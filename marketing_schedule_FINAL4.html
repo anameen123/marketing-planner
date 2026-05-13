@@ -4097,24 +4097,41 @@ var DataLayer = (function(){
     if(!config.enabled){
       return { ok: true, mode: 'localStorage' };
     }
-    try {
-      _updateSyncBadge && _updateSyncBadge('syncing');
-      await _initMsal();
-      await _ensureSignedIn();
-      await _ensureSiteId();
-      await _ensureLists();
-      await _initialFetch();
-      _startPolling();
-      _updateSyncBadge && _updateSyncBadge('ok');
-      console.info('[DataLayer] SharePoint backend live · site=' + config.siteId);
-      return { ok: true, mode: 'sharepoint' };
-    } catch(e){
-      console.warn('[DataLayer] bootstrap failed, falling back to localStorage:', e);
-      config.enabled = false;
-      _stopPolling();
-      _updateSyncBadge && _updateSyncBadge('error');
-      return { ok: false, mode: 'localStorage', error: (e && e.message) || String(e) };
+    // Retry transient failures (network hiccup, brief 5xx). Permanent
+    // failures (auth misconfig, missing permission) fail fast on first try
+    // since they wouldn't recover with retries anyway.
+    var attempt = 0, maxAttempts = 3, lastErr = null;
+    while(attempt < maxAttempts){
+      attempt++;
+      try {
+        _updateSyncBadge && _updateSyncBadge('syncing');
+        await _initMsal();
+        await _ensureSignedIn();
+        await _ensureSiteId();
+        await _ensureLists();
+        await _initialFetch();
+        _startPolling();
+        _updateSyncBadge && _updateSyncBadge('ok');
+        console.info('[DataLayer] SharePoint backend live · site=' + config.siteId + ' · driveId=' + config.driveId + (attempt > 1 ? ' (after ' + attempt + ' attempts)' : ''));
+        return { ok: true, mode: 'sharepoint' };
+      } catch(e){
+        lastErr = e;
+        var msg = (e && e.message) || String(e);
+        // Only retry on network/transient errors. Auth + 4xx → fail fast.
+        var transient = /network|timeout|fetch failed|503|502|504|429|aborted/i.test(msg);
+        if(!transient || attempt >= maxAttempts){
+          console.warn('[DataLayer] bootstrap failed (attempt ' + attempt + '/' + maxAttempts + '), falling back to localStorage:', e);
+          config.enabled = false;
+          _stopPolling();
+          _updateSyncBadge && _updateSyncBadge('error');
+          return { ok: false, mode: 'localStorage', error: msg, attempts: attempt };
+        }
+        var backoffMs = Math.pow(2, attempt - 1) * 1000;   // 1s, 2s
+        console.info('[DataLayer] transient bootstrap error, retrying in ' + backoffMs + 'ms…');
+        await new Promise(function(r){ setTimeout(r, backoffMs); });
+      }
     }
+    return { ok: false, mode: 'localStorage', error: (lastErr && lastErr.message) || 'unknown', attempts: attempt };
   }
 
   // setConfig(partial) — merge SharePoint credentials in at runtime. Used
