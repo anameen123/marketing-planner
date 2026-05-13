@@ -3926,13 +3926,20 @@ var DataLayer = (function(){
   // App registration: "ICC Marketing Planner" in the wcgtx.com tenant.
   // Permissions: Sites.ReadWrite.All + User.Read (delegated, per-user consent).
   // SPA redirect URIs cover localhost dev + the GitHub Pages prod URL.
+  //
+  // `enabled` starts false. The Microsoft sign-in flow (doMsLogin) flips it
+  // to true and runs bootstrap() to provision Lists + start polling. The
+  // hardcoded login (admin/1234) intentionally LEAVES enabled=false — it's
+  // a localStorage-only dev mode that doesn't touch SharePoint. This means:
+  //   • Open at localhost → admin/1234 → fast, offline, no popups
+  //   • Open at github.io/… → click MS button → SharePoint goes live
   var config = {
-    enabled: false,                       // ← MAIN SWITCH — flip to true to go live with SharePoint
-    sharepointUrl: 'https://wcgtx.sharepoint.com',                // root site — Lists live here
-    siteId: '',                                                    // resolved on bootstrap, cached after
-    tenantId: '36db94fb-80e4-470d-a675-2ee06ddf3d89',              // wcgtx.com tenant
-    clientId: '0447f26e-7a21-4c67-90a0-e967ee70a10f',              // ICC Marketing Planner app registration
-    pollIntervalMs: 5000,                                          // 5-sec live sync for team-wide updates
+    enabled: false,                                                 // flips to true after successful MS sign-in
+    sharepointUrl: 'https://wcgtx.sharepoint.com',                 // root site — Lists live here
+    siteId: '',                                                     // resolved on bootstrap, cached after
+    tenantId: '36db94fb-80e4-470d-a675-2ee06ddf3d89',               // wcgtx.com tenant
+    clientId: '0447f26e-7a21-4c67-90a0-e967ee70a10f',               // ICC Marketing Planner app registration
+    pollIntervalMs: 5000,                                           // 5-sec live sync for team-wide updates
     // Mapping: localStorage key → SharePoint Lists name
     // Each store maps to one List in the site. Lists are auto-provisioned
     // on first run when DataLayer.bootstrap() is called.
@@ -5333,6 +5340,21 @@ async function doMsLogin(){
       email:    email,
       authVia:  'entra-id'
     };
+
+    // ── Activate the SharePoint backend on first MS sign-in ──────────────
+    // This is what flips the app from per-browser localStorage to team-wide
+    // live sync. Runs once: provisions Lists, fetches latest, starts polling.
+    // If it fails (network, missing permission, etc.), we silently fall back
+    // to localStorage so the user can still work — we'll retry on next login.
+    DataLayer._config.enabled = true;
+    var bootResult = await DataLayer.bootstrap();
+    if(bootResult.ok && bootResult.mode === 'sharepoint'){
+      showToast('Connected to SharePoint · live sync on');
+    } else {
+      // Bootstrap failed — already logged inside DataLayer. Toast for visibility.
+      console.warn('[Auth] SharePoint bootstrap failed, continuing with localStorage');
+      showToast('Working offline — SharePoint sync unavailable');
+    }
     _finishLogin();
   } catch(e){
     console.warn('[Auth] MS sign-in failed:', e);
