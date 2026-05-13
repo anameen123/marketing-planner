@@ -3893,6 +3893,164 @@ function _computeCurrentPeriod(date){
 }
 var CURRENT_PERIOD = _computeCurrentPeriod();
 
+// ══════════════════════════════════════════════════════════════════════════
+// DATA LAYER (DataLayer) — single chokepoint for all reads/writes
+// ──────────────────────────────────────────────────────────────────────────
+// Today: every read/write goes to localStorage (per-browser, no sharing).
+// Tomorrow: same calls transparently hit Microsoft Lists in SharePoint
+// (team-wide sync + 5-sec live updates) once `config.enabled = true`.
+//
+// All call-sites use DataLayer.load() / .save() / .remove() — never call
+// localStorage directly. This means the migration is a one-line flag flip
+// at the top of this block. NO call-site changes needed when we go live.
+//
+// The localStorage layer is ALWAYS used as a write-through cache, even
+// after SharePoint is enabled:
+//   • Reads return cached value instantly → polling refreshes it in background
+//   • Writes hit localStorage immediately (optimistic) → queued to SharePoint
+//   • If SharePoint write fails, we retry in the next poll cycle
+// This keeps the UI snappy and works offline.
+// ══════════════════════════════════════════════════════════════════════════
+var DataLayer = (function(){
+  // ── Config — flip these once the SharePoint setup is done ──────────────
+  var config = {
+    enabled: false,                       // ← MAIN SWITCH — true to go live with SharePoint
+    sharepointUrl: '',                    // e.g. 'https://wcgtx.sharepoint.com/sites/MarketingPlanner'
+    siteId: '',                           // Microsoft Graph site ID (fetched once + cached)
+    tenantId: '',                         // Entra ID tenant ID for MSAL
+    clientId: '',                         // Entra ID app registration client ID
+    pollIntervalMs: 5000,                 // How often we poll for changes from other team members
+    // Mapping: localStorage key → SharePoint Lists name
+    // Each store maps to one List in the site. Lists are auto-provisioned
+    // on first run when DataLayer.bootstrap() is called.
+    keyToList: {
+      'wcg_schedule_v1':                'Visits',
+      'wcg_business_referrals_v1':      'BusinessReferrals',
+      'wcg_tier_thresholds_v4':         'TierThresholds',
+      'wcg_period_budget_enabled_v1':   'Settings',
+      'wcg_admin_notifications_v1':     'AdminNotifications',
+      // Per-user "which notifs I've read" keys are dynamic — handled separately
+    }
+  };
+
+  // ── Internal state ──────────────────────────────────────────────────────
+  var _writeQueue = [];                   // pending SharePoint writes
+  var _writeTimer = null;                 // debounce timer for batching writes
+  var _pollTimer = null;                  // interval ID for the live-sync poller
+  var _lastPollISO = null;                // ISO timestamp of last successful poll
+  var _msalInstance = null;               // MSAL.js instance (initialized once)
+
+  // ── PUBLIC API ──────────────────────────────────────────────────────────
+  // load(key, fallback?) — read a JSON value by key. Returns parsed value,
+  //   or `fallback` (default null) if the key doesn't exist or fails to parse.
+  function load(key, fallback){
+    try {
+      var raw = localStorage.getItem(key);
+      if(raw === null || raw === undefined) return arguments.length > 1 ? fallback : null;
+      return JSON.parse(raw);
+    } catch(e){ return arguments.length > 1 ? fallback : null; }
+  }
+
+  // loadRaw(key) — read the raw string (not parsed). Used for primitive
+  //   string flags like '0' / '1' where JSON.parse would be wrong.
+  function loadRaw(key){
+    try { return localStorage.getItem(key); } catch(e){ return null; }
+  }
+
+  // save(key, value) — write a value by key. Objects/arrays are JSON-encoded;
+  //   strings are written as-is. Always writes localStorage immediately; if
+  //   SharePoint backend is enabled, queues a remote write too.
+  function save(key, value){
+    try {
+      var serialized = (typeof value === 'string') ? value : JSON.stringify(value);
+      localStorage.setItem(key, serialized);
+    } catch(e){ /* quota — UI keeps working, just no persistence */ }
+
+    if(config.enabled && config.keyToList[key]){
+      _enqueueRemoteWrite(key, value);
+    }
+  }
+
+  // remove(key) — delete a key from local + remote.
+  function remove(key){
+    try { localStorage.removeItem(key); } catch(e){}
+    if(config.enabled && config.keyToList[key]){
+      _enqueueRemoteWrite(key, null);
+    }
+  }
+
+  // bootstrap() — call once on app load to:
+  //   1. Initialize MSAL for Entra ID sign-in
+  //   2. Provision any missing Lists in SharePoint
+  //   3. Start the 5-sec polling loop
+  //   4. Reconcile any locally-cached writes against the remote
+  // Idempotent — safe to call multiple times.
+  async function bootstrap(){
+    if(!config.enabled){
+      // localStorage-only mode. Nothing to bootstrap.
+      return { ok: true, mode: 'localStorage' };
+    }
+    // SharePoint mode bootstrap path is built in a later phase. For now,
+    // this just flags the intent. The full impl ships with the SP migration.
+    try {
+      // TODO: MSAL.initialize(), then ensureSiteId(), then ensureLists(), then startPolling()
+      _startPolling();
+      return { ok: true, mode: 'sharepoint' };
+    } catch(e){
+      console.warn('[DataLayer] bootstrap failed, falling back to localStorage:', e);
+      config.enabled = false;
+      return { ok: false, mode: 'localStorage', error: e.message };
+    }
+  }
+
+  // setConfig(partial) — merge SharePoint credentials in at runtime. Used
+  //   after the Entra ID app registration is created and we know the IDs.
+  function setConfig(partial){
+    for(var k in partial){ if(partial.hasOwnProperty(k)) config[k] = partial[k]; }
+  }
+
+  // mode() — diagnostic; returns 'localStorage' or 'sharepoint'
+  function mode(){ return config.enabled ? 'sharepoint' : 'localStorage'; }
+
+  // ── PRIVATE — SharePoint sync (stubs filled in by next phase) ──────────
+  function _enqueueRemoteWrite(key, value){
+    _writeQueue.push({ key: key, value: value, at: Date.now() });
+    if(_writeTimer) clearTimeout(_writeTimer);
+    _writeTimer = setTimeout(_flushWrites, 300);   // debounce 300ms
+  }
+
+  function _flushWrites(){
+    // TODO: batch _writeQueue entries → POST to SharePoint via Graph API.
+    // Stub for now — implementation arrives when SharePoint is provisioned.
+    _writeQueue = [];
+  }
+
+  function _startPolling(){
+    if(_pollTimer) clearInterval(_pollTimer);
+    _pollTimer = setInterval(_pollOnce, config.pollIntervalMs);
+  }
+
+  async function _pollOnce(){
+    // TODO: GET each List with $filter=modified ge '<lastPoll>' and merge
+    // any changes back into localStorage. Trigger UI refresh. Stub for now.
+    _lastPollISO = new Date().toISOString();
+  }
+
+  // ── Expose ──────────────────────────────────────────────────────────────
+  return {
+    load: load,
+    loadRaw: loadRaw,
+    save: save,
+    remove: remove,
+    bootstrap: bootstrap,
+    setConfig: setConfig,
+    mode: mode,
+    _config: config,           // exposed for debugging only
+    _writeQueue: _writeQueue
+  };
+})();
+window.DataLayer = DataLayer;
+
 // ── PERSISTENCE ─────────────────────────────────────────────────────────
 var _BR_LS_KEY = 'wcg_business_referrals_v1';
 // v3 bumped from v2 when `periodBudget` field was added to each tier — old
@@ -3940,28 +4098,24 @@ var _PB_LS_KEY = 'wcg_period_budget_enabled_v1';
 // the older per-visit-cap-only rules (your "undo" switch).
 var PERIOD_BUDGET_ENABLED = true;
 
-function _savePeriodBudgetEnabled(){ try { localStorage.setItem(_PB_LS_KEY, PERIOD_BUDGET_ENABLED ? '1' : '0'); } catch(e){} }
+function _savePeriodBudgetEnabled(){ DataLayer.save(_PB_LS_KEY, PERIOD_BUDGET_ENABLED ? '1' : '0'); }
 function _loadPeriodBudgetEnabled(){
-  try {
-    var raw = localStorage.getItem(_PB_LS_KEY);
-    if(raw === '0') PERIOD_BUDGET_ENABLED = false;
-    else if(raw === '1') PERIOD_BUDGET_ENABLED = true;
-  } catch(e){}
+  var raw = DataLayer.loadRaw(_PB_LS_KEY);
+  if(raw === '0') PERIOD_BUDGET_ENABLED = false;
+  else if(raw === '1') PERIOD_BUDGET_ENABLED = true;
 }
 
-function _saveReferrals(){ try { localStorage.setItem(_BR_LS_KEY, JSON.stringify(BUSINESS_REFERRALS)); } catch(e){} }
+function _saveReferrals(){ DataLayer.save(_BR_LS_KEY, BUSINESS_REFERRALS); }
 function _loadReferrals(){
-  try {
-    var raw = localStorage.getItem(_BR_LS_KEY);
-    if(raw) BUSINESS_REFERRALS = JSON.parse(raw) || {};
-  } catch(e){ BUSINESS_REFERRALS = {}; }
+  var v = DataLayer.load(_BR_LS_KEY);
+  if(v && typeof v === 'object') BUSINESS_REFERRALS = v;
+  else BUSINESS_REFERRALS = BUSINESS_REFERRALS || {};
 }
-function _saveTiers(){ try { localStorage.setItem(_TT_LS_KEY, JSON.stringify(TIER_THRESHOLDS)); } catch(e){} }
+function _saveTiers(){ DataLayer.save(_TT_LS_KEY, TIER_THRESHOLDS); }
 function _loadTiers(){
   try {
-    var raw = localStorage.getItem(_TT_LS_KEY);
-    if(raw){
-      var t = JSON.parse(raw);
+    var t = DataLayer.load(_TT_LS_KEY);
+    if(t){
       if(t && t.clinic && t.mva && t.outreach){
         // Defensive: if any tier is missing periodBudget (data from a partial
         // migration), fall back to the in-file defaults for that tier.
@@ -3997,17 +4151,13 @@ var _S_SAVE_THROTTLE_MS = 400;   // coalesce rapid mutations
 var _S_SAVE_TIMER = null;
 
 function _saveS(){
-  // Throttled save — bursts of refresh() calls only hit localStorage once
-  // every 400ms. Final state is always saved.
+  // Throttled save — bursts of refresh() calls only hit storage once every
+  // 400ms. Final state is always saved. Routes through DataLayer so the
+  // same call automatically syncs to SharePoint when that backend is on.
   if(_S_SAVE_TIMER) clearTimeout(_S_SAVE_TIMER);
   _S_SAVE_TIMER = setTimeout(function(){
-    try {
-      if(typeof S !== 'undefined' && S && S.days){
-        localStorage.setItem(_S_LS_KEY, JSON.stringify({ days: S.days, savedAt: new Date().toISOString() }));
-      }
-    } catch(e){
-      // localStorage can fill up. We swallow here; the UI keeps working
-      // even if persistence fails (next reload would just lose data).
+    if(typeof S !== 'undefined' && S && S.days){
+      DataLayer.save(_S_LS_KEY, { days: S.days, savedAt: new Date().toISOString() });
     }
     _S_SAVE_TIMER = null;
   }, _S_SAVE_THROTTLE_MS);
@@ -4018,11 +4168,9 @@ window._saveS = _saveS;
 // don't sit in the throttle buffer when the user closes the tab.
 function _saveSImmediate(){
   if(_S_SAVE_TIMER){ clearTimeout(_S_SAVE_TIMER); _S_SAVE_TIMER = null; }
-  try {
-    if(typeof S !== 'undefined' && S && S.days){
-      localStorage.setItem(_S_LS_KEY, JSON.stringify({ days: S.days, savedAt: new Date().toISOString() }));
-    }
-  } catch(e){}
+  if(typeof S !== 'undefined' && S && S.days){
+    DataLayer.save(_S_LS_KEY, { days: S.days, savedAt: new Date().toISOString() });
+  }
 }
 window._saveSImmediate = _saveSImmediate;
 
@@ -4031,12 +4179,9 @@ window._saveSImmediate = _saveSImmediate;
 // saved data or if the saved shape doesn't match expectations.
 function _hydrateSFromStorage(){
   try {
-    var raw = localStorage.getItem(_S_LS_KEY);
-    if(!raw) return;
-    var parsed = JSON.parse(raw);
+    var parsed = DataLayer.load(_S_LS_KEY);
     if(!parsed || !Array.isArray(parsed.days)) return;
     if(typeof S === 'undefined' || !S) return;
-    // We replace S.days entirely so the seeded version is overridden.
     S.days = parsed.days.filter(function(d){ return d && d.date; });
   } catch(e){}
 }
@@ -5208,13 +5353,11 @@ var ADMIN_NOTIF_UI_LIMIT = 10;
 var ADMIN_NOTIF_LS_KEY = 'wcg_admin_notifications_v1';
 
 function _loadAdminNotifs(){
-  try {
-    var raw = localStorage.getItem(ADMIN_NOTIF_LS_KEY);
-    if(raw){ ADMIN_NOTIFICATIONS = JSON.parse(raw) || []; }
-  } catch(e){ ADMIN_NOTIFICATIONS = []; }
+  var v = DataLayer.load(ADMIN_NOTIF_LS_KEY);
+  ADMIN_NOTIFICATIONS = Array.isArray(v) ? v : [];
 }
 function _saveAdminNotifs(){
-  try { localStorage.setItem(ADMIN_NOTIF_LS_KEY, JSON.stringify(ADMIN_NOTIFICATIONS)); } catch(e){}
+  DataLayer.save(ADMIN_NOTIF_LS_KEY, ADMIN_NOTIFICATIONS);
 }
 
 // Per-user read state — Duaa reading something doesn't mark it read for Sadia.
@@ -5223,10 +5366,11 @@ function _readKey(){
   return 'wcg_admin_notif_read_' + u;
 }
 function _loadReadIds(){
-  try { return JSON.parse(localStorage.getItem(_readKey()) || '[]'); } catch(e){ return []; }
+  var v = DataLayer.load(_readKey());
+  return Array.isArray(v) ? v : [];
 }
 function _saveReadIds(ids){
-  try { localStorage.setItem(_readKey(), JSON.stringify(ids)); } catch(e){}
+  DataLayer.save(_readKey(), ids);
 }
 function isAdminNotifRead(id){
   return _loadReadIds().indexOf(id) >= 0;
@@ -5237,10 +5381,11 @@ function _readTsKey(){
   return 'wcg_admin_notif_read_ts_' + u;
 }
 function _loadReadTs(){
-  try { return JSON.parse(localStorage.getItem(_readTsKey()) || '{}'); } catch(e){ return {}; }
+  var v = DataLayer.load(_readTsKey());
+  return (v && typeof v === 'object' && !Array.isArray(v)) ? v : {};
 }
 function _saveReadTs(map){
-  try { localStorage.setItem(_readTsKey(), JSON.stringify(map)); } catch(e){}
+  DataLayer.save(_readTsKey(), map);
 }
 function _getReadAt(id){
   var map = _loadReadTs();
