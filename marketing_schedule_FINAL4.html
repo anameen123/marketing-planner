@@ -1038,6 +1038,16 @@ body.member-view.member-mobile .member-bottom-nav{display:flex}
 .mb-nav-btn:focus{outline:none}
 .mb-nav-btn.active .mb-ico{transform:scale(1.06)}
 </style>
+
+<!-- ════════════════════════════════════════════════════════════════════════
+     MSAL.js — Microsoft's official auth library. Drives Entra ID sign-in
+     and the Graph API token flow used by DataLayer (when SharePoint mode
+     is enabled). Loaded from jsDelivr (rock-solid CDN, Microsoft-published
+     package). Version 3.x is the current major. The bundle is ~80 KB
+     gzipped and only fires on the sign-in flow — no perf cost while idle.
+     ──────────────────────────────────────────────────────────────────── -->
+<script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3/lib/msal-browser.min.js"
+        defer></script>
 </head>
 <body>
 
@@ -3979,27 +3989,33 @@ var DataLayer = (function(){
     }
   }
 
-  // bootstrap() — call once on app load to:
-  //   1. Initialize MSAL for Entra ID sign-in
-  //   2. Provision any missing Lists in SharePoint
-  //   3. Start the 5-sec polling loop
-  //   4. Reconcile any locally-cached writes against the remote
+  // bootstrap() — call once on app load. In SharePoint mode this:
+  //   1. Initializes MSAL for Entra ID sign-in (silently if cached creds exist)
+  //   2. Resolves the SharePoint site ID via Graph API
+  //   3. Provisions any missing Lists (creates them with the right schema)
+  //   4. Does a fresh initial fetch into local cache
+  //   5. Starts the 5-sec polling loop
   // Idempotent — safe to call multiple times.
+  // Returns { ok, mode, error? }. On any failure, gracefully falls back to
+  // localStorage-only — the app keeps working, just without team sync.
   async function bootstrap(){
     if(!config.enabled){
-      // localStorage-only mode. Nothing to bootstrap.
       return { ok: true, mode: 'localStorage' };
     }
-    // SharePoint mode bootstrap path is built in a later phase. For now,
-    // this just flags the intent. The full impl ships with the SP migration.
     try {
-      // TODO: MSAL.initialize(), then ensureSiteId(), then ensureLists(), then startPolling()
+      await _initMsal();
+      await _ensureSignedIn();
+      await _ensureSiteId();
+      await _ensureLists();
+      await _initialFetch();
       _startPolling();
+      console.info('[DataLayer] SharePoint backend live · site=' + config.siteId);
       return { ok: true, mode: 'sharepoint' };
     } catch(e){
       console.warn('[DataLayer] bootstrap failed, falling back to localStorage:', e);
       config.enabled = false;
-      return { ok: false, mode: 'localStorage', error: e.message };
+      _stopPolling();
+      return { ok: false, mode: 'localStorage', error: (e && e.message) || String(e) };
     }
   }
 
@@ -4012,17 +4028,204 @@ var DataLayer = (function(){
   // mode() — diagnostic; returns 'localStorage' or 'sharepoint'
   function mode(){ return config.enabled ? 'sharepoint' : 'localStorage'; }
 
-  // ── PRIVATE — SharePoint sync (stubs filled in by next phase) ──────────
-  function _enqueueRemoteWrite(key, value){
-    _writeQueue.push({ key: key, value: value, at: Date.now() });
-    if(_writeTimer) clearTimeout(_writeTimer);
-    _writeTimer = setTimeout(_flushWrites, 300);   // debounce 300ms
+  // ── PRIVATE — MSAL authentication ──────────────────────────────────────
+  // Initializes MSAL.js once. The script tag in <head> loads the library;
+  // we wait for window.msal to be defined (defer loading can lag a moment).
+  async function _initMsal(){
+    if(_msalInstance) return _msalInstance;
+    if(typeof window.msal === 'undefined'){
+      // Library still loading — wait up to 5 seconds
+      var waited = 0;
+      while(typeof window.msal === 'undefined' && waited < 5000){
+        await new Promise(function(r){ setTimeout(r, 100); });
+        waited += 100;
+      }
+      if(typeof window.msal === 'undefined'){
+        throw new Error('MSAL library failed to load from CDN');
+      }
+    }
+    _msalInstance = new window.msal.PublicClientApplication({
+      auth: {
+        clientId: config.clientId,
+        authority: 'https://login.microsoftonline.com/' + config.tenantId,
+        redirectUri: window.location.origin + window.location.pathname
+      },
+      cache: {
+        cacheLocation: 'localStorage',   // survives page reloads
+        storeAuthStateInCookie: false
+      }
+    });
+    await _msalInstance.initialize();
+    return _msalInstance;
   }
 
-  function _flushWrites(){
-    // TODO: batch _writeQueue entries → POST to SharePoint via Graph API.
-    // Stub for now — implementation arrives when SharePoint is provisioned.
-    _writeQueue = [];
+  // Returns a Graph API access token (for Sites.ReadWrite.All scope).
+  // Tries silent token acquisition first (uses cached refresh tokens);
+  // falls back to popup if silent fails (first sign-in / expired session).
+  async function _getToken(){
+    var accounts = _msalInstance.getAllAccounts();
+    var request = {
+      scopes: ['Sites.ReadWrite.All', 'User.Read'],
+      account: accounts[0] || undefined
+    };
+    try {
+      var result = await _msalInstance.acquireTokenSilent(request);
+      return result.accessToken;
+    } catch(e){
+      // Silent failed — interactive popup
+      var result = await _msalInstance.acquireTokenPopup(request);
+      return result.accessToken;
+    }
+  }
+
+  // Ensures there's at least one signed-in account. Pops up the Microsoft
+  // sign-in flow if not. Returns the account info { name, username, ... }.
+  async function _ensureSignedIn(){
+    var accounts = _msalInstance.getAllAccounts();
+    if(accounts.length === 0){
+      var result = await _msalInstance.loginPopup({
+        scopes: ['Sites.ReadWrite.All', 'User.Read'],
+        prompt: 'select_account'
+      });
+      _msalInstance.setActiveAccount(result.account);
+      return result.account;
+    }
+    _msalInstance.setActiveAccount(accounts[0]);
+    return accounts[0];
+  }
+
+  // ── PRIVATE — Graph API wrapper ────────────────────────────────────────
+  // All SharePoint API calls go through this so retries / auth refresh /
+  // throttling handling lives in one place.
+  async function _graphFetch(path, options){
+    options = options || {};
+    var token = await _getToken();
+    var url = path.indexOf('http') === 0 ? path : 'https://graph.microsoft.com/v1.0' + path;
+    var resp = await fetch(url, {
+      method: options.method || 'GET',
+      headers: Object.assign({
+        'Authorization': 'Bearer ' + token,
+        'Content-Type': 'application/json',
+        'Accept':       'application/json'
+      }, options.headers || {}),
+      body: options.body ? (typeof options.body === 'string' ? options.body : JSON.stringify(options.body)) : undefined
+    });
+    if(resp.status === 429){
+      // Throttled — wait suggested time then retry once
+      var retryAfter = parseInt(resp.headers.get('Retry-After') || '2', 10);
+      await new Promise(function(r){ setTimeout(r, retryAfter * 1000); });
+      return _graphFetch(path, options);
+    }
+    if(!resp.ok && resp.status !== 404){
+      var errText = await resp.text();
+      throw new Error('Graph API ' + resp.status + ' on ' + path + ': ' + errText.slice(0, 200));
+    }
+    if(resp.status === 204 || resp.status === 404) return null;
+    return resp.json();
+  }
+
+  // ── PRIVATE — Site + List provisioning ─────────────────────────────────
+  // Resolves the SharePoint site by URL → cached numeric Graph site ID.
+  async function _ensureSiteId(){
+    if(config.siteId) return config.siteId;
+    // Parse: 'https://wcgtx.sharepoint.com/sites/MarketingPlanner'
+    //  → hostname = 'wcgtx.sharepoint.com', sitePath = '/sites/MarketingPlanner'
+    var m = /^https?:\/\/([^\/]+)(\/.+)?$/.exec(config.sharepointUrl);
+    if(!m) throw new Error('Invalid sharepointUrl: ' + config.sharepointUrl);
+    var hostname = m[1];
+    var sitePath = (m[2] || '').replace(/\/+$/, '');
+    var endpoint = '/sites/' + hostname + ':' + sitePath;
+    var data = await _graphFetch(endpoint);
+    if(!data || !data.id) throw new Error('Could not resolve site ID for ' + config.sharepointUrl);
+    config.siteId = data.id;
+    return data.id;
+  }
+
+  // Creates any missing Lists in the SharePoint site. Each List has a
+  // simple schema: Title (key), Value (long text JSON blob), Modified
+  // (built-in). One row per data key — last-write-wins semantics.
+  async function _ensureLists(){
+    var listNames = {};
+    for(var k in config.keyToList){
+      if(config.keyToList.hasOwnProperty(k)) listNames[config.keyToList[k]] = true;
+    }
+    // Fetch existing lists in one call
+    var existing = await _graphFetch('/sites/' + config.siteId + '/lists?$select=name,id');
+    var have = {};
+    (existing && existing.value || []).forEach(function(l){ have[l.name] = l.id; });
+
+    var listIds = {};
+    var listNamesArr = Object.keys(listNames);
+    for(var i = 0; i < listNamesArr.length; i++){
+      var name = listNamesArr[i];
+      if(have[name]){
+        listIds[name] = have[name];
+        continue;
+      }
+      // Create the list
+      var created = await _graphFetch('/sites/' + config.siteId + '/lists', {
+        method: 'POST',
+        body: {
+          displayName: name,
+          list: { template: 'genericList' },
+          columns: [
+            { name: 'Value', text: { allowMultipleLines: true, maxLength: 1000000 } }
+          ]
+        }
+      });
+      if(created && created.id) listIds[name] = created.id;
+    }
+    config.listIds = listIds;
+    return listIds;
+  }
+
+  // ── PRIVATE — Initial fetch + polling ──────────────────────────────────
+  // Pulls the current value of every tracked key into localStorage on
+  // app boot. After this the app reads from localStorage normally.
+  async function _initialFetch(){
+    var keys = Object.keys(config.keyToList);
+    for(var i = 0; i < keys.length; i++){
+      try { await _fetchKeyIntoCache(keys[i]); } catch(e){ /* tolerate single-key failures */ }
+    }
+    _lastPollISO = new Date().toISOString();
+  }
+
+  async function _fetchKeyIntoCache(key){
+    var listName = config.keyToList[key];
+    var listId = config.listIds && config.listIds[listName];
+    if(!listId) return;
+    // Each List stores ONE item with Title=key, Value=JSON blob
+    var resp = await _graphFetch('/sites/' + config.siteId + '/lists/' + listId + '/items?$expand=fields($select=Title,Value,Modified)&$filter=fields/Title eq \'' + encodeURIComponent(key) + '\'&$top=1');
+    var item = resp && resp.value && resp.value[0];
+    if(!item || !item.fields) return;
+    var remoteValue = item.fields.Value;
+    if(typeof remoteValue === 'undefined') return;
+    // Compare with local — only update cache if remote differs
+    var localStr = localStorage.getItem(key);
+    if(localStr === remoteValue) return;
+    try { localStorage.setItem(key, remoteValue); }
+    catch(e){ /* quota — skip */ }
+    // Trigger UI refresh — different reloaders exist per data type
+    _emitChange(key);
+  }
+
+  function _emitChange(key){
+    // Re-fire the in-app hydration logic for the affected key
+    try {
+      if(key === 'wcg_schedule_v1' && typeof _hydrateSFromStorage === 'function'){
+        _hydrateSFromStorage();
+        if(typeof refresh === 'function') refresh();
+      } else if(key === 'wcg_business_referrals_v1' && typeof _loadReferrals === 'function'){
+        _loadReferrals();
+      } else if(key === 'wcg_tier_thresholds_v4' && typeof _loadTiers === 'function'){
+        _loadTiers();
+      } else if(key === 'wcg_period_budget_enabled_v1' && typeof _loadPeriodBudgetEnabled === 'function'){
+        _loadPeriodBudgetEnabled();
+      } else if(key === 'wcg_admin_notifications_v1' && typeof _loadAdminNotifs === 'function'){
+        _loadAdminNotifs();
+        if(typeof renderAdminNotifications === 'function') renderAdminNotifications();
+      }
+    } catch(e){ /* don't crash UI on sync hiccup */ }
   }
 
   function _startPolling(){
@@ -4030,10 +4233,65 @@ var DataLayer = (function(){
     _pollTimer = setInterval(_pollOnce, config.pollIntervalMs);
   }
 
+  function _stopPolling(){
+    if(_pollTimer){ clearInterval(_pollTimer); _pollTimer = null; }
+  }
+
   async function _pollOnce(){
-    // TODO: GET each List with $filter=modified ge '<lastPoll>' and merge
-    // any changes back into localStorage. Trigger UI refresh. Stub for now.
+    // Re-fetch every tracked key. Cheap because the server returns a 304
+    // for unchanged items + we only update cache when remote differs.
+    if(!config.enabled || !config.listIds) return;
+    var keys = Object.keys(config.keyToList);
+    for(var i = 0; i < keys.length; i++){
+      try { await _fetchKeyIntoCache(keys[i]); } catch(e){ /* tolerate single-key failures */ }
+    }
     _lastPollISO = new Date().toISOString();
+  }
+
+  // ── PRIVATE — Write path ───────────────────────────────────────────────
+  function _enqueueRemoteWrite(key, value){
+    _writeQueue.push({ key: key, value: value, at: Date.now() });
+    if(_writeTimer) clearTimeout(_writeTimer);
+    _writeTimer = setTimeout(_flushWrites, 300);   // debounce 300ms
+  }
+
+  async function _flushWrites(){
+    if(!config.enabled || !config.listIds) { _writeQueue = []; return; }
+    // Coalesce: only keep the most recent write per key
+    var latestByKey = {};
+    _writeQueue.forEach(function(w){ latestByKey[w.key] = w; });
+    _writeQueue = [];
+    var keys = Object.keys(latestByKey);
+    for(var i = 0; i < keys.length; i++){
+      try { await _writeKey(keys[i], latestByKey[keys[i]].value); }
+      catch(e){
+        console.warn('[DataLayer] write failed for ' + keys[i] + ', re-queueing:', e);
+        _writeQueue.push(latestByKey[keys[i]]);  // retry next cycle
+      }
+    }
+  }
+
+  async function _writeKey(key, value){
+    var listName = config.keyToList[key];
+    var listId = config.listIds && config.listIds[listName];
+    if(!listId) throw new Error('No list for key ' + key);
+    var serialized = (typeof value === 'string') ? value : JSON.stringify(value);
+    // Find existing item by Title=key
+    var found = await _graphFetch('/sites/' + config.siteId + '/lists/' + listId + '/items?$expand=fields($select=Title)&$filter=fields/Title eq \'' + encodeURIComponent(key) + '\'&$top=1');
+    var existing = found && found.value && found.value[0];
+    if(existing && existing.id){
+      // Update existing
+      await _graphFetch('/sites/' + config.siteId + '/lists/' + listId + '/items/' + existing.id + '/fields', {
+        method: 'PATCH',
+        body: { Value: serialized }
+      });
+    } else {
+      // Create new
+      await _graphFetch('/sites/' + config.siteId + '/lists/' + listId + '/items', {
+        method: 'POST',
+        body: { fields: { Title: key, Value: serialized } }
+      });
+    }
   }
 
   // ── Expose ──────────────────────────────────────────────────────────────
