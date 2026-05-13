@@ -5817,9 +5817,27 @@ window.maybeShowIosInstallHint = maybeShowIosInstallHint;
 window.dismissIosInstallHint = dismissIosInstallHint;
 
 // Kick off auto-resume on initial page load. Runs AFTER MSAL has had a
-// chance to load (defer script). 200ms delay is enough; if MSAL isn't
+// chance to load (defer script). 250ms delay is enough; if MSAL isn't
 // ready by then, the function returns false and the login screen shows.
+//
+// IMPORTANT guard: when MSAL's loginPopup() opens, the popup window loads
+// the redirectUri — which is our same HTML file. The popup briefly mounts
+// the whole app before MSAL detects the auth response and closes itself.
+// We must NOT run auto-resume in that popup window or we'd kick off a
+// nested sign-in. Detect via window.opener (non-null in popups) + the
+// URL hash containing MSAL's response params.
+function _isMsalPopupWindow(){
+  try {
+    if(!window.opener || window.opener === window) return false;
+    // MSAL appends #code=... or #error=... to the redirect URI
+    if(/#.*(code=|error=|state=)/.test(window.location.hash)) return true;
+    // Also true if our parent thinks it's waiting on a popup
+    return false;
+  } catch(e){ return false; }
+}
+
 window.addEventListener('load', function(){
+  if(_isMsalPopupWindow()) return;   // popup auth response handler — let MSAL.js handle it
   setTimeout(function(){
     if(!CURRENT_USER){   // only if not already signed in via hardcoded
       tryAutoResumeMsSession();
