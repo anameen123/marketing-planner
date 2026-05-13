@@ -1,0 +1,13 @@
+{
+  "name": "marketing-planner-scripts",
+  "version": "1.0.0",
+  "description": "One-shot scripts for the Marketing Planner (data seeding, migrations, etc.)",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "seed": "node seed.js"
+  },
+  "dependencies": {
+    "@azure/cosmos": "^4.0.0"
+  }
+}

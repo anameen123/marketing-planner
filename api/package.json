@@ -1,0 +1,22 @@
+{
+  "name": "marketing-planner-api",
+  "version": "1.0.0",
+  "description": "Azure Functions API backing the Marketing Planner web app",
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "func start",
+    "test": "echo 'No tests yet — add jest later'"
+  },
+  "dependencies": {
+    "@azure/cosmos": "^4.0.0",
+    "@azure/identity": "^4.0.0",
+    "@azure/functions": "^4.0.0",
+    "exceljs": "^4.4.0"
+  },
+  "devDependencies": {
+    "azure-functions-core-tools": "^4.0.0"
+  }
+}

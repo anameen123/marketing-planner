@@ -1,0 +1,54 @@
+{
+  "_comment_routes": "Routes table — controls auth + URL rewrites for Azure Static Web Apps",
+  "routes": [
+    {
+      "route": "/api/export/*",
+      "_comment": "Export endpoints use API-key auth (called by Power Automate, not a human). Anonymous so we don't 401 before our handler runs.",
+      "allowedRoles": ["anonymous"]
+    },
+    {
+      "route": "/api/*",
+      "_comment": "All other API endpoints require the user to be signed in. Server-side handlers then check role.",
+      "allowedRoles": ["authenticated"]
+    },
+    {
+      "route": "/admin/*",
+      "_comment": "Reserved for future admin-only paths if we split the HTML",
+      "allowedRoles": ["admin"]
+    }
+  ],
+  "navigationFallback": {
+    "rewrite": "/marketing_schedule_FINAL4.html",
+    "exclude": ["/api/*", "/*.{css,scss,js,png,jpg,jpeg,gif,ico,svg,webp,woff,woff2}"]
+  },
+  "responseOverrides": {
+    "401": {
+      "redirect": "/.auth/login/aad?post_login_redirect_uri=.referrer",
+      "statusCode": 302
+    },
+    "404": {
+      "rewrite": "/marketing_schedule_FINAL4.html"
+    }
+  },
+  "globalHeaders": {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Strict-Transport-Security": "max-age=31536000; includeSubDomains"
+  },
+  "mimeTypes": {
+    ".json": "application/json"
+  },
+  "auth": {
+    "_comment": "Entra ID single sign-on — restrict to @iccoftexas.com tenant. App registration must allow only the ICC tenant.",
+    "identityProviders": {
+      "azureActiveDirectory": {
+        "registration": {
+          "openIdIssuer": "https://login.microsoftonline.com/<ICC_TENANT_ID>/v2.0",
+          "clientIdSettingName": "AAD_CLIENT_ID",
+          "clientSecretSettingName": "AAD_CLIENT_SECRET"
+        }
+      }
+    }
+  }
+}

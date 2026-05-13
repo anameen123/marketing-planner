@@ -1,0 +1,58 @@
+# ──────────────────────────────────────────────────────────────────
+# Marketing Planner — .gitignore
+# Keeps the repo clean. Do NOT commit:
+#   - safety backups (huge HTML duplicates)
+#   - node_modules (re-installed on every clone via npm ci)
+#   - secrets / env vars
+#   - personal IDE / OS junk
+# ──────────────────────────────────────────────────────────────────
+
+# Safety backups — local snapshots before risky edits. Useful on
+# the dev machine, but they balloon the repo. Each ~1.2 MB.
+marketing_schedule_FINAL4.backup-*.html
+*.bak
+*.backup
+
+# Node dependencies — re-installed via `npm ci`
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Build artifacts
+api/.azure/
+api/local.settings.json
+infra/main.json
+infra/*.parameters.json
+dist/
+build/
+
+# Environment / secrets — NEVER commit
+.env
+.env.*
+*.pem
+*.key
+*.pfx
+cosmos-key.txt
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*.swo
+.idea/
+.vscode/*
+!.vscode/launch.json
+!.vscode/tasks.json
+
+# Logs
+*.log
+logs/
+
+# Test artifacts
+coverage/
+.nyc_output/
+test-results/
+
+# Claude session memory (local-only)
+.claude/
