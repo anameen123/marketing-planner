@@ -4294,12 +4294,26 @@ var DataLayer = (function(){
     }
   }
 
+  // ── External helpers — used by AuthLayer to share one MSAL session ─────
+  async function _initMsal_external(){ return _initMsal(); }
+  async function _ensureSignedIn_external(){ await _initMsal(); return _ensureSignedIn(); }
+  async function _signOut_external(){
+    if(!_msalInstance) return;
+    var accounts = _msalInstance.getAllAccounts();
+    if(accounts.length === 0) return;
+    try { await _msalInstance.logoutPopup({ account: accounts[0] }); }
+    catch(e){ /* user closed popup; nothing to do */ }
+  }
+
   // ── Expose ──────────────────────────────────────────────────────────────
   return {
     load: load,
     loadRaw: loadRaw,
     save: save,
     remove: remove,
+    _initMsal_external: _initMsal_external,
+    _ensureSignedIn_external: _ensureSignedIn_external,
+    _signOut_external: _signOut_external,
     bootstrap: bootstrap,
     setConfig: setConfig,
     mode: mode,
@@ -5244,6 +5258,91 @@ function toggleLoginPassword(){
 }
 window.toggleLoginPassword = toggleLoginPassword;
 
+// ══════════════════════════════════════════════════════════════════════════
+// AuthLayer — single chokepoint for sign-in. Like DataLayer, this can run
+// in two modes:
+//   • Hardcoded (today) — username/password matched against USERS object
+//   • Entra ID (after MS sign-in is configured) — popup, real M365 auth,
+//     role derived from the user's email address via EMAIL_USER_MAP
+// Both flows end the same way: set CURRENT_USER, hide login screen, hydrate.
+// ══════════════════════════════════════════════════════════════════════════
+
+// Maps M365 emails → existing USERS entries (so role/name/color stay consistent
+// between hardcoded and Entra ID flows). The admin entry is configured here
+// because the admin's M365 email (malthaher@wcgtx.com) doesn't match any
+// username in the USERS object directly.
+var EMAIL_USER_MAP = {
+  // ── Admin (you) ──────────────────────────────────────────────────────────
+  'malthaher@wcgtx.com': { username: 'admin',   role: 'admin',    name: 'Mahmoud Althaher', color: '#1F3864' },
+  // ── Members ──────────────────────────────────────────────────────────────
+  // Defaults below assume the email prefix matches a USERS key. Override
+  // here if a team member's email doesn't follow that pattern. We seed
+  // the obvious ones; admin can add more later in this block.
+  'duaa@wcgtx.com':       USERS.duaa,
+  'sadia@wcgtx.com':      USERS.sadia,
+  'ahsan@wcgtx.com':      USERS.ahsan,
+  // Add new entries here in the same shape when onboarding teammates:
+  //   'newhire@wcgtx.com': { username: 'newhire', role: 'member', name: 'New Hire', color: '#888' }
+};
+
+// Email → user profile. Returns null if the email isn't authorized to use
+// the app (no entry + no matching USERS prefix). This is the gate that
+// prevents random M365 users in your tenant from signing in.
+function _resolveMsUser(email){
+  if(!email) return null;
+  email = String(email).toLowerCase().trim();
+  // 1. Explicit map (preferred path)
+  if(EMAIL_USER_MAP[email]) return Object.assign({ email: email }, EMAIL_USER_MAP[email]);
+  // 2. Username = email prefix (e.g. duaa@wcgtx.com → USERS.duaa)
+  var prefix = email.split('@')[0];
+  if(USERS[prefix]) return Object.assign({ email: email, username: prefix }, USERS[prefix]);
+  // 3. Not authorized
+  return null;
+}
+
+// Microsoft sign-in flow. Called from the "Sign in with Microsoft" button.
+// Requires DataLayer config (clientId, tenantId) to be filled in — uses
+// DataLayer's MSAL instance directly so we share one auth session.
+async function doMsLogin(){
+  var errEl = document.getElementById('login-error');
+  var btn = document.getElementById('ms-login-btn');
+  if(!DataLayer._config.clientId || !DataLayer._config.tenantId){
+    errEl.textContent = 'Microsoft sign-in is not configured yet. Use username/password for now.';
+    return;
+  }
+  if(btn){ btn.disabled = true; btn.dataset.originalText = btn.innerHTML; btn.innerHTML = '<span style="opacity:.7">Signing in…</span>'; }
+  try {
+    // Initialize MSAL (idempotent) + popup sign-in
+    await DataLayer._initMsal_external();   // exposed below
+    var account = await DataLayer._ensureSignedIn_external();
+    var email = account.username;            // M365 sign-in email
+    var profile = _resolveMsUser(email);
+    if(!profile){
+      errEl.textContent = email + ' is not authorized to use this app. Contact admin.';
+      try { await DataLayer._signOut_external(); } catch(e){}
+      return;
+    }
+    CURRENT_USER = {
+      username: profile.username,
+      name:     profile.name,
+      role:     profile.role,
+      color:    profile.color,
+      email:    email,
+      authVia:  'entra-id'
+    };
+    _finishLogin();
+  } catch(e){
+    console.warn('[Auth] MS sign-in failed:', e);
+    errEl.textContent = 'Microsoft sign-in failed: ' + ((e && e.message) || e);
+  } finally {
+    if(btn){ btn.disabled = false; if(btn.dataset.originalText) btn.innerHTML = btn.dataset.originalText; }
+  }
+}
+window.doMsLogin = doMsLogin;
+
+// Hardcoded sign-in (legacy / fallback for local dev). Kept until Entra ID
+// is fully proven in production. To retire: hide the username/password
+// fields in the login screen and remove this function.
 function doLogin(){
   var u = (document.getElementById('login-username').value||'').trim().toLowerCase();
   var p = (document.getElementById('login-password').value||'').trim();
@@ -5251,21 +5350,19 @@ function doLogin(){
   if(!u||!p){ errEl.textContent='Please enter username and password.'; return; }
   var user = USERS[u];
   if(!user||user.password!==p){ errEl.textContent='Incorrect username or password.'; return; }
-  CURRENT_USER = { username:u, name:user.name, role:user.role, color:user.color };
+  CURRENT_USER = { username:u, name:user.name, role:user.role, color:user.color, authVia:'hardcoded' };
+  _finishLogin();
+}
+
+// Shared post-sign-in flow — runs identically for hardcoded + MS auth.
+function _finishLogin(){
   document.getElementById('login-screen').style.display='none';
-  // Apply the member-view body class for non-admins. This switches the
-  // dark hero gradient to the soft sky-blue palette and enables the
-  // bottom-nav (on phone-sized viewports — see member-mobile class below).
   applyMemberViewClass();
   renderUserBadge();
   applyRoleRestrictions();
   if(typeof updateBankAdminControls==="function") updateBankAdminControls();
   renderCalGrid(); renderCounters();
-  // Land on the Home page after sign-in (was: Dashboard/schedule).
-  // The Dashboard (calendar planner) is one tab-click away from Home.
   if(typeof switchTab === 'function') switchTab('home');
-  // Hydrate the admin-activity panel for the user that just signed in
-  // (read state is per-user via localStorage).
   if(typeof _loadAdminNotifs === 'function') _loadAdminNotifs();
   if(typeof renderAdminNotifications === 'function') renderAdminNotifications();
   showToast('Welcome, '+CURRENT_USER.name+' 👋');
@@ -19662,6 +19759,28 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
     <img src="logo.jpeg" alt="Immediate Care Centers of Texas" style="display:block;max-width:240px;width:80%;height:auto;margin:0 auto 14px;border-radius:8px">
     <div class="login-title">Marketing Planner</div>
     <div class="login-sub">Immediate Care Centers of Texas</div>
+    <!-- Microsoft sign-in button — primary, top-of-form when configured.
+         Falls back gracefully if the Entra ID app registration isn't set
+         up yet (clicking shows an inline error). After cutover, the
+         username/password fields below will be hidden. -->
+    <button type="button" id="ms-login-btn" onclick="doMsLogin()"
+            style="width:100%;padding:11px 14px;margin-bottom:10px;background:#fff;border:1px solid #d0d4dc;border-radius:8px;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:600;color:#1a2233;display:flex;align-items:center;justify-content:center;gap:10px;transition:background .15s,border-color .15s"
+            onmouseover="this.style.background='#f4f5f9'"
+            onmouseout="this.style.background='#fff'">
+      <!-- Microsoft logo (inline SVG, no external dependency) -->
+      <svg width="18" height="18" viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="1"  y="1"  width="9" height="9" fill="#f25022"/>
+        <rect x="11" y="1"  width="9" height="9" fill="#7fba00"/>
+        <rect x="1"  y="11" width="9" height="9" fill="#00a4ef"/>
+        <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
+      </svg>
+      <span>Sign in with Microsoft</span>
+    </button>
+    <div style="display:flex;align-items:center;gap:10px;margin:6px 0 12px;font-size:11px;color:var(--muted)">
+      <span style="flex:1;height:1px;background:var(--border)"></span>
+      <span>or</span>
+      <span style="flex:1;height:1px;background:var(--border)"></span>
+    </div>
     <div class="login-field">
       <label>Username</label>
       <input type="text" id="login-username" placeholder="Enter your username" autocomplete="username" onkeydown="if(event.key==='Enter')doLogin()">
