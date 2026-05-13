@@ -5567,7 +5567,25 @@ async function doMsLogin(){
     _finishLogin();
   } catch(e){
     console.warn('[Auth] MS sign-in failed:', e);
-    errEl.textContent = 'Microsoft sign-in failed: ' + ((e && e.message) || e);
+    var raw = (e && (e.errorCode || e.message)) || String(e);
+    var friendly;
+    // Map common AAD error codes to plain-English explanations
+    if(/AADSTS65001|admin.?approval|admin.?consent/i.test(raw)){
+      friendly = 'This app needs IT approval before you can sign in. ' +
+                 'Please ask your IT admin to grant admin consent for "ICC Marketing Planner" ' +
+                 '(see TEAM_ONBOARDING.md or contact Mahmoud).';
+    } else if(/AADSTS50020|guest|external user/i.test(raw)){
+      friendly = 'Your account is a guest in this tenant. Sign in with your wcgtx.com or frisco-er.com email.';
+    } else if(/AADSTS50105|not assigned|user.+not assigned/i.test(raw)){
+      friendly = 'Your account hasn\'t been assigned to this app yet. Ask Mahmoud to add your email to the access list.';
+    } else if(/popup.?blocked|user.?cancelled|popup.?closed/i.test(raw)){
+      friendly = 'Sign-in window was blocked or closed. Allow popups for this site and try again.';
+    } else if(/network|offline|fetch/i.test(raw)){
+      friendly = 'Network issue — check your connection and try again.';
+    } else {
+      friendly = 'Microsoft sign-in failed: ' + raw;
+    }
+    errEl.textContent = friendly;
   } finally {
     if(btn){ btn.disabled = false; if(btn.dataset.originalText) btn.innerHTML = btn.dataset.originalText; }
   }
