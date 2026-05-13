@@ -5661,13 +5661,17 @@ window.tryAutoResumeMsSession = tryAutoResumeMsSession;
 
 // Diagnostic popup for the sync-status badge. Shows mode, last sync,
 // queued writes. Useful when troubleshooting "why don't I see X yet?"
+// Offers a Reconnect action when in localStorage mode but the user signed
+// in via Entra ID — useful when the initial bootstrap failed (transient
+// network blip, etc.) so they don't have to sign out/in to retry.
 function showSyncStatus(){
   if(!CURRENT_USER){ return; }
   var mode = DataLayer.mode();
-  var enabled = DataLayer._config.enabled;
   var queueLen = (DataLayer._writeQueue && DataLayer._writeQueue.length) || 0;
   var lastSyncRaw = DataLayer._config.lastPollISO || null;
   var lastSync = lastSyncRaw ? new Date(lastSyncRaw).toLocaleString() : 'never';
+  var isStuck = (mode === 'localStorage') && (CURRENT_USER.authVia === 'entra-id');
+
   var msg = ''
     + '<div style="display:flex;flex-direction:column;gap:10px;font-size:12px;line-height:1.5">'
     +   '<div><strong>Mode:</strong> ' + (mode === 'sharepoint' ? '🔵 SharePoint (team sync)' : '🟢 localStorage (this browser only)') + '</div>'
@@ -5675,16 +5679,48 @@ function showSyncStatus(){
     +   '<div><strong>Last sync:</strong> ' + lastSync + '</div>'
     +   '<div><strong>Pending writes:</strong> ' + queueLen + '</div>'
     +   (mode === 'localStorage'
-        ? '<div style="background:#eff6ff;border-left:3px solid #1d4ed8;padding:8px 10px;border-radius:6px;font-size:11px;color:#1e3a8a">Your changes are saved in this browser only. To share with the team, sign out and use the "Sign in with Microsoft" option.</div>'
+        ? '<div style="background:#eff6ff;border-left:3px solid #1d4ed8;padding:8px 10px;border-radius:6px;font-size:11px;color:#1e3a8a">' +
+            (isStuck
+              ? 'Connected to your Microsoft account but SharePoint sync is offline. Click "Reconnect" below to retry.'
+              : 'Your changes are saved in this browser only. To share with the team, sign out and use the "Sign in with Microsoft" option.') +
+          '</div>'
         : '<div style="background:#dcfce7;border-left:3px solid #16a34a;padding:8px 10px;border-radius:6px;font-size:11px;color:#14532d">Connected to your team. Changes sync to everyone within 5 seconds.</div>')
     + '</div>';
-  if(typeof showToast === 'function' && typeof showConfirm === 'function'){
-    showConfirm({ icon: '📊', msg: 'Sync status', sub: msg, yesLabel: 'OK', noLabel: '', onConfirm: function(){} });
+
+  if(typeof showConfirm === 'function'){
+    showConfirm({
+      icon: '📊',
+      msg: 'Sync status',
+      sub: msg,
+      yesLabel: isStuck ? 'Reconnect' : 'OK',
+      noLabel:  isStuck ? 'Cancel' : '',
+      onConfirm: isStuck ? reconnectSharePoint : function(){}
+    });
   } else {
     alert(msg.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' '));
   }
 }
 window.showSyncStatus = showSyncStatus;
+
+// Manual retry for SharePoint bootstrap. Called from the sync-status popup
+// "Reconnect" button when the user is signed in via Entra ID but bootstrap
+// failed. Re-enables config and runs bootstrap again. Safe to call multiple times.
+async function reconnectSharePoint(){
+  if(!CURRENT_USER || CURRENT_USER.authVia !== 'entra-id'){
+    showToast('Sign in with Microsoft first');
+    return;
+  }
+  showToast('Reconnecting to SharePoint…');
+  DataLayer._config.enabled = true;
+  if(DataLayer._updateSyncBadge) DataLayer._updateSyncBadge('syncing');
+  var r = await DataLayer.bootstrap();
+  if(r.ok && r.mode === 'sharepoint'){
+    showToast('Reconnected · live sync on');
+  } else {
+    showToast('Still offline — check your network and try again');
+  }
+}
+window.reconnectSharePoint = reconnectSharePoint;
 
 // ── iPhone "Add to Home Screen" first-time hint ────────────────────────
 // Shows ONLY for:
