@@ -5477,17 +5477,30 @@ window.toggleLoginPassword = toggleLoginPassword;
 // between hardcoded and Entra ID flows). The admin entry is configured here
 // because the admin's M365 email (malthaher@wcgtx.com) doesn't match any
 // username in the USERS object directly.
+//
+// IMPORTANT: keys must be lowercase. Comparison in _resolveMsUser() is
+// done after .toLowerCase()-ing the signed-in email. The wcgtx.com tenant
+// has multiple verified domains (wcgtx.com, frisco-er.com, possibly others)
+// so team members may sign in with different domains — add each variant.
 var EMAIL_USER_MAP = {
-  // ── Admin (you) ──────────────────────────────────────────────────────────
-  'malthaher@wcgtx.com': { username: 'admin',   role: 'admin',    name: 'Mahmoud Althaher', color: '#1F3864' },
-  // ── Members ──────────────────────────────────────────────────────────────
-  // Defaults below assume the email prefix matches a USERS key. Override
-  // here if a team member's email doesn't follow that pattern. We seed
-  // the obvious ones; admin can add more later in this block.
-  'duaa@wcgtx.com':       USERS.duaa,
-  'sadia@wcgtx.com':      USERS.sadia,
-  'ahsan@wcgtx.com':      USERS.ahsan,
-  // Add new entries here in the same shape when onboarding teammates:
+  // ── Admin ────────────────────────────────────────────────────────────────
+  'malthaher@wcgtx.com':    { username: 'admin', role: 'admin',  name: 'Mahmoud Althaher', color: '#1F3864' },
+
+  // ── Members (real M365 sign-in addresses, confirmed via Graph directory) ─
+  // Duaa Khan — wcgtx tenant member
+  'dkhan@wcgtx.com':        { username: 'duaa',  role: 'member', name: 'Duaa Khan',     color: USERS.duaa.color },
+  // Sadia Khan — guest user (uses Frisco-ER email; her UPN ends in #EXT#@wcgtx.onmicrosoft.com
+  // but MSAL surfaces her sign-in email as skhan@frisco-er.com)
+  'skhan@frisco-er.com':    { username: 'sadia', role: 'member', name: 'Sadia Khan',    color: USERS.sadia.color },
+  // Dr Ahsan Paracha — wcgtx tenant member. NOTE: not "ahsan@wcgtx.com" —
+  // his real UPN is aparacha@wcgtx.com (initial + last name pattern).
+  'aparacha@wcgtx.com':     { username: 'ahsan', role: 'member', name: 'Dr Ahsan Paracha', color: USERS.ahsan.color },
+
+  // NOTE: there's also a Sana Khan in the tenant with skhan@wcgtx.com — she's
+  // NOT on the marketing team. We deliberately do NOT include skhan@wcgtx.com
+  // to avoid matching the wrong person. Sadia must use skhan@frisco-er.com.
+
+  // Add new entries here when onboarding teammates:
   //   'newhire@wcgtx.com': { username: 'newhire', role: 'member', name: 'New Hire', color: '#888' }
 };
 
