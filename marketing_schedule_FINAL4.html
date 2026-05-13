@@ -5557,6 +5557,9 @@ function _finishLogin(){
     window._updateSyncBadge('local');
   }
   showToast('Welcome, '+CURRENT_USER.name+' 👋');
+  // iPhone-Safari users get a gentle "Add to Home Screen" hint 2s in.
+  // No-op for desktop, Chrome, already-installed, or previously-dismissed.
+  setTimeout(function(){ try { maybeShowIosInstallHint(); } catch(e){} }, 2000);
 }
 
 // Add / remove the .member-view body class based on the current user's
@@ -5682,6 +5685,63 @@ function showSyncStatus(){
   }
 }
 window.showSyncStatus = showSyncStatus;
+
+// ── iPhone "Add to Home Screen" first-time hint ────────────────────────
+// Shows ONLY for:
+//   1. iOS Safari (not Chrome, not desktop, not already-installed PWA)
+//   2. Users who haven't dismissed it before
+//   3. After at least one successful sign-in (so we don't pester
+//      first-time visitors trying to sign in)
+// Dismissal persists per-browser via localStorage.
+function _isIosSafari(){
+  var ua = navigator.userAgent || '';
+  var isIos = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
+  var isSafari = /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS/.test(ua);
+  return isIos && isSafari;
+}
+function _isStandalone(){
+  // Standalone = already installed (running from home screen icon)
+  return (window.navigator.standalone === true) ||
+         (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+}
+function maybeShowIosInstallHint(){
+  if(!_isIosSafari()) return;
+  if(_isStandalone()) return;
+  if(DataLayer.loadRaw('wcg_ios_hint_dismissed') === '1') return;
+  if(!CURRENT_USER) return;   // wait until they sign in
+
+  var existing = document.getElementById('ios-install-hint');
+  if(existing) return;
+
+  var hint = document.createElement('div');
+  hint.id = 'ios-install-hint';
+  hint.style.cssText = 'position:fixed;left:14px;right:14px;bottom:calc(70px + env(safe-area-inset-bottom));z-index:9000;background:#fff;border:1px solid #c7d2fe;border-radius:14px;padding:14px 16px;box-shadow:0 12px 30px rgba(15,23,42,.18);font-family:DM Sans,sans-serif;display:flex;align-items:flex-start;gap:12px;animation:slideUpFade .35s ease-out';
+  hint.innerHTML = ''
+    + '<div style="font-size:28px;line-height:1">📱</div>'
+    + '<div style="flex:1">'
+    +   '<div style="font-size:13px;font-weight:700;color:#1a2233;margin-bottom:4px">Add to Home Screen</div>'
+    +   '<div style="font-size:11px;color:#475569;line-height:1.45">For the best experience: tap the <strong>Share</strong> button below, then <strong>"Add to Home Screen"</strong>. The app will open instantly with one tap.</div>'
+    + '</div>'
+    + '<button onclick="dismissIosInstallHint()" '
+    +   'style="background:none;border:none;color:#94a3b8;font-size:18px;cursor:pointer;padding:2px 6px;line-height:1;flex-shrink:0" '
+    +   'aria-label="Dismiss">×</button>';
+
+  // Inject keyframes if not already present
+  if(!document.getElementById('ios-hint-anim-style')){
+    var st = document.createElement('style');
+    st.id = 'ios-hint-anim-style';
+    st.textContent = '@keyframes slideUpFade { from { opacity:0; transform: translateY(20px); } to { opacity:1; transform: translateY(0); } }';
+    document.head.appendChild(st);
+  }
+  document.body.appendChild(hint);
+}
+function dismissIosInstallHint(){
+  var el = document.getElementById('ios-install-hint');
+  if(el) el.style.display = 'none';
+  DataLayer.save('wcg_ios_hint_dismissed', '1');
+}
+window.maybeShowIosInstallHint = maybeShowIosInstallHint;
+window.dismissIosInstallHint = dismissIosInstallHint;
 
 // Kick off auto-resume on initial page load. Runs AFTER MSAL has had a
 // chance to load (defer script). 200ms delay is enough; if MSAL isn't
