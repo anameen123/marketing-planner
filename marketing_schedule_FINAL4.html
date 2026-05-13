@@ -2,7 +2,20 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<!-- viewport-fit=cover lets CSS env(safe-area-inset-*) wrap notch areas on
+     newer iPhones. Without it, the bottom-nav can clash with the home indicator. -->
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1">
+<!-- iOS "Add to Home Screen" — turns the app into a standalone shortcut that
+     opens without the Safari URL bar. Members get a real-feeling app icon. -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Marketing">
+<meta name="mobile-web-app-capable" content="yes">
+<!-- Address-bar color on Android Chrome. Matches the navy header. -->
+<meta name="theme-color" content="#1F3864">
+<!-- Pinned-tab icon + home-screen icon. Browsers fall back to favicon.ico if these are missing. -->
+<link rel="apple-touch-icon" href="logo.jpeg">
+<link rel="icon" type="image/jpeg" href="logo.jpeg">
 <title>Marketing Planner</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -1037,6 +1050,59 @@ body.member-view.member-mobile .member-bottom-nav{display:flex}
 .mb-nav-btn.active{color:#1d4ed8}
 .mb-nav-btn:focus{outline:none}
 .mb-nav-btn.active .mb-ico{transform:scale(1.06)}
+
+/* ── iPhone / touch-device polish (44×44 tap targets per Apple HIG) ───────
+   Boosts the tap areas of small close-x buttons, pagination buttons, and
+   the calendar month nav on member-mobile screens. Doesn't touch desktop
+   so the design stays compact for laptops. The visual icon doesn't grow;
+   only the hit area + padding does. */
+@media (max-width: 768px) and (pointer: coarse) {
+  /* Modal close buttons (×) — were 26-28px, now full 44px tappable */
+  .modal-top button,
+  .cal-pop-top button {
+    width: 44px !important;
+    height: 44px !important;
+    font-size: 20px;
+  }
+  /* Calendar month nav (‹ ›) */
+  .cal-month-nav button,
+  .cal-pop-nav button {
+    width: 44px !important;
+    height: 44px !important;
+    font-size: 22px;
+  }
+  /* Pagination + small action chips */
+  .pg-btn {
+    min-width: 44px;
+    height: 44px;
+    font-size: 13px;
+  }
+  /* User avatar grows slightly so the badge is easier to tap */
+  .user-avatar {
+    width: 36px;
+    height: 36px;
+    font-size: 14px;
+  }
+  /* Generic close × buttons rendered inline in dropdowns (announcements,
+     events, observances, etc.) — they all share the right-aligned :hover
+     pattern. Boost the hit area without redesigning each one. */
+  [onclick*="close"][onclick*="Detail"],
+  [onclick*="closeAnnouncementsList"],
+  [onclick*="closeAllEventsList"],
+  [onclick*="closeAllObservancesList"] {
+    min-width: 44px !important;
+    min-height: 44px !important;
+  }
+  /* Prevent iOS from double-tap-zooming our buttons */
+  button { touch-action: manipulation; }
+  /* Disable text selection on buttons so long-press doesn't pop the
+     selection menu over a tap */
+  button { -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+  /* Inputs: zoom-bug fix — Safari zooms in on focus if input font < 16px */
+  input[type="text"], input[type="password"], input[type="date"], input[type="number"], textarea, select {
+    font-size: 16px;
+  }
+}
 </style>
 
 <!-- ════════════════════════════════════════════════════════════════════════
