@@ -4003,30 +4003,40 @@ var DataLayer = (function(){
   // SPA redirect URIs cover localhost dev + the GitHub Pages prod URL.
   //
   // `enabled` starts false. The Microsoft sign-in flow (doMsLogin) flips it
-  // to true and runs bootstrap() to provision Lists + start polling. The
-  // hardcoded login (admin/1234) intentionally LEAVES enabled=false — it's
-  // a localStorage-only dev mode that doesn't touch SharePoint. This means:
+  // to true and runs bootstrap() to provision the data folder + start polling.
+  // The hardcoded login (admin/1234) intentionally LEAVES enabled=false —
+  // a localStorage-only dev mode that doesn't touch SharePoint.
+  //
+  // STORAGE MODEL: SharePoint Document Library (files), not Lists.
+  // Why: SharePoint List multi-line text columns cap at ~63,999 chars per
+  // value. Our schedule JSON is ~1 MB+. Storing as JSON files in the site's
+  // default Document Library ("Documents") sidesteps the limit entirely —
+  // files can be 250 GB each. Each tracked key maps to one .json file under
+  // /MarketingPlannerData/. Files are read/written via the Graph drive API.
+  //
   //   • Open at localhost → admin/1234 → fast, offline, no popups
-  //   • Open at github.io/… → click MS button → SharePoint goes live
+  //   • Open at github.io/… → click MS button → SharePoint files go live
   var config = {
     enabled: false,                                                 // flips to true after successful MS sign-in
-    sharepointUrl: 'https://wcgtx.sharepoint.com',                 // root site — Lists live here
+    sharepointUrl: 'https://wcgtx.sharepoint.com',                 // root site
     siteId: '',                                                     // resolved on bootstrap, cached after
+    driveId: '',                                                    // default Document Library drive (resolved on bootstrap)
     tenantId: '36db94fb-80e4-470d-a675-2ee06ddf3d89',               // wcgtx.com tenant
     clientId: '0447f26e-7a21-4c67-90a0-e967ee70a10f',               // ICC Marketing Planner app registration
     pollIntervalMs: 5000,                                           // 5-sec live sync for team-wide updates
-    // Mapping: localStorage key → SharePoint Lists name
-    // Each store maps to one List in the site. Lists are auto-provisioned
-    // on first run when DataLayer.bootstrap() is called.
-    keyToList: {
-      'wcg_schedule_v1':                'Visits',
-      'wcg_business_referrals_v1':      'BusinessReferrals',
-      'wcg_tier_thresholds_v4':         'TierThresholds',
-      'wcg_period_budget_enabled_v1':   'Settings',
-      'wcg_admin_notifications_v1':     'AdminNotifications',
-      // Per-user "which notifs I've read" keys are dynamic — handled separately
+    dataFolder: 'MarketingPlannerData',                             // folder name inside the Document Library
+    // Mapping: localStorage key → filename inside the data folder.
+    keyToFile: {
+      'wcg_schedule_v1':                'schedule.json',
+      'wcg_business_referrals_v1':      'business-referrals.json',
+      'wcg_tier_thresholds_v4':         'tier-thresholds.json',
+      'wcg_period_budget_enabled_v1':   'settings-period-budget.json',
+      'wcg_admin_notifications_v1':     'admin-notifications.json'
+      // Per-user "which notifs I've read" keys stay in localStorage (per-user, not shared)
     }
   };
+  // Backwards-compat alias — older code paths still reference keyToList
+  config.keyToList = config.keyToFile;
 
   // ── Internal state ──────────────────────────────────────────────────────
   var _writeQueue = [];                   // pending SharePoint writes
@@ -4185,19 +4195,31 @@ var DataLayer = (function(){
   // ── PRIVATE — Graph API wrapper ────────────────────────────────────────
   // All SharePoint API calls go through this so retries / auth refresh /
   // throttling handling lives in one place.
+  //
+  // Body handling: if options.body is a string, sent as-is. If it's an
+  // object, JSON-encoded.
+  // Headers: caller can override Content-Type (e.g. file uploads send the
+  // raw JSON body with Content-Type: application/json).
+  // Response: parses JSON when response is application/json; otherwise
+  // returns the raw text. 204 / 404 return null. Other 4xx/5xx throw.
   async function _graphFetch(path, options){
     options = options || {};
     var token = await _getToken();
     var url = path.indexOf('http') === 0 ? path : 'https://graph.microsoft.com/v1.0' + path;
-    var resp = await fetch(url, {
-      method: options.method || 'GET',
-      headers: Object.assign({
-        'Authorization': 'Bearer ' + token,
-        'Content-Type': 'application/json',
-        'Accept':       'application/json'
-      }, options.headers || {}),
-      body: options.body ? (typeof options.body === 'string' ? options.body : JSON.stringify(options.body)) : undefined
-    });
+    var headers = Object.assign({
+      'Authorization': 'Bearer ' + token,
+      'Accept':        'application/json'
+    }, options.headers || {});
+    // Default Content-Type for requests with a body
+    if(options.body !== undefined && options.body !== null && !headers['Content-Type']){
+      headers['Content-Type'] = 'application/json';
+    }
+    var body = (options.body === undefined || options.body === null)
+      ? undefined
+      : (typeof options.body === 'string' ? options.body : JSON.stringify(options.body));
+
+    var resp = await fetch(url, { method: options.method || 'GET', headers: headers, body: body });
+
     if(resp.status === 429){
       // Throttled — wait suggested time then retry once
       var retryAfter = parseInt(resp.headers.get('Retry-After') || '2', 10);
@@ -4205,11 +4227,14 @@ var DataLayer = (function(){
       return _graphFetch(path, options);
     }
     if(!resp.ok && resp.status !== 404){
-      var errText = await resp.text();
-      throw new Error('Graph API ' + resp.status + ' on ' + path + ': ' + errText.slice(0, 200));
+      var errText = '';
+      try { errText = await resp.text(); } catch(e){}
+      throw new Error('Graph API ' + resp.status + ' on ' + path + ': ' + (errText || resp.statusText).slice(0, 240));
     }
     if(resp.status === 204 || resp.status === 404) return null;
-    return resp.json();
+    var ct = (resp.headers.get('content-type') || '').toLowerCase();
+    if(ct.indexOf('application/json') !== -1) return resp.json();
+    return resp.text();
   }
 
   // ── PRIVATE — Site + List provisioning ─────────────────────────────────
@@ -4229,42 +4254,33 @@ var DataLayer = (function(){
     return data.id;
   }
 
-  // Creates any missing Lists in the SharePoint site. Each List has a
-  // simple schema: Title (key), Value (long text JSON blob), Modified
-  // (built-in). One row per data key — last-write-wins semantics.
+  // Resolves the default Document Library's drive ID + ensures our data
+  // folder exists inside it. We use the site's primary "Documents" library.
+  // Creating the folder is implicit — PUTting a file at a path with a
+  // missing folder will create the folder, but we explicitly create it
+  // here once so it shows up in SharePoint UI even before any data.
   async function _ensureLists(){
-    var listNames = {};
-    for(var k in config.keyToList){
-      if(config.keyToList.hasOwnProperty(k)) listNames[config.keyToList[k]] = true;
+    // Get the default drive (the "Documents" Document Library)
+    if(!config.driveId){
+      var drive = await _graphFetch('/sites/' + config.siteId + '/drive');
+      if(!drive || !drive.id) throw new Error('Could not resolve default Document Library');
+      config.driveId = drive.id;
     }
-    // Fetch existing lists in one call
-    var existing = await _graphFetch('/sites/' + config.siteId + '/lists?$select=name,id');
-    var have = {};
-    (existing && existing.value || []).forEach(function(l){ have[l.name] = l.id; });
-
-    var listIds = {};
-    var listNamesArr = Object.keys(listNames);
-    for(var i = 0; i < listNamesArr.length; i++){
-      var name = listNamesArr[i];
-      if(have[name]){
-        listIds[name] = have[name];
-        continue;
-      }
-      // Create the list
-      var created = await _graphFetch('/sites/' + config.siteId + '/lists', {
+    // Try to create our data folder. If it already exists, ignore the 409.
+    try {
+      await _graphFetch('/drives/' + config.driveId + '/root/children', {
         method: 'POST',
-        body: {
-          displayName: name,
-          list: { template: 'genericList' },
-          columns: [
-            { name: 'Value', text: { allowMultipleLines: true, maxLength: 1000000 } }
-          ]
-        }
+        body: { name: config.dataFolder, folder: {}, '@microsoft.graph.conflictBehavior': 'fail' }
       });
-      if(created && created.id) listIds[name] = created.id;
+    } catch(e){
+      // 409 (already exists) is fine; anything else bubbles up
+      if(!/409|already exists|nameAlreadyExists/i.test((e && e.message) || '')){
+        throw e;
+      }
     }
-    config.listIds = listIds;
-    return listIds;
+    // listIds kept for backwards-compat — now contains filename references
+    config.listIds = config.keyToFile;
+    return config.listIds;
   }
 
   // ── PRIVATE — Initial fetch + polling ──────────────────────────────────
@@ -4296,49 +4312,71 @@ var DataLayer = (function(){
     config.lastPollISO = _lastPollISO;
   }
 
+  // Helper: full path for a key's JSON file inside the data folder.
+  function _filePathFor(key){
+    var fname = config.keyToFile[key];
+    if(!fname) return null;
+    return config.dataFolder + '/' + fname;
+  }
+
+  // GET a file's body. Returns null if the file doesn't exist.
+  async function _readFile(key){
+    var path = _filePathFor(key);
+    if(!path) return null;
+    try {
+      var raw = await _graphFetch('/drives/' + config.driveId + '/root:/' + path + ':/content');
+      if(raw === null) return null;
+      // Graph returns parsed JSON if Content-Type is application/json, or string otherwise.
+      // Our _graphFetch returns JSON if response is JSON; we standardize to string here.
+      if(typeof raw === 'string') return raw;
+      // Re-serialize so caller compares strings consistently with localStorage
+      return JSON.stringify(raw);
+    } catch(e){
+      // 404 = file doesn't exist yet (treat as null)
+      if(/404|not.?found/i.test((e && e.message) || '')) return null;
+      throw e;
+    }
+  }
+
+  // PUT a file's body. Creates the file if missing; overwrites if it exists.
+  async function _writeFile(key, valueStr){
+    var path = _filePathFor(key);
+    if(!path) throw new Error('No file mapping for key ' + key);
+    return _graphFetch('/drives/' + config.driveId + '/root:/' + path + ':/content', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: valueStr   // pass raw string body directly
+    });
+  }
+
   // Returns 'pulled' / 'seeded' / 'noop' depending on what happened.
   async function _fetchOrSeedKey(key){
-    var listName = config.keyToList[key];
-    var listId = config.listIds && config.listIds[listName];
-    if(!listId) return 'noop';
-    var resp = await _graphFetch('/sites/' + config.siteId + '/lists/' + listId + '/items?$expand=fields($select=Title,Value,Modified)&$filter=fields/Title eq \'' + encodeURIComponent(key) + '\'&$top=1');
-    var item = resp && resp.value && resp.value[0];
-    var remoteValue = (item && item.fields && typeof item.fields.Value !== 'undefined') ? item.fields.Value : null;
+    var remoteStr = await _readFile(key);
     var localStr = localStorage.getItem(key);
 
-    if(remoteValue !== null){
+    if(remoteStr !== null){
       // ── SP has data: pull DOWN (override local cache only if it differs) ──
-      if(localStr === remoteValue) return 'noop';
-      try { localStorage.setItem(key, remoteValue); }
+      if(localStr === remoteStr) return 'noop';
+      try { localStorage.setItem(key, remoteStr); }
       catch(e){ /* quota — skip */ }
       _emitChange(key);
       return 'pulled';
     } else if(localStr !== null){
       // ── SP is empty but local has data: seed SP ───────────────────────────
-      // POST a new item with Title=key, Value=local. Use _writeKey for parity.
-      var parsed;
-      try { parsed = JSON.parse(localStr); }
-      catch(e){ parsed = localStr; /* string value, kept as-is */ }
-      await _writeKey(key, parsed);
+      await _writeFile(key, localStr);
       return 'seeded';
     }
     return 'noop';
   }
 
-  // Polling path — same as _fetchOrSeedKey but only pulls (never seeds).
-  // We don't want polling to re-seed after the admin manually cleared a List.
+  // Polling path — pull-only (never seeds). Stays defensive against the admin
+  // manually deleting a file in SharePoint UI (the file just stays absent).
   async function _fetchKeyIntoCache(key){
-    var listName = config.keyToList[key];
-    var listId = config.listIds && config.listIds[listName];
-    if(!listId) return;
-    var resp = await _graphFetch('/sites/' + config.siteId + '/lists/' + listId + '/items?$expand=fields($select=Title,Value,Modified)&$filter=fields/Title eq \'' + encodeURIComponent(key) + '\'&$top=1');
-    var item = resp && resp.value && resp.value[0];
-    if(!item || !item.fields) return;
-    var remoteValue = item.fields.Value;
-    if(typeof remoteValue === 'undefined') return;
+    var remoteStr = await _readFile(key);
+    if(remoteStr === null) return;
     var localStr = localStorage.getItem(key);
-    if(localStr === remoteValue) return;
-    try { localStorage.setItem(key, remoteValue); }
+    if(localStr === remoteStr) return;
+    try { localStorage.setItem(key, remoteStr); }
     catch(e){ /* quota — skip */ }
     _emitChange(key);
   }
@@ -4433,26 +4471,8 @@ var DataLayer = (function(){
   }
 
   async function _writeKey(key, value){
-    var listName = config.keyToList[key];
-    var listId = config.listIds && config.listIds[listName];
-    if(!listId) throw new Error('No list for key ' + key);
     var serialized = (typeof value === 'string') ? value : JSON.stringify(value);
-    // Find existing item by Title=key
-    var found = await _graphFetch('/sites/' + config.siteId + '/lists/' + listId + '/items?$expand=fields($select=Title)&$filter=fields/Title eq \'' + encodeURIComponent(key) + '\'&$top=1');
-    var existing = found && found.value && found.value[0];
-    if(existing && existing.id){
-      // Update existing
-      await _graphFetch('/sites/' + config.siteId + '/lists/' + listId + '/items/' + existing.id + '/fields', {
-        method: 'PATCH',
-        body: { Value: serialized }
-      });
-    } else {
-      // Create new
-      await _graphFetch('/sites/' + config.siteId + '/lists/' + listId + '/items', {
-        method: 'POST',
-        body: { fields: { Title: key, Value: serialized } }
-      });
-    }
+    await _writeFile(key, serialized);
   }
 
   // ── External helpers — used by AuthLayer to share one MSAL session ─────
