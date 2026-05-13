@@ -4425,6 +4425,12 @@ var DataLayer = (function(){
     try { await _msalInstance.logoutPopup({ account: accounts[0] }); }
     catch(e){ /* user closed popup; nothing to do */ }
   }
+  // Returns the cached MSAL accounts (or empty array). Initializes MSAL
+  // lazily on first call. Used by auto-resume to detect returning users.
+  async function _getAccounts_external(){
+    try { await _initMsal(); return _msalInstance.getAllAccounts(); }
+    catch(e){ return []; }
+  }
 
   // ── Expose ──────────────────────────────────────────────────────────────
   return {
@@ -4435,6 +4441,7 @@ var DataLayer = (function(){
     _initMsal_external: _initMsal_external,
     _ensureSignedIn_external: _ensureSignedIn_external,
     _signOut_external: _signOut_external,
+    _getAccounts_external: _getAccounts_external,
     bootstrap: bootstrap,
     setConfig: setConfig,
     mode: mode,
@@ -5532,7 +5539,16 @@ window.addEventListener('resize', _updateMemberMobileClass);
 _updateMemberMobileClass();
 window.doLogin=doLogin;
 
-function doLogout(){
+async function doLogout(){
+  // If the user signed in via Entra ID, also clear MSAL's cached account so
+  // a different M365 user can sign in afterward. Hardcoded sessions don't
+  // need this step. We swallow MSAL errors — even if logout-popup fails
+  // (user closed it), we still want to log them out locally.
+  if(CURRENT_USER && CURRENT_USER.authVia === 'entra-id'){
+    try { await DataLayer._signOut_external(); } catch(e){}
+    // Stop background polling so we don't keep hammering Graph as a logged-out user
+    try { DataLayer._config.enabled = false; } catch(e){}
+  }
   CURRENT_USER=null;
   document.body.classList.remove('member-view'); // back to admin palette on the login screen
   document.getElementById('login-screen').style.display='flex';
@@ -5542,6 +5558,66 @@ function doLogout(){
   document.getElementById('user-badge-wrap').innerHTML='';
 }
 window.doLogout=doLogout;
+
+// ── Auto-resume Microsoft session on page load ─────────────────────────
+// If the user previously signed in via Entra ID and the cached MSAL token
+// is still valid, silently sign them back in instead of showing the login
+// screen. Pattern: try a silent token acquire — if it works, we have an
+// account; if not, fall through to the login screen as normal.
+//
+// This is what makes the app feel "permanent" on iPhone — reload the
+// Home Screen icon, you're still signed in. No re-click required.
+async function tryAutoResumeMsSession(){
+  // Only attempt if the user previously chose the MS path (cached account).
+  // We never silently sign in a fresh visitor — they must click the button.
+  if(typeof window.msal === 'undefined' || typeof window.msal.PublicClientApplication !== 'function'){
+    return false;
+  }
+  if(!DataLayer._config.clientId) return false;   // Entra ID not configured
+  try {
+    var accounts = await DataLayer._getAccounts_external();
+    if(!accounts || !accounts.length) return false;
+    // Use the same flow as doMsLogin but skip the popup
+    var email = (accounts[0].username || '').toLowerCase();
+    var profile = _resolveMsUser(email);
+    if(!profile){
+      // Authorized to use M365 but not authorized for this app — clear cache + show login
+      try { await DataLayer._signOut_external(); } catch(e){}
+      return false;
+    }
+    CURRENT_USER = {
+      username: profile.username,
+      name:     profile.name,
+      role:     profile.role,
+      color:    profile.color,
+      email:    email,
+      authVia:  'entra-id'
+    };
+    DataLayer._config.enabled = true;
+    DataLayer.bootstrap().then(function(r){
+      if(r.ok && r.mode === 'sharepoint'){
+        if(typeof showToast === 'function') showToast('Welcome back · live sync on');
+      }
+    });
+    _finishLogin();
+    return true;
+  } catch(e){
+    // Token expired / silent acquire failed — fall through to login screen
+    return false;
+  }
+}
+window.tryAutoResumeMsSession = tryAutoResumeMsSession;
+
+// Kick off auto-resume on initial page load. Runs AFTER MSAL has had a
+// chance to load (defer script). 200ms delay is enough; if MSAL isn't
+// ready by then, the function returns false and the login screen shows.
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    if(!CURRENT_USER){   // only if not already signed in via hardcoded
+      tryAutoResumeMsSession();
+    }
+  }, 250);
+});
 
 function renderUserBadge(){
   var wrap=document.getElementById('user-badge-wrap');
