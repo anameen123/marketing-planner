@@ -1160,6 +1160,15 @@ body.member-view.member-mobile .member-bottom-nav{display:flex}
         <div id="admin-notif-list" style="max-height:380px;overflow-y:auto"></div>
       </div>
     </div>
+    <!-- 🔵 SYNC STATUS BADGE — shows whether the app is in localStorage-only
+         mode (no team sharing) vs SharePoint mode (live sync). Hidden until
+         a user is signed in. Click for diagnostic info. -->
+    <div id="sync-status-wrap" style="display:none;align-items:center;gap:6px;font-size:10px;font-weight:600;letter-spacing:.04em;padding:5px 9px;border-radius:9px;cursor:pointer;transition:background .15s"
+         title="Sync status — click for details"
+         onclick="showSyncStatus()">
+      <span id="sync-status-dot" style="width:8px;height:8px;border-radius:50%;background:#94a3b8;display:inline-block;transition:background .25s"></span>
+      <span id="sync-status-label" style="color:#fff;opacity:.85">Local</span>
+    </div>
     <div id="user-badge-wrap"></div><div id="hdr-clock"></div></div>
   </div>
   <div class="main-nav">
@@ -4079,18 +4088,21 @@ var DataLayer = (function(){
       return { ok: true, mode: 'localStorage' };
     }
     try {
+      _updateSyncBadge && _updateSyncBadge('syncing');
       await _initMsal();
       await _ensureSignedIn();
       await _ensureSiteId();
       await _ensureLists();
       await _initialFetch();
       _startPolling();
+      _updateSyncBadge && _updateSyncBadge('ok');
       console.info('[DataLayer] SharePoint backend live · site=' + config.siteId);
       return { ok: true, mode: 'sharepoint' };
     } catch(e){
       console.warn('[DataLayer] bootstrap failed, falling back to localStorage:', e);
       config.enabled = false;
       _stopPolling();
+      _updateSyncBadge && _updateSyncBadge('error');
       return { ok: false, mode: 'localStorage', error: (e && e.message) || String(e) };
     }
   }
@@ -4281,6 +4293,7 @@ var DataLayer = (function(){
       console.info('[DataLayer] Pulled ' + pulledCount + ' List(s) from SharePoint into local cache');
     }
     _lastPollISO = new Date().toISOString();
+    config.lastPollISO = _lastPollISO;
   }
 
   // Returns 'pulled' / 'seeded' / 'noop' depending on what happened.
@@ -4362,12 +4375,39 @@ var DataLayer = (function(){
     // Re-fetch every tracked key. Cheap because the server returns a 304
     // for unchanged items + we only update cache when remote differs.
     if(!config.enabled || !config.listIds) return;
+    _updateSyncBadge('syncing');
+    var anyFailed = false;
     var keys = Object.keys(config.keyToList);
     for(var i = 0; i < keys.length; i++){
-      try { await _fetchKeyIntoCache(keys[i]); } catch(e){ /* tolerate single-key failures */ }
+      try { await _fetchKeyIntoCache(keys[i]); }
+      catch(e){ anyFailed = true; /* tolerate single-key failures */ }
     }
     _lastPollISO = new Date().toISOString();
+    config.lastPollISO = _lastPollISO;
+    _updateSyncBadge(anyFailed ? 'error' : 'ok');
   }
+
+  // ── Sync status badge — visible in the header. Reflects backend state.
+  // States: 'local' (gray) · 'syncing' (yellow pulse) · 'ok' (green) · 'error' (red)
+  function _updateSyncBadge(state){
+    var wrap = document.getElementById('sync-status-wrap');
+    var dot = document.getElementById('sync-status-dot');
+    var lbl = document.getElementById('sync-status-label');
+    if(!wrap || !dot || !lbl) return;
+    if(!CURRENT_USER){ wrap.style.display = 'none'; return; }
+    wrap.style.display = 'inline-flex';
+    var map = {
+      local:   { color: '#94a3b8', label: 'Local',       bg: 'rgba(255,255,255,.08)' },
+      syncing: { color: '#fbbf24', label: 'Syncing…', bg: 'rgba(251,191,36,.15)' },
+      ok:      { color: '#22c55e', label: 'Live',        bg: 'rgba(34,197,94,.15)' },
+      error:   { color: '#ef4444', label: 'Sync error',  bg: 'rgba(239,68,68,.15)' }
+    };
+    var s = map[state] || map.local;
+    dot.style.background = s.color;
+    lbl.textContent = s.label;
+    wrap.style.background = s.bg;
+  }
+  window._updateSyncBadge = _updateSyncBadge;
 
   // ── PRIVATE — Write path ───────────────────────────────────────────────
   function _enqueueRemoteWrite(key, value){
@@ -4442,6 +4482,7 @@ var DataLayer = (function(){
     _ensureSignedIn_external: _ensureSignedIn_external,
     _signOut_external: _signOut_external,
     _getAccounts_external: _getAccounts_external,
+    _updateSyncBadge: _updateSyncBadge,
     bootstrap: bootstrap,
     setConfig: setConfig,
     mode: mode,
@@ -5508,6 +5549,13 @@ function _finishLogin(){
   if(typeof switchTab === 'function') switchTab('home');
   if(typeof _loadAdminNotifs === 'function') _loadAdminNotifs();
   if(typeof renderAdminNotifications === 'function') renderAdminNotifications();
+  // Reflect the current backend in the header badge. Bootstrap will flip
+  // it to 'ok'/'syncing'/'error' if SharePoint comes online.
+  if(typeof DataLayer !== 'undefined' && DataLayer._updateSyncBadge){
+    DataLayer._updateSyncBadge(DataLayer.mode() === 'sharepoint' ? 'syncing' : 'local');
+  } else if(typeof window._updateSyncBadge === 'function'){
+    window._updateSyncBadge('local');
+  }
   showToast('Welcome, '+CURRENT_USER.name+' 👋');
 }
 
@@ -5607,6 +5655,33 @@ async function tryAutoResumeMsSession(){
   }
 }
 window.tryAutoResumeMsSession = tryAutoResumeMsSession;
+
+// Diagnostic popup for the sync-status badge. Shows mode, last sync,
+// queued writes. Useful when troubleshooting "why don't I see X yet?"
+function showSyncStatus(){
+  if(!CURRENT_USER){ return; }
+  var mode = DataLayer.mode();
+  var enabled = DataLayer._config.enabled;
+  var queueLen = (DataLayer._writeQueue && DataLayer._writeQueue.length) || 0;
+  var lastSyncRaw = DataLayer._config.lastPollISO || null;
+  var lastSync = lastSyncRaw ? new Date(lastSyncRaw).toLocaleString() : 'never';
+  var msg = ''
+    + '<div style="display:flex;flex-direction:column;gap:10px;font-size:12px;line-height:1.5">'
+    +   '<div><strong>Mode:</strong> ' + (mode === 'sharepoint' ? '🔵 SharePoint (team sync)' : '🟢 localStorage (this browser only)') + '</div>'
+    +   '<div><strong>Auth:</strong> ' + (CURRENT_USER.authVia === 'entra-id' ? 'Microsoft Entra ID · ' + (CURRENT_USER.email || '') : 'Hardcoded (dev mode)') + '</div>'
+    +   '<div><strong>Last sync:</strong> ' + lastSync + '</div>'
+    +   '<div><strong>Pending writes:</strong> ' + queueLen + '</div>'
+    +   (mode === 'localStorage'
+        ? '<div style="background:#eff6ff;border-left:3px solid #1d4ed8;padding:8px 10px;border-radius:6px;font-size:11px;color:#1e3a8a">Your changes are saved in this browser only. To share with the team, sign out and use the "Sign in with Microsoft" option.</div>'
+        : '<div style="background:#dcfce7;border-left:3px solid #16a34a;padding:8px 10px;border-radius:6px;font-size:11px;color:#14532d">Connected to your team. Changes sync to everyone within 5 seconds.</div>')
+    + '</div>';
+  if(typeof showToast === 'function' && typeof showConfirm === 'function'){
+    showConfirm({ icon: '📊', msg: 'Sync status', sub: msg, yesLabel: 'OK', noLabel: '', onConfirm: function(){} });
+  } else {
+    alert(msg.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' '));
+  }
+}
+window.showSyncStatus = showSyncStatus;
 
 // Kick off auto-resume on initial page load. Runs AFTER MSAL has had a
 // chance to load (defer script). 200ms delay is enough; if MSAL isn't
