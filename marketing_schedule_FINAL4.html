@@ -4190,32 +4190,77 @@ var DataLayer = (function(){
   }
 
   // ── PRIVATE — Initial fetch + polling ──────────────────────────────────
-  // Pulls the current value of every tracked key into localStorage on
-  // app boot. After this the app reads from localStorage normally.
+  // Runs on first bootstrap. For each tracked key:
+  //   • If SharePoint has a value → pull DOWN into local cache (override local)
+  //   • If SharePoint is empty BUT we have a local cache → push UP (seed SP)
+  //   • If both empty → do nothing
+  // This "first-run migration" ensures the admin's existing 365-day schedule
+  // (or any other local state) doesn't get wiped when the team first goes live.
+  // Last-writer-wins semantics from there on — works fine for a 6-user team.
   async function _initialFetch(){
     var keys = Object.keys(config.keyToList);
+    var seededCount = 0, pulledCount = 0;
     for(var i = 0; i < keys.length; i++){
-      try { await _fetchKeyIntoCache(keys[i]); } catch(e){ /* tolerate single-key failures */ }
+      try {
+        var result = await _fetchOrSeedKey(keys[i]);
+        if(result === 'pulled')  pulledCount++;
+        else if(result === 'seeded') seededCount++;
+      } catch(e){ /* tolerate single-key failures */ }
+    }
+    if(seededCount > 0){
+      console.info('[DataLayer] Seeded ' + seededCount + ' empty SharePoint List(s) from local cache');
+      if(typeof showToast === 'function') showToast('Uploaded ' + seededCount + ' data set(s) to SharePoint');
+    }
+    if(pulledCount > 0){
+      console.info('[DataLayer] Pulled ' + pulledCount + ' List(s) from SharePoint into local cache');
     }
     _lastPollISO = new Date().toISOString();
   }
 
+  // Returns 'pulled' / 'seeded' / 'noop' depending on what happened.
+  async function _fetchOrSeedKey(key){
+    var listName = config.keyToList[key];
+    var listId = config.listIds && config.listIds[listName];
+    if(!listId) return 'noop';
+    var resp = await _graphFetch('/sites/' + config.siteId + '/lists/' + listId + '/items?$expand=fields($select=Title,Value,Modified)&$filter=fields/Title eq \'' + encodeURIComponent(key) + '\'&$top=1');
+    var item = resp && resp.value && resp.value[0];
+    var remoteValue = (item && item.fields && typeof item.fields.Value !== 'undefined') ? item.fields.Value : null;
+    var localStr = localStorage.getItem(key);
+
+    if(remoteValue !== null){
+      // ── SP has data: pull DOWN (override local cache only if it differs) ──
+      if(localStr === remoteValue) return 'noop';
+      try { localStorage.setItem(key, remoteValue); }
+      catch(e){ /* quota — skip */ }
+      _emitChange(key);
+      return 'pulled';
+    } else if(localStr !== null){
+      // ── SP is empty but local has data: seed SP ───────────────────────────
+      // POST a new item with Title=key, Value=local. Use _writeKey for parity.
+      var parsed;
+      try { parsed = JSON.parse(localStr); }
+      catch(e){ parsed = localStr; /* string value, kept as-is */ }
+      await _writeKey(key, parsed);
+      return 'seeded';
+    }
+    return 'noop';
+  }
+
+  // Polling path — same as _fetchOrSeedKey but only pulls (never seeds).
+  // We don't want polling to re-seed after the admin manually cleared a List.
   async function _fetchKeyIntoCache(key){
     var listName = config.keyToList[key];
     var listId = config.listIds && config.listIds[listName];
     if(!listId) return;
-    // Each List stores ONE item with Title=key, Value=JSON blob
     var resp = await _graphFetch('/sites/' + config.siteId + '/lists/' + listId + '/items?$expand=fields($select=Title,Value,Modified)&$filter=fields/Title eq \'' + encodeURIComponent(key) + '\'&$top=1');
     var item = resp && resp.value && resp.value[0];
     if(!item || !item.fields) return;
     var remoteValue = item.fields.Value;
     if(typeof remoteValue === 'undefined') return;
-    // Compare with local — only update cache if remote differs
     var localStr = localStorage.getItem(key);
     if(localStr === remoteValue) return;
     try { localStorage.setItem(key, remoteValue); }
     catch(e){ /* quota — skip */ }
-    // Trigger UI refresh — different reloaders exist per data type
     _emitChange(key);
   }
 
