@@ -3922,14 +3922,17 @@ var CURRENT_PERIOD = _computeCurrentPeriod();
 // This keeps the UI snappy and works offline.
 // ══════════════════════════════════════════════════════════════════════════
 var DataLayer = (function(){
-  // ── Config — flip these once the SharePoint setup is done ──────────────
+  // ── Config — Wellness & Care Group of Texas Inc. tenant ────────────────
+  // App registration: "ICC Marketing Planner" in the wcgtx.com tenant.
+  // Permissions: Sites.ReadWrite.All + User.Read (delegated, per-user consent).
+  // SPA redirect URIs cover localhost dev + the GitHub Pages prod URL.
   var config = {
-    enabled: false,                       // ← MAIN SWITCH — true to go live with SharePoint
-    sharepointUrl: '',                    // e.g. 'https://wcgtx.sharepoint.com/sites/MarketingPlanner'
-    siteId: '',                           // Microsoft Graph site ID (fetched once + cached)
-    tenantId: '',                         // Entra ID tenant ID for MSAL
-    clientId: '',                         // Entra ID app registration client ID
-    pollIntervalMs: 5000,                 // How often we poll for changes from other team members
+    enabled: false,                       // ← MAIN SWITCH — flip to true to go live with SharePoint
+    sharepointUrl: 'https://wcgtx.sharepoint.com',                // root site — Lists live here
+    siteId: '',                                                    // resolved on bootstrap, cached after
+    tenantId: '36db94fb-80e4-470d-a675-2ee06ddf3d89',              // wcgtx.com tenant
+    clientId: '0447f26e-7a21-4c67-90a0-e967ee70a10f',              // ICC Marketing Planner app registration
+    pollIntervalMs: 5000,                                          // 5-sec live sync for team-wide updates
     // Mapping: localStorage key → SharePoint Lists name
     // Each store maps to one List in the site. Lists are auto-provisioned
     // on first run when DataLayer.bootstrap() is called.
