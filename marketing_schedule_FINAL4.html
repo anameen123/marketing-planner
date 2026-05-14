@@ -10760,7 +10760,13 @@ var APPROVED_AREAS = [
   'Wylie','Murphy','Flower Mound','Denton','Dallas'
 ];
 
-var EVENTBRITE_TOKEN = 'REDACTED_TOKEN_REVOKED_20260514';
+// ⚠ The Eventbrite token previously hardcoded on this line has been
+// REVOKED. The original token leaked when the repo went public — it's
+// no longer valid. To re-enable Eventbrite event imports, generate a
+// new token at https://www.eventbrite.com/account-settings/api and
+// store it OUTSIDE this HTML (e.g. SharePoint settings file via
+// DataLayer, OR via Power Automate flow — NEVER hardcode it here).
+var EVENTBRITE_TOKEN = '';
 var EVT_NEXT_ID=11;
 
 // ── OBSERVANCES & MEMORIAL DAYS (full year 2026) ──────────────
