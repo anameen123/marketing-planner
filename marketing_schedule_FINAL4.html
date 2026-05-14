@@ -2410,12 +2410,26 @@ var LEAD_STATUSES = {
 var ESTABLISHED_LEVELS = {
   1: { label:'L1 — Front Desk',   color:'#16a34a', desc:'Relationship with receptionist / front desk' },
   2: { label:'L2 — Coordinator',  color:'#0d9488', desc:'Reached office manager or coordinator' },
-  3: { label:'L3 — Doctor',       color:'#7030A0', desc:'Direct relationship with the physician' }
+  3: { label:'L3 — Doctor',       color:'#7030A0', desc:'Direct relationship with the physician' },
+  4: { label:'L4 — Owner',        color:'#dc2626', desc:'Direct relationship with the practice owner / decision-maker' }
 };
 
-// CLINIC_LEADS: tracks lead status per clinic
+// CLINIC_LEADS: tracks lead status per clinic.
 // Key: clinic name. Value: { status, level, member, date, notes, history[], revisitDate }
+// PERSISTED via DataLayer (so it round-trips to SharePoint when SP mode is on)
 var CLINIC_LEADS = {};
+var _CL_LS_KEY = 'wcg_clinic_leads_v1';
+function _loadClinicLeads(){
+  if(typeof DataLayer === 'undefined' || !DataLayer.load) return;
+  var v = DataLayer.load(_CL_LS_KEY);
+  CLINIC_LEADS = (v && typeof v === 'object' && !Array.isArray(v)) ? v : {};
+}
+function _saveClinicLeads(){
+  if(typeof DataLayer === 'undefined' || !DataLayer.save) return;
+  DataLayer.save(_CL_LS_KEY, CLINIC_LEADS);
+}
+window._loadClinicLeads = _loadClinicLeads;
+window._saveClinicLeads = _saveClinicLeads;
 
 // Map a business name back to its type (clinic / mva / outreach) by checking
 // which Bank array it lives in. Used to color-code schedule rows + cards
@@ -2536,7 +2550,93 @@ function setClinicLead(clinicName, update, note, byMember){
     lastUpdated: now,
     lastUpdatedBy: byMember || (CURRENT_USER ? CURRENT_USER.name : '')
   });
+  // Persist so the change survives reloads + syncs to teammates
+  _saveClinicLeads();
 }
+
+// Card-level lead editor — used by the inline "Set Lead" widget on each
+// business card. Sets the lead to status='established' at the chosen level.
+// `note` is auto-set to "Set retroactively from card" so the history makes
+// it clear this wasn't tied to a specific visit.
+function setCardLead(businessName, level){
+  if(typeof level !== 'number' || level < 1 || level > 4){
+    showToast('Pick L1, L2, L3 or L4');
+    return;
+  }
+  setClinicLead(businessName, { status: 'established', level: level }, 'Lead set retroactively from card');
+  showToast('Set ' + businessName + ' → L' + level);
+  // Re-render all the bank panels so the new badge shows up everywhere
+  if(typeof renderBank === 'function')    try { renderBank(); }    catch(e){}
+  if(typeof renderMVABank === 'function') try { renderMVABank(); } catch(e){}
+  if(typeof renderOutreach === 'function')try { renderOutreach(); }catch(e){}
+}
+// Clear the lead status entirely — back to 'not_visited'.
+function clearCardLead(businessName){
+  setClinicLead(businessName, { status: 'not_visited', level: 0 }, 'Lead cleared from card');
+  showToast(businessName + ' lead cleared');
+  if(typeof renderBank === 'function')    try { renderBank(); }    catch(e){}
+  if(typeof renderMVABank === 'function') try { renderMVABank(); } catch(e){}
+  if(typeof renderOutreach === 'function')try { renderOutreach(); }catch(e){}
+}
+window.setCardLead = setCardLead;
+window.clearCardLead = clearCardLead;
+
+// Inline mini-modal that lets the user pick a lead level for a business.
+// Anchored to the clicked element. Buttons L1/L2/L3/L4 + "Clear" + "Cancel".
+// Readonly users get a "view only" notice instead.
+function openCardLeadEditor(anchor, businessName){
+  if(!businessName) return;
+  if(CURRENT_USER && CURRENT_USER.role === 'readonly'){ showToast('Read-only role cannot edit lead status'); return; }
+  // Close any existing popover so we don't stack them
+  var existing = document.getElementById('card-lead-popover');
+  if(existing) existing.remove();
+
+  var lead = getClinicLead(businessName);
+  var currentLvl = (lead.status === 'established' && lead.level) ? lead.level : 0;
+  var pop = document.createElement('div');
+  pop.id = 'card-lead-popover';
+  pop.style.cssText = 'position:fixed;z-index:9500;background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:0 14px 36px rgba(15,23,42,.28);padding:12px;min-width:240px;font-family:DM Sans,sans-serif';
+  // Position it near the anchor
+  var rect = anchor.getBoundingClientRect();
+  var left = Math.min(window.innerWidth - 260, Math.max(8, rect.left));
+  var top  = Math.min(window.innerHeight - 220, rect.bottom + 6);
+  pop.style.left = left + 'px';
+  pop.style.top  = top + 'px';
+
+  var html = '';
+  html += '<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Set Lead Status</div>';
+  html += '<div style="font-size:12px;color:var(--text);font-weight:600;margin-bottom:10px;word-break:break-word">' + businessName.replace(/</g,'&lt;') + '</div>';
+  // L1-L4 buttons
+  for(var i = 1; i <= 4; i++){
+    var lv = ESTABLISHED_LEVELS[i];
+    var isCurrent = (currentLvl === i);
+    html += '<button onclick="setCardLead(\'' + businessName.replace(/\\/g,'\\\\').replace(/\'/g,"\\'") + '\','+i+');document.getElementById(\'card-lead-popover\').remove()" '
+         +  'style="display:block;width:100%;margin-bottom:6px;padding:8px 10px;border:'+(isCurrent?'2px solid '+lv.color:'1px solid var(--border)')+';background:'+(isCurrent?lv.color+'22':'#fff')+';color:'+(isCurrent?lv.color:'var(--text)')+';border-radius:8px;cursor:pointer;font-family:inherit;font-size:11px;font-weight:'+(isCurrent?'700':'500')+';text-align:left;line-height:1.3">'
+         +    lv.label + (isCurrent ? ' &#10003;' : '')
+         +  '<div style="font-size:9px;color:var(--muted);margin-top:2px;font-weight:400">'+lv.desc+'</div>'
+         +  '</button>';
+  }
+  if(currentLvl > 0){
+    html += '<button onclick="clearCardLead(\'' + businessName.replace(/\\/g,'\\\\').replace(/\'/g,"\\'") + '\');document.getElementById(\'card-lead-popover\').remove()" '
+         +  'style="display:block;width:100%;margin-top:4px;padding:7px 10px;border:1px solid #fca5a5;background:#fff;color:#991b1b;border-radius:8px;cursor:pointer;font-family:inherit;font-size:11px;font-weight:600">'
+         +  '&#8634; Clear lead status</button>';
+  }
+  html += '<button onclick="document.getElementById(\'card-lead-popover\').remove()" '
+       +  'style="display:block;width:100%;margin-top:6px;padding:6px 10px;border:none;background:#f3f4f6;color:var(--muted);border-radius:6px;cursor:pointer;font-family:inherit;font-size:11px">Cancel</button>';
+  pop.innerHTML = html;
+  document.body.appendChild(pop);
+  // Click outside to close
+  setTimeout(function(){
+    function clickOff(e){
+      if(!pop.contains(e.target)){
+        pop.remove();
+        document.removeEventListener('click', clickOff, true);
+      }
+    }
+    document.addEventListener('click', clickOff, true);
+  }, 50);
+}
+window.openCardLeadEditor = openCardLeadEditor;
 
 function getEstablishedLeads(){
   // Returns unique clinics with status=established, counted once each
@@ -3893,9 +3993,10 @@ function renderMVABank(){
       lsRow.appendChild(lsBadge);lsRow.appendChild(lvBadge);
     } else { lsRow.appendChild(lsBadge); }
     var updBtn=document.createElement('button');
+    var hasLevelM = (lead.status === 'established' && lead.level);
     updBtn.style.cssText='font-size:9px;background:none;border:1px solid var(--border);border-radius:4px;padding:1px 6px;cursor:pointer;color:var(--muted);font-family:DM Sans,sans-serif';
-    updBtn.textContent='Update';
-    (function(nm){updBtn.onclick=function(e){e.stopPropagation();openLeadStatusModal(nm);};})(m.firm);
+    updBtn.innerHTML = hasLevelM ? '&#9998; Change' : '+ Set Lead';
+    (function(nm,btn){btn.onclick=function(e){e.stopPropagation();openCardLeadEditor(btn,nm);};})(m.firm,updBtn);
     lsRow.appendChild(updBtn);
     card.appendChild(lsRow);
 
@@ -4211,7 +4312,9 @@ var DataLayer = (function(){
       'wcg_business_referrals_v1':      'business-referrals.json',
       'wcg_tier_thresholds_v4':         'tier-thresholds.json',
       'wcg_period_budget_enabled_v1':   'settings-period-budget.json',
-      'wcg_admin_notifications_v1':     'admin-notifications.json'
+      'wcg_admin_notifications_v1':     'admin-notifications.json',
+      'wcg_clinic_leads_v1':            'clinic-leads.json',
+      'wcg_display_names_v1':           'display-names.json'
       // Per-user "which notifs I've read" keys stay in localStorage (per-user, not shared)
     }
   };
@@ -4808,6 +4911,8 @@ _loadReferrals();
 _loadTiers();
 // Display-name overrides depend on DataLayer being defined — load them now
 if(typeof _loadDisplayNames === 'function') _loadDisplayNames();
+// Clinic lead status (L1-L4) also persists via DataLayer
+if(typeof _loadClinicLeads === 'function') _loadClinicLeads();
 _loadPeriodBudgetEnabled();
 
 // ── SCHEDULE PERSISTENCE (S.days) ───────────────────────────────────────
@@ -18849,10 +18954,15 @@ function renderBankPage(filtered){
       lvBadge.textContent=lv.label;
       stRow.appendChild(stBadge);stRow.appendChild(lvBadge);
     } else { stRow.appendChild(stBadge); }
+    // Lead level editor — quick L1/L2/L3/L4 picker that bypasses the full
+    // visit-bound modal. Lets the marketing lead retroactively record an
+    // established relationship without needing a calendar visit to exist.
     var stBtn=document.createElement('button');
+    var hasLevel = (lead.status === 'established' && lead.level);
     stBtn.style.cssText='font-size:9px;background:none;border:1px solid var(--border);border-radius:4px;padding:1px 6px;cursor:pointer;color:var(--muted);font-family:DM Sans,sans-serif';
-    stBtn.textContent='Update';
-    (function(nm){stBtn.onclick=function(e){e.stopPropagation();openLeadStatusModal(nm);};})(c.n);
+    stBtn.textContent = hasLevel ? '&#9998; Change' : '+ Set Lead';
+    stBtn.innerHTML  = hasLevel ? '&#9998; Change' : '+ Set Lead';
+    (function(nm,btn){btn.onclick=function(e){e.stopPropagation();openCardLeadEditor(btn,nm);};})(c.n,stBtn);
     stRow.appendChild(stBtn);
     card.appendChild(stRow);
 
