@@ -5549,6 +5549,11 @@ var EMAIL_USER_MAP = {
   // his real UPN is aparacha@wcgtx.com (initial + last name pattern).
   'aparacha@wcgtx.com':     { username: 'ahsan', role: 'member', name: 'Dr Ahsan Paracha', color: USERS.ahsan.color },
 
+  // Ahmed Shuja — the Marketing manager (readonly view-only role).
+  // Added to the M365 Group as a Member at the SharePoint level so the app
+  // can fetch data on his behalf, but app role keeps his UI read-only.
+  'ashuja@wcgtx.com':       { username: 'manager', role: 'readonly', name: 'Ahmed Shuja', color: USERS.manager.color },
+
   // NOTE: there's also a Sana Khan in the tenant with skhan@wcgtx.com — she's
   // NOT on the marketing team. We deliberately do NOT include skhan@wcgtx.com
   // to avoid matching the wrong person. Sadia must use skhan@frisco-er.com.
