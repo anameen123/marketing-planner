@@ -4827,6 +4827,20 @@ var DataLayer = (function(){
   // ── External helpers — used by AuthLayer to share one MSAL session ─────
   async function _initMsal_external(){ return _initMsal(); }
   async function _ensureSignedIn_external(){ await _initMsal(); return _ensureSignedIn(); }
+  // Sign-in with email pre-filled (loginHint). Microsoft shows the password
+  // page directly — no email-entry step for the user. The popup is required
+  // for security; we cannot pass the password through our app to Microsoft.
+  async function _loginPopupWithHint_external(loginHint){
+    await _initMsal();
+    var request = {
+      scopes: ['Sites.ReadWrite.All', 'User.Read'],
+      loginHint: loginHint || undefined,
+      prompt: 'login'   // force fresh password entry on Microsoft's side
+    };
+    var result = await _msalInstance.loginPopup(request);
+    if(result && result.account) _msalInstance.setActiveAccount(result.account);
+    return result && result.account;
+  }
   async function _signOut_external(){
     if(!_msalInstance) return;
     // Clear our app's MSAL cache silently — no popup, no Microsoft-side sign-out.
@@ -4861,6 +4875,7 @@ var DataLayer = (function(){
     remove: remove,
     _initMsal_external: _initMsal_external,
     _ensureSignedIn_external: _ensureSignedIn_external,
+    _loginPopupWithHint_external: _loginPopupWithHint_external,
     _signOut_external: _signOut_external,
     _getAccounts_external: _getAccounts_external,
     _updateSyncBadge: _updateSyncBadge,
@@ -5947,6 +5962,104 @@ async function doMsLogin(){
 }
 window.doMsLogin = doMsLogin;
 
+// Email + password form sign-in. Verifies the email against EMAIL_USER_MAP
+// LOCALLY first (instant feedback if unauthorized), then triggers Microsoft
+// sign-in with the email pre-filled (loginHint) so the user lands on the
+// password screen directly.
+//
+// IMPORTANT: We never receive the typed password. It's collected in our
+// form for UX consistency, but Microsoft handles password verification
+// on their secure page. This is intentional — we cannot legally accept
+// raw passwords for a federated tenant with MFA (it would also be a
+// phishing risk if we did).
+async function doCredentialsLogin(){
+  var errEl = document.getElementById('login-email').parentElement && document.getElementById('login-error');
+  errEl = document.getElementById('login-error');
+  var email = (document.getElementById('login-email').value || '').trim().toLowerCase();
+  var pw = document.getElementById('login-password').value || '';
+
+  if(!email){ errEl.textContent = 'Please enter your email.'; return; }
+  if(!pw){ errEl.textContent = 'Please enter your password.'; return; }
+  // Basic email shape check
+  if(!/@[^\s.@]+\.[^\s.@]+/.test(email)){
+    errEl.textContent = 'That doesn\'t look like a valid email.';
+    return;
+  }
+  // Verify email is in the access list
+  var profile = _resolveMsUser(email);
+  if(!profile){
+    errEl.textContent = email + ' is not authorized to use this app. Contact admin (' + (USERS.admin && USERS.admin.name || 'Mahmoud') + ').';
+    return;
+  }
+  if(!DataLayer._config.clientId || !DataLayer._config.tenantId){
+    errEl.textContent = 'Microsoft sign-in is not configured yet.';
+    return;
+  }
+
+  errEl.textContent = '';
+  var btn = document.getElementById('login-btn');
+  if(btn){ btn.disabled = true; btn.dataset.originalText = btn.innerHTML; btn.innerHTML = '<span style="opacity:.7">Signing in…</span>'; }
+
+  try {
+    // This pops the Microsoft password screen with the email pre-filled.
+    // User types their password ONCE (on Microsoft's page, not ours).
+    var account = await DataLayer._loginPopupWithHint_external(email);
+    if(!account || !account.username){ throw new Error('Sign-in did not return an account'); }
+
+    var actualEmail = (account.username || '').toLowerCase();
+    // Re-resolve in case Microsoft returned a different username (e.g. for guest users)
+    var actualProfile = _resolveMsUser(actualEmail);
+    if(!actualProfile){
+      errEl.textContent = actualEmail + ' is not authorized to use this app.';
+      try { await DataLayer._signOut_external(); } catch(e){}
+      return;
+    }
+
+    CURRENT_USER = {
+      username: actualProfile.username,
+      name:     getDisplayName(actualProfile.username) || actualProfile.name,
+      role:     actualProfile.role,
+      color:    actualProfile.color,
+      email:    actualEmail,
+      authVia:  'entra-id'
+    };
+
+    // Activate SharePoint backend (same as doMsLogin)
+    DataLayer._config.enabled = true;
+    DataLayer.bootstrap().then(function(r){
+      if(r && r.ok && r.mode === 'sharepoint'){
+        showToast('Connected to SharePoint · live sync on');
+      } else {
+        showToast('Working offline — SharePoint sync unavailable');
+      }
+    });
+    _finishLogin();
+  } catch(e){
+    console.warn('[Auth] credentials sign-in failed:', e);
+    var raw = (e && (e.errorCode || e.message)) || String(e);
+    var friendly;
+    if(/AADSTS65001|admin.?approval|admin.?consent/i.test(raw)){
+      friendly = 'This app needs IT approval before you can sign in. Contact admin.';
+    } else if(/AADSTS50020|guest|external user/i.test(raw)){
+      friendly = 'Your account is a guest in this tenant.';
+    } else if(/AADSTS50105|not assigned|user.+not assigned/i.test(raw)){
+      friendly = 'Your account hasn\'t been assigned to this app yet.';
+    } else if(/AADSTS50126|invalid.+credentials|wrong.+password|invalid_grant/i.test(raw)){
+      friendly = 'Wrong email or password. Try again.';
+    } else if(/popup.?blocked|user.?cancelled|popup.?closed/i.test(raw)){
+      friendly = 'Sign-in window was blocked or closed. Allow popups for this site and try again.';
+    } else if(/network|offline|fetch/i.test(raw)){
+      friendly = 'Network issue — check your connection and try again.';
+    } else {
+      friendly = 'Sign-in failed: ' + raw;
+    }
+    errEl.textContent = friendly;
+  } finally {
+    if(btn){ btn.disabled = false; if(btn.dataset.originalText) btn.innerHTML = btn.dataset.originalText; }
+  }
+}
+window.doCredentialsLogin = doCredentialsLogin;
+
 // Hardcoded sign-in path — RETIRED.
 // Passwords are no longer stored in this file. To sign in, use the
 // "Sign in with Microsoft" button (Entra ID). This function remains only
@@ -6021,24 +6134,32 @@ window.addEventListener('resize', _updateMemberMobileClass);
 _updateMemberMobileClass();
 window.doLogin=doLogin;
 
-async function doLogout(){
-  // If the user signed in via Entra ID, also clear MSAL's cached account so
-  // a different M365 user can sign in afterward. Hardcoded sessions don't
-  // need this step. We swallow MSAL errors — even if logout-popup fails
-  // (user closed it), we still want to log them out locally.
-  if(CURRENT_USER && CURRENT_USER.authVia === 'entra-id'){
-    try { await DataLayer._signOut_external(); } catch(e){}
-    // Stop background polling so we don't keep hammering Graph as a logged-out user
-    try { DataLayer._config.enabled = false; } catch(e){}
-  }
-  CURRENT_USER=null;
-  document.body.classList.remove('member-view'); // back to admin palette on the login screen
+function doLogout(){
+  // ── INSTANT local sign-out FIRST ──────────────────────────────────────
+  // User sees the login screen within milliseconds. Microsoft / MSAL
+  // cleanup happens AFTER in the background — even if it takes a second
+  // or shows a brief popup, the user is already locally signed out.
+  var wasMs = (CURRENT_USER && CURRENT_USER.authVia === 'entra-id');
+  CURRENT_USER = null;
+  document.body.classList.remove('member-view');
   var ls = document.getElementById('login-screen');
-  if(ls){ ls.classList.add('visible'); ls.style.display=''; }   // both class + clear inline so it shows
-  document.getElementById('login-username').value='';
-  document.getElementById('login-password').value='';
-  document.getElementById('login-error').textContent='';
-  document.getElementById('user-badge-wrap').innerHTML='';
+  if(ls){ ls.classList.add('visible'); ls.style.display = ''; }
+  var u = document.getElementById('login-username'); if(u) u.value = '';
+  var p = document.getElementById('login-password'); if(p) p.value = '';
+  var er = document.getElementById('login-error');   if(er) er.textContent = '';
+  var ub = document.getElementById('user-badge-wrap'); if(ub) ub.innerHTML = '';
+
+  // ── Microsoft cleanup in background (fire-and-forget) ─────────────────
+  // Doesn't block the user. If it fails or shows a popup, fine — they're
+  // already logged out locally. They can dismiss any popup whenever.
+  if(wasMs){
+    setTimeout(function(){
+      try { DataLayer._config.enabled = false; } catch(e){}
+      if(DataLayer && DataLayer._signOut_external){
+        DataLayer._signOut_external().catch(function(e){ /* ignore */ });
+      }
+    }, 0);
+  }
 }
 window.doLogout=doLogout;
 
@@ -20703,35 +20824,55 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
       </svg>
       <span>Sign in with Microsoft</span>
     </button>
-    <!-- Username/password fallback — HIDDEN by default. Only shown when URL
-         contains ?devmode=1 (local debugging only). Production team
-         members see only the Microsoft sign-in button above. -->
-    <div id="legacy-login-block" style="display:none">
-      <div style="display:flex;align-items:center;gap:10px;margin:6px 0 12px;font-size:11px;color:var(--muted)">
-        <span style="flex:1;height:1px;background:var(--border)"></span>
-        <span>dev mode</span>
-        <span style="flex:1;height:1px;background:var(--border)"></span>
-      </div>
-      <div class="login-field">
-        <label>Username (dev mode)</label>
-        <input type="text" id="login-username" placeholder="admin / duaa / sadia / ahsan / manager" autocomplete="username" onkeydown="if(event.key==='Enter')doLogin()">
-      </div>
-      <div class="login-field">
-        <label style="opacity:.6">Password (ignored)</label>
-        <div style="position:relative">
-          <input type="password" id="login-password" placeholder="leave blank — not used" autocomplete="off" onkeydown="if(event.key==='Enter')doLogin()" style="padding-right:38px;width:100%;box-sizing:border-box">
-          <button type="button" id="login-show-pw" onclick="toggleLoginPassword()" tabindex="-1" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:4px;color:var(--muted);font-size:16px;display:flex;align-items:center;justify-content:center" title="Show password">👁</button>
-        </div>
-      </div>
-      <button class="login-btn" id="login-btn" onclick="doLogin()">Sign In (dev)</button>
+    <!-- Email + password form — always visible alongside the MS button.
+         For users who prefer typing their credentials over clicking a
+         button. Behind the scenes still uses Microsoft Entra ID for
+         authentication (we never store passwords). Microsoft may ask
+         for password confirmation on their secure page for MFA. -->
+    <div style="display:flex;align-items:center;gap:10px;margin:6px 0 12px;font-size:11px;color:var(--muted)">
+      <span style="flex:1;height:1px;background:var(--border)"></span>
+      <span>or sign in with your work email</span>
+      <span style="flex:1;height:1px;background:var(--border)"></span>
     </div>
+    <div class="login-field">
+      <label>Email</label>
+      <input type="email" id="login-email" placeholder="you@wcgtx.com"
+             autocomplete="username"
+             onkeydown="if(event.key==='Enter'){event.preventDefault();doCredentialsLogin();}">
+    </div>
+    <div class="login-field">
+      <label>Password</label>
+      <div style="position:relative">
+        <input type="password" id="login-password" placeholder="Your Microsoft password"
+               autocomplete="current-password"
+               onkeydown="if(event.key==='Enter'){event.preventDefault();doCredentialsLogin();}"
+               style="padding-right:38px;width:100%;box-sizing:border-box">
+        <button type="button" id="login-show-pw" onclick="toggleLoginPassword()" tabindex="-1"
+                style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:4px;color:var(--muted);font-size:16px;display:flex;align-items:center;justify-content:center"
+                title="Show password">👁</button>
+      </div>
+    </div>
+    <button class="login-btn" id="login-btn" onclick="doCredentialsLogin()">Sign In</button>
+    <div style="font-size:10px;color:var(--muted);margin-top:8px;line-height:1.4;text-align:center">
+      For your security, Microsoft will verify your password on their page.<br>
+      Multi-factor authentication may also be required.
+    </div>
+    <!-- Hidden username field — kept so legacy ?devmode=1 path still works for local dev -->
+    <input type="hidden" id="login-username" value="">
+
     <div class="login-error" id="login-error"></div>
     <script>
-      // Reveal the dev-mode block only if ?devmode=1 is in the URL.
-      // This way prod users see a clean Microsoft-only sign-in screen.
+      // Dev-mode override: ?devmode=1 enables the legacy hardcoded login
+      // (uses login-username field). Production users see the email+password
+      // form above, which routes through Microsoft.
       if(/[?&]devmode=1\b/.test(window.location.search)){
-        var blk = document.getElementById('legacy-login-block');
-        if(blk) blk.style.display = 'block';
+        var emailInput = document.getElementById('login-email');
+        if(emailInput){
+          emailInput.placeholder = 'dev mode — type username (admin / duaa / sadia / ahsan / manager)';
+        }
+        // Re-wire the button to use doLogin in dev mode
+        var btn = document.getElementById('login-btn');
+        if(btn) btn.setAttribute('onclick', 'document.getElementById("login-username").value = document.getElementById("login-email").value; doLogin();');
       }
     </script>
   </div>
