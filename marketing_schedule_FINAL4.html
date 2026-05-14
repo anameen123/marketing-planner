@@ -4244,19 +4244,54 @@ var TIER_THRESHOLDS = {
 // Shape: { [businessName]: { type, currentCount, periodStart, history:[{period, count, tier, lockedAt}] } }
 var BUSINESS_REFERRALS = {};
 
-// Current 3-month period. Default = current calendar quarter.
-// Months: Jan-Mar = Q1, Apr-Jun = Q2, Jul-Sep = Q3, Oct-Dec = Q4
+// Current period — quarter (3 months) by default, or month (1 month) for trial.
+// Configurable via RESET_INTERVAL setting in localStorage / DataLayer.
+//   'quarterly' (default) → Jan-Mar / Apr-Jun / Jul-Sep / Oct-Dec
+//   'monthly'             → Calendar month (Jan / Feb / Mar / ...)
+// Trial periods use 'monthly' so admin can verify the rollover behavior
+// without waiting 3 months. Switch in Tier Settings → Reset Frequency.
+var _RI_LS_KEY = 'wcg_reset_interval_v1';
+var RESET_INTERVAL = 'quarterly';   // overridden by loaded value on boot
+
 function _computeCurrentPeriod(date){
   var d = date || new Date();
   var y = d.getFullYear(), m = d.getMonth();
-  var qIdx = Math.floor(m / 3); // 0..3
+  if(RESET_INTERVAL === 'monthly'){
+    // Whole calendar month
+    var monthLbl = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m];
+    return {
+      start: new Date(y, m, 1).toISOString().slice(0,10),
+      end:   new Date(y, m+1, 0).toISOString().slice(0,10),
+      label: y + '-' + monthLbl
+    };
+  }
+  // Default: quarterly
+  var qIdx = Math.floor(m / 3);
   var startMonth = qIdx * 3;
   return {
     start: new Date(y, startMonth, 1).toISOString().slice(0,10),
-    end:   new Date(y, startMonth+3, 0).toISOString().slice(0,10), // last day of last month in quarter
+    end:   new Date(y, startMonth+3, 0).toISOString().slice(0,10),
     label: y + '-Q' + (qIdx+1)
   };
 }
+
+function _loadResetInterval(){
+  if(typeof DataLayer === 'undefined' || !DataLayer.loadRaw) return;
+  var raw = DataLayer.loadRaw(_RI_LS_KEY);
+  if(raw === 'monthly' || raw === 'quarterly') RESET_INTERVAL = raw;
+}
+function setResetInterval(value){
+  if(value !== 'monthly' && value !== 'quarterly'){ showToast('Pick monthly or quarterly'); return; }
+  if(typeof isAdmin === 'function' && !isAdmin()){ showToast('Admin only'); return; }
+  RESET_INTERVAL = value;
+  DataLayer.save(_RI_LS_KEY, value);
+  CURRENT_PERIOD = _computeCurrentPeriod();
+  showToast('Reset frequency set to: ' + value + ' (current period: ' + CURRENT_PERIOD.label + ')');
+  if(typeof refresh === 'function') refresh();
+}
+window.setResetInterval = setResetInterval;
+window._loadResetInterval = _loadResetInterval;
+
 var CURRENT_PERIOD = _computeCurrentPeriod();
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -4314,7 +4349,8 @@ var DataLayer = (function(){
       'wcg_period_budget_enabled_v1':   'settings-period-budget.json',
       'wcg_admin_notifications_v1':     'admin-notifications.json',
       'wcg_clinic_leads_v1':            'clinic-leads.json',
-      'wcg_display_names_v1':           'display-names.json'
+      'wcg_display_names_v1':           'display-names.json',
+      'wcg_reset_interval_v1':          'settings-reset-interval.json'
       // Per-user "which notifs I've read" keys stay in localStorage (per-user, not shared)
     }
   };
@@ -4913,6 +4949,8 @@ _loadTiers();
 if(typeof _loadDisplayNames === 'function') _loadDisplayNames();
 // Clinic lead status (L1-L4) also persists via DataLayer
 if(typeof _loadClinicLeads === 'function') _loadClinicLeads();
+// Reset interval (quarterly/monthly) — admin-configurable
+if(typeof _loadResetInterval === 'function'){ _loadResetInterval(); CURRENT_PERIOD = _computeCurrentPeriod(); }
 _loadPeriodBudgetEnabled();
 
 // ── SCHEDULE PERSISTENCE (S.days) ───────────────────────────────────────

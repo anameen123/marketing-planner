@@ -277,6 +277,13 @@ def main():
         "Marketing Planner — Technical Manual",
         "Architecture, hosting, security · ICC of Texas",
     )
+    if (ROOT / "COVERAGE_ANALYSIS.md").exists():
+        build_pdf(
+            ROOT / "COVERAGE_ANALYSIS.md",
+            ROOT / "COVERAGE_ANALYSIS.pdf",
+            "Marketing Coordinator → Website Coverage",
+            "Side-by-side mapping · ICC of Texas",
+        )
     print("Done.")
 
 
