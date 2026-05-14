@@ -4123,6 +4123,8 @@ var DataLayer = (function(){
           console.warn('[DataLayer] bootstrap failed (attempt ' + attempt + '/' + maxAttempts + '), falling back to localStorage:', e);
           config.enabled = false;
           _stopPolling();
+          config.lastBootstrapError = msg;        // surface in showSyncStatus popup
+          config.lastBootstrapErrorAt = new Date().toISOString();
           _updateSyncBadge && _updateSyncBadge('error');
           return { ok: false, mode: 'localStorage', error: msg, attempts: attempt };
         }
@@ -5740,12 +5742,24 @@ function showSyncStatus(){
   var lastSync = lastSyncRaw ? new Date(lastSyncRaw).toLocaleString() : 'never';
   var isStuck = (mode === 'localStorage') && (CURRENT_USER.authVia === 'entra-id');
 
+  // Surface the actual bootstrap error so admin can see it without dev tools.
+  // Truncate to 400 chars so the popup doesn't blow up.
+  var bootErr = DataLayer._config.lastBootstrapError || null;
+  var errBlock = '';
+  if(bootErr && isStuck){
+    var clean = String(bootErr).slice(0, 400);
+    errBlock = '<div style="background:#fef2f2;border-left:3px solid #dc2626;padding:8px 10px;border-radius:6px;font-size:11px;color:#7f1d1d;word-break:break-all">' +
+                 '<div style="font-weight:700;margin-bottom:3px">⚠ Last error</div>' +
+                 clean.replace(/[<>]/g, '') +
+               '</div>';
+  }
   var msg = ''
     + '<div style="display:flex;flex-direction:column;gap:10px;font-size:12px;line-height:1.5">'
     +   '<div><strong>Mode:</strong> ' + (mode === 'sharepoint' ? '🔵 SharePoint (team sync)' : '🟢 localStorage (this browser only)') + '</div>'
     +   '<div><strong>Auth:</strong> ' + (CURRENT_USER.authVia === 'entra-id' ? 'Microsoft Entra ID · ' + (CURRENT_USER.email || '') : 'Hardcoded (dev mode)') + '</div>'
     +   '<div><strong>Last sync:</strong> ' + lastSync + '</div>'
     +   '<div><strong>Pending writes:</strong> ' + queueLen + '</div>'
+    +   errBlock
     +   (mode === 'localStorage'
         ? '<div style="background:#eff6ff;border-left:3px solid #1d4ed8;padding:8px 10px;border-radius:6px;font-size:11px;color:#1e3a8a">' +
             (isStuck
@@ -6590,14 +6604,26 @@ _loadAdminNotifs();
 _pruneOldAdminNotifs();
 
 // ══════════════════════════════════════════════════════════════════════════════
-// SHAREPOINT INTEGRATION
+// LEGACY SHAREPOINT INTEGRATION — DORMANT, DO NOT USE
+// ──────────────────────────────────────────────────────────────────────────────
+// This block is an older client-credentials-flow attempt at SharePoint sync.
+// It has been REPLACED by the DataLayer + MSAL approach defined earlier in
+// the file (DataLayer uses delegated SPA auth — no client secret in browser
+// code). The functions below remain only because removing them would touch
+// 99+ call sites; they are dormant (_spReady stays false) so nothing here
+// actually executes.
+//
+// ⚠ The client secret previously hardcoded on this line has been ROTATED
+// and removed. Never put a real Application Secret in browser-side code —
+// it's visible to anyone who views the HTML source. App-only auth always
+// belongs on a server, not a client. ⚠
 // ══════════════════════════════════════════════════════════════════════════════
-var SP_CLIENT_ID  = '0f338bab-ccbf-43b2-ba76-50b785ec3261';
-var SP_TENANT_ID  = '36db94fb-80e4-470d-a675-2ee06ddf3d89';
-var SP_CLIENT_SECRET = 'REDACTED_SECRET_REVOKED_20260514';
-var SP_SITE_URL   = 'https://wcgtx.sharepoint.com/sites/Marketing';
-var SP_SITE_HOST  = 'wcgtx.sharepoint.com';
-var SP_SITE_PATH  = '/sites/Marketing';
+var SP_CLIENT_ID  = '';   // intentionally blank — see comment above
+var SP_TENANT_ID  = '';   // intentionally blank
+var SP_CLIENT_SECRET = ''; // intentionally blank — DO NOT REPOPULATE
+var SP_SITE_URL   = '';
+var SP_SITE_HOST  = '';
+var SP_SITE_PATH  = '';
 
 var _spToken = null;
 var _spTokenExpiry = 0;
