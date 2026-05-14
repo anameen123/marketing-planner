@@ -647,13 +647,39 @@ textarea.rnotes:focus{border-color:var(--purple);outline:none}
 /* On the login screen the ticker sits at the very top */
 #login-ticker{position:absolute;top:0;left:0;right:0;z-index:2;font-size:11px;padding:6px 16px;min-height:30px}
 
-/* ── LOGIN SCREEN — rotating healthcare photos behind a tinted overlay ── */
-#login-screen{
-  position:fixed;inset:0;
-  /* Solid gradient as the safety-net fallback — image layers sit ON TOP of this */
+/* ── BOOT SPLASH — eliminates the "login screen flash" on auto-resume ──
+   Shows immediately on page load with the brand color + a small spinner.
+   tryAutoResumeMsSession() runs in the background; if there's a cached
+   MSAL session, the splash fades directly to the app (login screen never
+   shown). If there's no session, the splash hides + login screen takes over.
+   Max 2 sec display so we don't get stuck on a slow MSAL load. */
+#boot-splash{
+  position:fixed;inset:0;z-index:10000;
   background:linear-gradient(135deg,#1F3864 0%, #4c2480 55%, #7030A0 100%);
-  display:flex;align-items:center;justify-content:center;z-index:9999;overflow:hidden;
+  display:flex;align-items:center;justify-content:center;flex-direction:column;gap:18px;
+  color:#fff;font-family:'DM Sans',sans-serif;
+  opacity:1;transition:opacity .25s ease-out;
 }
+#boot-splash.fading{opacity:0;pointer-events:none}
+#boot-splash .bs-title{font-size:22px;font-weight:700;letter-spacing:.02em}
+#boot-splash .bs-sub{font-size:12px;opacity:.7;letter-spacing:.05em}
+#boot-splash .bs-spinner{
+  width:34px;height:34px;border:3px solid rgba(255,255,255,.18);border-top-color:#fff;
+  border-radius:50%;animation:bsSpin .9s linear infinite;margin-top:6px;
+}
+@keyframes bsSpin{ to { transform:rotate(360deg) } }
+
+/* ── LOGIN SCREEN — rotating healthcare photos behind a tinted overlay ──
+   Hidden by default. Revealed by JS only when we've confirmed no cached
+   MSAL session exists (so users who are already signed in never see this
+   screen — they go directly from splash to app). */
+#login-screen{
+  display:none;
+  position:fixed;inset:0;
+  background:linear-gradient(135deg,#1F3864 0%, #4c2480 55%, #7030A0 100%);
+  align-items:center;justify-content:center;z-index:9999;overflow:hidden;
+}
+#login-screen.visible{display:flex}
 /* Two stacked image layers used for crossfading between 4 healthcare photos */
 .login-bg-layer{
   position:absolute;inset:0;
@@ -1116,6 +1142,16 @@ body.member-view.member-mobile .member-bottom-nav{display:flex}
         defer></script>
 </head>
 <body>
+
+<!-- BOOT SPLASH — visible on every page load, fades out once auth state is
+     known. Eliminates the "login screen flash" for already-signed-in users.
+     See CSS at #boot-splash for behavior. -->
+<div id="boot-splash">
+  <img src="logo.jpeg" alt="" style="height:64px;width:auto;border-radius:10px;padding:5px 8px;background:#fff;box-shadow:0 4px 14px rgba(0,0,0,.25)">
+  <div class="bs-title">Marketing Planner</div>
+  <div class="bs-sub">Immediate Care Centers of Texas</div>
+  <div class="bs-spinner"></div>
+</div>
 
 <div id="landing">
   <div style="position:sticky;top:0;z-index:100"><div class="header">
@@ -5695,7 +5731,8 @@ async function doLogout(){
   }
   CURRENT_USER=null;
   document.body.classList.remove('member-view'); // back to admin palette on the login screen
-  document.getElementById('login-screen').style.display='flex';
+  var ls = document.getElementById('login-screen');
+  if(ls){ ls.classList.add('visible'); ls.style.display=''; }   // both class + clear inline so it shows
   document.getElementById('login-username').value='';
   document.getElementById('login-password').value='';
   document.getElementById('login-error').textContent='';
@@ -5885,8 +5922,7 @@ window.maybeShowIosInstallHint = maybeShowIosInstallHint;
 window.dismissIosInstallHint = dismissIosInstallHint;
 
 // Kick off auto-resume on initial page load. Runs AFTER MSAL has had a
-// chance to load (defer script). 250ms delay is enough; if MSAL isn't
-// ready by then, the function returns false and the login screen shows.
+// chance to load (defer script).
 //
 // IMPORTANT guard: when MSAL's loginPopup() opens, the popup window loads
 // the redirectUri — which is our same HTML file. The popup briefly mounts
@@ -5897,20 +5933,68 @@ window.dismissIosInstallHint = dismissIosInstallHint;
 function _isMsalPopupWindow(){
   try {
     if(!window.opener || window.opener === window) return false;
-    // MSAL appends #code=... or #error=... to the redirect URI
     if(/#.*(code=|error=|state=)/.test(window.location.hash)) return true;
-    // Also true if our parent thinks it's waiting on a popup
     return false;
   } catch(e){ return false; }
 }
 
+// Boot-splash control. The splash covers the entire screen with the brand
+// while we figure out the auth state. After tryAutoResume completes (or
+// times out), we either fade to the app (signed-in) OR fade to the login
+// screen (not signed-in). Either way, no login-screen flash for returning users.
+function _hideBootSplash(){
+  var s = document.getElementById('boot-splash');
+  if(!s) return;
+  s.classList.add('fading');
+  setTimeout(function(){ s.style.display = 'none'; }, 300);
+}
+function _revealLoginScreen(){
+  var ls = document.getElementById('login-screen');
+  if(ls) ls.classList.add('visible');
+  _hideBootSplash();
+}
+window._hideBootSplash = _hideBootSplash;
+window._revealLoginScreen = _revealLoginScreen;
+
 window.addEventListener('load', function(){
-  if(_isMsalPopupWindow()) return;   // popup auth response handler — let MSAL.js handle it
-  setTimeout(function(){
-    if(!CURRENT_USER){   // only if not already signed in via hardcoded
-      tryAutoResumeMsSession();
+  if(_isMsalPopupWindow()){
+    // Popup just for auth — don't run app, don't show splash long, MSAL handles it
+    _hideBootSplash();
+    return;
+  }
+  // Try auto-resume immediately. Race against a 2-second safety timeout
+  // so a slow MSAL load doesn't trap users behind the splash forever.
+  var revealedAlready = false;
+  function _safetyReveal(){
+    if(revealedAlready) return;
+    revealedAlready = true;
+    if(!CURRENT_USER) _revealLoginScreen();
+  }
+  setTimeout(_safetyReveal, 2000);
+
+  // Kick auto-resume as soon as possible
+  setTimeout(async function(){
+    if(CURRENT_USER){
+      // Somehow already signed in (e.g., test path) — just hide splash
+      revealedAlready = true;
+      _hideBootSplash();
+      return;
     }
-  }, 250);
+    try {
+      var resumed = await tryAutoResumeMsSession();
+      revealedAlready = true;
+      if(resumed){
+        // _finishLogin already hid login-screen; splash fades next
+        _hideBootSplash();
+      } else {
+        // No cached session — reveal the login screen
+        _revealLoginScreen();
+      }
+    } catch(e){
+      revealedAlready = true;
+      _revealLoginScreen();
+    }
+  }, 50);
 });
 
 function renderUserBadge(){
