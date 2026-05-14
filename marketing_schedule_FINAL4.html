@@ -3899,12 +3899,16 @@ window.confirmYes=confirmYes;
 window.confirmNo=confirmNo;
 
 // ── USERS & LOGIN ─────────────────────────────────────────────────────────────
+// USERS — role + display metadata only. Passwords are NEVER stored here.
+// Authentication runs through Microsoft Entra ID (see doMsLogin + EMAIL_USER_MAP).
+// The keys ('admin', 'duaa', etc.) are stable usernames that other code
+// references; they're mapped from M365 sign-in emails in EMAIL_USER_MAP.
 var USERS = {
-  'admin':   { password: '1234',            role: 'admin',    name: 'Admin',    color: '#1F3864' },
-  'duaa':    { password: 'Duaa@WCG2026',    role: 'member',   name: 'Duaa',     color: '#7030A0' },
-  'sadia':   { password: 'Sadia@WCG2026',   role: 'member',   name: 'Ms Sadia', color: '#2563eb' },
-  'ahsan':   { password: 'Ahsan@WCG2026',   role: 'member',   name: 'Dr Ahsan', color: '#059669' },
-  'manager': { password: 'Manager@WCG2026', role: 'readonly', name: 'Manager',  color: '#64748b' }
+  'admin':   { role: 'admin',    name: 'Admin',    color: '#1F3864' },
+  'duaa':    { role: 'member',   name: 'Duaa',     color: '#7030A0' },
+  'sadia':   { role: 'member',   name: 'Ms Sadia', color: '#2563eb' },
+  'ahsan':   { role: 'member',   name: 'Dr Ahsan', color: '#059669' },
+  'manager': { role: 'readonly', name: 'Manager',  color: '#64748b' }
 };
 var _spPasswordsLoaded = false;
 
@@ -5594,17 +5598,25 @@ async function doMsLogin(){
 }
 window.doMsLogin = doMsLogin;
 
-// Hardcoded sign-in (legacy / fallback for local dev). Kept until Entra ID
-// is fully proven in production. To retire: hide the username/password
-// fields in the login screen and remove this function.
+// Hardcoded sign-in path — RETIRED.
+// Passwords are no longer stored in this file. To sign in, use the
+// "Sign in with Microsoft" button (Entra ID). This function remains only
+// as a safety net for emergencies: when DEV_MODE is true (URL param
+// `?devmode=1`), it accepts any non-empty username and grants that role
+// WITHOUT password verification. Useful ONLY for local debugging when
+// MS sign-in is unreachable. Production team members never use this.
 function doLogin(){
-  var u = (document.getElementById('login-username').value||'').trim().toLowerCase();
-  var p = (document.getElementById('login-password').value||'').trim();
   var errEl = document.getElementById('login-error');
-  if(!u||!p){ errEl.textContent='Please enter username and password.'; return; }
+  var isDev = /[?&]devmode=1\b/.test(window.location.search);
+  if(!isDev){
+    errEl.textContent = 'Username/password sign-in is disabled. Use "Sign in with Microsoft" above.';
+    return;
+  }
+  var u = (document.getElementById('login-username').value||'').trim().toLowerCase();
+  if(!u){ errEl.textContent='Enter a username (dev mode).'; return; }
   var user = USERS[u];
-  if(!user||user.password!==p){ errEl.textContent='Incorrect username or password.'; return; }
-  CURRENT_USER = { username:u, name:user.name, role:user.role, color:user.color, authVia:'hardcoded' };
+  if(!user){ errEl.textContent='Unknown username (dev mode).'; return; }
+  CURRENT_USER = { username:u, name:user.name, role:user.role, color:user.color, authVia:'dev-bypass' };
   _finishLogin();
 }
 
@@ -20277,24 +20289,37 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
       </svg>
       <span>Sign in with Microsoft</span>
     </button>
-    <div style="display:flex;align-items:center;gap:10px;margin:6px 0 12px;font-size:11px;color:var(--muted)">
-      <span style="flex:1;height:1px;background:var(--border)"></span>
-      <span>or</span>
-      <span style="flex:1;height:1px;background:var(--border)"></span>
-    </div>
-    <div class="login-field">
-      <label>Username</label>
-      <input type="text" id="login-username" placeholder="Enter your username" autocomplete="username" onkeydown="if(event.key==='Enter')doLogin()">
-    </div>
-    <div class="login-field">
-      <label>Password</label>
-      <div style="position:relative">
-        <input type="password" id="login-password" placeholder="Enter your password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()" style="padding-right:38px;width:100%;box-sizing:border-box">
-        <button type="button" id="login-show-pw" onclick="toggleLoginPassword()" tabindex="-1" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:4px;color:var(--muted);font-size:16px;display:flex;align-items:center;justify-content:center" title="Show password">👁</button>
+    <!-- Username/password fallback — HIDDEN by default. Only shown when URL
+         contains ?devmode=1 (local debugging only). Production team
+         members see only the Microsoft sign-in button above. -->
+    <div id="legacy-login-block" style="display:none">
+      <div style="display:flex;align-items:center;gap:10px;margin:6px 0 12px;font-size:11px;color:var(--muted)">
+        <span style="flex:1;height:1px;background:var(--border)"></span>
+        <span>dev mode</span>
+        <span style="flex:1;height:1px;background:var(--border)"></span>
       </div>
+      <div class="login-field">
+        <label>Username (dev mode)</label>
+        <input type="text" id="login-username" placeholder="admin / duaa / sadia / ahsan / manager" autocomplete="username" onkeydown="if(event.key==='Enter')doLogin()">
+      </div>
+      <div class="login-field">
+        <label style="opacity:.6">Password (ignored)</label>
+        <div style="position:relative">
+          <input type="password" id="login-password" placeholder="leave blank — not used" autocomplete="off" onkeydown="if(event.key==='Enter')doLogin()" style="padding-right:38px;width:100%;box-sizing:border-box">
+          <button type="button" id="login-show-pw" onclick="toggleLoginPassword()" tabindex="-1" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:4px;color:var(--muted);font-size:16px;display:flex;align-items:center;justify-content:center" title="Show password">👁</button>
+        </div>
+      </div>
+      <button class="login-btn" id="login-btn" onclick="doLogin()">Sign In (dev)</button>
     </div>
-    <button class="login-btn" id="login-btn" onclick="doLogin()">Sign In</button>
     <div class="login-error" id="login-error"></div>
+    <script>
+      // Reveal the dev-mode block only if ?devmode=1 is in the URL.
+      // This way prod users see a clean Microsoft-only sign-in screen.
+      if(/[?&]devmode=1\b/.test(window.location.search)){
+        var blk = document.getElementById('legacy-login-block');
+        if(blk) blk.style.display = 'block';
+      }
+    </script>
   </div>
 </div>
 

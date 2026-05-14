@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# ──────────────────────────────────────────────────────────────────────────
+# pre-commit hook — secret-scanner for the Marketing Planner repo
+#
+# Runs `gitleaks protect --staged` against your staged changes BEFORE the
+# commit lands locally. If it finds anything matching its built-in patterns
+# (Azure secrets, API tokens, private keys, etc.), the commit is BLOCKED.
+#
+# Setup (run once per machine):
+#     git config core.hooksPath .githooks
+#     winget install -e --id gitleaks.gitleaks   (or brew install gitleaks)
+#
+# To bypass in a genuine emergency (NEVER do this for real secrets):
+#     git commit --no-verify -m "..."
+# ──────────────────────────────────────────────────────────────────────────
+
+set -e
+
+if ! command -v gitleaks >/dev/null 2>&1; then
+  echo "⚠  gitleaks is not installed — skipping secret scan."
+  echo "   Install with: winget install gitleaks.gitleaks  (or brew install gitleaks)"
+  echo "   This commit will proceed, but consider this a warning."
+  exit 0
+fi
+
+echo "🔍 scanning staged changes for secrets…"
+if ! gitleaks protect --staged --no-banner --redact; then
+  echo ""
+  echo "❌ gitleaks found a likely secret in your staged changes."
+  echo "   Remove it from the file, OR if it's a false positive, add an exception"
+  echo "   to .gitleaksignore or .gitleaks.toml."
+  echo "   Commit blocked."
+  exit 1
+fi
+echo "✓ no secrets detected"
