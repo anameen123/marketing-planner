@@ -153,6 +153,17 @@ td:last-child{border-right:none}
 .c-Allen{background:#ede9fe;color:#5b21b6}.c-Other,.c-Custom{background:#fae8ff;color:#7e22ce}
 .c-Unknown{background:#f3f4f6;color:#6c757d}
 .clinic-name{font-weight:600;font-size:11px;color:var(--text);margin-bottom:1px}
+/* Click-to-jump hint on visit-info clinic names */
+.clinic-name.jump-target{cursor:pointer;text-decoration:underline dotted transparent;transition:text-decoration-color .15s,color .15s}
+.clinic-name.jump-target:hover{color:var(--purple);text-decoration-color:var(--purple)}
+/* Pulse highlight applied to a business card briefly when navigated to */
+@keyframes cardJumpPulse {
+  0%   { box-shadow: 0 0 0 0 rgba(112, 48, 160, 0); transform: scale(1); }
+  20%  { box-shadow: 0 0 0 8px rgba(112, 48, 160, .35); transform: scale(1.015); }
+  60%  { box-shadow: 0 0 0 12px rgba(112, 48, 160, .12); transform: scale(1); }
+  100% { box-shadow: 0 0 0 0 rgba(112, 48, 160, 0); transform: scale(1); }
+}
+.card-jump-pulse { animation: cardJumpPulse 1.2s ease-out 1; }
 .clinic-sub{font-size:10px;color:var(--muted)}
 .mosque-badge{display:inline-block;font-size:9px;background:#dcfce7;color:#166534;padding:1px 6px;border-radius:3px;border:1px solid #86efac;margin-bottom:2px;font-weight:600}
 .resched-badge{display:inline-block;font-size:9px;background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:3px;border:1px solid #fcd34d;margin-bottom:2px}
@@ -2418,6 +2429,64 @@ function getBizTypeForName(name){
   return 'clinic';
 }
 window.getBizTypeForName = getBizTypeForName;
+
+// jumpToBusinessCard(name) — used when a user clicks a clinic/firm/outreach
+// name in the visit-info column of the schedule. Navigates Businesses tab →
+// the right sub-section (clinic / MVA / outreach) → filters to that name →
+// scrolls the card into view → adds a brief purple pulse highlight.
+//
+// Does NOT open the card details modal (that would feel like a detour);
+// users land on the bank card and can choose to click into it themselves.
+function jumpToBusinessCard(name){
+  if(!name) return;
+  var type = getBizTypeForName(name);
+
+  // 1. Switch to Businesses tab + Bank of Targets sub-tab
+  if(typeof switchTab === 'function') switchTab('bank');
+  if(typeof switchClinicTab === 'function') switchClinicTab('overall');
+
+  // 2. Switch to the right sub-section (clinic / MVA / outreach)
+  if(typeof switchOverallTab === 'function'){
+    if(type === 'mva')        switchOverallTab('mva');
+    else if(type === 'outreach') switchOverallTab('outreach');
+    else                          switchOverallTab('bank');   // clinics
+  }
+
+  // 3. Filter the bank by exact name. We use the search input so the
+  //    user can clear/edit afterwards. Each panel has its own search box.
+  var searchId = (type === 'mva') ? 'mva-search'
+               : (type === 'outreach') ? 'out-search'
+               : 'bank-search';
+  var rerender = (type === 'mva') ? (typeof renderMVABank === 'function' ? renderMVABank : null)
+               : (type === 'outreach') ? (typeof renderOutreach === 'function' ? renderOutreach : null)
+               : (typeof renderBank === 'function' ? renderBank : null);
+  var input = document.getElementById(searchId);
+  if(input){ input.value = name; }
+  if(rerender) try { rerender(); } catch(e){}
+
+  // 4. Find the card matching this name + scroll + pulse.
+  //    We wait one frame so the re-render finishes.
+  setTimeout(function(){
+    var gridId = (type === 'mva') ? 'mva-grid'
+              : (type === 'outreach') ? 'out-grid'
+              : 'bank-grid';
+    var grid = document.getElementById(gridId);
+    if(!grid) return;
+    var cards = grid.children;
+    var match = null;
+    var nameLow = name.toLowerCase();
+    for(var i = 0; i < cards.length; i++){
+      var t = (cards[i].textContent || '').toLowerCase();
+      if(t.indexOf(nameLow) !== -1){ match = cards[i]; break; }
+    }
+    if(match){
+      match.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      match.classList.add('card-jump-pulse');
+      setTimeout(function(){ match.classList.remove('card-jump-pulse'); }, 1500);
+    }
+  }, 120);
+}
+window.jumpToBusinessCard = jumpToBusinessCard;
 
 // BUSINESS_NOTES: per-business "Next Visit Notes" — free-text reminders
 // (e.g. "bring gift", "bring food"). Keyed by clinic / firm / outreach name.
@@ -10654,7 +10723,11 @@ function rowHTML(row,di,ri){
   } else {
     var doc=(row.doctor&&row.doctor!=='TBD')?row.doctor:'';
     var sub=[doc,row.spec,row.last?'Last: '+row.last:'First visit'].filter(Boolean).join(' · ');
-    clinicCell=badges+'<div class="clinic-name">'+row.clinic+'</div>'
+    // Make the clinic name a click-to-jump target — opens the matching
+    // card in Bank of Targets with a brief purple pulse highlight.
+    var safeNameAttr = (row.clinic || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    clinicCell=badges
+      +'<div class="clinic-name jump-target" title="Click to view in Bank of Targets" onclick="event.stopPropagation();jumpToBusinessCard(\''+safeNameAttr+'\')">'+row.clinic+'</div>'
       +'<div class="clinic-sub">'+sub+' <button class="edit-btn" onclick="startEdit('+di+','+ri+')">&#9998;</button></div>';
   }
 
