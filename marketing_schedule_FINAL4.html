@@ -4022,7 +4022,7 @@ var DataLayer = (function(){
   //   • Open at github.io/… → click MS button → SharePoint files go live
   var config = {
     enabled: false,                                                 // flips to true after successful MS sign-in
-    sharepointUrl: 'https://wcgtx.sharepoint.com',                 // root site
+    sharepointUrl: 'https://wcgtx.sharepoint.com/sites/mkt',       // "Marketing team (On ground + Digital marketing)" M365 Group site — Mahmoud is Owner
     siteId: '',                                                     // resolved on bootstrap, cached after
     driveId: '',                                                    // default Document Library drive (resolved on bootstrap)
     tenantId: '36db94fb-80e4-470d-a675-2ee06ddf3d89',               // wcgtx.com tenant
@@ -4373,9 +4373,14 @@ var DataLayer = (function(){
   }
 
   // Returns 'pulled' / 'seeded' / 'noop' depending on what happened.
+  // SAFETY: readonly users (Manager) NEVER seed their localStorage UP.
+  // If their cache has stale data from a previous session, we don't want
+  // it overwriting the team's current SharePoint data. They only ever
+  // pull DOWN from SharePoint.
   async function _fetchOrSeedKey(key){
     var remoteStr = await _readFile(key);
     var localStr = localStorage.getItem(key);
+    var isReadonly = (typeof CURRENT_USER !== 'undefined' && CURRENT_USER && CURRENT_USER.role === 'readonly');
 
     if(remoteStr !== null){
       // ── SP has data: pull DOWN (override local cache only if it differs) ──
@@ -4384,8 +4389,8 @@ var DataLayer = (function(){
       catch(e){ /* quota — skip */ }
       _emitChange(key);
       return 'pulled';
-    } else if(localStr !== null){
-      // ── SP is empty but local has data: seed SP ───────────────────────────
+    } else if(localStr !== null && !isReadonly){
+      // ── SP is empty but local has data: seed SP (only for non-readonly) ───
       await _writeFile(key, localStr);
       return 'seeded';
     }
@@ -4479,6 +4484,12 @@ var DataLayer = (function(){
 
   async function _flushWrites(){
     if(!config.enabled || !config.listIds) { _writeQueue = []; return; }
+    // SAFETY: readonly users (Manager) never write to SharePoint, no matter what.
+    // Drop the queue silently so we don't even attempt a 403'd write.
+    if(typeof CURRENT_USER !== 'undefined' && CURRENT_USER && CURRENT_USER.role === 'readonly'){
+      _writeQueue = [];
+      return;
+    }
     // Coalesce: only keep the most recent write per key
     var latestByKey = {};
     _writeQueue.forEach(function(w){ latestByKey[w.key] = w; });
