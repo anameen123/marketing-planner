@@ -4829,10 +4829,22 @@ var DataLayer = (function(){
   async function _ensureSignedIn_external(){ await _initMsal(); return _ensureSignedIn(); }
   async function _signOut_external(){
     if(!_msalInstance) return;
-    var accounts = _msalInstance.getAllAccounts();
-    if(accounts.length === 0) return;
-    try { await _msalInstance.logoutPopup({ account: accounts[0] }); }
-    catch(e){ /* user closed popup; nothing to do */ }
+    // Clear our app's MSAL cache silently — no popup, no Microsoft-side sign-out.
+    // This signs the user out of THIS APP but keeps their Microsoft browser
+    // session intact so the next "Sign in with Microsoft" is instant SSO
+    // (no need to retype password).
+    //
+    // If you ever want full sign-out from Microsoft (e.g. shared computer),
+    // call _msalInstance.logoutPopup() directly — but most users want fast
+    // re-sign-in, not a Microsoft confirmation dialog.
+    try {
+      var accounts = _msalInstance.getAllAccounts();
+      for(var i = 0; i < accounts.length; i++){
+        try { await _msalInstance.clearCache({ account: accounts[i] }); }
+        catch(e){ /* fallback to setActiveAccount(null) below */ }
+      }
+      try { _msalInstance.setActiveAccount(null); } catch(e){}
+    } catch(e){ /* don't let MSAL errors block local sign-out */ }
   }
   // Returns the cached MSAL accounts (or empty array). Initializes MSAL
   // lazily on first call. Used by auto-resume to detect returning users.
