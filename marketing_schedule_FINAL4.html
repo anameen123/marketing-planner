@@ -3940,12 +3940,83 @@ window.confirmNo=confirmNo;
 // The keys ('admin', 'duaa', etc.) are stable usernames that other code
 // references; they're mapped from M365 sign-in emails in EMAIL_USER_MAP.
 var USERS = {
-  'admin':   { role: 'admin',    name: 'Admin',    color: '#1F3864' },
+  'admin':   { role: 'admin',    name: 'Mahmoud Althaher', color: '#1F3864' },
   'duaa':    { role: 'member',   name: 'Duaa',     color: '#7030A0' },
   'sadia':   { role: 'member',   name: 'Ms Sadia', color: '#2563eb' },
   'ahsan':   { role: 'member',   name: 'Dr Ahsan', color: '#059669' },
   'manager': { role: 'readonly', name: 'Manager',  color: '#64748b' }
 };
+
+// ── DISPLAY NAME OVERRIDES ─────────────────────────────────────────────
+// Admin can rename any team member's display name without touching the
+// underlying username (which is the canonical ID). Overrides persist via
+// DataLayer (localStorage today, SharePoint when SP backend is active).
+// Keys are USERS keys ('admin', 'duaa', etc.); values are the friendly
+// display name to show everywhere a member's name renders.
+var _DN_LS_KEY = 'wcg_display_names_v1';
+var DISPLAY_NAMES = {};   // {username: overrideName}
+
+function _loadDisplayNames(){
+  if(typeof DataLayer === 'undefined' || !DataLayer.load) return;   // DataLayer not yet defined
+  var v = DataLayer.load(_DN_LS_KEY);
+  DISPLAY_NAMES = (v && typeof v === 'object' && !Array.isArray(v)) ? v : {};
+}
+function _saveDisplayNames(){
+  if(typeof DataLayer === 'undefined' || !DataLayer.save){
+    try { localStorage.setItem(_DN_LS_KEY, JSON.stringify(DISPLAY_NAMES)); } catch(e){}
+    return;
+  }
+  DataLayer.save(_DN_LS_KEY, DISPLAY_NAMES);
+}
+// Returns the display name for a USERS username, falling back to the
+// hardcoded default. Used everywhere a name renders so admin renames
+// take effect across the whole UI.
+function getDisplayName(username){
+  if(!username) return '';
+  if(DISPLAY_NAMES[username]) return DISPLAY_NAMES[username];
+  return (USERS[username] && USERS[username].name) || username;
+}
+// Admin-only: open a small prompt asking for a new display name, then
+// save it. Used by the "Rename member" UI on the Team tab + user badge.
+function promptRenameMember(username){
+  if(!username) return;
+  if(typeof isAdmin !== 'function' || !isAdmin()){
+    showToast('Admin only');
+    return;
+  }
+  var current = getDisplayName(username);
+  var newName = prompt(
+    'Enter a new display name for "' + current + '"\n\n' +
+    '(This changes how the name appears everywhere in the app.\n' +
+    'The underlying username "' + username + '" stays the same.)',
+    current
+  );
+  if(newName === null) return;   // user cancelled
+  setDisplayName(username, newName);
+}
+window.promptRenameMember = promptRenameMember;
+
+// Admin-only: rename a member. Saves + triggers UI refresh.
+function setDisplayName(username, newName){
+  if(!isAdmin || !isAdmin()){ showToast('Admin only'); return false; }
+  var trimmed = (newName || '').trim();
+  if(!trimmed){ showToast('Name cannot be empty'); return false; }
+  DISPLAY_NAMES[username] = trimmed;
+  _saveDisplayNames();
+  // If renaming the currently signed-in user, update CURRENT_USER too
+  if(CURRENT_USER && CURRENT_USER.username === username){
+    CURRENT_USER.name = trimmed;
+  }
+  // Refresh all the places that display names
+  if(typeof renderUserBadge === 'function') renderUserBadge();
+  if(typeof refresh === 'function') refresh();
+  showToast('Renamed to "' + trimmed + '"');
+  return true;
+}
+window.getDisplayName = getDisplayName;
+window.setDisplayName = setDisplayName;
+window._loadDisplayNames = _loadDisplayNames;
+_loadDisplayNames();
 var _spPasswordsLoaded = false;
 
 var CURRENT_USER = null; // { username, name, role, color }
@@ -4666,6 +4737,8 @@ function _loadTiers(){
 }
 _loadReferrals();
 _loadTiers();
+// Display-name overrides depend on DataLayer being defined — load them now
+if(typeof _loadDisplayNames === 'function') _loadDisplayNames();
 _loadPeriodBudgetEnabled();
 
 // ── SCHEDULE PERSISTENCE (S.days) ───────────────────────────────────────
@@ -5601,7 +5674,7 @@ async function doMsLogin(){
     }
     CURRENT_USER = {
       username: profile.username,
-      name:     profile.name,
+      name:     getDisplayName(profile.username) || profile.name,    // honor admin rename
       role:     profile.role,
       color:    profile.color,
       email:    email,
@@ -5668,7 +5741,7 @@ function doLogin(){
   if(!u){ errEl.textContent='Enter a username (dev mode).'; return; }
   var user = USERS[u];
   if(!user){ errEl.textContent='Unknown username (dev mode).'; return; }
-  CURRENT_USER = { username:u, name:user.name, role:user.role, color:user.color, authVia:'dev-bypass' };
+  CURRENT_USER = { username:u, name:getDisplayName(u) || user.name, role:user.role, color:user.color, authVia:'dev-bypass' };
   _finishLogin();
 }
 
@@ -5773,7 +5846,7 @@ async function tryAutoResumeMsSession(){
     }
     CURRENT_USER = {
       username: profile.username,
-      name:     profile.name,
+      name:     getDisplayName(profile.username) || profile.name,   // honor admin rename
       role:     profile.role,
       color:    profile.color,
       email:    email,
@@ -6009,10 +6082,18 @@ function renderUserBadge(){
   var roleBadge='';
   if(CURRENT_USER.role==='admin')roleBadge='<span style="font-size:9px;background:#f59e0b;color:#fff;padding:1px 5px;border-radius:4px;font-weight:700">ADMIN</span>';
   else if(CURRENT_USER.role==='readonly')roleBadge='<span style="font-size:9px;background:#64748b;color:#fff;padding:1px 5px;border-radius:4px;font-weight:700">READ ONLY</span>';
+  // Admin-only: tiny pencil to rename the current user's display name
+  // inline from the header. Non-admins don't see the pencil — their name
+  // is set by the admin via the Team tab. Underlying USERS key never
+  // changes; only the display name does.
+  var renameBtn = isAdmin()
+    ? '<button class="logout-btn" onclick="promptRenameMember(\''+CURRENT_USER.username+'\')" title="Rename your display name" style="margin-right:2px;font-size:13px">&#9998;</button>'
+    : '';
   wrap.innerHTML='<div class="user-badge">'
     +'<div class="user-avatar" style="background:'+CURRENT_USER.color+'">'+initials+'</div>'
     +'<span class="user-name">'+CURRENT_USER.name+'</span>'
     +roleBadge
+    +renameBtn
     +'<button class="logout-btn" onclick="openChangePassword()" title="Change Password" style="margin-right:2px">&#128273;</button>'
     +'<button class="logout-btn" onclick="doLogout()">Sign out</button>'
     +'</div>';
