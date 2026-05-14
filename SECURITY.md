@@ -78,10 +78,12 @@ Within 24 hours:
 
 ## Past incidents
 
-| Date | Service | Secret | Resolution |
-|---|---|---|---|
-| 2026-05-14 | Azure (Marketing dashboard app `0f338bab-...`) | `yKd8Q~...` client secret | Revoked in Entra ID via `az ad app credential delete` |
-| 2026-05-14 | Eventbrite | API token `REDACTED_TOKEN_REVOKED_20260514` | Removed from code (user must revoke at eventbrite.com manually) |
+| Date | Service | Resolution |
+|---|---|---|
+| 2026-05-14 | Azure (legacy "Marketing dashboard" app, since deleted) | Client secret revoked in Entra ID + removed from code + scrubbed from git history |
+| 2026-05-14 | Eventbrite OAuth2 token (legacy events-import path) | Token removed from code + revoked in Eventbrite admin + scrubbed from git history |
+
+(Specific token / secret strings deliberately omitted from this document so they don't re-leak via the audit log. Internal incident notes are kept separately.)
 
 ---
 
