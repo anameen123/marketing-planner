@@ -4190,6 +4190,13 @@ _loadDisplayNames();
 var _spPasswordsLoaded = false;
 
 var CURRENT_USER = null; // { username, name, role, color }
+// When admin uses "View as [member]" feature, REAL_USER stores the
+// original admin identity. Switching back restores CURRENT_USER from this.
+// While impersonating, all SP writes are BLOCKED (preview is read-only).
+var REAL_USER = null;
+// Returns true if admin is currently impersonating another role
+function isImpersonating(){ return !!REAL_USER; }
+window.isImpersonating = isImpersonating;
 
 // ══════════════════════════════════════════════════════════════════════════
 // SPENDING TRACKING + 3-MONTH TIERED RANKING SYSTEM
@@ -4385,6 +4392,18 @@ var DataLayer = (function(){
   //   strings are written as-is. Always writes localStorage immediately; if
   //   SharePoint backend is enabled, queues a remote write too.
   function save(key, value){
+    // Block writes while admin is "Viewing as" a member — preview is READ-ONLY.
+    // Without this guard, an admin testing what a member sees could
+    // accidentally write data attributed to the impersonated user.
+    if(typeof isImpersonating === 'function' && isImpersonating()){
+      try {
+        if(typeof showToast === 'function'){
+          showToast('Preview is read-only — switch back to Admin to save', 'warn');
+        }
+        console.warn('[DataLayer] save blocked during impersonation:', key);
+      } catch(e){}
+      return;
+    }
     try {
       var serialized = (typeof value === 'string') ? value : JSON.stringify(value);
       localStorage.setItem(key, serialized);
@@ -6427,25 +6446,169 @@ function renderUserBadge(){
   var roleBadge='';
   if(CURRENT_USER.role==='admin')roleBadge='<span style="font-size:9px;background:#f59e0b;color:#fff;padding:1px 5px;border-radius:4px;font-weight:700">ADMIN</span>';
   else if(CURRENT_USER.role==='readonly')roleBadge='<span style="font-size:9px;background:#64748b;color:#fff;padding:1px 5px;border-radius:4px;font-weight:700">READ ONLY</span>';
+  // If impersonating, show a small "PREVIEW" chip so the badge itself
+  // also reflects the state (not just the top banner).
+  if(typeof isImpersonating === 'function' && isImpersonating()){
+    roleBadge += '<span style="font-size:9px;background:#f59e0b;color:#fff;padding:1px 5px;border-radius:4px;font-weight:700;margin-left:4px">PREVIEW</span>';
+  }
   // Admin-only: tiny pencil to rename the current user's display name
   // inline from the header. Non-admins don't see the pencil — their name
   // is set by the admin via the Team tab. Underlying USERS key never
   // changes; only the display name does.
-  var renameBtn = isAdmin()
+  // While impersonating, hide the pencil — it would rename the impersonated
+  // user, which is confusing. Real admin can still rename via Team tab.
+  var showRename = isAdmin() && !(typeof isImpersonating === 'function' && isImpersonating());
+  var renameBtn = showRename
     ? '<button class="logout-btn" onclick="promptRenameMember(\''+CURRENT_USER.username+'\')" title="Rename your display name" style="margin-right:2px;font-size:13px">&#9998;</button>'
     : '';
+  // Admin-only: "View as" dropdown — lets the admin see the app as any
+  // member would. Hidden while already impersonating (the yellow banner
+  // already provides a way back to admin).
+  var viewAsBtn = '';
+  var realAdmin = (REAL_USER && REAL_USER.role === 'admin') || (CURRENT_USER && CURRENT_USER.role === 'admin' && !isImpersonating());
+  if(realAdmin && !isImpersonating()){
+    viewAsBtn = '<div style="position:relative;display:inline-block">'
+      +   '<button class="logout-btn" id="view-as-btn" onclick="_toggleViewAsMenu(event)" title="View the app as another member (read-only preview)" style="margin-right:2px;font-size:12px">View as &#9662;</button>'
+      +   '<div id="view-as-menu" style="display:none;position:absolute;top:calc(100% + 4px);right:0;background:#fff;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.12);padding:4px;min-width:180px;z-index:10500;font-family:DM Sans,sans-serif">'
+      +     _buildViewAsMenuItems()
+      +   '</div>'
+      + '</div>';
+  }
   wrap.innerHTML='<div class="user-badge">'
     +'<div class="user-avatar" style="background:'+CURRENT_USER.color+'">'+initials+'</div>'
     +'<span class="user-name">'+CURRENT_USER.name+'</span>'
     +roleBadge
     +renameBtn
+    +viewAsBtn
     +'<button class="logout-btn" onclick="openChangePassword()" title="Change Password" style="margin-right:2px">&#128273;</button>'
     +'<button class="logout-btn" onclick="doLogout()">Sign out</button>'
     +'</div>';
 }
+
+// Build the list of menu items for the admin "View as" dropdown.
+// Skips the admin themselves, since "view as admin" is a no-op.
+function _buildViewAsMenuItems(){
+  var html = '';
+  Object.keys(USERS).forEach(function(uname){
+    if(uname === 'admin') return;  // can't view as yourself
+    var u = USERS[uname];
+    var display = (typeof getDisplayName === 'function') ? (getDisplayName(uname) || u.name) : u.name;
+    var roleChip = u.role === 'readonly'
+      ? '<span style="font-size:9px;background:#64748b;color:#fff;padding:1px 4px;border-radius:3px;margin-left:6px">READ ONLY</span>'
+      : '<span style="font-size:9px;background:#cbd5e1;color:#334155;padding:1px 4px;border-radius:3px;margin-left:6px">MEMBER</span>';
+    html += '<button onclick="_pickViewAs(\''+uname+'\')" '
+         + 'style="display:flex;align-items:center;width:100%;text-align:left;background:transparent;border:0;padding:8px 10px;border-radius:6px;cursor:pointer;font-size:13px;color:#1e293b;font-family:inherit"'
+         + ' onmouseover="this.style.background=\'#f1f5f9\'" onmouseout="this.style.background=\'transparent\'">'
+         + '<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:'+u.color+';margin-right:8px"></span>'
+         + '<span style="flex:1">'+display+'</span>'
+         + roleChip
+         + '</button>';
+  });
+  return html;
+}
+
+function _toggleViewAsMenu(e){
+  if(e){ e.stopPropagation(); }
+  var m = document.getElementById('view-as-menu');
+  if(!m) return;
+  var open = (m.style.display !== 'none');
+  m.style.display = open ? 'none' : 'block';
+  if(!open){
+    // Close on next outside click
+    setTimeout(function(){
+      var handler = function(ev){
+        if(!m.contains(ev.target) && ev.target.id !== 'view-as-btn'){
+          m.style.display = 'none';
+          document.removeEventListener('click', handler, true);
+        }
+      };
+      document.addEventListener('click', handler, true);
+    }, 0);
+  }
+}
+function _pickViewAs(uname){
+  var m = document.getElementById('view-as-menu');
+  if(m) m.style.display = 'none';
+  viewAsMember(uname);
+}
+window._toggleViewAsMenu = _toggleViewAsMenu;
+window._pickViewAs = _pickViewAs;
 window.renderUserBadge=renderUserBadge;
 
 function isAdmin(){ return CURRENT_USER&&CURRENT_USER.role==='admin'; }
+
+// ── "View as member" admin tool ────────────────────────────────────────
+// Lets the real admin switch the UI temporarily to render as another role
+// (member or readonly), useful for testing what each team member sees.
+// All writes are blocked while impersonating — preview is READ-ONLY.
+// Refreshing the page exits impersonation (back to admin).
+function viewAsMember(username){
+  // Only the real admin can enter this mode. If already impersonating,
+  // calling this swaps to the new target.
+  var realAdminCheck = REAL_USER ? (REAL_USER.role === 'admin') : (CURRENT_USER && CURRENT_USER.role === 'admin');
+  if(!realAdminCheck){ showToast('Admin only'); return; }
+  var user = USERS[username];
+  if(!user){ showToast('Unknown member: ' + username); return; }
+  if(!REAL_USER) REAL_USER = CURRENT_USER;  // preserve the real admin on first entry
+  CURRENT_USER = {
+    username: username,
+    name:     getDisplayName(username) || user.name,
+    role:     user.role,
+    color:    user.color,
+    authVia:  'impersonation',
+    impersonatedFrom: REAL_USER.username,
+    email:    REAL_USER.email   // real admin's email (audit trail)
+  };
+  applyMemberViewClass();
+  renderUserBadge();
+  applyRoleRestrictions();
+  if(typeof updateBankAdminControls==="function") updateBankAdminControls();
+  if(typeof refresh === 'function') refresh();
+  _showImpersonationBanner();
+  showToast('Viewing as ' + CURRENT_USER.name + ' · read-only preview');
+}
+window.viewAsMember = viewAsMember;
+
+// Exit impersonation — restore the real admin user
+function exitViewAs(){
+  if(!REAL_USER){ return; }
+  CURRENT_USER = REAL_USER;
+  REAL_USER = null;
+  applyMemberViewClass();
+  renderUserBadge();
+  applyRoleRestrictions();
+  if(typeof updateBankAdminControls==="function") updateBankAdminControls();
+  if(typeof refresh === 'function') refresh();
+  _hideImpersonationBanner();
+  showToast('Back to admin view');
+}
+window.exitViewAs = exitViewAs;
+
+// Yellow banner pinned to the top of the page while impersonating
+function _showImpersonationBanner(){
+  var existing = document.getElementById('impersonation-banner');
+  if(existing) existing.remove();
+  var b = document.createElement('div');
+  b.id = 'impersonation-banner';
+  b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:11000;background:#fef3c7;border-bottom:2px solid #f59e0b;padding:8px 16px;display:flex;align-items:center;justify-content:center;gap:16px;font-family:DM Sans,sans-serif;font-size:13px;color:#92400e;font-weight:600;box-shadow:0 2px 8px rgba(245,158,11,.2);flex-wrap:wrap';
+  var name = CURRENT_USER.name || '?';
+  var role = CURRENT_USER.role || '?';
+  b.innerHTML = '<span style="font-size:16px">&#128065;</span>'
+    + '<span>Admin preview &middot; viewing as <strong>' + name + '</strong> '
+    +   '<span style="background:#92400e;color:#fef3c7;font-size:10px;padding:1px 6px;border-radius:4px;margin-left:4px;text-transform:uppercase;letter-spacing:.5px">' + role + '</span>'
+    +   ' &middot; <em style="font-weight:400">read-only — saves are blocked</em></span>'
+    + '<button onclick="exitViewAs()" style="background:#92400e;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">Switch back to Admin</button>';
+  document.body.appendChild(b);
+  // Push the rest of the page down so the banner doesn't cover content
+  document.body.style.paddingTop = (b.offsetHeight) + 'px';
+}
+function _hideImpersonationBanner(){
+  var b = document.getElementById('impersonation-banner');
+  if(b) b.remove();
+  document.body.style.paddingTop = '';
+}
+window._showImpersonationBanner = _showImpersonationBanner;
+window._hideImpersonationBanner = _hideImpersonationBanner;
 function getLoggedInMember(){ return CURRENT_USER&&CURRENT_USER.role==='member'?CURRENT_USER.name:null; }
 window.isAdmin=isAdmin;
 window.getLoggedInMember=getLoggedInMember;
