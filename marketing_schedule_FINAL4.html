@@ -7203,21 +7203,51 @@ function renderAdminNotifications(){
       aff = '<span class="member-link" data-member="'+n.originalAuthor.replace(/"/g,'&quot;')+'" title="Open '+n.originalAuthor+'\'s profile" style="color:#7030A0;font-weight:600;cursor:pointer">'+n.originalAuthor+'</span>\'s ';
     }
     var safeSummary = (n.summary||'').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    html += '<div onclick="openAdminNotifDetail(\''+n.id+'\')" '
+    // Decide what clicking the notification does:
+    //   • If we have a navigable target (business name), JUMP there directly.
+    //   • Otherwise, fall back to opening the detail modal.
+    var hasNav = !!(n.target && (typeof getBizTypeForName === 'function')
+                    && (CLINIC_BANK || MVA_ATTORNEYS || OUTREACH));
+    var safeTarget = (n.target || '').replace(/'/g,"\\'").replace(/"/g,'&quot;');
+    var clickHandler = hasNav
+      ? 'onclick="openAdminNotifTarget(\''+n.id+'\', \''+safeTarget+'\')"'
+      : 'onclick="openAdminNotifDetail(\''+n.id+'\')"';
+    var jumpHint = hasNav
+      ? '<span title="Click to jump to this business" style="font-size:9px;color:#7030A0;font-weight:700;margin-left:4px">↗</span>'
+      : '';
+    html += '<div ' + clickHandler + ' '
           + 'style="cursor:pointer;display:flex;align-items:flex-start;gap:6px;padding:9px 11px;border-left:3px solid '+border+';background:'+bg+';border-bottom:1px solid var(--border);transition:background .12s ease" '
           + 'onmouseover="this.style.background=\'#f3e8ff\'" '
           + 'onmouseout="this.style.background=\''+bg+'\'">'
           + mark
           + '<div style="flex:1;min-width:0">'
-          +   '<div style="font-size:11px;font-weight:700;color:var(--text);line-height:1.3">'+n.action+' '+aff+(n.target||'')+'</div>'
+          +   '<div style="font-size:11px;font-weight:700;color:var(--text);line-height:1.3">'+n.action+' '+aff+(n.target||'')+jumpHint+'</div>'
           +   (safeSummary ? '<div style="font-size:10px;color:var(--muted);margin-top:2px;line-height:1.35;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">'+safeSummary+'</div>' : '')
-          +   '<div style="font-size:9px;color:var(--muted);margin-top:3px;display:flex;align-items:center;gap:6px"><span>by '+n.adminName+'</span>·<span>'+when+'</span></div>'
+          +   '<div style="font-size:9px;color:var(--muted);margin-top:3px;display:flex;align-items:center;gap:6px"><span>by '+n.adminName+'</span>·<span>'+when+'</span>'
+          +     (hasNav ? '·<button onclick="event.stopPropagation();openAdminNotifDetail(\''+n.id+'\')" style="background:none;border:none;color:#64748b;font-size:9px;cursor:pointer;padding:0;text-decoration:underline;font-family:inherit">details</button>' : '')
+          +   '</div>'
           + '</div>'
           + '</div>';
   });
   listEl.innerHTML = html;
 }
 window.renderAdminNotifications = renderAdminNotifications;
+
+// Notification click → JUMP to the affected business + mark as read + close
+// the bell dropdown. This is the primary path now; the detail modal is only
+// reached via the explicit "details" link inside each notification.
+function openAdminNotifTarget(id, businessName){
+  var n = ADMIN_NOTIFICATIONS.find(function(x){ return x.id === id; });
+  if(n) markAdminNotifRead(id);
+  // Close the bell dropdown so we don't obscure the destination card
+  var dd = document.getElementById('admin-notif-dropdown');
+  if(dd) dd.style.display = 'none';
+  // Jump to the business card
+  if(businessName && typeof jumpToBusinessCard === 'function'){
+    jumpToBusinessCard(businessName);
+  }
+}
+window.openAdminNotifTarget = openAdminNotifTarget;
 
 function openAdminNotifDetail(id){
   var n = ADMIN_NOTIFICATIONS.find(function(x){ return x.id === id; });
