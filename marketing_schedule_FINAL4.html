@@ -1259,6 +1259,11 @@ body.member-mobile.is-call-handler .nav-handler-also {
     <!-- Status moved to a sub-tab under Businesses (2026-05-15). Old links still work via switchTab('leads-page'). -->
     <button class="nav-tab" id="tab-members" onclick="switchTab('members')">👥 Team</button>
     <button class="nav-tab" id="tab-bank" onclick="switchTab('bank')">🏢 Businesses</button>
+    <!-- Patient Referrals — admin-only for now. Once IT creates the 3 front-desk accounts,
+         they'll also see this. Members + readonly never see this button — they only see
+         their own member/facility counters on their Team-tab profile. Visibility is set
+         by JS in renderReferralNavVisibility() based on CURRENT_USER role. -->
+    <button class="nav-tab" id="tab-referrals" onclick="switchTab('referrals')">📋 Referrals</button>
     <button class="nav-tab" id="tab-finances" onclick="switchTab('finances')">💰 Finances</button>
     <button class="nav-tab" id="tab-reports" onclick="switchTab('reports')">📋 Reports</button>
     <button class="nav-tab" id="tab-feed" onclick="switchTab('feed')">📡 Activity Feed <span id="feed-badge" style="display:none;background:#ef4444;color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:10px;margin-left:4px">0</span></button>
@@ -1607,6 +1612,11 @@ body.member-mobile.is-call-handler .nav-handler-also {
       </div>
       <div class="profile-stats" id="profile-stats"></div>
     </div>
+
+    <!-- 📋 Per-member referral counters (Frisco / Carrollton / Plano).
+         Auto-populated from the Patient Referral Log. Updates whenever a
+         new referral entry is added. -->
+    <div id="member-referral-counters" style="margin-top:14px;padding-top:14px;border-top:1px solid rgba(255,255,255,.18);display:none"></div>
 
     <!-- Collapsible Side Activities — click header to toggle -->
     <div id="side-activities-section" class="side-activities-collapsible" style="margin-top:14px;padding-top:14px;border-top:1px solid rgba(255,255,255,.18)"></div>
@@ -4699,7 +4709,8 @@ var DataLayer = (function(){
       'wcg_admin_notifications_v1':     'admin-notifications.json',
       'wcg_clinic_leads_v1':            'clinic-leads.json',
       'wcg_display_names_v1':           'display-names.json',
-      'wcg_reset_interval_v1':          'settings-reset-interval.json'
+      'wcg_reset_interval_v1':          'settings-reset-interval.json',
+      'wcg_referral_log_v1':            'referral-log.json'
       // Per-user "which notifs I've read" keys stay in localStorage (per-user, not shared)
     }
   };
@@ -5100,6 +5111,10 @@ var DataLayer = (function(){
       } else if(key === 'wcg_admin_notifications_v1' && typeof _loadAdminNotifs === 'function'){
         _loadAdminNotifs();
         if(typeof renderAdminNotifications === 'function') renderAdminNotifications();
+      } else if(key === 'wcg_referral_log_v1' && typeof _loadReferralLog === 'function'){
+        _loadReferralLog();
+        if(typeof _recomputeReferralCountsFromLog === 'function') _recomputeReferralCountsFromLog();
+        if(typeof renderReferralLog === 'function') renderReferralLog();
       }
     } catch(e){ /* don't crash UI on sync hiccup */ }
   }
@@ -5876,10 +5891,12 @@ function _buildReferralCounterBlock(name){
     +     '</div>'
     +   '</div>'
     + '</div>'
-    + (canAdjust
-        ? '<button onclick="openReferralAdjust(\''+safeName+'\')" title="Adjust the referral count (admin or Ms Sadia only)" style="background:#1F3864;color:#fff;border:none;border-radius:6px;padding:5px 10px;font-size:10px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;white-space:nowrap;flex-shrink:0">✎ Adjust</button>'
-        : '<span style="font-size:9px;color:var(--muted);font-style:italic;flex-shrink:0">🔒 admin / Sadia</span>'
-      );
+    // 2026-05-15: Manual "Adjust" UI removed — referral counts are now
+    // auto-computed from the Patient Referral Log (📋 Referrals tab).
+    // Admin can edit entries there if a correction is needed; the source
+    // of truth is no longer manual on each card. The counter readout
+    // above still shows the live count (recomputed from log entries).
+    + '<span style="font-size:9px;color:var(--muted);font-style:italic;flex-shrink:0;text-align:right;line-height:1.3">Auto-updated<br>from referral log</span>';
   // Stop card-level click handler from firing when adjust is clicked
   var btn = wrap.querySelector('button');
   if(btn){ btn.addEventListener('click', function(e){ e.stopPropagation(); }); }
@@ -6485,6 +6502,9 @@ function _finishLogin(){
   if(typeof switchTab === 'function') switchTab('home');
   if(typeof _loadAdminNotifs === 'function') _loadAdminNotifs();
   if(typeof renderAdminNotifications === 'function') renderAdminNotifications();
+  // Load the patient referral log + recompute derived counters from it
+  if(typeof _loadReferralLog === 'function') _loadReferralLog();
+  if(typeof _recomputeReferralCountsFromLog === 'function') _recomputeReferralCountsFromLog();
   // Reflect the current backend in the header badge. Bootstrap will flip
   // it to 'ok'/'syncing'/'error' if SharePoint comes online.
   if(typeof DataLayer !== 'undefined' && DataLayer._updateSyncBadge){
@@ -7035,6 +7055,13 @@ function applyRoleRestrictions(){
     var obsAddBtn=document.getElementById('obs-add-btn');
     if(obsAddBtn)obsAddBtn.style.display='inline-block';
   }
+  // 📋 Referrals tab — admin-only for now. Members/readonly never see this
+  // button. Later, when the 3 front-desk accounts are created, they'll be
+  // unlocked here too.
+  var refTab = document.getElementById('tab-referrals');
+  if(refTab){
+    refTab.style.display = (CURRENT_USER.role === 'admin') ? '' : 'none';
+  }
 }
 
 function applyReadonlyMode(){
@@ -7298,6 +7325,503 @@ var ADMIN_NOTIFICATIONS = [];      // newest first; trimmed to last 50, UI shows
 var ADMIN_NOTIF_MAX_KEEP = 50;
 var ADMIN_NOTIF_UI_LIMIT = 10;
 var ADMIN_NOTIF_LS_KEY = 'wcg_admin_notifications_v1';
+
+// ═══════════════════════════════════════════════════════════════════════
+// PATIENT REFERRAL LOG (built 2026-05-15)
+// ═══════════════════════════════════════════════════════════════════════
+// Front-desk staff at each WCG facility log incoming patients here. Each
+// entry records WHO got the referral (marketing team member), WHERE it
+// came from (clinic/MVA/outreach in the bank), WHICH facility received
+// the patient, HOW MANY patients, and WHO at the front desk filled it.
+//
+// This is the substitute for the manual "Adjust referrals" UI that Sadia
+// used to control on each clinic card — that flow is removed in this
+// change. The clinic-level referral counters (used by the tier system)
+// are now AUTO-COMPUTED from these log entries.
+//
+// Per-member-per-facility counters are also derived live from this log:
+// for each (marketing member × WCG facility) pair, sum patientCount.
+// These show on the member's profile page in the Team tab.
+//
+// Edit/Delete window:
+//   • Admin can edit / delete any entry forever.
+//   • The submitter (front desk) can edit / delete THEIR OWN entry for
+//     1 hour after creation. After that, only admin can touch it.
+//
+// Schema:
+//   {
+//     id:          'rlog_<timestamp>_<rand>',
+//     ts:          ISO timestamp,
+//     memberName:  marketing team member name (e.g. 'Duaa'),
+//     sourceBusiness: source clinic/MVA/outreach NAME,
+//     sourceType:  'clinic' | 'mva' | 'outreach',
+//     destinationFacility: 'frisco_er' | 'castle_hills_er' | 'plano_uc',
+//     patientCount: integer ≥ 1,
+//     filledByName: free-text name of the person who filled the entry,
+//     filledByEmail: email of the logged-in account (auto, future use),
+//     adminEdited: ISO timestamp if admin has edited (audit trail)
+//   }
+var REFERRAL_LOG = [];
+var REFERRAL_LOG_LS_KEY = 'wcg_referral_log_v1';
+var REFERRAL_EDIT_WINDOW_MS = 60 * 60 * 1000; // 1 hour self-edit window
+// The 3 WCG facilities — keyed for stable storage. Labels for display.
+var REFERRAL_FACILITIES = [
+  { key: 'frisco_er',        label: 'Frisco ER',        short: 'Frisco',     city: 'Frisco' },
+  { key: 'castle_hills_er',  label: 'Castle Hills ER',  short: 'Carrollton', city: 'Carrollton' },
+  { key: 'plano_uc',         label: 'Urgent Care Plano',short: 'Plano',      city: 'Plano' }
+];
+
+function _loadReferralLog(){
+  if(typeof DataLayer === 'undefined' || !DataLayer.load) return;
+  var v = DataLayer.load(REFERRAL_LOG_LS_KEY);
+  REFERRAL_LOG = Array.isArray(v) ? v : [];
+}
+function _saveReferralLog(){
+  if(typeof DataLayer === 'undefined' || !DataLayer.save) return;
+  DataLayer.save(REFERRAL_LOG_LS_KEY, REFERRAL_LOG);
+}
+window._loadReferralLog = _loadReferralLog;
+window._saveReferralLog = _saveReferralLog;
+
+// ── REFERRAL LOG: CRUD ────────────────────────────────────────────────
+// Insert a new entry. Returns the entry on success, or { error:'...' }.
+function addReferralEntry(data){
+  if(!data || !data.memberName || !data.sourceBusiness || !data.destinationFacility){
+    return { error: 'Missing required fields' };
+  }
+  var fac = REFERRAL_FACILITIES.find(function(f){ return f.key === data.destinationFacility; });
+  if(!fac) return { error: 'Unknown destination facility' };
+  var count = parseInt(data.patientCount, 10);
+  if(isNaN(count) || count < 1){ return { error: 'Patient count must be at least 1' }; }
+  // Look up source type if not given
+  var sourceType = data.sourceType || '';
+  if(!sourceType && typeof getBizTypeForName === 'function'){
+    sourceType = getBizTypeForName(data.sourceBusiness) || 'clinic';
+  }
+  var entry = {
+    id:           'rlog_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
+    ts:           new Date().toISOString(),
+    memberName:   String(data.memberName).trim(),
+    sourceBusiness: String(data.sourceBusiness).trim(),
+    sourceType:   sourceType,
+    destinationFacility: data.destinationFacility,
+    patientCount: count,
+    filledByName: String(data.filledByName || '').trim(),
+    filledByEmail: (CURRENT_USER && CURRENT_USER.email) || '',
+    adminEdited:  null
+  };
+  REFERRAL_LOG.unshift(entry); // newest first
+  _saveReferralLog();
+  _recomputeReferralCountsFromLog();
+  return entry;
+}
+window.addReferralEntry = addReferralEntry;
+
+// Edit an existing entry. Permission rules:
+//   • Admin can edit any entry forever
+//   • Submitter can edit their own entry within REFERRAL_EDIT_WINDOW_MS
+function canEditReferralEntry(entry){
+  if(!entry) return false;
+  if(typeof isAdmin === 'function' && isAdmin()) return true;
+  if(!CURRENT_USER) return false;
+  var myEmail = (CURRENT_USER.email || '').toLowerCase();
+  var myName  = (CURRENT_USER.name  || '').toLowerCase();
+  var entryEmail = (entry.filledByEmail || '').toLowerCase();
+  var entryName  = (entry.filledByName  || '').toLowerCase();
+  var mine = (myEmail && myEmail === entryEmail) || (myName && myName === entryName);
+  if(!mine) return false;
+  // Within the 1-hour window?
+  var age = Date.now() - new Date(entry.ts).getTime();
+  return age <= REFERRAL_EDIT_WINDOW_MS;
+}
+window.canEditReferralEntry = canEditReferralEntry;
+
+function editReferralEntry(id, patch){
+  var idx = REFERRAL_LOG.findIndex(function(e){ return e.id === id; });
+  if(idx < 0) return { error: 'Entry not found' };
+  var entry = REFERRAL_LOG[idx];
+  if(!canEditReferralEntry(entry)) return { error: 'You can no longer edit this entry. Ask the admin.' };
+  // Allow patching: memberName, sourceBusiness, destinationFacility, patientCount, filledByName
+  ['memberName','sourceBusiness','destinationFacility','filledByName'].forEach(function(k){
+    if(patch && patch[k] != null) entry[k] = String(patch[k]).trim();
+  });
+  if(patch && patch.patientCount != null){
+    var c = parseInt(patch.patientCount, 10);
+    if(!isNaN(c) && c >= 1) entry.patientCount = c;
+  }
+  if(patch && patch.sourceType != null) entry.sourceType = patch.sourceType;
+  if(typeof isAdmin === 'function' && isAdmin()){
+    entry.adminEdited = new Date().toISOString();
+  }
+  REFERRAL_LOG[idx] = entry;
+  _saveReferralLog();
+  _recomputeReferralCountsFromLog();
+  return entry;
+}
+window.editReferralEntry = editReferralEntry;
+
+function deleteReferralEntry(id){
+  var idx = REFERRAL_LOG.findIndex(function(e){ return e.id === id; });
+  if(idx < 0) return { error: 'Entry not found' };
+  var entry = REFERRAL_LOG[idx];
+  if(!canEditReferralEntry(entry)) return { error: 'You can no longer delete this entry. Ask the admin.' };
+  REFERRAL_LOG.splice(idx, 1);
+  _saveReferralLog();
+  _recomputeReferralCountsFromLog();
+  return { ok: true };
+}
+window.deleteReferralEntry = deleteReferralEntry;
+
+// ── DERIVED COUNTERS ──────────────────────────────────────────────────
+// Recompute BUSINESS_REFERRALS counters from the referral log. This keeps
+// the tier system working (which depends on BUSINESS_REFERRALS) while the
+// log is the new source of truth. Called on every CRUD operation + on
+// initial boot.
+function _recomputeReferralCountsFromLog(){
+  if(typeof BUSINESS_REFERRALS === 'undefined') return;
+  // Reset all currentCount values to 0 first
+  Object.keys(BUSINESS_REFERRALS).forEach(function(name){
+    if(BUSINESS_REFERRALS[name]) BUSINESS_REFERRALS[name].currentCount = 0;
+  });
+  // Sum log entries into per-business counts
+  REFERRAL_LOG.forEach(function(e){
+    if(!e || !e.sourceBusiness) return;
+    var rec = BUSINESS_REFERRALS[e.sourceBusiness];
+    if(!rec){
+      // Create a stub record for businesses that appear in the log but aren't
+      // yet in BUSINESS_REFERRALS (e.g. a newly added clinic with no manual
+      // adjustments yet). Standard shape used elsewhere in the code.
+      rec = { currentCount: 0, previousCount: 0, history: [] };
+      BUSINESS_REFERRALS[e.sourceBusiness] = rec;
+    }
+    rec.currentCount = (rec.currentCount || 0) + (parseInt(e.patientCount, 10) || 0);
+  });
+  // Persist + re-render any open views that read from BUSINESS_REFERRALS
+  if(typeof _saveReferrals === 'function') _saveReferrals();
+  if(typeof renderBank === 'function') renderBank();
+  if(typeof renderMVABank === 'function') renderMVABank();
+  if(typeof renderOutreach === 'function') renderOutreach();
+}
+window._recomputeReferralCountsFromLog = _recomputeReferralCountsFromLog;
+
+// Get the count of patients that (member) referred to (facilityKey).
+function getMemberFacilityCount(memberName, facilityKey){
+  if(!memberName || !facilityKey) return 0;
+  var total = 0;
+  REFERRAL_LOG.forEach(function(e){
+    if(e.memberName === memberName && e.destinationFacility === facilityKey){
+      total += parseInt(e.patientCount, 10) || 0;
+    }
+  });
+  return total;
+}
+window.getMemberFacilityCount = getMemberFacilityCount;
+
+// Return all 3 facility counts for a member as an object {frisco_er, castle_hills_er, plano_uc, total}.
+function getMemberAllFacilityCounts(memberName){
+  var out = { total: 0 };
+  REFERRAL_FACILITIES.forEach(function(f){
+    out[f.key] = getMemberFacilityCount(memberName, f.key);
+    out.total += out[f.key];
+  });
+  return out;
+}
+window.getMemberAllFacilityCounts = getMemberAllFacilityCounts;
+
+// ── REFERRAL LOG: UI RENDERERS ────────────────────────────────────────
+function renderReferralLog(){
+  var view = document.getElementById('referrals-view');
+  if(!view) return;
+
+  // Populate filter dropdowns (member + facility)
+  var mFilter = document.getElementById('rl-filter-member');
+  var fFilter = document.getElementById('rl-filter-facility');
+  if(mFilter && mFilter.options.length <= 1){
+    var mHtml = '<option value="">All members</option>';
+    if(typeof MEMBERS !== 'undefined' && Array.isArray(MEMBERS)){
+      MEMBERS.forEach(function(m){ mHtml += '<option value="' + m + '">' + m + '</option>'; });
+    }
+    mFilter.innerHTML = mHtml;
+  }
+  if(fFilter && fFilter.options.length <= 1){
+    var fHtml = '<option value="">All facilities</option>';
+    REFERRAL_FACILITIES.forEach(function(f){
+      fHtml += '<option value="' + f.key + '">' + f.label + '</option>';
+    });
+    fFilter.innerHTML = fHtml;
+  }
+
+  // ── Summary cards ───────────────────────────────────────────────────
+  var sum = document.getElementById('rl-summary');
+  if(sum){
+    var totalPts = 0;
+    var perFacility = {};
+    REFERRAL_FACILITIES.forEach(function(f){ perFacility[f.key] = 0; });
+    REFERRAL_LOG.forEach(function(e){
+      totalPts += parseInt(e.patientCount, 10) || 0;
+      if(perFacility.hasOwnProperty(e.destinationFacility)){
+        perFacility[e.destinationFacility] += parseInt(e.patientCount, 10) || 0;
+      }
+    });
+    var sumHtml = '';
+    sumHtml += '<div style="background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;border-radius:12px;padding:14px 18px">'
+            + '<div style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;opacity:.85">Total patients referred</div>'
+            + '<div style="font-size:32px;font-weight:800;margin-top:4px;font-family:DM Mono,monospace">' + totalPts + '</div>'
+            + '<div style="font-size:10px;opacity:.85;margin-top:2px">' + REFERRAL_LOG.length + ' entries logged</div>'
+            + '</div>';
+    REFERRAL_FACILITIES.forEach(function(f){
+      sumHtml += '<div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:14px 18px">'
+              + '<div style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">🏥 ' + f.label + '</div>'
+              + '<div style="font-size:26px;font-weight:800;margin-top:4px;font-family:DM Mono,monospace;color:#1F3864">' + perFacility[f.key] + '</div>'
+              + '<div style="font-size:10px;color:var(--muted);margin-top:2px">' + f.city + '</div>'
+              + '</div>';
+    });
+    sum.innerHTML = sumHtml;
+  }
+
+  // ── Per-member-per-facility totals grid ──────────────────────────────
+  var pm = document.getElementById('rl-member-totals');
+  if(pm){
+    var pmHtml = '';
+    if(typeof MEMBERS !== 'undefined'){
+      MEMBERS.forEach(function(m){
+        var counts = getMemberAllFacilityCounts(m);
+        if(counts.total === 0 && !document.getElementById('rl-show-zero')) {
+          // still show — admins want to see zero baselines too
+        }
+        pmHtml += '<div style="background:#f8fafc;border:1px solid var(--border);border-radius:10px;padding:10px 12px">'
+                + '<div style="font-size:12px;font-weight:700;color:var(--text)">' + m + '</div>'
+                + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:6px">';
+        REFERRAL_FACILITIES.forEach(function(f){
+          pmHtml += '<div style="text-align:center;background:#fff;border:1px solid var(--border);border-radius:6px;padding:5px 4px">'
+                  + '<div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em">' + f.short + '</div>'
+                  + '<div style="font-size:16px;font-weight:800;font-family:DM Mono,monospace;color:#1F3864">' + counts[f.key] + '</div>'
+                  + '</div>';
+        });
+        pmHtml += '</div>'
+               + '<div style="font-size:10px;color:var(--muted);margin-top:6px;text-align:right">Total: <strong style="color:#7030A0">' + counts.total + '</strong></div>'
+               + '</div>';
+      });
+    }
+    pm.innerHTML = pmHtml || '<div style="font-size:11px;color:var(--muted);font-style:italic">No members configured yet.</div>';
+  }
+
+  // ── Entries table (filtered) ─────────────────────────────────────────
+  var entriesEl = document.getElementById('rl-entries');
+  if(!entriesEl) return;
+  var memFilter   = (mFilter && mFilter.value) || '';
+  var facFilter   = (fFilter && fFilter.value) || '';
+  var searchTerm  = ((document.getElementById('rl-filter-search') || {}).value || '').toLowerCase();
+  var filtered = REFERRAL_LOG.filter(function(e){
+    if(memFilter && e.memberName !== memFilter) return false;
+    if(facFilter && e.destinationFacility !== facFilter) return false;
+    if(searchTerm){
+      var hay = (e.sourceBusiness + ' ' + (e.filledByName||'')).toLowerCase();
+      if(hay.indexOf(searchTerm) < 0) return false;
+    }
+    return true;
+  });
+  if(filtered.length === 0){
+    entriesEl.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--muted);font-size:13px;font-style:italic">No entries match the current filters.</div>';
+    return;
+  }
+  var rowsHtml = '<table style="width:100%;border-collapse:collapse">'
+    + '<thead><tr style="background:#fafbfc;border-bottom:1px solid var(--border)">'
+    +   '<th style="padding:9px 12px;text-align:left;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">When</th>'
+    +   '<th style="padding:9px 12px;text-align:left;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Marketer</th>'
+    +   '<th style="padding:9px 12px;text-align:left;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Source business</th>'
+    +   '<th style="padding:9px 12px;text-align:left;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Destination</th>'
+    +   '<th style="padding:9px 12px;text-align:center;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Patients</th>'
+    +   '<th style="padding:9px 12px;text-align:left;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Filled by</th>'
+    +   '<th style="padding:9px 12px;text-align:center;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Actions</th>'
+    + '</tr></thead><tbody>';
+  filtered.forEach(function(e, i){
+    var fac = REFERRAL_FACILITIES.find(function(f){ return f.key === e.destinationFacility; });
+    var facLabel = fac ? fac.label : (e.destinationFacility || '—');
+    var dt = new Date(e.ts);
+    var dtStr = dt.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) + ' · '
+              + dt.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+    var canEdit = canEditReferralEntry(e);
+    var editedMark = e.adminEdited ? ' <span title="Edited by admin" style="font-size:9px;color:#f59e0b">✎</span>' : '';
+    rowsHtml += '<tr style="' + (i%2===0?'':'background:#fafbfc') + ';border-bottom:1px solid var(--border)">'
+      + '<td style="padding:9px 12px;font-size:11px;color:var(--text);white-space:nowrap">' + dtStr + editedMark + '</td>'
+      + '<td style="padding:9px 12px;font-size:12px;font-weight:600;color:var(--text)">' + (e.memberName || '—').replace(/</g,'&lt;') + '</td>'
+      + '<td style="padding:9px 12px;font-size:12px;color:var(--text)">' + (e.sourceBusiness || '—').replace(/</g,'&lt;') + '</td>'
+      + '<td style="padding:9px 12px;font-size:11px;color:var(--muted)">🏥 ' + facLabel + '</td>'
+      + '<td style="padding:9px 12px;text-align:center;font-size:14px;font-weight:800;font-family:DM Mono,monospace;color:#1F3864">' + (e.patientCount || 0) + '</td>'
+      + '<td style="padding:9px 12px;font-size:11px;color:var(--muted)">' + (e.filledByName || '—').replace(/</g,'&lt;') + '</td>'
+      + '<td style="padding:9px 12px;text-align:center;white-space:nowrap">'
+      + (canEdit
+          ? '<button onclick="openReferralForm(\'' + e.id + '\')" title="Edit" style="background:none;border:1px solid var(--border);border-radius:5px;padding:3px 8px;font-size:10px;cursor:pointer;color:#1F3864;margin-right:4px">✎</button>'
+            + '<button onclick="_confirmDeleteReferral(\'' + e.id + '\')" title="Delete" style="background:none;border:1px solid #fca5a5;border-radius:5px;padding:3px 8px;font-size:10px;cursor:pointer;color:#991b1b">🗑</button>'
+          : '<span style="font-size:10px;color:var(--muted);font-style:italic">🔒 locked</span>')
+      + '</td>'
+      + '</tr>';
+  });
+  rowsHtml += '</tbody></table>';
+  entriesEl.innerHTML = rowsHtml;
+}
+window.renderReferralLog = renderReferralLog;
+
+function _confirmDeleteReferral(id){
+  if(typeof showConfirm === 'function'){
+    showConfirm({
+      icon: '!',
+      msg: 'Delete this referral entry?',
+      sub: 'The clinic\'s count will be reduced by this entry\'s patient count. Cannot be undone.',
+      yesLabel: 'Delete',
+      danger: true,
+      onConfirm: function(){
+        var res = deleteReferralEntry(id);
+        if(res && res.error){ if(typeof showToast === 'function') showToast(res.error); return; }
+        if(typeof showToast === 'function') showToast('Entry deleted');
+        renderReferralLog();
+      }
+    });
+  } else {
+    if(confirm('Delete this entry?')){ deleteReferralEntry(id); renderReferralLog(); }
+  }
+}
+window._confirmDeleteReferral = _confirmDeleteReferral;
+
+// ── FORM: open / submit ───────────────────────────────────────────────
+function openReferralForm(editId){
+  var modal = document.getElementById('referral-form-modal');
+  if(!modal) return;
+  // Populate member dropdown
+  var mSel = document.getElementById('rl-member');
+  if(mSel){
+    var mHtml = '<option value="">— Pick a member —</option>';
+    if(typeof MEMBERS !== 'undefined'){
+      MEMBERS.forEach(function(m){ mHtml += '<option value="' + m + '">' + m + '</option>'; });
+    }
+    mSel.innerHTML = mHtml;
+  }
+  // Populate destination radios as styled buttons
+  var dRow = document.getElementById('rl-destination-row');
+  if(dRow){
+    var dHtml = '';
+    REFERRAL_FACILITIES.forEach(function(f){
+      dHtml += '<label style="display:flex;align-items:center;gap:6px;background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:8px 12px;cursor:pointer;font-size:11px;font-weight:600;color:var(--text)">'
+            + '<input type="radio" name="rl-dest" value="' + f.key + '" style="accent-color:#1F3864">'
+            + '<span>🏥 ' + f.label + '</span>'
+            + '</label>';
+    });
+    dRow.innerHTML = dHtml;
+  }
+  // Reset / pre-fill based on edit vs new
+  document.getElementById('rl-edit-id').value = '';
+  document.getElementById('rl-source').value  = '';
+  document.getElementById('rl-count').value   = '1';
+  document.getElementById('rl-filler').value  = (CURRENT_USER && CURRENT_USER.name) || '';
+  var errEl = document.getElementById('rl-form-err');
+  if(errEl){ errEl.style.display = 'none'; errEl.textContent = ''; }
+  var titleEl = document.getElementById('rl-form-title');
+  if(titleEl) titleEl.textContent = editId ? '✎ Edit referral entry' : '➕ New referral entry';
+  if(editId){
+    var entry = REFERRAL_LOG.find(function(e){ return e.id === editId; });
+    if(entry){
+      document.getElementById('rl-edit-id').value = entry.id;
+      if(mSel) mSel.value = entry.memberName || '';
+      document.getElementById('rl-source').value = entry.sourceBusiness || '';
+      var picked = document.querySelector('input[name="rl-dest"][value="' + entry.destinationFacility + '"]');
+      if(picked) picked.checked = true;
+      document.getElementById('rl-count').value = entry.patientCount || 1;
+      document.getElementById('rl-filler').value = entry.filledByName || '';
+    }
+  }
+  // Hide suggest dropdown
+  var sug = document.getElementById('rl-source-suggest');
+  if(sug) sug.style.display = 'none';
+  modal.style.display = 'flex';
+  setTimeout(function(){
+    var firstField = editId ? document.getElementById('rl-count') : document.getElementById('rl-member');
+    if(firstField && firstField.focus) firstField.focus();
+  }, 80);
+}
+window.openReferralForm = openReferralForm;
+
+function closeReferralForm(){
+  var modal = document.getElementById('referral-form-modal');
+  if(modal) modal.style.display = 'none';
+}
+window.closeReferralForm = closeReferralForm;
+
+// Source business autocomplete — searches CLINIC_BANK + MVA_ATTORNEYS + OUTREACH
+function _rlSuggestSources(){
+  var inp = document.getElementById('rl-source');
+  var sug = document.getElementById('rl-source-suggest');
+  if(!inp || !sug) return;
+  var q = (inp.value || '').trim().toLowerCase();
+  if(q.length < 2){ sug.style.display = 'none'; return; }
+  var matches = [];
+  if(typeof CLINIC_BANK !== 'undefined'){
+    CLINIC_BANK.forEach(function(c){
+      if(c.n && c.n.toLowerCase().indexOf(q) >= 0) matches.push({name:c.n, type:'clinic', city:c.c||''});
+    });
+  }
+  if(typeof MVA_ATTORNEYS !== 'undefined'){
+    MVA_ATTORNEYS.forEach(function(m){
+      if(m.firm && m.firm.toLowerCase().indexOf(q) >= 0) matches.push({name:m.firm, type:'mva', city:m.city||''});
+    });
+  }
+  if(typeof OUTREACH !== 'undefined'){
+    OUTREACH.forEach(function(o){
+      if(o.name && o.name.toLowerCase().indexOf(q) >= 0) matches.push({name:o.name, type:'outreach', city:o.city||''});
+    });
+  }
+  matches = matches.slice(0, 10);
+  if(matches.length === 0){ sug.style.display = 'none'; return; }
+  var typeColors = { clinic:'#3b82f6', mva:'#f59e0b', outreach:'#16a34a' };
+  var typeLabel = { clinic:'Clinic', mva:'MVA', outreach:'Outreach' };
+  var html = '';
+  matches.forEach(function(m){
+    var safe = m.name.replace(/'/g,"\\'").replace(/"/g,'&quot;');
+    html += '<div onclick="_rlPickSource(\'' + safe + '\', \'' + m.type + '\')" style="padding:7px 12px;cursor:pointer;border-bottom:1px solid #f1f5f9;font-size:12px;color:var(--text);display:flex;align-items:center;justify-content:space-between" onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'#fff\'">'
+         + '<span><strong>' + m.name.replace(/</g,'&lt;') + '</strong>' + (m.city ? ' <span style="color:var(--muted);font-size:10px">· ' + m.city + '</span>' : '') + '</span>'
+         + '<span style="background:' + typeColors[m.type] + '22;color:' + typeColors[m.type] + ';font-size:9px;font-weight:700;padding:1px 6px;border-radius:4px;border:1px solid ' + typeColors[m.type] + '66">' + typeLabel[m.type] + '</span>'
+         + '</div>';
+  });
+  sug.innerHTML = html;
+  sug.style.display = 'block';
+}
+window._rlSuggestSources = _rlSuggestSources;
+
+function _rlPickSource(name, type){
+  var inp = document.getElementById('rl-source');
+  if(inp) inp.value = name;
+  inp.dataset.sourceType = type;
+  var sug = document.getElementById('rl-source-suggest');
+  if(sug) sug.style.display = 'none';
+}
+window._rlPickSource = _rlPickSource;
+
+function submitReferralForm(){
+  var errEl = document.getElementById('rl-form-err');
+  function showErr(msg){
+    if(errEl){ errEl.textContent = msg; errEl.style.display = 'block'; }
+    else if(typeof showToast === 'function') showToast(msg);
+  }
+  var editId = document.getElementById('rl-edit-id').value;
+  var data = {
+    memberName: document.getElementById('rl-member').value,
+    sourceBusiness: document.getElementById('rl-source').value,
+    sourceType: document.getElementById('rl-source').dataset.sourceType || '',
+    destinationFacility: ((document.querySelector('input[name="rl-dest"]:checked') || {}).value) || '',
+    patientCount: document.getElementById('rl-count').value,
+    filledByName: document.getElementById('rl-filler').value
+  };
+  if(!data.memberName)         { showErr('Pick the marketing team member.'); return; }
+  if(!data.sourceBusiness)     { showErr('Enter the source business.'); return; }
+  if(!data.destinationFacility){ showErr('Pick a destination facility.'); return; }
+  if(!data.filledByName)       { showErr('Enter the name of the person filling this form.'); return; }
+  var res = editId ? editReferralEntry(editId, data) : addReferralEntry(data);
+  if(res && res.error){ showErr(res.error); return; }
+  closeReferralForm();
+  if(typeof showToast === 'function') showToast(editId ? 'Entry updated' : 'Referral logged · counters updated');
+  renderReferralLog();
+}
+window.submitReferralForm = submitReferralForm;
 
 function _loadAdminNotifs(){
   var v = DataLayer.load(ADMIN_NOTIF_LS_KEY);
@@ -16080,7 +16604,7 @@ function switchTab(tab, opts){
     }, 0);
   }
   // Update active tab button (Home is a new top-level view)
-  ['home','schedule','members','bank','finances','reports','feed'].forEach(function(t){
+  ['home','schedule','members','bank','finances','reports','feed','referrals'].forEach(function(t){
     var btn=document.getElementById('tab-'+t);
     if(btn)btn.classList.toggle('active',t===tab);
   });
@@ -16092,7 +16616,8 @@ function switchTab(tab, opts){
     'bank':      document.getElementById('bank-view'),
     'finances':  document.getElementById('finances-view'),
     'reports':   document.getElementById('reports-view'),
-    'feed':      document.getElementById('feed-view')
+    'feed':      document.getElementById('feed-view'),
+    'referrals': document.getElementById('referrals-view')
   };
   // Show only the active view
   Object.keys(views).forEach(function(k){
@@ -16133,6 +16658,7 @@ function switchTab(tab, opts){
   if(tab==='finances' && typeof renderFinances === 'function') renderFinances();
   if(tab==='feed'){ renderFeed(); if(typeof renderAdminFeed==='function') renderAdminFeed(); }
   if(tab==='leads-page')renderLeadsPage();
+  if(tab==='referrals' && typeof renderReferralLog === 'function') renderReferralLog();
   if(tab==='members'){
     // Default behavior: clicking the Team tab button takes you to the FIRST
     // sub-tab (Tree Chart) with no member selected. Pass {keepMember:true}
@@ -16341,7 +16867,35 @@ function loadMemberProfile(name){
   // Conversions chart only renders content if this member is a call handler;
   // otherwise it hides itself.
   if(typeof renderMonthlyConversions === 'function') renderMonthlyConversions(name);
+  // 📋 Per-member referral counters (Frisco / Carrollton / Plano)
+  if(typeof renderMemberReferralCounters === 'function') renderMemberReferralCounters(name);
 }
+
+// Render the 3-facility referral counter strip for the given member,
+// computed from REFERRAL_LOG. Shown on the member's profile card.
+function renderMemberReferralCounters(name){
+  var wrap = document.getElementById('member-referral-counters');
+  if(!wrap) return;
+  if(!name){ wrap.style.display = 'none'; return; }
+  var counts = (typeof getMemberAllFacilityCounts === 'function')
+    ? getMemberAllFacilityCounts(name) : { total:0 };
+  var fac = (typeof REFERRAL_FACILITIES !== 'undefined') ? REFERRAL_FACILITIES : [];
+  var html = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'
+           +   '<div style="font-size:11px;font-weight:700;color:#fff;text-transform:uppercase;letter-spacing:.05em;opacity:.85">📋 Patient referrals attributed to you</div>'
+           +   '<div style="font-size:10px;color:rgba(255,255,255,.7)">' + counts.total + ' total · all-time</div>'
+           + '</div>'
+           + '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">';
+  fac.forEach(function(f){
+    html += '<div style="background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.18);border-radius:8px;padding:8px 10px;text-align:center">'
+         +   '<div style="font-size:9px;color:rgba(255,255,255,.75);text-transform:uppercase;letter-spacing:.04em">🏥 ' + f.short + '</div>'
+         +   '<div style="font-size:20px;font-weight:800;font-family:DM Mono,monospace;color:#fff;margin-top:2px">' + (counts[f.key] || 0) + '</div>'
+         + '</div>';
+  });
+  html += '</div>';
+  wrap.innerHTML = html;
+  wrap.style.display = 'block';
+}
+window.renderMemberReferralCounters = renderMemberReferralCounters;
 
 function renderHistory(){
   if(!currentMember)return;
@@ -21600,6 +22154,99 @@ setInterval(updateClock,1000);updateClock();
 autoLockTargets(); // auto-lock if Monday 8PM has passed
 
 </script>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     📋 PATIENT REFERRAL LOG VIEW
+     Admin (and later, the 3 front-desk accounts) log incoming patient
+     referrals here. Each entry feeds the per-member-per-facility
+     counters AND auto-increments the source clinic's referral count
+     (which drives the tier system).
+     ═══════════════════════════════════════════════════════════════════ -->
+<div id="referrals-view" style="display:none;padding:28px 20px;max-width:1200px;width:100%;margin:0 auto">
+
+  <!-- Header -->
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:12px">
+    <div>
+      <div style="font-size:18px;font-weight:700;color:var(--text)">📋 Patient Referral Log</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:3px">Log every incoming patient referral · drives member &amp; clinic counters automatically</div>
+    </div>
+    <button onclick="openReferralForm()" style="background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;display:inline-flex;align-items:center;gap:6px">➕ New referral entry</button>
+  </div>
+
+  <!-- Summary strip — total referrals + per-facility totals + per-member panel -->
+  <div id="rl-summary" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:18px"></div>
+
+  <!-- Per-member breakdown — each member's 3-facility counters -->
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px 20px;margin-bottom:18px;box-shadow:0 2px 10px rgba(15,23,42,.05)">
+    <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:10px">👥 Per-member referral totals</div>
+    <div id="rl-member-totals" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:10px"></div>
+  </div>
+
+  <!-- Filters -->
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center">
+    <select id="rl-filter-member" onchange="renderReferralLog()" style="border:1px solid var(--border);border-radius:8px;padding:7px 12px;font-size:12px;font-family:'DM Sans',sans-serif;background:#fff">
+      <option value="">All members</option>
+    </select>
+    <select id="rl-filter-facility" onchange="renderReferralLog()" style="border:1px solid var(--border);border-radius:8px;padding:7px 12px;font-size:12px;font-family:'DM Sans',sans-serif;background:#fff">
+      <option value="">All facilities</option>
+    </select>
+    <input type="text" id="rl-filter-search" placeholder="🔍 Search business or filler name..." oninput="renderReferralLog()"
+           style="border:1px solid var(--border);border-radius:8px;padding:7px 12px;font-size:12px;font-family:'DM Sans',sans-serif;background:#fff;flex:1;min-width:200px">
+  </div>
+
+  <!-- Log entries table -->
+  <div id="rl-entries" style="background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(15,23,42,.04)"></div>
+</div>
+
+<!-- ── REFERRAL ENTRY FORM MODAL ──────────────────────────────────────── -->
+<div id="referral-form-modal" class="modal-ov" style="display:none;z-index:9800">
+  <div class="modal-box" style="width:520px;max-width:96vw;max-height:92vh;display:flex;flex-direction:column">
+    <div class="modal-top" style="flex-shrink:0;background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff">
+      <span id="rl-form-title">➕ New referral entry</span>
+      <button onclick="closeReferralForm()" style="background:rgba(255,255,255,.18);color:#fff;border:none">&#215;</button>
+    </div>
+    <div class="modal-body" style="overflow-y:auto;flex:1;min-height:0;padding:18px 22px">
+      <input type="hidden" id="rl-edit-id" value="">
+
+      <div class="kpi-input-row" style="margin-bottom:12px">
+        <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Marketing team member who got the referral *</label>
+        <select id="rl-member" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box"></select>
+      </div>
+
+      <div class="kpi-input-row" style="margin-bottom:12px;position:relative">
+        <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Source business — who referred the patient? *</label>
+        <input type="text" id="rl-source" placeholder="Start typing — clinic, MVA firm, or outreach name"
+               autocomplete="off"
+               oninput="_rlSuggestSources()" onfocus="_rlSuggestSources()"
+               style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box">
+        <div id="rl-source-suggest" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid var(--border);border-top:none;border-radius:0 0 8px 8px;max-height:200px;overflow-y:auto;z-index:10;box-shadow:0 4px 12px rgba(0,0,0,.1)"></div>
+      </div>
+
+      <div class="kpi-input-row" style="margin-bottom:12px">
+        <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:6px">Destination — which facility received the patient? *</label>
+        <div id="rl-destination-row" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:6px"></div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1.6fr;gap:10px;margin-bottom:12px">
+        <div>
+          <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Number of patients *</label>
+          <input type="number" id="rl-count" min="1" value="1" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Your name (person filling this) *</label>
+          <input type="text" id="rl-filler" placeholder="e.g. Maria — Frisco ER shift A"
+                 style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box">
+        </div>
+      </div>
+
+      <div id="rl-form-err" style="display:none;background:#fee2e2;border:1px solid #fecaca;color:#991b1b;border-radius:8px;padding:9px 12px;font-size:11px;margin-top:8px"></div>
+    </div>
+    <div class="modal-foot" style="flex-shrink:0;background:#fff;padding:12px 22px;border-top:1px solid var(--border);display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap">
+      <button onclick="closeReferralForm()" style="background:#e5e7eb;color:#374151;border:none;border-radius:8px;padding:9px 18px;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif">Cancel</button>
+      <button id="rl-submit-btn" onclick="submitReferralForm()" style="background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;border:none;border-radius:8px;padding:9px 26px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif">Save entry</button>
+    </div>
+  </div>
+</div>
 
 <!-- ACTIVITY FEED VIEW -->
 <div id="feed-view" style="display:none;padding:28px 20px;max-width:1000px;width:100%;margin:0 auto">
