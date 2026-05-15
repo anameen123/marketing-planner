@@ -4087,9 +4087,13 @@ function saveNewOutreach(){
   var cat = (typeof OUTREACH_SUB !== 'undefined') ? OUTREACH_SUB : 'random';
   var catLabel = (OUTREACH_CATEGORIES[cat] || OUTREACH_CATEGORIES.random).label;
   showConfirm({icon:'?',msg:'Add "'+name+'"?',sub:OUTREACH_TYPES[type]+' in '+city+' · ' + catLabel,yesLabel:'Add',danger:false,onConfirm:function(){
+    var _outWebsite = ((document.getElementById('out-add-website')||{}).value||'').trim();
+    if(_outWebsite && !/^https?:\/\//i.test(_outWebsite)) _outWebsite = 'https://' + _outWebsite;
     OUTREACH.push({
       id:'co'+Date.now(),name:name,type:type,city:city,
       phone:(document.getElementById('out-add-phone').value||'TBD').trim(),
+      fax:((document.getElementById('out-add-fax')||{}).value||'').trim(),
+      website: _outWebsite,
       address:(document.getElementById('out-add-address').value||'TBD').trim(),
       contact:(document.getElementById('out-add-contact').value||'TBD').trim(),
       status:'Not Visited',
@@ -4110,7 +4114,7 @@ window.saveNewOutreach=saveNewOutreach;
 // ── ADD CLINIC ────────────────────────────────────────────────────────────────
 function openAddClinic(){
   document.getElementById('add-clinic-modal').style.display='flex';
-  ['clinic-add-name','clinic-add-doctor','clinic-add-spec','clinic-add-phone','clinic-add-address','clinic-add-notes'].forEach(function(id){
+  ['clinic-add-name','clinic-add-doctor','clinic-add-spec','clinic-add-phone','clinic-add-fax','clinic-add-website','clinic-add-address','clinic-add-notes'].forEach(function(id){
     var el=document.getElementById(id); if(el) el.value='';
   });
   var cityEl=document.getElementById('clinic-add-city');
@@ -4125,11 +4129,21 @@ function saveNewClinic(){
   var doctor=(document.getElementById('clinic-add-doctor').value||'').trim();
   var spec=(document.getElementById('clinic-add-spec').value||'').trim();
   var notes=(document.getElementById('clinic-add-notes').value||'').trim();
+  // New contact-info fields collected by the form (added 2026-05-15)
+  var phone   = ((document.getElementById('clinic-add-phone')   || {}).value || '').trim();
+  var fax     = ((document.getElementById('clinic-add-fax')     || {}).value || '').trim();
+  var website = ((document.getElementById('clinic-add-website') || {}).value || '').trim();
+  var address = ((document.getElementById('clinic-add-address') || {}).value || '').trim();
+  if(website && !/^https?:\/\//i.test(website)) website = 'https://' + website;
   if(!name||!city){ showToast('Clinic name and city are required.'); return; }
   // Block exact-match duplicates across clinic + MVA + outreach
   if(_guardDuplicateBusiness(name)) return;
   showConfirm({icon:'?',msg:'Add "'+name+'"?',sub:'New clinic in '+city,yesLabel:'Add',danger:false,onConfirm:function(){
     CLINIC_BANK.push({n:name,d:doctor||'TBD',s:spec||'',c:city,t:'',notes:notes,
+      phone:   phone,
+      fax:     fax,
+      website: website,
+      address: address,
       addedBy: (CURRENT_USER && CURRENT_USER.name) || '',
       addedAt: new Date().toISOString()
     });
@@ -4408,12 +4422,16 @@ function saveNewMVA(){
   // Block exact-match duplicates across clinic + MVA + outreach
   if(_guardDuplicateBusiness(firm)) return;
   showConfirm({icon:'?',msg:'Add "'+firm+'"?',sub:'New MVA attorney for '+city,yesLabel:'Add',danger:false,onConfirm:function(){
+    var _mvaWebsite = ((document.getElementById('mva-add-website')||{}).value||'').trim();
+    if(_mvaWebsite && !/^https?:\/\//i.test(_mvaWebsite)) _mvaWebsite = 'https://' + _mvaWebsite;
     MVA_ATTORNEYS.push({
       id:'mva'+Date.now(),
       firm:firm,
       attorney:(document.getElementById('mva-add-attorney').value||'TBD').trim(),
       city:city,
       phone:(document.getElementById('mva-add-phone').value||'TBD').trim(),
+      fax:((document.getElementById('mva-add-fax')||{}).value||'').trim(),
+      website: _mvaWebsite,
       address:(document.getElementById('mva-add-address').value||'TBD').trim(),
       status:'Not Visited',
       notes:(document.getElementById('mva-add-notes').value||'').trim(),
@@ -7555,6 +7573,186 @@ function getReferralHistoryForBusiness(name){
            trend:trend, last30:last30, prev30:prev30 };
 }
 window.getReferralHistoryForBusiness = getReferralHistoryForBusiness;
+
+// ═══════════════════════════════════════════════════════════════════════
+// CLINIC / MVA / OUTREACH CONTACT INFO (built 2026-05-15)
+// ═══════════════════════════════════════════════════════════════════════
+// Each business in the bank now carries: phone, fax, website (string),
+// address (existing), and city (existing). The contact-info panel inside
+// the clinic-history modal shows all of these plus a computed
+// "Distance to nearest WCG facility" derived from the city's coordinates.
+//
+// For the existing 595 clinics — phone/fax/website are EMPTY initially.
+// Admin (or the team gradually) fills them in via the ✎ Edit buttons
+// on the panel. New entries added going forward collect these fields
+// at creation time.
+//
+// Distance uses ROUTE_COORDS (the baked city + facility lat/lng table)
+// already defined for the Day Route Planner. v1 precision = city-level.
+//
+// Returns null if the business can't be located (city not in our table).
+function getNearestWcgFacility(city){
+  if(!city || typeof ROUTE_COORDS === 'undefined') return null;
+  var cityCoord = ROUTE_COORDS[city];
+  if(!cityCoord) return null;
+  var bestKey = null, bestLabel = null, bestMiles = Infinity;
+  Object.keys(ROUTE_COORDS).forEach(function(k){
+    var c = ROUTE_COORDS[k];
+    if(c.type !== 'facility') return;
+    var miles = (typeof _haversineMiles === 'function') ? _haversineMiles(cityCoord, c) : Infinity;
+    if(miles < bestMiles){ bestMiles = miles; bestKey = k; bestLabel = c.label; }
+  });
+  if(bestKey == null) return null;
+  return { key: bestKey, label: bestLabel, miles: bestMiles };
+}
+window.getNearestWcgFacility = getNearestWcgFacility;
+
+// Look up the full record for a business by name across all 3 banks.
+// Returns { record, type, list } so the caller can read AND mutate.
+function _getBusinessRecord(name){
+  if(!name) return null;
+  if(typeof CLINIC_BANK !== 'undefined'){
+    var c = CLINIC_BANK.find(function(x){ return x.n === name; });
+    if(c) return { record: c, type: 'clinic', list: CLINIC_BANK };
+  }
+  if(typeof MVA_ATTORNEYS !== 'undefined'){
+    var m = MVA_ATTORNEYS.find(function(x){ return x.firm === name; });
+    if(m) return { record: m, type: 'mva', list: MVA_ATTORNEYS };
+  }
+  if(typeof OUTREACH !== 'undefined'){
+    var o = OUTREACH.find(function(x){ return x.name === name; });
+    if(o) return { record: o, type: 'outreach', list: OUTREACH };
+  }
+  return null;
+}
+window._getBusinessRecord = _getBusinessRecord;
+
+// Persist a change to phone / fax / website / address on a business.
+// Auto-saves the right bank (clinics → CLINIC_BANK, etc) and broadcasts.
+function updateBusinessContact(name, patch){
+  var ref = _getBusinessRecord(name);
+  if(!ref) return { error: 'Business not found in any bank' };
+  var canEdit = (typeof CURRENT_USER !== 'undefined') && CURRENT_USER && CURRENT_USER.role !== 'readonly';
+  if(!canEdit) return { error: 'Read-only role cannot edit contact info' };
+  ['phone','fax','website','address'].forEach(function(k){
+    if(patch && patch[k] != null) ref.record[k] = String(patch[k]).trim();
+  });
+  ref.record.lastInfoEditedBy = (CURRENT_USER && CURRENT_USER.name) || '';
+  ref.record.lastInfoEditedAt = new Date().toISOString();
+  // Persist via DataLayer — clinics share the schedule key (since CLINIC_BANK
+  // travels with S), MVA + OUTREACH have their own files.
+  if(ref.type === 'clinic' && typeof _saveS === 'function'){ _saveS(); }
+  if(ref.type === 'mva'      && typeof _saveMva === 'function'){ _saveMva(); }
+  if(ref.type === 'outreach' && typeof _saveOutreach === 'function'){ _saveOutreach(); }
+  // Also call the universal save fallbacks
+  try { if(typeof DataLayer !== 'undefined' && DataLayer.save){
+    if(ref.type === 'mva' && typeof MVA_LS_KEY !== 'undefined') DataLayer.save(MVA_LS_KEY, MVA_ATTORNEYS);
+    if(ref.type === 'outreach' && typeof OUTREACH_LS_KEY !== 'undefined') DataLayer.save(OUTREACH_LS_KEY, OUTREACH);
+  }} catch(e){}
+  // Re-render the clinic history panel if open
+  if(typeof _renderClinicContactPanel === 'function') _renderClinicContactPanel(name);
+  // Refresh the bank views
+  if(typeof renderBank === 'function') renderBank();
+  if(typeof renderMVABank === 'function') renderMVABank();
+  if(typeof renderOutreach === 'function') renderOutreach();
+  return { ok: true, record: ref.record };
+}
+window.updateBusinessContact = updateBusinessContact;
+
+// Render the contact info panel inside the clinic-history modal.
+// Reads phone/fax/website/address from the business record + computes
+// nearest WCG facility on the fly. Each field has an ✎ Edit button for
+// admin / member roles (readonly hidden).
+function _renderClinicContactPanel(name){
+  var panel = document.getElementById('ch-contact-panel');
+  if(!panel) return;
+  if(!name){ panel.innerHTML = ''; return; }
+  var ref = _getBusinessRecord(name);
+  if(!ref){
+    panel.innerHTML = '<div style="font-size:11px;color:var(--muted);font-style:italic;padding:10px 12px;background:#f8fafc;border:1px solid var(--border);border-radius:8px">No contact record found for this business.</div>';
+    return;
+  }
+  var r = ref.record;
+  // Resolve the doctor / physician field — different across the 3 banks
+  var physician = (ref.type === 'mva') ? (r.attorney || '') : (r.d || r.doctor || r.contact || '');
+  if(physician === 'TBD') physician = '';
+  var phone   = r.phone   || '';   if(phone   === 'TBD') phone = '';
+  var fax     = r.fax     || '';
+  var website = r.website || '';
+  var address = r.address || '';   if(address === 'TBD') address = '';
+  var city    = (ref.type === 'mva') ? r.city : (r.c || r.city || '');
+  var nearest = getNearestWcgFacility(city);
+  var canEdit = (typeof CURRENT_USER !== 'undefined') && CURRENT_USER && CURRENT_USER.role !== 'readonly';
+  var safeName = String(name).replace(/'/g,"\\'").replace(/"/g,'&quot;');
+  // Helper to build one labeled field row with optional edit
+  function row(label, value, fieldKey, isLink){
+    var safeVal = (value || '').replace(/</g,'&lt;');
+    var disp = value
+      ? (isLink === 'tel'
+          ? '<a href="tel:' + safeVal + '" style="color:#1F3864;text-decoration:none">' + safeVal + '</a>'
+        : isLink === 'url'
+          ? '<a href="' + safeVal + '" target="_blank" rel="noopener" style="color:#1F3864">' + safeVal + '</a>'
+        : safeVal)
+      : '<span style="color:var(--muted);font-style:italic">— not recorded —</span>';
+    var editBtn = (canEdit && fieldKey)
+      ? '<button onclick="_promptEditClinicField(\'' + safeName + '\',\'' + fieldKey + '\')" title="Edit" style="background:none;border:1px solid var(--border);border-radius:5px;padding:2px 8px;font-size:10px;cursor:pointer;color:#1F3864;margin-left:6px">✎</button>'
+      : '';
+    return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 0;border-bottom:1px dashed var(--border)">'
+         +   '<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;min-width:90px;flex-shrink:0">' + label + '</div>'
+         +   '<div style="flex:1;font-size:12px;color:var(--text);text-align:right;word-break:break-all">' + disp + editBtn + '</div>'
+         + '</div>';
+  }
+  var distHtml = '';
+  if(nearest){
+    distHtml = '<div style="background:#f0f9ff;border:1px solid #93c5fd;border-radius:8px;padding:8px 12px;display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'
+             +   '<div>'
+             +     '<div style="font-size:10px;font-weight:700;color:#1e40af;text-transform:uppercase;letter-spacing:.04em">🏥 Nearest WCG facility</div>'
+             +     '<div style="font-size:13px;font-weight:700;color:#1F3864;margin-top:2px">' + nearest.label + '</div>'
+             +   '</div>'
+             +   '<div style="text-align:right">'
+             +     '<div style="font-size:9px;color:#3b82f6;text-transform:uppercase;letter-spacing:.04em">Distance</div>'
+             +     '<div style="font-size:18px;font-weight:800;font-family:DM Mono,monospace;color:#1F3864">~' + nearest.miles.toFixed(1) + ' mi</div>'
+             +   '</div>'
+             + '</div>';
+  } else if(city){
+    distHtml = '<div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:8px 12px;font-size:11px;color:#92400e;margin-bottom:10px">📍 City "' + city.replace(/</g,'&lt;') + '" is outside the WCG service area — distance unknown.</div>';
+  }
+  panel.innerHTML = ''
+    + '<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 16px">'
+    +   '<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">📞 Contact info</div>'
+    +   distHtml
+    +   row('Physician', physician, null, null)
+    +   row('Phone',     phone,     'phone', 'tel')
+    +   row('Fax',       fax,       'fax',   null)
+    +   row('Website',   website,   'website', 'url')
+    +   row('Address',   address,   'address', null)
+    +   row('City',      city,      null, null)
+    + '</div>';
+}
+window._renderClinicContactPanel = _renderClinicContactPanel;
+
+// Tiny prompt-based inline editor. Asks for the new value, validates a
+// little (URLs get an https:// prefix if missing), and persists. Used by
+// the ✎ buttons in the contact panel.
+function _promptEditClinicField(name, fieldKey){
+  var fieldLabel = { phone:'Phone', fax:'Fax', website:'Website', address:'Address' }[fieldKey] || fieldKey;
+  var ref = _getBusinessRecord(name);
+  if(!ref) return;
+  var current = ref.record[fieldKey] || '';
+  var next = window.prompt('Edit ' + fieldLabel + ' for "' + name + '":', current);
+  if(next == null) return;   // canceled
+  next = String(next).trim();
+  if(fieldKey === 'website' && next && !/^https?:\/\//i.test(next)){
+    next = 'https://' + next;
+  }
+  var res = updateBusinessContact(name, (function(){ var o={}; o[fieldKey]=next; return o; })());
+  if(res && res.error){
+    if(typeof showToast === 'function') showToast(res.error);
+    return;
+  }
+  if(typeof showToast === 'function') showToast(fieldLabel + ' updated for ' + name);
+}
+window._promptEditClinicField = _promptEditClinicField;
 
 // Get the count of patients that (member) referred to (facilityKey).
 function getMemberFacilityCount(memberName, facilityKey){
@@ -16069,6 +16267,8 @@ function openClinicHistory(clinicName,city,doctor,specialty){
   if(doctor&&doctor!=='TBD')meta.push(doctor);
   if(specialty)meta.push(specialty);
   document.getElementById('ch-meta').textContent = meta.join(' \u00b7 ');
+  // Render the contact info panel (phone / fax / website / distance / nearest facility)
+  if(typeof _renderClinicContactPanel === 'function') _renderClinicContactPanel(clinicName);
 
   // Counters \u2014 auto-update when visits are edited because they're calculated live.
   // Now tracks ALL statuses + total lifetime spending so the user sees
@@ -22717,6 +22917,10 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
     </div>
     <div class="modal-body">
       <div class="ch-stats" id="ch-stats"></div>
+      <!-- Contact / location info panel — populated by _renderClinicContactPanel().
+           Auto-shows distance + nearest WCG facility (from baked city coords).
+           Admin can edit phone / fax / website via the inline ✎ buttons. -->
+      <div id="ch-contact-panel" style="margin:14px 0 16px"></div>
       <div id="ch-visits"></div>
     </div>
   </div>
@@ -23210,6 +23414,8 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
           </select>
         </div>
         <div class="kpi-input-row"><label>Phone</label><input type="text" id="mva-add-phone" class="evt-input" placeholder="214-555-0100"></div>
+        <div class="kpi-input-row"><label>Fax (optional)</label><input type="text" id="mva-add-fax" class="evt-input" placeholder="214-555-0101"></div>
+        <div class="kpi-input-row"><label>Website (optional)</label><input type="text" id="mva-add-website" class="evt-input" placeholder="firmname.com"></div>
         <div class="kpi-input-row"><label>Address</label><input type="text" id="mva-add-address" class="evt-input" placeholder="Office address"></div>
         <div class="kpi-input-row"><label>Notes</label><input type="text" id="mva-add-notes" class="evt-input" placeholder="Notes about this firm"></div>
       </div>
@@ -23259,6 +23465,8 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
           </select>
         </div>
         <div class="kpi-input-row"><label>Phone</label><input type="text" id="out-add-phone" class="evt-input" placeholder="Phone number"></div>
+        <div class="kpi-input-row"><label>Fax (optional)</label><input type="text" id="out-add-fax" class="evt-input" placeholder="Fax number"></div>
+        <div class="kpi-input-row"><label>Website (optional)</label><input type="text" id="out-add-website" class="evt-input" placeholder="organization.org"></div>
         <div class="kpi-input-row"><label>Address</label><input type="text" id="out-add-address" class="evt-input" placeholder="Street address"></div>
         <div class="kpi-input-row"><label>Contact Person</label><input type="text" id="out-add-contact" class="evt-input" placeholder="Contact name / title"></div>
         <div class="kpi-input-row"><label>Notes</label><input type="text" id="out-add-notes" class="evt-input" placeholder="Notes about this organization"></div>
@@ -23456,6 +23664,10 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
       </div>
       <div class="kpi-input-row"><label>Doctor / Provider</label><input type="text" id="clinic-add-doctor" class="evt-input" placeholder="e.g. Dr. Smith"></div>
       <div class="kpi-input-row"><label>Specialty</label><input type="text" id="clinic-add-spec" class="evt-input" placeholder="e.g. PCP, Pediatrics, Internal Med"></div>
+      <div class="kpi-input-row"><label>Phone</label><input type="tel" id="clinic-add-phone" class="evt-input" placeholder="e.g. 469-555-1234"></div>
+      <div class="kpi-input-row"><label>Fax (optional)</label><input type="tel" id="clinic-add-fax" class="evt-input" placeholder="e.g. 469-555-1235"></div>
+      <div class="kpi-input-row"><label>Website (optional)</label><input type="text" id="clinic-add-website" class="evt-input" placeholder="e.g. clinicname.com"></div>
+      <div class="kpi-input-row"><label>Address (optional)</label><input type="text" id="clinic-add-address" class="evt-input" placeholder="Street address"></div>
       <div class="kpi-input-row"><label>Notes</label><input type="text" id="clinic-add-notes" class="evt-input" placeholder="Any notes about this clinic"></div>
     </div>
     <div class="modal-foot">
