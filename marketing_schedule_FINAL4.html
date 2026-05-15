@@ -1088,6 +1088,14 @@ body.member-view.member-mobile .member-bottom-nav{display:flex}
 body.member-mobile:not(.role-admin) .nav-admin-only {
   display: none !important;
 }
+/* Exception: call-handler members (e.g. Duaa) need the Team tab because
+   the Monthly Call Conversions chart + "+1 Convert" button live there.
+   So anything tagged .nav-handler-also stays visible for them even though
+   it also has .nav-admin-only. The body.is-call-handler class is added
+   by applyMemberViewClass when the current user is in CALL_HANDLERS. */
+body.member-mobile.is-call-handler .nav-handler-also {
+  display: flex !important;
+}
 .mb-nav-btn{
   flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
   background:none; border:none; color:#64748b; cursor:pointer; padding:4px 2px;
@@ -6426,6 +6434,14 @@ function applyMemberViewClass(){
   });
   if(CURRENT_USER && CURRENT_USER.role){
     b.classList.add('role-' + CURRENT_USER.role);
+  }
+  // Call-handler flag (e.g. Duaa today). Adds body.is-call-handler so we can
+  // selectively re-show certain otherwise-hidden tabs (specifically Team,
+  // where the monthly call-conversion chart + "+1 Convert" button live).
+  b.classList.remove('is-call-handler');
+  if(CURRENT_USER && typeof isCallHandler === 'function'
+     && isCallHandler(CURRENT_USER.name)){
+    b.classList.add('is-call-handler');
   }
   _updateMemberMobileClass();
 }
@@ -22105,9 +22121,11 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
     <button class="md-nav-item" onclick="memberDrawerGo('dashboard')"><span class="md-ico">📅</span><span class="md-lbl">Dashboard</span></button>
     <!-- Status moved into Businesses → Status sub-tab (2026-05-15) -->
 
-    <!-- Team accordion group — admin/readonly only on phone -->
-    <button class="md-nav-item nav-admin-only" data-parent="team" onclick="memberDrawerGo('team')"><span class="md-ico">👥</span><span class="md-lbl">Team</span><span class="md-chevron">›</span></button>
-    <div class="md-subnav nav-admin-only" data-parent="team">
+    <!-- Team accordion group — admin sees it always; call-handler members
+         (e.g. Duaa) also keep access on phone because the Monthly Call
+         Conversions chart + "+1 Convert" button live in the Team tab. -->
+    <button class="md-nav-item nav-admin-only nav-handler-also" data-parent="team" onclick="memberDrawerGo('team')"><span class="md-ico">👥</span><span class="md-lbl">Team</span><span class="md-chevron">›</span></button>
+    <div class="md-subnav nav-admin-only nav-handler-also" data-parent="team">
       <button class="md-subnav-item" data-sub="tree"  onclick="memberDrawerSubGo('team','tree')"><span class="md-sub-ico">🌳</span><span>Tree Chart</span></button>
       <button class="md-subnav-item" data-sub="stats" onclick="memberDrawerSubGo('team','stats')"><span class="md-sub-ico">📈</span><span>Stats</span></button>
     </div>
