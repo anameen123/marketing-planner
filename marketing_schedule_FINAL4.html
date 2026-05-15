@@ -5098,6 +5098,36 @@ function getTierForReferralCount(type, count){
   return tiers[0]; // fallback
 }
 
+// ── TIER VISUAL PALETTE ──────────────────────────────────────────────────
+// Centralized medal-themed colors. Returns { bg, fg, border, glow } for any
+// tier ID (1-4). Used by every render path that shows a tier badge — so a
+// single palette change here updates the whole app. Previous implementation
+// had 5+ inline color arrays that drifted out of sync. Solid color (no
+// gradient) for print/PDF compatibility; we layer richness via border + glow.
+var _TIER_VISUAL = {
+  // 1 = Bronze, 2 = Silver, 3 = Gold, 4 = Platinum.
+  // Each tier has: bg (badge fill), fg (text on badge), border (card outline),
+  // and glow (soft shadow when used on larger surfaces).
+  bronze:   { bg:'linear-gradient(135deg,#CD7F32 0%,#8B5A2B 100%)', fg:'#fff',     border:'#7a4d22', solid:'#B87333', glow:'rgba(205,127,50,.35)' },
+  silver:   { bg:'linear-gradient(135deg,#E5E7EB 0%,#9CA3AF 100%)', fg:'#1f2937', border:'#6b7280', solid:'#A8A9AD', glow:'rgba(156,163,175,.4)' },
+  gold:     { bg:'linear-gradient(135deg,#FBBF24 0%,#B8860B 100%)', fg:'#422006', border:'#a47728', solid:'#D4AF37', glow:'rgba(212,175,55,.4)' },
+  platinum: { bg:'linear-gradient(135deg,#1e293b 0%,#475569 60%,#94a3b8 100%)', fg:'#fff', border:'#0f172a', solid:'#1F3864', glow:'rgba(31,56,100,.45)' }
+};
+var _TIER_ORDER = ['bronze','silver','gold','platinum'];
+
+// Returns the visual style for a tier. typeKey is unused today (kept for API
+// stability in case clinic/MVA/outreach ever diverge), tierId is 1-based.
+function getTierStyle(typeKey, tierId){
+  var key = _TIER_ORDER[(tierId|0) - 1] || 'bronze';
+  return _TIER_VISUAL[key];
+}
+// Legacy single-color helper for callers that only need a solid fill.
+function getTierColor(typeKey, tierId){
+  return getTierStyle(typeKey, tierId).solid;
+}
+window.getTierStyle = getTierStyle;
+window.getTierColor = getTierColor;
+
 // Public: get the tier object for a given business by name.
 function getBusinessTier(name){
   if(!name) return null;
@@ -5484,13 +5514,11 @@ function _buildReferralCounterBlock(name){
   var historicCount = getReferralCountForTier(name);
   var tierKey = (type === 'mva' || type === 'outreach') ? type : 'clinic';
   var tier = getTierForReferralCount(tierKey, historicCount);
-  // Tier color by id: 1=lowest grey, 2=amber, 3=blue, 4=green (highest); 3-tier outreach uses 1/2/3
-  var tierColor;
-  if(tierKey === 'outreach'){
-    tierColor = ['#9ca3af','#1e40af','#16a34a'][tier.id-1] || '#9ca3af';
-  } else {
-    tierColor = ['#9ca3af','#f59e0b','#1e40af','#16a34a'][tier.id-1] || '#9ca3af';
-  }
+  // Medal palette — see getTierStyle (centralized).
+  var tierStyle = getTierStyle(tierKey, tier.id);
+  var tierColor = tierStyle.solid;   // legacy callers expecting a single color
+  var tierBg    = tierStyle.bg;       // gradient for badge fill
+  var tierFg    = tierStyle.fg;       // text color on badge
   var canAdjust = (typeof isReferralEditor === 'function') && isReferralEditor();
   var wrap = document.createElement('div');
   wrap.style.cssText = 'background:#fff;border:1px solid var(--border);border-radius:8px;padding:8px 10px;display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:4px';
@@ -5502,7 +5530,7 @@ function _buildReferralCounterBlock(name){
     +     '<div style="display:flex;align-items:center;gap:6px;margin-top:1px">'
     +       '<strong style="font-size:14px;font-family:DM Mono,monospace;color:var(--text)">'+count+'</strong>'
     +       '<span style="font-size:10px;color:var(--muted)">this period</span>'
-    +       '<span style="background:'+tierColor+';color:#fff;font-size:9px;font-weight:800;padding:2px 7px;border-radius:8px;letter-spacing:.04em">Tier '+(tier.name||'?')+'</span>'
+    +       '<span style="background:'+tierBg+';color:'+tierFg+';font-size:9px;font-weight:800;padding:2px 7px;border-radius:8px;letter-spacing:.04em;border:1px solid '+tierStyle.border+';box-shadow:0 1px 2px '+tierStyle.glow+'">Tier '+(tier.name||'?')+'</span>'
     +     '</div>'
     +   '</div>'
     + '</div>'
@@ -5531,15 +5559,16 @@ function openReferralAdjust(name){
   var current = rec.currentCount || 0;
   var tierKey = (type === 'mva' || type === 'outreach') ? type : 'clinic';
   var tier = getTierForReferralCount(tierKey, getReferralCountForTier(name));
-  // Tier color
-  var tierColor = (tierKey === 'outreach')
-    ? (['#9ca3af','#1e40af','#16a34a'][tier.id-1] || '#9ca3af')
-    : (['#9ca3af','#f59e0b','#1e40af','#16a34a'][tier.id-1] || '#9ca3af');
+  // Medal palette — centralized in getTierStyle
+  var tierStyle = getTierStyle(tierKey, tier.id);
   document.getElementById('ra-business-name').textContent = name;
   document.getElementById('ra-current-count').textContent = current;
   var curTierEl = document.getElementById('ra-current-tier');
   curTierEl.textContent = 'Tier ' + (tier.name || '?');
-  curTierEl.style.background = tierColor;
+  curTierEl.style.background = tierStyle.bg;
+  curTierEl.style.color = tierStyle.fg;
+  curTierEl.style.border = '1px solid ' + tierStyle.border;
+  curTierEl.style.boxShadow = '0 1px 2px ' + tierStyle.glow;
   // Clear delta input + hide preview
   document.getElementById('ra-delta-input').value = '';
   document.getElementById('ra-preview-block').style.display = 'none';
@@ -5581,13 +5610,14 @@ function _raDeltaChanged(){
   // Tier stays based on previous-period snapshot, so the LIVE tier preview
   // is the tier you'd be in IF this were the period-end count.
   var tier = getTierForReferralCount(tierKey, newCount);
-  var tierColor = (tierKey === 'outreach')
-    ? (['#9ca3af','#1e40af','#16a34a'][tier.id-1] || '#9ca3af')
-    : (['#9ca3af','#f59e0b','#1e40af','#16a34a'][tier.id-1] || '#9ca3af');
+  var tierStyle = getTierStyle(tierKey, tier.id);
   document.getElementById('ra-new-count').textContent = newCount;
   var newTierEl = document.getElementById('ra-new-tier');
   newTierEl.textContent = 'Tier ' + (tier.name || '?');
-  newTierEl.style.background = tierColor;
+  newTierEl.style.background = tierStyle.bg;
+  newTierEl.style.color = tierStyle.fg;
+  newTierEl.style.border = '1px solid ' + tierStyle.border;
+  newTierEl.style.boxShadow = '0 1px 2px ' + tierStyle.glow;
   preview.style.display = 'block';
   applyBtn.disabled = false;
   applyBtn.style.opacity = '1';
@@ -16055,24 +16085,18 @@ function renderFinancesRankings(){
   ];
   var sections = allSections.filter(function(s){ return s.type === RANKINGS_SUB; });
   function esc(v){ return (v==null?'':String(v)).replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-  // Tier color by id — matches the medal-ladder rename:
-  //   4-tier (clinic/mva): 1=Bronze copper, 2=Silver slate, 3=Gold yellow, 4=Platinum purple
-  //   3-tier (outreach):    1=Bronze copper, 2=Silver slate, 3=Gold yellow
-  function tierColor(typeKey, id){
-    if(typeKey === 'outreach'){
-      return ['#b87333','#94a3b8','#ca8a04'][id-1] || '#9ca3af';
-    }
-    return ['#b87333','#94a3b8','#ca8a04','#7030A0'][id-1] || '#9ca3af';
-  }
+  // Tier visuals come from getTierStyle (centralized medal palette).
+  function tierColor(typeKey, id){ return getTierStyle(typeKey, id).solid; }
+  function tierStyleFor(typeKey, id){ return getTierStyle(typeKey, id); }
   body.innerHTML = sections.map(function(sec){
     // Tier legend strip — show every tier with its threshold range + cap
     var tiers = TIER_THRESHOLDS[sec.type];
     // Render the legend top → bottom by HIGHEST tier first so A appears left
     var legendOrder = tiers.slice().sort(function(a,b){ return b.id - a.id; });
     var tierLegend = legendOrder.map(function(t){
-      var c = tierColor(sec.type, t.id);
-      return '<span style="display:inline-flex;align-items:center;gap:5px;font-size:10px;background:#fff;color:var(--text);padding:4px 9px;border-radius:8px;border:1px solid '+c+'">'
-        + '<span style="background:'+c+';color:#fff;font-size:9px;font-weight:800;padding:1px 6px;border-radius:5px;letter-spacing:.04em">'+esc(t.name)+'</span>'
+      var ts = tierStyleFor(sec.type, t.id);
+      return '<span style="display:inline-flex;align-items:center;gap:5px;font-size:10px;background:#fff;color:var(--text);padding:4px 9px;border-radius:8px;border:1px solid '+ts.border+'">'
+        + '<span style="background:'+ts.bg+';color:'+ts.fg+';font-size:9px;font-weight:800;padding:1px 6px;border-radius:5px;letter-spacing:.04em;border:1px solid '+ts.border+'">'+esc(t.name)+'</span>'
         + '<span style="color:var(--muted)">'+t.minReferrals+(t.maxReferrals==null?'+':('–'+t.maxReferrals))+' refs</span>'
         + '<span style="font-family:DM Mono,monospace;font-weight:700">$'+t.limitPerVisit+'</span>'
         + '</span>';
@@ -16117,12 +16141,12 @@ function renderFinancesRankings(){
     }
 
     var rowsHtml = entries.map(function(e, i){
-      var c = tierColor(sec.type, e.tier.id);
+      var ts = tierStyleFor(sec.type, e.tier.id);
       return '<tr style="'+(i%2===0?'':'background:#fafbfc')+'">'
         + '<td style="padding:9px 12px;color:var(--muted);font-size:10px;text-align:center;width:36px">'+(i+1)+'</td>'
         + '<td style="padding:9px 12px;font-size:12px;font-weight:600">'+esc(e.name)+'</td>'
         + '<td style="padding:9px 12px;text-align:center;font-family:DM Mono,monospace;font-size:14px;font-weight:700;color:var(--text);width:130px">'+e.count+'</td>'
-        + '<td style="padding:9px 12px;text-align:center;width:90px"><span style="background:'+c+';color:#fff;font-size:11px;font-weight:800;padding:3px 10px;border-radius:12px;letter-spacing:.04em">'+esc(e.tier.name)+'</span></td>'
+        + '<td style="padding:9px 12px;text-align:center;width:90px"><span style="background:'+ts.bg+';color:'+ts.fg+';font-size:11px;font-weight:800;padding:3px 10px;border-radius:12px;letter-spacing:.04em;border:1px solid '+ts.border+';box-shadow:0 1px 2px '+ts.glow+'">'+esc(e.tier.name)+'</span></td>'
         + '<td style="padding:9px 12px;text-align:right;font-size:13px;font-family:DM Mono,monospace;font-weight:700;color:var(--text);width:90px">$'+e.tier.limitPerVisit+'</td>'
         + spendCell(e)
         + '</tr>';
@@ -16175,10 +16199,9 @@ window.renderFinancesRankings = renderFinancesRankings;
 // decisions ("did Mother's Day actually bring patients last year?").
 function _renderOutreachRankings(body){
   function esc(v){ return (v==null?'':String(v)).replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-  function tierColorScheduled(id){
-    // 3-tier outreach: 1=Bronze copper, 2=Silver slate, 3=Gold yellow
-    return ['#b87333','#94a3b8','#ca8a04'][id-1] || '#9ca3af';
-  }
+  // Centralized medal palette — see getTierStyle.
+  function tierColorScheduled(id){ return getTierStyle('outreach', id).solid; }
+  function tierStyleScheduled(id){ return getTierStyle('outreach', id); }
 
   // ── 🗓 SCHEDULED OUTREACH RANKING (tier-based, period resets) ────────
   // Filters OUTREACH to category='scheduled' (mosques, Islamic centers,
@@ -16220,12 +16243,12 @@ function _renderOutreachRankings(body){
   }
 
   var scheduledRowsHtml = scheduledEntries.map(function(e, i){
-    var c = tierColorScheduled(e.tier.id);
+    var ts = tierStyleScheduled(e.tier.id);
     return '<tr style="'+(i%2===0?'':'background:#fafbfc')+'">'
       + '<td style="padding:9px 12px;color:var(--muted);font-size:10px;text-align:center;width:36px">'+(i+1)+'</td>'
       + '<td style="padding:9px 12px;font-size:12px;font-weight:600">'+esc(e.name)+'</td>'
       + '<td style="padding:9px 12px;text-align:center;font-family:DM Mono,monospace;font-size:14px;font-weight:700;color:var(--text);width:120px">'+e.count+'</td>'
-      + '<td style="padding:9px 12px;text-align:center;width:84px"><span style="background:'+c+';color:#fff;font-size:11px;font-weight:800;padding:3px 10px;border-radius:12px;letter-spacing:.04em">'+esc(e.tier.name)+'</span></td>'
+      + '<td style="padding:9px 12px;text-align:center;width:84px"><span style="background:'+ts.bg+';color:'+ts.fg+';font-size:11px;font-weight:800;padding:3px 10px;border-radius:12px;letter-spacing:.04em;border:1px solid '+ts.border+';box-shadow:0 1px 2px '+ts.glow+'">'+esc(e.tier.name)+'</span></td>'
       + '<td style="padding:9px 12px;text-align:right;font-size:13px;font-family:DM Mono,monospace;font-weight:700;color:var(--text);width:82px">$'+e.tier.limitPerVisit+'</td>'
       + scheduledSpendCell(e)
       + '</tr>';
@@ -16238,9 +16261,9 @@ function _renderOutreachRankings(body){
   var tiers = TIER_THRESHOLDS.outreach || [];
   var legendOrder = tiers.slice().sort(function(a,b){ return b.id - a.id; });
   var scheduledLegend = legendOrder.map(function(t){
-    var c = tierColorScheduled(t.id);
-    return '<span style="display:inline-flex;align-items:center;gap:5px;font-size:10px;background:#fff;color:var(--text);padding:4px 9px;border-radius:8px;border:1px solid '+c+'">'
-      + '<span style="background:'+c+';color:#fff;font-size:9px;font-weight:800;padding:1px 6px;border-radius:5px;letter-spacing:.04em">'+esc(t.name)+'</span>'
+    var ts = tierStyleScheduled(t.id);
+    return '<span style="display:inline-flex;align-items:center;gap:5px;font-size:10px;background:#fff;color:var(--text);padding:4px 9px;border-radius:8px;border:1px solid '+ts.border+'">'
+      + '<span style="background:'+ts.bg+';color:'+ts.fg+';font-size:9px;font-weight:800;padding:1px 6px;border-radius:5px;letter-spacing:.04em;border:1px solid '+ts.border+'">'+esc(t.name)+'</span>'
       + '<span style="color:var(--muted)">'+t.minReferrals+(t.maxReferrals==null?'+':('–'+t.maxReferrals))+' refs</span>'
       + '<span style="font-family:DM Mono,monospace;font-weight:700">$'+t.limitPerVisit+'</span>'
       + '</span>';
@@ -16516,10 +16539,8 @@ function _renderQuarterlyHistoryView(body){
   // Renders one type's snapshot as a sorted table. Sorting is by final
   // count (descending). Tier color follows the same legend as the live
   // ranking so the visuals match.
-  function tierColor(typeKey, id){
-    if(typeKey === 'outreach') return ['#9ca3af','#1e40af','#16a34a'][id-1] || '#9ca3af';
-    return ['#9ca3af','#f59e0b','#1e40af','#16a34a'][id-1] || '#9ca3af';
-  }
+  function tierColor(typeKey, id){ return getTierStyle(typeKey, id).solid; }
+  function tierStyleFor(typeKey, id){ return getTierStyle(typeKey, id); }
   function buildSection(sec){
     // Pull every business of this type that has a snapshot for the active period
     var entries = [];
@@ -16554,12 +16575,12 @@ function _renderQuarterlyHistoryView(body){
     }
 
     var rowsHtml = entries.map(function(e, i){
-      var c = tierColor(sec.type, e.tierId);
+      var ts = tierStyleFor(sec.type, e.tierId);
       return '<tr style="'+(i%2===0?'':'background:#fafbfc')+'">'
         + '<td style="padding:9px 12px;color:var(--muted);font-size:10px;text-align:center;width:36px">'+(i+1)+'</td>'
         + '<td style="padding:9px 12px;font-size:12px;font-weight:600">'+esc(e.name)+'</td>'
         + '<td style="padding:9px 12px;text-align:center;font-family:DM Mono,monospace;font-size:14px;font-weight:700;color:var(--text);width:130px">'+e.count+'</td>'
-        + '<td style="padding:9px 12px;text-align:center;width:90px"><span style="background:'+c+';color:#fff;font-size:11px;font-weight:800;padding:3px 10px;border-radius:12px;letter-spacing:.04em">'+esc(e.tierName)+'</span></td>'
+        + '<td style="padding:9px 12px;text-align:center;width:90px"><span style="background:'+ts.bg+';color:'+ts.fg+';font-size:11px;font-weight:800;padding:3px 10px;border-radius:12px;letter-spacing:.04em;border:1px solid '+ts.border+';box-shadow:0 1px 2px '+ts.glow+'">'+esc(e.tierName)+'</span></td>'
         + '<td style="padding:9px 12px;text-align:right;font-size:13px;font-family:DM Mono,monospace;font-weight:700;color:var(--text);width:100px">$'+e.limitPerVisit+'</td>'
         + '<td style="padding:9px 12px;text-align:right;font-size:13px;font-family:DM Mono,monospace;font-weight:700;color:#7030A0;width:120px">$'+e.periodBudget+'</td>'
         + '</tr>';
@@ -16647,8 +16668,9 @@ function renderFinancesTiers(){
       var dis = canAdmin ? '' : ' disabled';
       // Period budget value (defensive: fall back to 0 if missing)
       var pb = (typeof tier.periodBudget === 'number') ? tier.periodBudget : 0;
+      var ts = getTierStyle(t.key, tier.id);
       return '<tr>'
-        + '<td style="padding:7px 10px;font-size:12px;font-weight:600;color:var(--text)">'+esc(tier.name)+'</td>'
+        + '<td style="padding:7px 10px;font-size:12px;font-weight:600;color:var(--text)"><span style="display:inline-block;background:'+ts.bg+';color:'+ts.fg+';padding:3px 9px;border-radius:8px;font-size:10px;font-weight:800;letter-spacing:.04em;border:1px solid '+ts.border+';box-shadow:0 1px 2px '+ts.glow+'">'+esc(tier.name)+'</span></td>'
         + '<td style="padding:7px 10px;text-align:center"><input type="number" min="0" value="'+tier.minReferrals+'"'+dis+' onchange="_updateTier(\''+t.key+'\','+idx+',\'minReferrals\',this.value)" style="width:70px;border:1px solid var(--border);border-radius:5px;padding:4px 6px;font-size:11px;font-family:DM Mono,monospace;text-align:center"></td>'
         + '<td style="padding:7px 10px;text-align:center"><input type="number" min="0" value="'+maxVal+'" placeholder="∞"'+dis+' onchange="_updateTier(\''+t.key+'\','+idx+',\'maxReferrals\',this.value)" style="width:70px;border:1px solid var(--border);border-radius:5px;padding:4px 6px;font-size:11px;font-family:DM Mono,monospace;text-align:center"></td>'
         + '<td style="padding:7px 10px;text-align:center"><input type="number" min="0" value="'+tier.limitPerVisit+'"'+dis+' onchange="_updateTier(\''+t.key+'\','+idx+',\'limitPerVisit\',this.value)" style="width:80px;border:1px solid var(--border);border-radius:5px;padding:4px 6px;font-size:11px;font-family:DM Mono,monospace;text-align:center"></td>'
