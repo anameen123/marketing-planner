@@ -3797,13 +3797,165 @@ function deleteOutreach(id){
 }
 window.deleteOutreach=deleteOutreach;
 
-function openAddOutreach(){document.getElementById('add-outreach-modal').style.display='flex';}
+function openAddOutreach(){
+  document.getElementById('add-outreach-modal').style.display='flex';
+  if(typeof attachBusinessAutocomplete === 'function') attachBusinessAutocomplete('out-add-name');
+}
 function closeAddOutreach(){document.getElementById('add-outreach-modal').style.display='none';}
+// ── BUSINESS NAME AUTOCOMPLETE + DUPLICATE-BLOCK ────────────────────────
+// Per user request 2026-05-15: when adding a new clinic / MVA firm /
+// outreach org, suggest matches from the existing bank as the user types.
+// If they type something that EXACTLY matches an existing entry, block the
+// add and offer a "jump to existing card" shortcut.
+//
+// One source of truth for the bank: all 3 lists merged into a normalized
+// {name, type} array. We compare case-insensitively + trim whitespace.
+function _getAllKnownBusinesses(){
+  var out = [];
+  if(typeof CLINIC_BANK !== 'undefined' && Array.isArray(CLINIC_BANK)){
+    CLINIC_BANK.forEach(function(c){ if(c && c.n) out.push({name:c.n, type:'clinic', city:c.c||''}); });
+  }
+  if(typeof MVA_ATTORNEYS !== 'undefined' && Array.isArray(MVA_ATTORNEYS)){
+    MVA_ATTORNEYS.forEach(function(m){ if(m && m.firm) out.push({name:m.firm, type:'mva', city:m.city||''}); });
+  }
+  if(typeof OUTREACH !== 'undefined' && Array.isArray(OUTREACH)){
+    OUTREACH.forEach(function(o){ if(o && o.name) out.push({name:o.name, type:'outreach', city:o.city||''}); });
+  }
+  return out;
+}
+
+// Case-insensitive duplicate finder. Returns the matching entry or null.
+function _findBusinessDuplicate(rawName){
+  if(!rawName) return null;
+  var needle = String(rawName).trim().toLowerCase();
+  if(!needle) return null;
+  var all = _getAllKnownBusinesses();
+  for(var i = 0; i < all.length; i++){
+    if(String(all[i].name).trim().toLowerCase() === needle) return all[i];
+  }
+  return null;
+}
+window._findBusinessDuplicate = _findBusinessDuplicate;
+
+// Attach autocomplete to a text input. Builds an absolute-positioned
+// dropdown that hangs below the input and shows up-to-8 matching names.
+// Picking an entry fills the input AND closes the parent Add modal +
+// jumps to the existing card (since the user clearly wanted that record).
+function attachBusinessAutocomplete(inputId){
+  var inp = document.getElementById(inputId);
+  if(!inp) return;
+  if(inp._acAttached) return;
+  inp._acAttached = true;
+  inp.setAttribute('autocomplete', 'off');
+  // Ensure the input has a relative positioning ancestor for the dropdown
+  var listId = inputId + '-ac-list';
+  var list = document.createElement('div');
+  list.id = listId;
+  list.style.cssText = 'display:none;position:absolute;background:#fff;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:11000;max-height:240px;overflow-y:auto;min-width:280px;font-family:DM Sans,sans-serif';
+  document.body.appendChild(list);
+
+  function positionList(){
+    var r = inp.getBoundingClientRect();
+    list.style.left  = (window.scrollX + r.left) + 'px';
+    list.style.top   = (window.scrollY + r.bottom + 2) + 'px';
+    list.style.width = r.width + 'px';
+  }
+
+  function render(){
+    var q = (inp.value || '').trim().toLowerCase();
+    if(!q || q.length < 2){ list.style.display = 'none'; return; }
+    var all = _getAllKnownBusinesses();
+    var matches = all.filter(function(b){
+      return b.name.toLowerCase().indexOf(q) !== -1;
+    }).slice(0, 8);
+    if(matches.length === 0){ list.style.display = 'none'; return; }
+    // Show duplicate warning if any match is an exact case-insensitive equal
+    var exact = _findBusinessDuplicate(q);
+    var typeLabel = { clinic:'Clinic', mva:'MVA', outreach:'Outreach' };
+    var typeColor = { clinic:'#3b82f6', mva:'#f59e0b', outreach:'#16a34a' };
+    var html = '';
+    if(exact){
+      html += '<div style="background:#fef3c7;border-bottom:1px solid #f59e0b;padding:8px 10px;font-size:11px;color:#92400e;font-weight:600">'
+            + '⚠ Already in the bank as <strong>'+exact.name+'</strong> ('+typeLabel[exact.type]+'). Pick it below to open its card.'
+            + '</div>';
+    }
+    matches.forEach(function(m){
+      var chip = '<span style="background:'+typeColor[m.type]+'22;color:'+typeColor[m.type]+';border:1px solid '+typeColor[m.type]+'66;font-size:9px;font-weight:700;padding:1px 6px;border-radius:4px;margin-left:6px;text-transform:uppercase;letter-spacing:.04em">'+typeLabel[m.type]+'</span>';
+      var safe = m.name.replace(/'/g,"\\'").replace(/"/g,'&quot;');
+      html += '<div onclick="_acPickBusiness(\''+inputId+'\',\''+safe+'\')" style="padding:8px 10px;cursor:pointer;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;justify-content:space-between;font-size:12px;color:#1e293b" onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'#fff\'">'
+           + '<span><strong>'+m.name+'</strong>' + (m.city ? ' <span style="color:#64748b;font-size:10px">· '+m.city+'</span>' : '') + '</span>'
+           + chip
+           + '</div>';
+    });
+    list.innerHTML = html;
+    positionList();
+    list.style.display = 'block';
+  }
+
+  inp.addEventListener('input', render);
+  inp.addEventListener('focus', render);
+  // Close on blur (slight delay so click on list fires first)
+  inp.addEventListener('blur', function(){
+    setTimeout(function(){ list.style.display = 'none'; }, 180);
+  });
+  // Reposition on scroll/resize
+  window.addEventListener('scroll', function(){ if(list.style.display === 'block') positionList(); }, true);
+  window.addEventListener('resize', function(){ if(list.style.display === 'block') positionList(); });
+}
+window.attachBusinessAutocomplete = attachBusinessAutocomplete;
+
+// Pick handler — invoked when the user clicks a suggestion in the dropdown.
+// Fills the input AND, if it's an existing match, closes the parent Add
+// modal and jumps directly to the existing card (since picking a suggestion
+// implies "open that one, don't create a new one").
+function _acPickBusiness(inputId, name){
+  var inp = document.getElementById(inputId);
+  if(inp) inp.value = name;
+  var list = document.getElementById(inputId + '-ac-list');
+  if(list) list.style.display = 'none';
+  // Find the type
+  var match = _findBusinessDuplicate(name);
+  if(!match) return;
+  // Close whichever Add modal we're in (best-effort)
+  try { closeAddClinic && closeAddClinic(); } catch(e){}
+  try { closeAddMVA    && closeAddMVA();    } catch(e){}
+  try { closeAddOutreach && closeAddOutreach(); } catch(e){}
+  // Jump to the existing card
+  if(typeof jumpToBusinessCard === 'function') jumpToBusinessCard(match.name);
+  if(typeof showToast === 'function') showToast('Opened existing ' + match.type + ': ' + match.name);
+}
+window._acPickBusiness = _acPickBusiness;
+
+// Duplicate guard used by saveNewClinic / saveNewMVA / saveNewOutreach.
+// Returns true if it found a duplicate (and showed a confirm offering to
+// jump to the existing card). Callers should `return` immediately if true.
+function _guardDuplicateBusiness(rawName){
+  var dup = _findBusinessDuplicate(rawName);
+  if(!dup) return false;
+  var typeLabel = { clinic:'clinic', mva:'MVA firm', outreach:'outreach organization' }[dup.type] || 'business';
+  showConfirm({
+    icon: '!',
+    msg: 'Already in the bank',
+    sub: '"' + dup.name + '" already exists as a ' + typeLabel + '. Open its card to edit the lead — duplicates are not allowed.',
+    yesLabel: 'Open existing card',
+    onConfirm: function(){
+      try { closeAddClinic && closeAddClinic(); } catch(e){}
+      try { closeAddMVA    && closeAddMVA();    } catch(e){}
+      try { closeAddOutreach && closeAddOutreach(); } catch(e){}
+      if(typeof jumpToBusinessCard === 'function') jumpToBusinessCard(dup.name);
+    }
+  });
+  return true;
+}
+window._guardDuplicateBusiness = _guardDuplicateBusiness;
+
 function saveNewOutreach(){
   var name=(document.getElementById('out-add-name').value||'').trim();
   var type=document.getElementById('out-add-type').value;
   var city=document.getElementById('out-add-city').value;
   if(!name||!type||!city){showToast('Name, type, and city are required.');return;}
+  // Block exact-match duplicates across clinic + MVA + outreach
+  if(_guardDuplicateBusiness(name)) return;
   // New entries inherit the category of whichever sub-tab is currently
   // active so the user sees their addition immediately in the right bucket.
   // If they're on Holidays, the type-based default would override to random
@@ -3839,6 +3991,8 @@ function openAddClinic(){
   });
   var cityEl=document.getElementById('clinic-add-city');
   if(cityEl) cityEl.value='';
+  // Autocomplete: suggest matches from existing bank as the user types
+  if(typeof attachBusinessAutocomplete === 'function') attachBusinessAutocomplete('clinic-add-name');
 }
 function closeAddClinic(){ document.getElementById('add-clinic-modal').style.display='none'; }
 function saveNewClinic(){
@@ -3848,6 +4002,8 @@ function saveNewClinic(){
   var spec=(document.getElementById('clinic-add-spec').value||'').trim();
   var notes=(document.getElementById('clinic-add-notes').value||'').trim();
   if(!name||!city){ showToast('Clinic name and city are required.'); return; }
+  // Block exact-match duplicates across clinic + MVA + outreach
+  if(_guardDuplicateBusiness(name)) return;
   showConfirm({icon:'?',msg:'Add "'+name+'"?',sub:'New clinic in '+city,yesLabel:'Add',danger:false,onConfirm:function(){
     CLINIC_BANK.push({n:name,d:doctor||'TBD',s:spec||'',c:city,t:'',notes:notes,
       addedBy: (CURRENT_USER && CURRENT_USER.name) || '',
@@ -4116,12 +4272,17 @@ function deleteMVA(id){
 }
 window.deleteMVA=deleteMVA;
 
-function openAddMVA(){document.getElementById('add-mva-modal').style.display='flex';}
+function openAddMVA(){
+  document.getElementById('add-mva-modal').style.display='flex';
+  if(typeof attachBusinessAutocomplete === 'function') attachBusinessAutocomplete('mva-add-firm');
+}
 function closeAddMVA(){document.getElementById('add-mva-modal').style.display='none';}
 function saveNewMVA(){
   var firm=(document.getElementById('mva-add-firm').value||'').trim();
   var city=document.getElementById('mva-add-city').value;
   if(!firm||!city){showToast('Firm name and city are required.');return;}
+  // Block exact-match duplicates across clinic + MVA + outreach
+  if(_guardDuplicateBusiness(firm)) return;
   showConfirm({icon:'?',msg:'Add "'+firm+'"?',sub:'New MVA attorney for '+city,yesLabel:'Add',danger:false,onConfirm:function(){
     MVA_ATTORNEYS.push({
       id:'mva'+Date.now(),
