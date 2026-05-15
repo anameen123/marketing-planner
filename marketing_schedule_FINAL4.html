@@ -2581,6 +2581,74 @@ function clearCardLead(businessName){
 window.setCardLead = setCardLead;
 window.clearCardLead = clearCardLead;
 
+// ── INLINE LEAD CONTROL (renders directly on a Bank-of-Targets card) ────
+// Per user request 2026-05-15: edit the lead level inline on the card,
+// no modal, no popover. Returns a <select> element wired to setCardLead.
+// Read-only users get a disabled control. Each option shows the level's
+// short label; the currently-set level is preselected.
+function buildInlineLeadControl(businessName){
+  if(!businessName) return null;
+  var lead = getClinicLead(businessName);
+  var currentLvl = (lead.status === 'established' && lead.level) ? lead.level : 0;
+  var sel = document.createElement('select');
+  sel.setAttribute('data-business', businessName);
+  sel.style.cssText = 'font-size:10px;font-weight:600;border:1px solid var(--border);border-radius:6px;padding:3px 8px;cursor:pointer;background:#fff;color:var(--text);font-family:DM Sans,sans-serif;min-height:26px';
+  sel.title = 'Set lead status for ' + businessName;
+  // Build options
+  var opts = [
+    { v: '0', label: '— Not visited —' },
+    { v: '1', label: 'L1 · Contact' },
+    { v: '2', label: 'L2 · Receptionist' },
+    { v: '3', label: 'L3 · Office Manager' },
+    { v: '4', label: 'L4 · Owner / Decision-maker' }
+  ];
+  opts.forEach(function(o){
+    var op = document.createElement('option');
+    op.value = o.v;
+    op.textContent = o.label;
+    if(parseInt(o.v,10) === currentLvl) op.selected = true;
+    sel.appendChild(op);
+  });
+  // Read-only / role check
+  var isReadOnly = (CURRENT_USER && CURRENT_USER.role === 'readonly');
+  if(isReadOnly){
+    sel.disabled = true;
+    sel.style.opacity = '.6';
+    sel.title = 'Read-only role — lead changes disabled';
+  }
+  // Tint the select to reflect the current level (visible at a glance)
+  function tintForLevel(lvl){
+    if(lvl > 0 && typeof ESTABLISHED_LEVELS !== 'undefined' && ESTABLISHED_LEVELS[lvl]){
+      var c = ESTABLISHED_LEVELS[lvl].color || '';
+      if(c){ sel.style.borderColor = c; sel.style.color = c; sel.style.background = c + '11'; }
+    } else {
+      sel.style.borderColor = 'var(--border)';
+      sel.style.color = 'var(--text)';
+      sel.style.background = '#fff';
+    }
+  }
+  tintForLevel(currentLvl);
+  // Wire up onchange — save immediately
+  sel.onchange = function(e){
+    e.stopPropagation();
+    var newLvl = parseInt(sel.value, 10) || 0;
+    if(newLvl === 0){
+      clearCardLead(businessName);
+      tintForLevel(0);
+      if(typeof showToast === 'function') showToast('Lead cleared for ' + businessName);
+    } else {
+      setCardLead(businessName, newLvl);
+      tintForLevel(newLvl);
+      var lvDef = (typeof ESTABLISHED_LEVELS !== 'undefined') ? ESTABLISHED_LEVELS[newLvl] : null;
+      if(typeof showToast === 'function') showToast('Lead set to ' + (lvDef ? lvDef.label : 'L'+newLvl) + ' · ' + businessName);
+    }
+  };
+  // Stop card-click from firing through
+  sel.addEventListener('click', function(e){ e.stopPropagation(); });
+  return sel;
+}
+window.buildInlineLeadControl = buildInlineLeadControl;
+
 // Inline mini-modal that lets the user pick a lead level for a business.
 // Anchored to the clicked element. Buttons L1/L2/L3/L4 + "Clear" + "Cancel".
 // Readonly users get a "view only" notice instead.
@@ -3992,12 +4060,9 @@ function renderMVABank(){
       lvBadge.textContent=lv.label;
       lsRow.appendChild(lsBadge);lsRow.appendChild(lvBadge);
     } else { lsRow.appendChild(lsBadge); }
-    var updBtn=document.createElement('button');
-    var hasLevelM = (lead.status === 'established' && lead.level);
-    updBtn.style.cssText='font-size:9px;background:none;border:1px solid var(--border);border-radius:4px;padding:1px 6px;cursor:pointer;color:var(--muted);font-family:DM Sans,sans-serif';
-    updBtn.innerHTML = hasLevelM ? '&#9998; Change' : '+ Set Lead';
-    (function(nm,btn){btn.onclick=function(e){e.stopPropagation();openCardLeadEditor(btn,nm);};})(m.firm,updBtn);
-    lsRow.appendChild(updBtn);
+    // Inline lead control — direct edit on the card, no popover.
+    var leadSel = (typeof buildInlineLeadControl === 'function') ? buildInlineLeadControl(m.firm) : null;
+    if(leadSel) lsRow.appendChild(leadSel);
     card.appendChild(lsRow);
 
     // 📝 Next Visit Note (if any) — shown as a yellow sticky on the card
@@ -19278,16 +19343,11 @@ function renderBankPage(filtered){
       lvBadge.textContent=lv.label;
       stRow.appendChild(stBadge);stRow.appendChild(lvBadge);
     } else { stRow.appendChild(stBadge); }
-    // Lead level editor — quick L1/L2/L3/L4 picker that bypasses the full
-    // visit-bound modal. Lets the marketing lead retroactively record an
-    // established relationship without needing a calendar visit to exist.
-    var stBtn=document.createElement('button');
-    var hasLevel = (lead.status === 'established' && lead.level);
-    stBtn.style.cssText='font-size:9px;background:none;border:1px solid var(--border);border-radius:4px;padding:1px 6px;cursor:pointer;color:var(--muted);font-family:DM Sans,sans-serif';
-    stBtn.textContent = hasLevel ? '&#9998; Change' : '+ Set Lead';
-    stBtn.innerHTML  = hasLevel ? '&#9998; Change' : '+ Set Lead';
-    (function(nm,btn){btn.onclick=function(e){e.stopPropagation();openCardLeadEditor(btn,nm);};})(c.n,stBtn);
-    stRow.appendChild(stBtn);
+    // Inline lead control — direct edit on the card, no popover. Lets the
+    // marketing lead retroactively record an established relationship right
+    // here without opening a separate modal.
+    var stSel = (typeof buildInlineLeadControl === 'function') ? buildInlineLeadControl(c.n) : null;
+    if(stSel) stRow.appendChild(stSel);
     card.appendChild(stRow);
 
     // 📝 Next Visit Note (if any) — shown as a yellow sticky on the card
