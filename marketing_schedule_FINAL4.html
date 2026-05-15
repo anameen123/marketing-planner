@@ -1170,6 +1170,22 @@ body.member-mobile.is-call-handler .nav-handler-also {
      ──────────────────────────────────────────────────────────────────── -->
 <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3/lib/msal-browser.min.js"
         defer></script>
+
+<!-- ── LEAFLET — open-source mapping library (used by the Day Route Planner)
+     Loaded from unpkg.com (the official CDN recommended in Leaflet's docs).
+     Total weight: ~155 KB CSS+JS (~50 KB gzipped). Only used when the day
+     view opens, so no perf cost on other pages. Bundled with subresource
+     integrity (SRI) hashes per Leaflet's published v1.9.4 release.
+     OpenStreetMap tiles are served free per their fair-use policy.
+     ──────────────────────────────────────────────────────────────────── -->
+<link rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin="anonymous" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+        crossorigin="anonymous"
+        defer></script>
 </head>
 <body>
 
@@ -2413,6 +2429,85 @@ body.member-mobile.is-call-handler .nav-handler-also {
         </tr></thead>
         <tbody id="day-tbody"></tbody>
       </table>
+    </div>
+
+    <!-- ── DAY ROUTE PLANNER ────────────────────────────────────────────
+         A map + "plan a route" tool that lives below the visit table.
+         Shows pins for each clinic visited on this day at their city's
+         centroid, plus a "Plan a route" button that opens a dialog for
+         recommending additional clinics to visit between a start and
+         end address along the way. v1 uses city-level coordinates (good
+         enough since clinics in a city cluster near each other in real
+         driving terms). v2 will use precise per-clinic lat/lon once we
+         geocode each address individually. ─────────────────────────── -->
+    <div id="day-route-panel" style="margin-top:18px;background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;box-shadow:0 2px 10px rgba(15,23,42,.05)">
+      <div style="background:linear-gradient(135deg,#1F3864,#3b5fa3);color:#fff;padding:12px 18px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+        <div>
+          <div style="font-size:14px;font-weight:700">🗺️ Day Route Planner</div>
+          <div style="font-size:11px;opacity:.85;margin-top:2px">Map of today's visits · plan an efficient route with recommendations</div>
+        </div>
+        <button id="dv-plan-route-btn" onclick="openRoutePlanner()" style="background:#fff;color:#1F3864;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;display:flex;align-items:center;gap:6px"><span>🚗</span>Plan a route</button>
+      </div>
+      <div id="dv-map" style="height:320px;background:#e2e8f0"></div>
+      <div id="dv-map-fallback" style="display:none;padding:30px 20px;text-align:center;font-size:12px;color:var(--muted);font-style:italic">Map will appear here once the library loads (a few seconds after sign-in).</div>
+      <div id="dv-route-summary" style="display:none;padding:10px 18px;background:#f8fafc;border-top:1px solid var(--border);font-size:12px;color:var(--text)"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── ROUTE PLANNER DIALOG ──────────────────────────────────────────────
+     User picks a start city/address, end city/address, max clinics to fit
+     between them, and a detour budget. The algorithm scores clinics by
+     perpendicular distance from the A→B line and recommends the best
+     fit. Recommendations show on the map + as a list with "Add to day"
+     buttons. ──────────────────────────────────────────────────────── -->
+<div id="route-planner-modal" class="modal-ov" style="display:none;z-index:9800">
+  <div class="modal-box" style="width:480px;max-width:96vw;max-height:92vh;display:flex;flex-direction:column">
+    <div class="modal-top" style="flex-shrink:0;background:linear-gradient(135deg,#1F3864,#3b5fa3);color:#fff">
+      🚗 Plan a route
+      <button onclick="closeRoutePlanner()" style="background:rgba(255,255,255,.18);color:#fff;border:none">&#215;</button>
+    </div>
+    <div class="modal-body" style="overflow-y:auto;flex:1;min-height:0;padding:18px 22px">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:14px;line-height:1.45">
+        Tell us where you're starting and where you want to end. The app will recommend clinics from the bank that lie along the way, so you maximize visits with minimum driving.
+      </div>
+
+      <div class="kpi-input-row" style="margin-bottom:10px">
+        <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Starting city or facility *</label>
+        <select id="rp-start" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box"></select>
+      </div>
+      <div class="kpi-input-row" style="margin-bottom:10px">
+        <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Ending city or facility</label>
+        <select id="rp-end" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box"></select>
+        <div style="font-size:10px;color:var(--muted);margin-top:3px;font-style:italic">Pick "Same as start" for a round-trip plan.</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+        <div>
+          <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Max clinics to include *</label>
+          <input type="number" id="rp-count" value="5" min="1" max="20" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Max detour (miles)</label>
+          <input type="number" id="rp-detour" value="5" min="1" max="30" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box">
+        </div>
+      </div>
+      <div class="kpi-input-row" style="margin-bottom:10px">
+        <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Filter by specialty (optional)</label>
+        <select id="rp-specialty" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box">
+          <option value="">All specialties</option>
+        </select>
+      </div>
+      <div class="kpi-input-row" style="margin-bottom:6px">
+        <label style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:var(--text);cursor:pointer">
+          <input type="checkbox" id="rp-skip-visited" checked> Skip clinics I already visited this period
+        </label>
+      </div>
+
+      <div id="rp-results" style="display:none;margin-top:14px;border-top:1px solid var(--border);padding-top:12px"></div>
+    </div>
+    <div class="modal-foot" style="flex-shrink:0;background:#fff;padding:12px 22px;border-top:1px solid var(--border);display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap">
+      <button onclick="closeRoutePlanner()" style="background:#e5e7eb;color:#374151;border:none;border-radius:8px;padding:9px 16px;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif">Cancel</button>
+      <button onclick="runRoutePlanner()" id="rp-run-btn" style="background:linear-gradient(135deg,#1F3864,#3b5fa3);color:#fff;border:none;border-radius:8px;padding:9px 22px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif">Find recommendations →</button>
     </div>
   </div>
 </div>
@@ -10970,6 +11065,405 @@ function rollToNextBusinessDay(iso){
 }
 window.rollToNextBusinessDay = rollToNextBusinessDay;
 
+// ═══════════════════════════════════════════════════════════════════════
+// DAY ROUTE PLANNER + RECOMMENDATIONS (v1 — city-level coordinates)
+// ═══════════════════════════════════════════════════════════════════════
+// Baked-in coordinates for the 21 cities in APPROVED_AREAS + the 3 WCG
+// facilities. v1 of the route planner uses city-centroid as each clinic's
+// location (good enough since clinics in the same city cluster tightly in
+// real driving terms). v2 will replace this with per-clinic geocoded
+// addresses once we run a one-time geocoding pass on the bank.
+//
+// Coordinates were sourced from each city's Wikipedia "Geographic
+// Coordinates" infobox. WCG facility coords are from their listed
+// addresses on iccotx.com.
+var ROUTE_COORDS = {
+  // WCG facilities (highest priority — usually the start/end point)
+  '_facility_frisco_er':       { lat: 33.1577, lng: -96.8094, label: 'Frisco ER',         type: 'facility' },
+  '_facility_castle_hills_er': { lat: 32.9947, lng: -96.8881, label: 'Castle Hills ER',   type: 'facility' },
+  '_facility_plano_uc':        { lat: 33.0464, lng: -96.7558, label: 'Urgent Care Plano', type: 'facility' },
+  // 21 approved cities — centroid
+  'Frisco':         { lat: 33.1507, lng: -96.8236 },
+  'Plano':          { lat: 33.0198, lng: -96.6989 },
+  'Carrollton':     { lat: 32.9756, lng: -96.8899 },
+  'McKinney':       { lat: 33.1972, lng: -96.6398 },
+  'Allen':          { lat: 33.1032, lng: -96.6706 },
+  'Richardson':     { lat: 32.9483, lng: -96.7299 },
+  'Prosper':        { lat: 33.2363, lng: -96.8011 },
+  'Celina':         { lat: 33.3245, lng: -96.7847 },
+  'Little Elm':     { lat: 33.1626, lng: -96.9376 },
+  'The Colony':     { lat: 33.0890, lng: -96.8864 },
+  'Addison':        { lat: 32.9618, lng: -96.8290 },
+  'Farmers Branch': { lat: 32.9261, lng: -96.8961 },
+  'Lewisville':     { lat: 33.0462, lng: -96.9942 },
+  'Coppell':        { lat: 32.9546, lng: -97.0150 },
+  'Irving':         { lat: 32.8140, lng: -96.9489 },
+  'Garland':        { lat: 32.9126, lng: -96.6389 },
+  'Wylie':          { lat: 33.0151, lng: -96.5388 },
+  'Murphy':         { lat: 33.0151, lng: -96.6131 },
+  'Flower Mound':   { lat: 33.0146, lng: -97.0967 },
+  'Denton':         { lat: 33.2148, lng: -97.1331 },
+  'Dallas':         { lat: 32.7767, lng: -96.7970 }
+};
+
+// Returns {lat,lng} for any known city or facility key; null otherwise.
+function getRouteCoord(key){
+  return ROUTE_COORDS[key] || null;
+}
+
+// Haversine distance in miles between two {lat,lng} points.
+function _haversineMiles(a, b){
+  if(!a || !b) return Infinity;
+  var R = 3958.8; // Earth's radius, miles
+  var rad = Math.PI / 180;
+  var lat1 = a.lat * rad, lat2 = b.lat * rad;
+  var dLat = (b.lat - a.lat) * rad;
+  var dLng = (b.lng - a.lng) * rad;
+  var h = Math.sin(dLat/2)*Math.sin(dLat/2)
+        + Math.cos(lat1)*Math.cos(lat2) * Math.sin(dLng/2)*Math.sin(dLng/2);
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+// Perpendicular distance (in miles) from point P to the line segment A→B.
+// If the projection of P onto the line falls outside the segment, returns
+// distance to the nearer endpoint instead. Used to score clinics by how
+// much detour they add to a planned route.
+function _perpDistanceMiles(P, A, B){
+  if(!P || !A || !B) return Infinity;
+  // Round-trip case (A === B) — just use distance from A
+  if(Math.abs(A.lat - B.lat) < 1e-9 && Math.abs(A.lng - B.lng) < 1e-9){
+    return _haversineMiles(P, A);
+  }
+  // Project to line in plain lat/lng space (good approx for small areas)
+  var ax = A.lng, ay = A.lat;
+  var bx = B.lng, by = B.lat;
+  var px = P.lng, py = P.lat;
+  var dx = bx - ax, dy = by - ay;
+  var t = ((px - ax) * dx + (py - ay) * dy) / (dx*dx + dy*dy);
+  t = Math.max(0, Math.min(1, t));  // clamp to segment
+  var qx = ax + t * dx, qy = ay + t * dy;
+  return _haversineMiles(P, { lat: qy, lng: qx });
+}
+
+// Returns the city coordinate for a given clinic / MVA / outreach entry.
+// Falls back to null if the city isn't in our coord map.
+function getCoordForBusiness(name){
+  if(!name) return null;
+  var type = (typeof getBizTypeForName === 'function') ? getBizTypeForName(name) : 'clinic';
+  var city = '';
+  if(type === 'mva' && typeof MVA_ATTORNEYS !== 'undefined'){
+    var m = MVA_ATTORNEYS.find(function(x){ return x.firm === name; });
+    if(m) city = m.city;
+  } else if(type === 'outreach' && typeof OUTREACH !== 'undefined'){
+    var o = OUTREACH.find(function(x){ return x.name === name; });
+    if(o) city = o.city;
+  } else if(typeof CLINIC_BANK !== 'undefined'){
+    var c = CLINIC_BANK.find(function(x){ return x.n === name; });
+    if(c) city = c.c;
+  }
+  return getRouteCoord(city);
+}
+window.getCoordForBusiness = getCoordForBusiness;
+
+// ── MAP MANAGEMENT ─────────────────────────────────────────────────────
+// Keep a single Leaflet map instance lazy-initialized — only created once
+// the day view opens for the first time. Subsequent openDay() calls just
+// clear the marker layer and redraw with the new day's pins.
+var _DV_MAP = null;
+var _DV_MARKERS = null;    // L.layerGroup of visit pins
+var _DV_RECS = null;       // L.layerGroup of recommended-clinic pins
+var _DV_ROUTELINE = null;  // L.polyline showing the planned route
+var _DV_LAST_DI = null;
+
+function _initDayMap(){
+  if(typeof L === 'undefined') return false;   // Leaflet not loaded yet
+  var el = document.getElementById('dv-map');
+  if(!el) return false;
+  if(_DV_MAP) return true;
+  try {
+    _DV_MAP = L.map(el, { zoomControl: true, scrollWheelZoom: false }).setView([33.07, -96.78], 10);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      maxZoom: 19
+    }).addTo(_DV_MAP);
+    _DV_MARKERS    = L.layerGroup().addTo(_DV_MAP);
+    _DV_RECS       = L.layerGroup().addTo(_DV_MAP);
+    return true;
+  } catch(e){
+    console.warn('Map init failed:', e);
+    return false;
+  }
+}
+
+// Called from openDay() to refresh the map with this day's visits.
+function renderDayMap(di){
+  _DV_LAST_DI = di;
+  // Try to init; if Leaflet isn't loaded yet, retry shortly.
+  if(!_initDayMap()){
+    setTimeout(function(){ renderDayMap(di); }, 600);
+    return;
+  }
+  if(!_DV_MARKERS) return;
+  _DV_MARKERS.clearLayers();
+  _DV_RECS.clearLayers();
+  if(_DV_ROUTELINE){ _DV_MAP.removeLayer(_DV_ROUTELINE); _DV_ROUTELINE = null; }
+  var day = S.days[di];
+  if(!day || !day.rows) return;
+  var pts = [];
+  var seenCities = {};
+  day.rows.forEach(function(row, idx){
+    if(!row.clinic) return;
+    var coord = getCoordForBusiness(row.clinic);
+    if(!coord) return;
+    // Add a tiny offset for duplicate-city pins so they don't stack invisibly
+    var dupKey = coord.lat.toFixed(3) + ',' + coord.lng.toFixed(3);
+    var stack = seenCities[dupKey] || 0;
+    var offset = stack * 0.004;
+    var lat = coord.lat + offset, lng = coord.lng + offset;
+    seenCities[dupKey] = stack + 1;
+    var color = (row.status === 'Completed') ? '#16a34a'
+              : (row.status === 'Canceled')  ? '#dc2626'
+              : (row.status === 'Postponed') ? '#f59e0b'
+                                              : '#1F3864';
+    var marker = L.circleMarker([lat, lng], {
+      radius: 9, color: '#fff', weight: 2, fillColor: color, fillOpacity: 0.95
+    }).bindPopup('<b>' + (row.clinic || '').replace(/</g,'&lt;') + '</b><br>'
+                + (row.status || 'Pending')
+                + (row.member ? '<br>👤 ' + row.member : ''));
+    _DV_MARKERS.addLayer(marker);
+    pts.push([lat, lng]);
+  });
+  // Also drop a pin for each WCG facility for context
+  Object.keys(ROUTE_COORDS).forEach(function(k){
+    var c = ROUTE_COORDS[k];
+    if(c.type !== 'facility') return;
+    var m = L.marker([c.lat, c.lng], {
+      title: c.label,
+      icon: L.divIcon({
+        className: 'wcg-facility-pin',
+        html: '<div style="width:18px;height:18px;background:#7030A0;border:3px solid #fff;border-radius:50%;box-shadow:0 2px 6px rgba(112,48,160,.5)"></div>',
+        iconSize: [18, 18], iconAnchor: [9, 9]
+      })
+    }).bindPopup('<b>🏥 ' + c.label + '</b><br><i>WCG facility</i>');
+    _DV_MARKERS.addLayer(m);
+    pts.push([c.lat, c.lng]);
+  });
+  // Fit map to all pins, with reasonable bounds
+  if(pts.length > 0){
+    try { _DV_MAP.fitBounds(L.latLngBounds(pts).pad(0.2), { maxZoom: 12 }); } catch(e){}
+  }
+  // Make sure the map renders correctly after possibly being hidden
+  setTimeout(function(){ try { _DV_MAP.invalidateSize(); } catch(e){} }, 200);
+}
+window.renderDayMap = renderDayMap;
+
+// ── ROUTE PLANNER DIALOG ────────────────────────────────────────────────
+function openRoutePlanner(){
+  // Populate start/end dropdowns
+  var startSel = document.getElementById('rp-start');
+  var endSel   = document.getElementById('rp-end');
+  var specSel  = document.getElementById('rp-specialty');
+  if(!startSel || !endSel) return;
+  var html = '';
+  // Group: WCG facilities first (most common starting points)
+  html += '<optgroup label="WCG facilities">';
+  Object.keys(ROUTE_COORDS).forEach(function(k){
+    if(ROUTE_COORDS[k].type === 'facility'){
+      html += '<option value="' + k + '">🏥 ' + ROUTE_COORDS[k].label + '</option>';
+    }
+  });
+  html += '</optgroup>';
+  // Group: approved cities
+  html += '<optgroup label="Cities">';
+  Object.keys(ROUTE_COORDS).forEach(function(k){
+    if(!ROUTE_COORDS[k].type){ html += '<option value="' + k + '">' + k + '</option>'; }
+  });
+  html += '</optgroup>';
+  startSel.innerHTML = html;
+  endSel.innerHTML = '<option value="__same__">— Same as start (round trip) —</option>' + html;
+  // Default: Frisco ER → same as start
+  startSel.value = '_facility_frisco_er';
+  endSel.value = '__same__';
+
+  // Populate specialty filter from the actual specialties in the bank
+  var specs = {};
+  if(typeof CLINIC_BANK !== 'undefined'){
+    CLINIC_BANK.forEach(function(c){ if(c.s) specs[c.s] = true; });
+  }
+  var specHtml = '<option value="">All specialties</option>';
+  Object.keys(specs).sort().forEach(function(s){
+    specHtml += '<option value="' + s + '">' + s + '</option>';
+  });
+  specSel.innerHTML = specHtml;
+
+  // Clear any previous results
+  var res = document.getElementById('rp-results');
+  if(res){ res.style.display = 'none'; res.innerHTML = ''; }
+
+  document.getElementById('route-planner-modal').style.display = 'flex';
+}
+window.openRoutePlanner = openRoutePlanner;
+
+function closeRoutePlanner(){
+  document.getElementById('route-planner-modal').style.display = 'none';
+}
+window.closeRoutePlanner = closeRoutePlanner;
+
+// Average city-driving speed used to convert miles → minutes (very rough).
+// Future: use Google Routes API for real ETAs.
+var _ROUTE_AVG_MPH = 28;
+
+function runRoutePlanner(){
+  var startKey = document.getElementById('rp-start').value;
+  var endKey   = document.getElementById('rp-end').value;
+  var count    = Math.max(1, parseInt(document.getElementById('rp-count').value, 10) || 5);
+  var detour   = Math.max(1, parseFloat(document.getElementById('rp-detour').value) || 5);
+  var specFilter = document.getElementById('rp-specialty').value || '';
+  var skipVisited = !!document.getElementById('rp-skip-visited').checked;
+
+  var A = getRouteCoord(startKey);
+  if(!A){ showToast('Pick a starting city or facility.'); return; }
+  var B = (endKey === '__same__') ? A : getRouteCoord(endKey);
+  if(!B){ showToast('Pick an ending city or facility.'); return; }
+
+  // Build candidate pool — every clinic + MVA in the bank with a known city
+  var candidates = [];
+  if(typeof CLINIC_BANK !== 'undefined'){
+    CLINIC_BANK.forEach(function(c){
+      if(specFilter && c.s !== specFilter) return;
+      var coord = getRouteCoord(c.c);
+      if(!coord) return;
+      candidates.push({ type:'clinic', name:c.n, city:c.c, specialty:c.s||'', doctor:c.d||'', coord:coord });
+    });
+  }
+  if(typeof MVA_ATTORNEYS !== 'undefined' && !specFilter){
+    MVA_ATTORNEYS.forEach(function(m){
+      var coord = getRouteCoord(m.city);
+      if(!coord) return;
+      candidates.push({ type:'mva', name:m.firm, city:m.city, specialty:'MVA', doctor:m.attorney||'', coord:coord });
+    });
+  }
+  // Optionally drop clinics with referrals already this period
+  if(skipVisited && typeof BUSINESS_REFERRALS !== 'undefined'){
+    candidates = candidates.filter(function(c){
+      var rec = BUSINESS_REFERRALS[c.name];
+      return !rec || (rec.currentCount || 0) === 0;
+    });
+  }
+  // Score each by perpendicular distance from the A→B line
+  candidates.forEach(function(c){
+    c._detour = _perpDistanceMiles(c.coord, A, B);
+  });
+  // Filter to within the detour budget, sort smallest detour first
+  var picks = candidates
+    .filter(function(c){ return c._detour <= detour; })
+    .sort(function(x, y){ return x._detour - y._detour; })
+    .slice(0, count);
+  // Estimate driving — direct distance plus 1.4x crow-fly factor + sum of detours
+  var crowDirect = _haversineMiles(A, B);
+  var totalDetour = picks.reduce(function(s, p){ return s + p._detour * 2; }, 0); // there and back per pick
+  var totalMiles = (crowDirect * 1.4) + totalDetour;
+  var totalMin = Math.round((totalMiles / _ROUTE_AVG_MPH) * 60);
+  // Render results
+  var res = document.getElementById('rp-results');
+  if(!res) return;
+  if(picks.length === 0){
+    res.style.display = 'block';
+    res.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:10px;background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;line-height:1.5"><b>No clinics fit within ' + detour + ' miles of your route.</b><br>Try increasing the detour budget, or pick different start/end cities.</div>';
+    return;
+  }
+  var html = '<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">' + picks.length + ' recommended stops · ~' + totalMiles.toFixed(0) + ' mi · ~' + totalMin + ' min total</div>';
+  picks.forEach(function(p, i){
+    var typeChip = p.type === 'mva'
+      ? '<span style="background:#fef3c7;color:#92400e;font-size:9px;font-weight:700;padding:1px 6px;border-radius:4px;border:1px solid #fcd34d">MVA</span>'
+      : '<span style="background:#dbeafe;color:#1e3a8a;font-size:9px;font-weight:700;padding:1px 6px;border-radius:4px;border:1px solid #93c5fd">' + (p.specialty || 'Clinic') + '</span>';
+    var safeName = p.name.replace(/'/g,"\\'").replace(/"/g,'&quot;');
+    html += '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;background:#fff">'
+          + '<div style="background:#1F3864;color:#fff;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">' + (i+1) + '</div>'
+          + '<div style="flex:1;min-width:0">'
+          +   '<div style="font-size:12px;font-weight:700;color:var(--text)">' + p.name.replace(/</g,'&lt;') + '</div>'
+          +   '<div style="font-size:10px;color:var(--muted);margin-top:2px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">'
+          +     typeChip
+          +     '<span>📍 ' + p.city + '</span>'
+          +     '<span>↗ ' + p.coord.lat.toFixed(2) + ' mi detour</span>'.replace(/[\d.]+/, p._detour.toFixed(1))
+          +   '</div>'
+          + '</div>'
+          + '<button onclick="addRecommendationToDay(\'' + safeName + '\')" style="background:#7030A0;color:#fff;border:none;border-radius:6px;padding:6px 10px;font-size:10px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;white-space:nowrap;flex-shrink:0">+ Add</button>'
+          + '</div>';
+  });
+  res.style.display = 'block';
+  res.innerHTML = html;
+
+  // Draw the route + recommendations on the day map (under the dialog)
+  _drawPlannedRouteOnMap(A, B, picks);
+}
+window.runRoutePlanner = runRoutePlanner;
+
+// Render the planned route on the day map: start pin, end pin, recommendation
+// pins in order, and a dashed polyline through them.
+function _drawPlannedRouteOnMap(A, B, picks){
+  if(!_DV_MAP || !_DV_RECS) return;
+  _DV_RECS.clearLayers();
+  if(_DV_ROUTELINE){ _DV_MAP.removeLayer(_DV_ROUTELINE); _DV_ROUTELINE = null; }
+  var route = [[A.lat, A.lng]];
+  picks.forEach(function(p, i){
+    var stop = [p.coord.lat + (i*0.002), p.coord.lng + (i*0.002)];
+    route.push(stop);
+    var m = L.marker(stop, {
+      icon: L.divIcon({
+        className: 'route-rec-pin',
+        html: '<div style="background:#7030A0;color:#fff;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:11px;border:2px solid #fff;box-shadow:0 2px 5px rgba(0,0,0,.3)">' + (i+1) + '</div>',
+        iconSize: [24, 24], iconAnchor: [12, 12]
+      })
+    }).bindPopup('<b>' + p.name.replace(/</g,'&lt;') + '</b><br>📍 ' + p.city + '<br>↗ ' + p._detour.toFixed(1) + ' mi detour');
+    _DV_RECS.addLayer(m);
+  });
+  route.push([B.lat, B.lng]);
+  _DV_ROUTELINE = L.polyline(route, { color:'#7030A0', weight:3, dashArray:'6,8', opacity:0.85 });
+  _DV_MAP.addLayer(_DV_ROUTELINE);
+  try { _DV_MAP.fitBounds(_DV_ROUTELINE.getBounds().pad(0.2), { maxZoom: 12 }); } catch(e){}
+}
+
+// Add a recommendation to the currently-open day as a new visit row.
+function addRecommendationToDay(name){
+  if(_DV_LAST_DI == null){ showToast('Open a day first.'); return; }
+  var day = S.days[_DV_LAST_DI];
+  if(!day){ return; }
+  // Find an empty slot, or push a new one
+  var emptyIdx = day.rows.findIndex(function(r){ return !r.clinic; });
+  if(emptyIdx === -1){
+    // Push a new row in the same shape as existing slots
+    day.rows.push({
+      slot: day.rows.length + 1,
+      status: 'Pending',
+      rd: '',
+      member: '',
+      memberConfirmed: false,
+      relationship: '',
+      relNotes: '',
+      leadNotes: '',
+      rescheduledFrom: null,
+      isRescheduled: false,
+      isMosque: false,
+      isManual: false,
+      editing: false,
+      customCity: '',
+      clinic: name,
+      addedBy: (CURRENT_USER && CURRENT_USER.name) || '',
+      addedAt: new Date().toISOString()
+    });
+  } else {
+    day.rows[emptyIdx].clinic = name;
+    day.rows[emptyIdx].addedBy = (CURRENT_USER && CURRENT_USER.name) || '';
+    day.rows[emptyIdx].addedAt = new Date().toISOString();
+  }
+  if(typeof refresh === 'function') refresh(_DV_LAST_DI);
+  if(typeof showToast === 'function') showToast('Added: ' + name);
+  // Refresh the map to show the new pin
+  renderDayMap(_DV_LAST_DI);
+}
+window.addRecommendationToDay = addRecommendationToDay;
+
 function buildRecurringDates(startISO, count, interval){
   var out = [];
   if(!startISO || !count || count < 1) return out;
@@ -11856,6 +12350,9 @@ function openDay(di){
   document.getElementById('landing').style.display='none';
   document.getElementById('day-view').style.display='flex';
   renderDayTable(di);
+  // Render the day's route-map panel (lazy; if Leaflet isn't loaded yet it
+  // retries automatically). Showing this for everyone — admin + members.
+  if(typeof renderDayMap === 'function') renderDayMap(di);
 }
 function showLanding(){
   window.scrollTo(0,0);
@@ -14283,7 +14780,11 @@ renderCalGrid();renderCounters();renderEvents();renderAnnouncements();renderObse
 // Render the dynamic org tree on page load so it's populated even before the user opens the Members tab
 if(typeof renderOrgTree === 'function') renderOrgTree();
 function refresh(di){
-  if(S.currentDay===di)renderDayTable(di);
+  if(S.currentDay===di){
+    renderDayTable(di);
+    // Keep the day-map in sync when visits are added/changed/removed
+    if(typeof renderDayMap === 'function') renderDayMap(di);
+  }
   renderCalGrid();
   if(typeof renderBank === 'function') renderBank();
   if(typeof renderAnnouncements==='function')renderAnnouncements();
