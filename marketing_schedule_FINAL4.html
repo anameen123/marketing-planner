@@ -1903,11 +1903,11 @@ body.member-mobile.is-call-handler .nav-handler-also {
         <div id="av-repeat-row" style="display:none;margin-top:10px;display:none">
           <div style="display:grid;grid-template-columns:1fr 1.4fr;gap:10px;align-items:end">
             <div>
-              <label style="font-size:10px;font-weight:600;color:var(--text);display:block;margin-bottom:3px">Repeat how many times?</label>
+              <label style="font-size:10px;font-weight:600;color:var(--text);display:block;margin-bottom:3px" title="Total number of visits — counts this one">Total number of visits</label>
               <input type="number" id="av-repeat-count" value="4" min="2" max="26" oninput="updateAddVisitRepeatPreview()" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:13px;font-family:'DM Sans',sans-serif;outline:none;background:#fff;box-sizing:border-box">
             </div>
             <div>
-              <label style="font-size:10px;font-weight:600;color:var(--text);display:block;margin-bottom:3px">Every</label>
+              <label style="font-size:10px;font-weight:600;color:var(--text);display:block;margin-bottom:3px">Time between each visit</label>
               <select id="av-repeat-interval" onchange="updateAddVisitRepeatPreview()" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:13px;font-family:'DM Sans',sans-serif;outline:none;background:#fff;box-sizing:border-box">
                 <option value="14">2 weeks</option>
                 <option value="21">3 weeks</option>
@@ -10925,11 +10925,59 @@ window.updateAddVisitRepeat = updateAddVisitRepeat;
 
 // Build a list of ISO dates from a start date + count + interval.
 // Interval is either a number-of-days string ("14", "21") or "month-N".
+// Returns true if the ISO date string is a federal / Texas state holiday
+// (clinics observe these, so visits roll forward). Religious observances
+// like Easter/Eid stay as-is because clinics still operate that day.
+function isBusinessClosedHoliday(iso){
+  if(!iso) return false;
+  if(typeof OBSERVANCES === 'undefined' || !Array.isArray(OBSERVANCES)) return false;
+  for(var i=0; i<OBSERVANCES.length; i++){
+    var o = OBSERVANCES[i];
+    if(o && o.date === iso && (o.type === 'federal' || o.type === 'texas')){
+      return true;
+    }
+  }
+  return false;
+}
+window.isBusinessClosedHoliday = isBusinessClosedHoliday;
+
+// Format a Date as YYYY-MM-DD (local time, not UTC — avoids DST off-by-one)
+function _toISO(d){
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
+// Roll a date forward to the next business day, skipping Saturdays, Sundays,
+// and federal/Texas holidays. Returns the adjusted ISO and a boolean flag
+// that's true when any rolling actually happened (useful for showing a hint
+// in the recurring-visit preview).
+function rollToNextBusinessDay(iso){
+  if(!iso) return { iso: iso, rolled: false };
+  var d = new Date(iso + 'T00:00:00');
+  if(isNaN(d.getTime())) return { iso: iso, rolled: false };
+  var rolled = false;
+  var safety = 0;
+  while(safety < 14){  // never roll more than 2 weeks; holidays never stack that long
+    var dow = d.getDay();           // 0=Sun, 6=Sat
+    var curISO = _toISO(d);
+    var weekend = (dow === 0 || dow === 6);
+    var holiday = isBusinessClosedHoliday(curISO);
+    if(!weekend && !holiday) break; // landed on a business day
+    d.setDate(d.getDate() + 1);
+    rolled = true;
+    safety++;
+  }
+  return { iso: _toISO(d), rolled: rolled };
+}
+window.rollToNextBusinessDay = rollToNextBusinessDay;
+
 function buildRecurringDates(startISO, count, interval){
   var out = [];
   if(!startISO || !count || count < 1) return out;
   var start = new Date(startISO+'T00:00:00');
   if(isNaN(start.getTime())) return out;
+  // We build the RAW date for each occurrence (interval × i from start), then
+  // roll forward off weekends/federal/Texas holidays. The roll is per-date so
+  // a one-time bump doesn't drift subsequent visits.
   for(var i=0; i<count; i++){
     var d = new Date(start);
     if(interval && interval.indexOf('month-') === 0){
@@ -10939,8 +10987,9 @@ function buildRecurringDates(startISO, count, interval){
       var days = parseInt(interval, 10) || 14;
       d.setDate(start.getDate() + (i * days));
     }
-    var iso = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
-    out.push(iso);
+    var rawISO = _toISO(d);
+    var adj = rollToNextBusinessDay(rawISO);
+    out.push(adj.iso);
   }
   return out;
 }
@@ -10967,6 +11016,23 @@ function updateAddVisitRepeatPreview(){
   var interval = document.getElementById('av-repeat-interval').value;
   var dates = buildRecurringDates(startISO, count, interval);
   if(!dates.length){ preview.textContent = ''; return; }
+  // Detect any rolling that happened — compare the adjusted dates against the
+  // raw arithmetic dates. If different, surface a hint so the user knows
+  // weekends/holidays were skipped automatically.
+  var rolledCount = 0;
+  var start = new Date(startISO+'T00:00:00');
+  for(var i=0; i<dates.length; i++){
+    var raw = new Date(start);
+    if(interval && interval.indexOf('month-') === 0){
+      var months = parseInt(interval.split('-')[1], 10) || 1;
+      raw.setMonth(start.getMonth() + (i * months));
+    } else {
+      var days = parseInt(interval, 10) || 14;
+      raw.setDate(start.getDate() + (i * days));
+    }
+    var rawISO = raw.getFullYear()+'-'+String(raw.getMonth()+1).padStart(2,'0')+'-'+String(raw.getDate()).padStart(2,'0');
+    if(rawISO !== dates[i]) rolledCount++;
+  }
   // Show first 4 dates + ellipsis if more
   var formatted = dates.slice(0,4).map(function(iso){
     var d = new Date(iso+'T00:00:00');
@@ -10974,7 +11040,12 @@ function updateAddVisitRepeatPreview(){
   });
   var label = '→ ' + formatted.join(', ');
   if(dates.length > 4) label += ', … +' + (dates.length-4) + ' more';
-  preview.textContent = label + '   (' + dates.length + ' visits total)';
+  label += '   (' + dates.length + ' visits total';
+  if(rolledCount > 0){
+    label += ' · ' + rolledCount + ' rolled off weekend/holiday';
+  }
+  label += ')';
+  preview.textContent = label;
 }
 window.updateAddVisitRepeatPreview = updateAddVisitRepeatPreview;
 
