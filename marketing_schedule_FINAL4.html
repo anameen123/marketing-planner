@@ -1077,6 +1077,17 @@ body.member-view.member-mobile .header{padding-left:60px !important}
   font-family:'DM Sans',sans-serif;
 }
 body.member-view.member-mobile .member-bottom-nav{display:flex}
+
+/* ── PHONE-LAYOUT ROLE-BASED HIDING ────────────────────────────────────────
+   Per user request 2026-05-15: members use the app on their phones while
+   commuting. They only need Home / Dashboard / Businesses to do their job
+   — the other tabs are admin-heavy. So we HIDE the .nav-admin-only items
+   for non-admins on phone-sized viewports. Admin sees everything still.
+   Desktop is unchanged for all roles (members can still get to Team /
+   Finances / Reports from their laptop top-nav). */
+body.member-mobile:not(.role-admin) .nav-admin-only {
+  display: none !important;
+}
 .mb-nav-btn{
   flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
   background:none; border:none; color:#64748b; cursor:pointer; padding:4px 2px;
@@ -6407,6 +6418,14 @@ function applyMemberViewClass(){
     b.classList.add('member-view');
   } else {
     b.classList.remove('member-view');
+  }
+  // Set a role-specific body class so CSS rules can hide/show elements per
+  // role without re-checking CURRENT_USER everywhere. Cleared if logged out.
+  ['role-admin', 'role-member', 'role-readonly'].forEach(function(c){
+    b.classList.remove(c);
+  });
+  if(CURRENT_USER && CURRENT_USER.role){
+    b.classList.add('role-' + CURRENT_USER.role);
   }
   _updateMemberMobileClass();
 }
@@ -22086,14 +22105,14 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
     <button class="md-nav-item" onclick="memberDrawerGo('dashboard')"><span class="md-ico">📅</span><span class="md-lbl">Dashboard</span></button>
     <!-- Status moved into Businesses → Status sub-tab (2026-05-15) -->
 
-    <!-- Team accordion group -->
-    <button class="md-nav-item" data-parent="team" onclick="memberDrawerGo('team')"><span class="md-ico">👥</span><span class="md-lbl">Team</span><span class="md-chevron">›</span></button>
-    <div class="md-subnav" data-parent="team">
+    <!-- Team accordion group — admin/readonly only on phone -->
+    <button class="md-nav-item nav-admin-only" data-parent="team" onclick="memberDrawerGo('team')"><span class="md-ico">👥</span><span class="md-lbl">Team</span><span class="md-chevron">›</span></button>
+    <div class="md-subnav nav-admin-only" data-parent="team">
       <button class="md-subnav-item" data-sub="tree"  onclick="memberDrawerSubGo('team','tree')"><span class="md-sub-ico">🌳</span><span>Tree Chart</span></button>
       <button class="md-subnav-item" data-sub="stats" onclick="memberDrawerSubGo('team','stats')"><span class="md-sub-ico">📈</span><span>Stats</span></button>
     </div>
 
-    <!-- Businesses accordion group -->
+    <!-- Businesses accordion group — kept for everyone (members use this) -->
     <button class="md-nav-item" data-parent="businesses" onclick="memberDrawerGo('businesses')"><span class="md-ico">🏢</span><span class="md-lbl">Businesses</span><span class="md-chevron">›</span></button>
     <div class="md-subnav" data-parent="businesses">
       <button class="md-subnav-item" data-sub="overall" onclick="memberDrawerSubGo('businesses','overall')"><span class="md-sub-ico">🎯</span><span>Bank of Targets</span></button>
@@ -22102,18 +22121,18 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
       <button class="md-subnav-item" data-sub="status"  onclick="memberDrawerSubGo('businesses','status')"><span class="md-sub-ico">📊</span><span>Status</span></button>
     </div>
 
-    <!-- Finances accordion group -->
-    <button class="md-nav-item" data-parent="finances" onclick="memberDrawerGo('finances')"><span class="md-ico">💰</span><span class="md-lbl">Finances</span><span class="md-chevron">›</span></button>
-    <div class="md-subnav" data-parent="finances">
+    <!-- Finances accordion group — admin-only on phone -->
+    <button class="md-nav-item nav-admin-only" data-parent="finances" onclick="memberDrawerGo('finances')"><span class="md-ico">💰</span><span class="md-lbl">Finances</span><span class="md-chevron">›</span></button>
+    <div class="md-subnav nav-admin-only" data-parent="finances">
       <button class="md-subnav-item" data-sub="log"      onclick="memberDrawerSubGo('finances','log')"><span class="md-sub-ico">📜</span><span>Spending Log</span></button>
       <button class="md-subnav-item" data-sub="rankings" onclick="memberDrawerSubGo('finances','rankings')"><span class="md-sub-ico">🏆</span><span>Rankings</span></button>
       <button class="md-subnav-item" data-sub="tiers"    onclick="memberDrawerSubGo('finances','tiers')"><span class="md-sub-ico">⚙️</span><span>Tier Settings</span></button>
     </div>
 
-    <!-- Secondary destinations -->
-    <div class="md-section-label">More</div>
-    <button class="md-nav-item" onclick="memberDrawerGo('reports')"><span class="md-ico">📋</span><span class="md-lbl">Reports</span></button>
-    <button class="md-nav-item" onclick="memberDrawerGo('activity')"><span class="md-ico">📡</span><span class="md-lbl">Activity Feed</span></button>
+    <!-- Secondary destinations — admin-only on phone -->
+    <div class="md-section-label nav-admin-only">More</div>
+    <button class="md-nav-item nav-admin-only" onclick="memberDrawerGo('reports')"><span class="md-ico">📋</span><span class="md-lbl">Reports</span></button>
+    <button class="md-nav-item nav-admin-only" onclick="memberDrawerGo('activity')"><span class="md-ico">📡</span><span class="md-lbl">Activity Feed</span></button>
   </div>
   <div class="member-drawer-footer">
     <button class="md-signout-btn" onclick="toggleMemberDrawer(false); doLogout();">↩ Sign out</button>
@@ -22242,6 +22261,10 @@ document.addEventListener('keydown', function(e){
      Tapping a button calls the same showLandingTab() the top nav uses,
      so behavior stays consistent across the two navigations.
      ════════════════════════════════════════════════════════════════════ -->
+<!-- Phone bottom-nav. Members see only 3 essential buttons (Home / Dashboard
+     / Businesses) — the .nav-admin-only class hides extras for non-admins
+     via CSS. Admin keeps all 5 buttons. Per user request 2026-05-15:
+     "make it more friendly for members who use phones while commuting." -->
 <nav class="member-bottom-nav" aria-label="Member quick nav">
   <button class="mb-nav-btn active" onclick="memberBottomNavGo('home')"      id="mb-nav-home" title="Home">
     <span class="mb-ico">🏠</span><span class="mb-lbl">Home</span>
@@ -22249,13 +22272,13 @@ document.addEventListener('keydown', function(e){
   <button class="mb-nav-btn"        onclick="memberBottomNavGo('dashboard')" id="mb-nav-dash" title="Calendar planner">
     <span class="mb-ico">📅</span><span class="mb-lbl">Dashboard</span>
   </button>
-  <button class="mb-nav-btn"        onclick="memberBottomNavGo('status')"    id="mb-nav-stat" title="Status &amp; leads">
+  <button class="mb-nav-btn nav-admin-only" onclick="memberBottomNavGo('status')"    id="mb-nav-stat" title="Status &amp; leads">
     <span class="mb-ico">📊</span><span class="mb-lbl">Status</span>
   </button>
   <button class="mb-nav-btn"        onclick="memberBottomNavGo('businesses')" id="mb-nav-biz" title="Businesses">
     <span class="mb-ico">🏢</span><span class="mb-lbl">Businesses</span>
   </button>
-  <button class="mb-nav-btn"        onclick="memberBottomNavGo('finances')"  id="mb-nav-fin"  title="Spending &amp; ranks">
+  <button class="mb-nav-btn nav-admin-only" onclick="memberBottomNavGo('finances')"  id="mb-nav-fin"  title="Spending &amp; ranks">
     <span class="mb-ico">💰</span><span class="mb-lbl">Finances</span>
   </button>
 </nav>
