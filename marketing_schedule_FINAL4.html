@@ -6384,12 +6384,26 @@ function _finishLogin(){
   setTimeout(function(){ try { maybeShowIosInstallHint(); } catch(e){} }, 2000);
 }
 
-// Add / remove the .member-view body class based on the current user's
-// role. Also tracks viewport width via .member-mobile so the bottom nav
-// only appears on phone-sized screens.
+// Add / remove the .member-view body class. Historically this was role-only
+// (members got it, admin didn't), which left admin on iPhone stuck with the
+// desktop-style header crammed into a small viewport — no bottom nav, no
+// hamburger drawer, awkward tap targets.
+//
+// Per user request 2026-05-15: the mobile-friendly polish should apply to
+// EVERYONE on a phone, including admin. So we add .member-view in two
+// situations:
+//   • The user is a non-admin (member or readonly), regardless of device,
+//     OR
+//   • The viewport is phone-sized (≤768px), regardless of role.
+//
+// On desktop, admin still gets the full-width admin layout (no
+// .member-view). On phone, admin shares the polished mobile UX with the
+// rest of the team.
 function applyMemberViewClass(){
   var b = document.body;
-  if(CURRENT_USER && CURRENT_USER.role !== 'admin'){
+  var isPhone    = window.innerWidth <= 768;
+  var isNonAdmin = CURRENT_USER && CURRENT_USER.role !== 'admin';
+  if(isNonAdmin || isPhone){
     b.classList.add('member-view');
   } else {
     b.classList.remove('member-view');
@@ -6406,7 +6420,12 @@ function _updateMemberMobileClass(){
   else b.classList.remove('member-mobile');
 }
 window._updateMemberMobileClass = _updateMemberMobileClass;
-window.addEventListener('resize', _updateMemberMobileClass);
+// Resize: re-evaluate BOTH classes so admin on a laptop browser that's
+// being narrowed below 768px (e.g. dev tools, split screen, smaller display)
+// also picks up the mobile polish dynamically.
+window.addEventListener('resize', function(){
+  applyMemberViewClass();
+});
 // Run once on initial load too (covers the case where the page is opened
 // already at a phone width but no one's logged in yet).
 _updateMemberMobileClass();
