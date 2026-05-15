@@ -548,8 +548,34 @@ textarea.rnotes:focus{border-color:var(--purple);outline:none}
 .perf-period-sel{border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:11px;font-family:'DM Sans',sans-serif;background:var(--card);color:var(--text);cursor:pointer}
 .perf-period-sel:focus{outline:none;border-color:var(--purple)}
 
-.clinic-name-link{cursor:pointer;color:var(--text)}
-.clinic-name-link:hover{color:var(--purple);text-decoration:underline}
+/* Clinic / MVA / Outreach name on each card — clearly clickable so users
+   know they can click to see the full contact-info + history popup.
+   2026-05-15: was previously plain text with hover-only feedback; now
+   shows a subtle purple tint + dotted underline by default, with a
+   stronger solid underline on hover. */
+.clinic-name-link{
+  cursor:pointer;
+  color:#1F3864;
+  text-decoration:underline;
+  text-decoration-style:dotted;
+  text-decoration-color:#9ca3af;
+  text-underline-offset:3px;
+  text-decoration-thickness:1px;
+  transition:color .12s, text-decoration-color .12s;
+}
+.clinic-name-link::after{
+  content:" \203A";  /* single right-pointing angle quote — signals "click for more" */
+  font-size:1em;
+  opacity:.5;
+  margin-left:3px;
+  font-weight:600;
+}
+.clinic-name-link:hover{
+  color:var(--purple);
+  text-decoration-style:solid;
+  text-decoration-color:var(--purple);
+}
+.clinic-name-link:hover::after{ opacity:.9 }
 #clinic-history-modal .modal-box{width:600px;max-width:95vw;max-height:85vh;display:flex;flex-direction:column}
 #clinic-history-modal .modal-body{overflow-y:auto;flex:1;padding:0 20px 16px}
 .ch-header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:16px 20px 12px;border-bottom:1px solid var(--border)}
