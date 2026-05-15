@@ -1221,7 +1221,7 @@ body.member-view.member-mobile .member-bottom-nav{display:flex}
   <div class="main-nav">
     <button class="nav-tab active" id="tab-home" onclick="switchTab('home')">🏠 Home</button>
     <button class="nav-tab" id="tab-schedule" onclick="switchTab('schedule')">📅 Dashboard</button>
-    <button class="nav-tab" id="tab-leads-page" onclick="switchTab('leads-page')">📊 Status</button>
+    <!-- Status moved to a sub-tab under Businesses (2026-05-15). Old links still work via switchTab('leads-page'). -->
     <button class="nav-tab" id="tab-members" onclick="switchTab('members')">👥 Team</button>
     <button class="nav-tab" id="tab-bank" onclick="switchTab('bank')">🏢 Businesses</button>
     <button class="nav-tab" id="tab-finances" onclick="switchTab('finances')">💰 Finances</button>
@@ -2006,6 +2006,8 @@ body.member-view.member-mobile .member-bottom-nav{display:flex}
     <button id="subtab-visits" onclick="switchClinicTab('visits')" style="padding:12px 20px;font-size:12px;font-weight:600;color:rgba(255,255,255,.55);cursor:pointer;border:none;background:none;border-bottom:3px solid transparent;font-family:'DM Sans',sans-serif">&#128203; Visits</button>
 
     <button id="subtab-podcast" onclick="switchClinicTab('podcast')" style="padding:12px 20px;font-size:12px;font-weight:600;color:rgba(255,255,255,.55);cursor:pointer;border:none;background:none;border-bottom:3px solid transparent;font-family:'DM Sans',sans-serif">&#127911;&#65039; Podcast Schedule</button>
+
+    <button id="subtab-status" onclick="switchClinicTab('status')" style="padding:12px 20px;font-size:12px;font-weight:600;color:rgba(255,255,255,.55);cursor:pointer;border:none;background:none;border-bottom:3px solid transparent;font-family:'DM Sans',sans-serif">&#128202; Status</button>
   </div>
   <!-- Level 2: sub-tabs inside Bank of Visits -->
   <div id="overall-subnav" style="background:#f0f2f8;border-bottom:1px solid var(--border);padding:0 20px;display:flex;gap:0">
@@ -15185,12 +15187,22 @@ var KPI_TARGETS={
 
 function switchTab(tab, opts){
   window.scrollTo(0,0);
-  // Update active tab button (including the new Home tab)
-  ['home','schedule','leads-page','members','bank','finances','reports','feed'].forEach(function(t){
+  // 2026-05-15: Status is now a sub-tab under Businesses, not top-level.
+  // Any call to switchTab('leads-page') (from notifications, deep-links,
+  // bookmarks) silently routes to Businesses → Status.
+  if(tab === 'leads-page'){
+    if(typeof _ensureStatusPanelMounted === 'function') _ensureStatusPanelMounted();
+    tab = 'bank';
+    setTimeout(function(){
+      if(typeof switchClinicTab === 'function') switchClinicTab('status');
+    }, 0);
+  }
+  // Update active tab button (Home is a new top-level view)
+  ['home','schedule','members','bank','finances','reports','feed'].forEach(function(t){
     var btn=document.getElementById('tab-'+t);
     if(btn)btn.classList.toggle('active',t===tab);
   });
-  // All views to manage (Home is a new top-level view)
+  // All views to manage
   var views={
     'home':      document.getElementById('home-view'),
     'schedule':  document.getElementById('schedule-view'),
@@ -15198,8 +15210,7 @@ function switchTab(tab, opts){
     'bank':      document.getElementById('bank-view'),
     'finances':  document.getElementById('finances-view'),
     'reports':   document.getElementById('reports-view'),
-    'feed':      document.getElementById('feed-view'),
-    'leads-page':document.getElementById('leads-page-view')
+    'feed':      document.getElementById('feed-view')
   };
   // Show only the active view
   Object.keys(views).forEach(function(k){
@@ -19557,11 +19568,21 @@ function switchOverallTab(tab){
 window.switchOverallTab=switchOverallTab;
 
 function switchClinicTab(tab){
-  // Level 1: overall (Bank of Targets) | visits (Completed + Canceled) | podcast
-  // Backward compat: 'completed' is still accepted and mapped to 'visits' so older
-  // code that calls switchClinicTab('completed') keeps working.
+  // Level 1 sub-tabs under Businesses:
+  //   overall  → Bank of Targets (clinics/MVA/outreach grid + sub-sub-tabs)
+  //   visits   → Completed + Canceled visits list
+  //   podcast  → Podcast Schedule
+  //   status   → Established leads CRM (moved from top-level in 2026-05-15)
+  //
+  // Backward compat: 'completed' was an old alias for 'visits'; 'leads' was
+  // an old alias for the status panel (top-level Status tab before the move).
   if(tab === 'completed') tab = 'visits';
-  var l1=['overall','leads','podcast','visits'];
+  if(tab === 'leads')     tab = 'status';
+  // Ensure the leads-page-view has been relocated into bank-view as a panel
+  // (one-time migration; idempotent — see _ensureStatusPanelMounted below).
+  if(typeof _ensureStatusPanelMounted === 'function') _ensureStatusPanelMounted();
+
+  var l1=['overall','podcast','visits','status'];
   l1.forEach(function(t){
     var b=document.getElementById('subtab-'+t);
     if(!b)return;
@@ -19573,7 +19594,7 @@ function switchClinicTab(tab){
   var subnav=document.getElementById('overall-subnav');
   if(subnav)subnav.style.display=(tab==='overall'?'flex':'none');
   // Show/hide panels
-  ['bank','podcast','mva','outreach','visits'].forEach(function(t){
+  ['bank','podcast','mva','outreach','visits','status'].forEach(function(t){
     var p=document.getElementById('clinic-panel-'+t);
     if(p)p.style.display='none';
   });
@@ -19588,8 +19609,32 @@ function switchClinicTab(tab){
       // Default to the Completed sub-pane on entry (or whatever was last picked)
       switchVisitsSubtab(window._currentVisitsSubtab || 'completed');
     }
+    if(tab==='status'){
+      // Render the leads CRM (functions defined in the leads-page-view block)
+      if(typeof renderLeadsPage === 'function') renderLeadsPage();
+      if(typeof switchStatusTab === 'function' && window._currentStatusSubtab){
+        switchStatusTab(window._currentStatusSubtab);
+      }
+    }
   }
 }
+
+// One-time migration: move the leads-page-view div from its old top-level
+// location into bank-view as a sibling panel (renamed to clinic-panel-status).
+// Safe to call multiple times — short-circuits once relocated.
+function _ensureStatusPanelMounted(){
+  var bankView  = document.getElementById('bank-view');
+  var leadsView = document.getElementById('leads-page-view');
+  if(!bankView || !leadsView) return;        // DOM not ready yet
+  if(bankView.contains(leadsView))  return;  // already mounted
+  // Move and rename
+  bankView.appendChild(leadsView);
+  leadsView.id = 'clinic-panel-status';
+  leadsView.style.padding = '0';
+  // Reset display so the switchClinicTab toggle controls it
+  leadsView.style.display = 'none';
+}
+window._ensureStatusPanelMounted = _ensureStatusPanelMounted;
 window.switchClinicTab=switchClinicTab;
 
 // Inner sub-tab switcher: Completed vs Canceled
@@ -21764,7 +21809,7 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
     <div class="md-section-label">Main</div>
     <button class="md-nav-item active" onclick="memberDrawerGo('home')"><span class="md-ico">🏠</span><span class="md-lbl">Home</span></button>
     <button class="md-nav-item" onclick="memberDrawerGo('dashboard')"><span class="md-ico">📅</span><span class="md-lbl">Dashboard</span></button>
-    <button class="md-nav-item" onclick="memberDrawerGo('status')"><span class="md-ico">📊</span><span class="md-lbl">Status</span></button>
+    <!-- Status moved into Businesses → Status sub-tab (2026-05-15) -->
 
     <!-- Team accordion group -->
     <button class="md-nav-item" data-parent="team" onclick="memberDrawerGo('team')"><span class="md-ico">👥</span><span class="md-lbl">Team</span><span class="md-chevron">›</span></button>
@@ -21779,6 +21824,7 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
       <button class="md-subnav-item" data-sub="overall" onclick="memberDrawerSubGo('businesses','overall')"><span class="md-sub-ico">🎯</span><span>Bank of Targets</span></button>
       <button class="md-subnav-item" data-sub="visits"  onclick="memberDrawerSubGo('businesses','visits')"><span class="md-sub-ico">📋</span><span>Visits</span></button>
       <button class="md-subnav-item" data-sub="podcast" onclick="memberDrawerSubGo('businesses','podcast')"><span class="md-sub-ico">🎙️</span><span>Podcast Schedule</span></button>
+      <button class="md-subnav-item" data-sub="status"  onclick="memberDrawerSubGo('businesses','status')"><span class="md-sub-ico">📊</span><span>Status</span></button>
     </div>
 
     <!-- Finances accordion group -->
