@@ -11390,10 +11390,37 @@ function rowHTML(row,di,ri){
     ?'<textarea class="rnotes" rows="2" placeholder="Additional notes (visible to you in your Members tab)..." onchange="setLeadNotes('+di+','+ri+',this.value)" oninput="setLeadNotes('+di+','+ri+',this.value)">'+(row.leadNotes||'')+'</textarea>'
     :'<span class="lead-locked">&#128274; Only when Completed</span>';
 
-  // Delete button (only for non-completed rows)
-  var delBtnHtml=st!=='Completed'
-    ?'<button onclick="deleteVisit('+di+','+ri+')" style="background:none;border:none;color:#ddd;cursor:pointer;font-size:13px;padding:0 3px;line-height:1" title="Delete visit">&#10005;</button>'
-    :'';
+  // ⋮ Edit/Delete menu — shown to admin (any visit) and to the row's own
+  // member (their own visits, any status). Admin can delete completed visits
+  // too — full reversal: visit gone, spending refunded to budget.
+  var canEdit   = (typeof canEditVisitRow === 'function')   ? canEditVisitRow(row)   : true;
+  var canDel    = (typeof canDeleteVisitRow === 'function') ? canDeleteVisitRow(row) : false;
+  var dateOpen  = (typeof canEditDate === 'function') ? canEditDate(day.date) : true;
+  // For Completed visits, only admin can delete (extra safety) — members can
+  // still see/edit but the delete confirms is gated to admin.
+  var canDelHere = canDel && (st !== 'Completed' || (typeof isAdmin === 'function' && isAdmin()));
+  // For Edit: needs both permission and the date to be open (members can't
+  // edit past-locked rows; admin can always).
+  var canEditHere = canEdit && (dateOpen || (typeof isAdmin === 'function' && isAdmin()));
+  var delBtnHtml = '';
+  if(canDelHere || canEditHere){
+    var menuId = 'vm-' + di + '-' + ri;
+    var safeCl = (row.clinic || '').replace(/'/g,"\\'").replace(/"/g,'&quot;');
+    delBtnHtml = ''
+      + '<div style="position:relative;display:inline-block">'
+      +   '<button onclick="event.stopPropagation();_openVisitMenu('+di+','+ri+',\''+menuId+'\')" '
+      +     'title="More actions" '
+      +     'style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:16px;padding:2px 6px;line-height:1;font-weight:700">&#8942;</button>'
+      +   '<div id="'+menuId+'" style="display:none;position:absolute;top:calc(100% + 4px);left:0;background:#fff;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.15);padding:4px;min-width:140px;z-index:9000;font-family:DM Sans,sans-serif;text-align:left">'
+      +     (canEditHere
+          ? '<button onclick="event.stopPropagation();_closeVisitMenu(\''+menuId+'\');startEdit('+di+','+ri+')" style="display:flex;align-items:center;gap:6px;width:100%;text-align:left;background:transparent;border:0;padding:7px 10px;border-radius:6px;cursor:pointer;font-size:12px;color:#1e293b;font-family:inherit" onmouseover="this.style.background=\'#f1f5f9\'" onmouseout="this.style.background=\'transparent\'"><span>&#9998;</span> Edit visit</button>'
+          : '')
+      +     (canDelHere
+          ? '<button onclick="event.stopPropagation();_closeVisitMenu(\''+menuId+'\');deleteVisit('+di+','+ri+')" style="display:flex;align-items:center;gap:6px;width:100%;text-align:left;background:transparent;border:0;padding:7px 10px;border-radius:6px;cursor:pointer;font-size:12px;color:#991b1b;font-family:inherit" onmouseover="this.style.background=\'#fee2e2\'" onmouseout="this.style.background=\'transparent\'"><span>&#128465;</span> Delete visit</button>'
+          : '')
+      +   '</div>'
+      + '</div>';
+  }
 
   // Pre-build the right-side cells, swapping in the lock placeholder when assignment isn't confirmed.
   // To keep the row visually clean we show the full lock message ONCE (in the Status cell) and
@@ -12850,12 +12877,50 @@ window.renderCalGrid=renderCalGrid;
 window.renderCounters=renderCounters;
 window.renderDayTable=renderDayTable;
 
+// ── ⋮ VISIT MENU helpers ────────────────────────────────────────────────
+// Open the per-visit dropdown menu (Edit / Delete). Auto-closes when the
+// user clicks anywhere else on the page.
+function _openVisitMenu(di, ri, menuId){
+  // Close any other open menus first
+  document.querySelectorAll('[id^="vm-"]').forEach(function(m){ m.style.display = 'none'; });
+  var menu = document.getElementById(menuId);
+  if(!menu) return;
+  menu.style.display = 'block';
+  // Outside-click close
+  setTimeout(function(){
+    var handler = function(ev){
+      if(!menu.contains(ev.target)){
+        menu.style.display = 'none';
+        document.removeEventListener('click', handler, true);
+      }
+    };
+    document.addEventListener('click', handler, true);
+  }, 0);
+}
+function _closeVisitMenu(menuId){
+  var m = document.getElementById(menuId);
+  if(m) m.style.display = 'none';
+}
+window._openVisitMenu  = _openVisitMenu;
+window._closeVisitMenu = _closeVisitMenu;
+
 function deleteVisit(di,ri){
+  var row = (S.days[di] && S.days[di].rows[ri]) || null;
+  if(!row){ return; }
+  // Build a "what gets reversed" summary so the user knows the impact
+  var summaryParts = [];
+  if(row.clinic) summaryParts.push('"' + row.clinic + '"');
+  var spent = row.spending && (row.spending.total || 0);
+  if(spent > 0) summaryParts.push('refund $' + spent.toFixed(2) + ' to the period budget');
+  if(row.member) summaryParts.push('decrement ' + row.member + '\'s visit counter');
+  var sub = (summaryParts.length ? 'This will: ' + summaryParts.join(', ') + '. ' : '')
+          + 'Lead status on the clinic card is kept (not affected). Cannot be undone.';
   showConfirm({
     icon:'!',
-    msg:'Delete this visit?',
-    sub:'This cannot be undone.',
+    msg:'Delete this visit permanently?',
+    sub: sub,
     yesLabel:'Delete',
+    danger: true,
     onConfirm:function(){ _doDeleteVisit(di,ri); }
   });
 }
