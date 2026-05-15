@@ -5801,17 +5801,18 @@ function saveVisitSpending(di, ri, items, overrideReason, zero){
     };
   });
   var total = sumSpendingItems(items);
-  var over  = total > (tier.limitPerVisit || 0);
-  if(over && !(overrideReason && overrideReason.trim())){
-    return { ok:false, error:'Reason required to exceed the tier limit' };
-  }
+  // PER-VISIT CAP REMOVED (2026-05-15): the per-visit limit is no longer
+  // enforced — only the quarterly/period budget matters. Historical fields
+  // (limitAtSave, overLimit, overrideReason) are kept so old data renders.
+  // New visits always pass with overLimit=false unless period-budget triggers.
+  var over = false;
   row.spending = {
     items: items,
     total: total,
     tierAtSave: tier.id,
     limitAtSave: tier.limitPerVisit || 0,
     overLimit: over,
-    overrideReason: over ? overrideReason.trim() : null,
+    overrideReason: null,
     zeroSpending: false,
     confirmedAt: new Date().toISOString(),
     confirmedBy: (CURRENT_USER && CURRENT_USER.name) || ''
@@ -16098,7 +16099,6 @@ function renderFinancesRankings(){
       return '<span style="display:inline-flex;align-items:center;gap:5px;font-size:10px;background:#fff;color:var(--text);padding:4px 9px;border-radius:8px;border:1px solid '+ts.border+'">'
         + '<span style="background:'+ts.bg+';color:'+ts.fg+';font-size:9px;font-weight:800;padding:1px 6px;border-radius:5px;letter-spacing:.04em;border:1px solid '+ts.border+'">'+esc(t.name)+'</span>'
         + '<span style="color:var(--muted)">'+t.minReferrals+(t.maxReferrals==null?'+':('–'+t.maxReferrals))+' refs</span>'
-        + '<span style="font-family:DM Mono,monospace;font-weight:700">$'+t.limitPerVisit+'</span>'
         + '</span>';
     }).join(' ');
 
@@ -16147,12 +16147,11 @@ function renderFinancesRankings(){
         + '<td style="padding:9px 12px;font-size:12px;font-weight:600">'+esc(e.name)+'</td>'
         + '<td style="padding:9px 12px;text-align:center;font-family:DM Mono,monospace;font-size:14px;font-weight:700;color:var(--text);width:130px">'+e.count+'</td>'
         + '<td style="padding:9px 12px;text-align:center;width:90px"><span style="background:'+ts.bg+';color:'+ts.fg+';font-size:11px;font-weight:800;padding:3px 10px;border-radius:12px;letter-spacing:.04em;border:1px solid '+ts.border+';box-shadow:0 1px 2px '+ts.glow+'">'+esc(e.tier.name)+'</span></td>'
-        + '<td style="padding:9px 12px;text-align:right;font-size:13px;font-family:DM Mono,monospace;font-weight:700;color:var(--text);width:90px">$'+e.tier.limitPerVisit+'</td>'
         + spendCell(e)
         + '</tr>';
     }).join('');
     if(!entries.length){
-      rowsHtml = '<tr><td colspan="6" style="text-align:center;padding:30px;color:var(--muted);font-size:11px;font-style:italic">No '+sec.type+' businesses yet.</td></tr>';
+      rowsHtml = '<tr><td colspan="5" style="text-align:center;padding:30px;color:var(--muted);font-size:11px;font-style:italic">No '+sec.type+' businesses yet.</td></tr>';
     }
 
     // Period-spend header label adapts to the toggle state so the user knows
@@ -16181,7 +16180,6 @@ function renderFinancesRankings(){
       +     '<th style="padding:9px 12px;font-size:10px;color:var(--muted);text-align:left;min-width:220px">Business</th>'
       +     '<th style="padding:9px 12px;font-size:10px;color:var(--muted);text-align:center;width:120px">Referrals (period)</th>'
       +     '<th style="padding:9px 12px;font-size:10px;color:var(--muted);text-align:center;width:84px">Tier</th>'
-      +     '<th style="padding:9px 12px;font-size:10px;color:var(--muted);text-align:right;width:82px">$ cap / visit</th>'
       +     '<th style="padding:9px 12px;font-size:10px;color:'+(PERIOD_BUDGET_ENABLED?'#1e40af':'var(--muted)')+';text-align:left;width:170px">'+periodColHeader+'</th>'
       +   '</tr></thead>'
       +   '<tbody>' + rowsHtml + '</tbody>'
@@ -16249,12 +16247,11 @@ function _renderOutreachRankings(body){
       + '<td style="padding:9px 12px;font-size:12px;font-weight:600">'+esc(e.name)+'</td>'
       + '<td style="padding:9px 12px;text-align:center;font-family:DM Mono,monospace;font-size:14px;font-weight:700;color:var(--text);width:120px">'+e.count+'</td>'
       + '<td style="padding:9px 12px;text-align:center;width:84px"><span style="background:'+ts.bg+';color:'+ts.fg+';font-size:11px;font-weight:800;padding:3px 10px;border-radius:12px;letter-spacing:.04em;border:1px solid '+ts.border+';box-shadow:0 1px 2px '+ts.glow+'">'+esc(e.tier.name)+'</span></td>'
-      + '<td style="padding:9px 12px;text-align:right;font-size:13px;font-family:DM Mono,monospace;font-weight:700;color:var(--text);width:82px">$'+e.tier.limitPerVisit+'</td>'
       + scheduledSpendCell(e)
       + '</tr>';
   }).join('');
   if(!scheduledEntries.length){
-    scheduledRowsHtml = '<tr><td colspan="6" style="text-align:center;padding:30px;color:var(--muted);font-size:11px;font-style:italic">No scheduled-outreach businesses yet.</td></tr>';
+    scheduledRowsHtml = '<tr><td colspan="5" style="text-align:center;padding:30px;color:var(--muted);font-size:11px;font-style:italic">No scheduled-outreach businesses yet.</td></tr>';
   }
 
   // Tier legend strip for scheduled outreach (3 tiers, A best → C lowest in id terms)
@@ -16265,7 +16262,6 @@ function _renderOutreachRankings(body){
     return '<span style="display:inline-flex;align-items:center;gap:5px;font-size:10px;background:#fff;color:var(--text);padding:4px 9px;border-radius:8px;border:1px solid '+ts.border+'">'
       + '<span style="background:'+ts.bg+';color:'+ts.fg+';font-size:9px;font-weight:800;padding:1px 6px;border-radius:5px;letter-spacing:.04em;border:1px solid '+ts.border+'">'+esc(t.name)+'</span>'
       + '<span style="color:var(--muted)">'+t.minReferrals+(t.maxReferrals==null?'+':('–'+t.maxReferrals))+' refs</span>'
-      + '<span style="font-family:DM Mono,monospace;font-weight:700">$'+t.limitPerVisit+'</span>'
       + '</span>';
   }).join(' ');
 
@@ -16285,7 +16281,6 @@ function _renderOutreachRankings(body){
     +     '<th style="padding:9px 12px;font-size:10px;color:var(--muted);text-align:left;min-width:220px">Business</th>'
     +     '<th style="padding:9px 12px;font-size:10px;color:var(--muted);text-align:center;width:120px">Referrals (period)</th>'
     +     '<th style="padding:9px 12px;font-size:10px;color:var(--muted);text-align:center;width:84px">Tier</th>'
-    +     '<th style="padding:9px 12px;font-size:10px;color:var(--muted);text-align:right;width:82px">$ cap / visit</th>'
     +     '<th style="padding:9px 12px;font-size:10px;color:'+(PERIOD_BUDGET_ENABLED?'#1e40af':'var(--muted)')+';text-align:left;width:170px">$ Period spend (of budget)</th>'
     +   '</tr></thead>'
     +   '<tbody>'+scheduledRowsHtml+'</tbody>'
@@ -16581,7 +16576,6 @@ function _renderQuarterlyHistoryView(body){
         + '<td style="padding:9px 12px;font-size:12px;font-weight:600">'+esc(e.name)+'</td>'
         + '<td style="padding:9px 12px;text-align:center;font-family:DM Mono,monospace;font-size:14px;font-weight:700;color:var(--text);width:130px">'+e.count+'</td>'
         + '<td style="padding:9px 12px;text-align:center;width:90px"><span style="background:'+ts.bg+';color:'+ts.fg+';font-size:11px;font-weight:800;padding:3px 10px;border-radius:12px;letter-spacing:.04em;border:1px solid '+ts.border+';box-shadow:0 1px 2px '+ts.glow+'">'+esc(e.tierName)+'</span></td>'
-        + '<td style="padding:9px 12px;text-align:right;font-size:13px;font-family:DM Mono,monospace;font-weight:700;color:var(--text);width:100px">$'+e.limitPerVisit+'</td>'
         + '<td style="padding:9px 12px;text-align:right;font-size:13px;font-family:DM Mono,monospace;font-weight:700;color:#7030A0;width:120px">$'+e.periodBudget+'</td>'
         + '</tr>';
     }).join('');
@@ -16600,7 +16594,6 @@ function _renderQuarterlyHistoryView(body){
       +     '<th style="padding:9px 12px;font-size:10px;color:var(--muted);text-align:left;min-width:200px">Business</th>'
       +     '<th style="padding:9px 12px;font-size:10px;color:var(--muted);text-align:center;width:120px">Final refs ('+esc(active)+')</th>'
       +     '<th style="padding:9px 12px;font-size:10px;color:var(--muted);text-align:center;width:84px">Tier (locked)</th>'
-      +     '<th style="padding:9px 12px;font-size:10px;color:var(--muted);text-align:right;width:90px">$ cap / visit</th>'
       +     '<th style="padding:9px 12px;font-size:10px;color:#7030A0;text-align:right;width:120px">$ Budget / period</th>'
       +   '</tr></thead>'
       +   '<tbody>'+rowsHtml+'</tbody>'
@@ -16673,7 +16666,6 @@ function renderFinancesTiers(){
         + '<td style="padding:7px 10px;font-size:12px;font-weight:600;color:var(--text)"><span style="display:inline-block;background:'+ts.bg+';color:'+ts.fg+';padding:3px 9px;border-radius:8px;font-size:10px;font-weight:800;letter-spacing:.04em;border:1px solid '+ts.border+';box-shadow:0 1px 2px '+ts.glow+'">'+esc(tier.name)+'</span></td>'
         + '<td style="padding:7px 10px;text-align:center"><input type="number" min="0" value="'+tier.minReferrals+'"'+dis+' onchange="_updateTier(\''+t.key+'\','+idx+',\'minReferrals\',this.value)" style="width:70px;border:1px solid var(--border);border-radius:5px;padding:4px 6px;font-size:11px;font-family:DM Mono,monospace;text-align:center"></td>'
         + '<td style="padding:7px 10px;text-align:center"><input type="number" min="0" value="'+maxVal+'" placeholder="∞"'+dis+' onchange="_updateTier(\''+t.key+'\','+idx+',\'maxReferrals\',this.value)" style="width:70px;border:1px solid var(--border);border-radius:5px;padding:4px 6px;font-size:11px;font-family:DM Mono,monospace;text-align:center"></td>'
-        + '<td style="padding:7px 10px;text-align:center"><input type="number" min="0" value="'+tier.limitPerVisit+'"'+dis+' onchange="_updateTier(\''+t.key+'\','+idx+',\'limitPerVisit\',this.value)" style="width:80px;border:1px solid var(--border);border-radius:5px;padding:4px 6px;font-size:11px;font-family:DM Mono,monospace;text-align:center"></td>'
         + '<td style="padding:7px 10px;text-align:center"><input type="number" min="0" value="'+pb+'"'+dis+' onchange="_updateTier(\''+t.key+'\','+idx+',\'periodBudget\',this.value)" style="width:90px;border:1px solid '+(enabled?'#93c5fd':'var(--border)')+';border-radius:5px;padding:4px 6px;font-size:11px;font-family:DM Mono,monospace;text-align:center;background:'+(enabled?'#eff6ff':'#f9fafb')+'"></td>'
         + '</tr>';
     }).join('');
@@ -16684,7 +16676,6 @@ function renderFinancesTiers(){
       +     '<th style="padding:8px 10px;font-size:10px;color:var(--muted);text-align:left">Tier</th>'
       +     '<th style="padding:8px 10px;font-size:10px;color:var(--muted);text-align:center">Min referrals</th>'
       +     '<th style="padding:8px 10px;font-size:10px;color:var(--muted);text-align:center">Max referrals</th>'
-      +     '<th style="padding:8px 10px;font-size:10px;color:var(--muted);text-align:center">$ Cap / visit</th>'
       +     '<th style="padding:8px 10px;font-size:10px;color:'+(enabled?'#1e40af':'var(--muted)')+';text-align:center" title="Total 3-month spending pool for businesses in this tier">$ Budget / period '+(enabled?'':'<span style="font-size:9px;color:var(--muted);text-transform:none">(off)</span>')+'</th>'
       +   '</tr></thead>'
       +   '<tbody>'+rows+'</tbody>'
@@ -17202,12 +17193,10 @@ function _updateSpendingBudgetPanel(row, projectedAmount){
 window._updateSpendingBudgetPanel = _updateSpendingBudgetPanel;
 
 function _recomputeVisitTotal(){
+  // PER-VISIT CAP REMOVED — only the period-budget panel matters now.
   var total = _SPENDING_ZERO ? 0 : sumSpendingItems(_SPENDING_ITEMS);
   var row = (_SPENDING_DI != null) ? S.days[_SPENDING_DI].rows[_SPENDING_RI] : null;
   if(!row) return;
-  var tier = getBusinessTier(row.clinic) || { limitPerVisit:0 };
-  var cap = tier.limitPerVisit || 0;
-  var over = !_SPENDING_ZERO && total > cap;
   // Update the period-budget panel as items change (uses the row's saved
   // total minus the current draft as the "before-this-visit" snapshot).
   _updateSpendingBudgetPanel(row, total);
@@ -17215,31 +17204,24 @@ function _recomputeVisitTotal(){
   var totalEl = document.getElementById('sp-running-total');
   if(totalEl){
     totalEl.textContent = '$' + total.toFixed(2);
-    totalEl.style.color = over ? '#dc2626' : (_SPENDING_ZERO ? '#166534' : 'var(--text)');
+    totalEl.style.color = _SPENDING_ZERO ? '#166534' : 'var(--text)';
   }
   var status = document.getElementById('sp-total-status');
   if(status){
     if(_SPENDING_ZERO){
       status.textContent = '🚫 No spending — saving as $0';
       status.style.color = '#166534';
-    } else if(over){
-      status.textContent = 'over cap by $' + (total - cap).toFixed(2);
-      status.style.color = '#dc2626';
-    } else if(total > 0 && total >= cap * 0.8){
-      status.textContent = 'getting close to cap ($' + cap + ')';
-      status.style.color = '#92400e';
     } else if(total > 0){
-      status.textContent = 'within cap ($' + cap + ')';
-      status.style.color = '#16a34a';
+      status.textContent = '';
     } else {
       status.textContent = '';
     }
   }
-  // Total bar border highlights red when over cap, soft green for zero-mode
+  // Total bar: green border for zero-mode, neutral otherwise
   var bar = document.getElementById('sp-total-bar');
   if(bar){
-    bar.style.border = '1px solid ' + (over ? '#fca5a5' : (_SPENDING_ZERO ? '#86efac' : 'var(--border)'));
-    bar.style.background = over ? '#fef2f2' : (_SPENDING_ZERO ? '#f0fdf4' : '#fff');
+    bar.style.border = '1px solid ' + (_SPENDING_ZERO ? '#86efac' : 'var(--border)');
+    bar.style.background = _SPENDING_ZERO ? '#f0fdf4' : '#fff';
   }
   // Save button is enabled when:
   //   • zero-spending mode is ON (always saveable as $0), OR
@@ -17250,9 +17232,7 @@ function _recomputeVisitTotal(){
     btn.disabled = !canSave;
     btn.style.opacity = canSave ? '1' : '.5';
     btn.style.cursor  = canSave ? 'pointer' : 'not-allowed';
-    if(_SPENDING_ZERO)      btn.textContent = 'Save $0 spending';
-    else if(over)           btn.textContent = '⚠ Save spending';
-    else                    btn.textContent = 'Save spending';
+    btn.textContent = _SPENDING_ZERO ? 'Save $0 spending' : 'Save spending';
   }
 }
 
@@ -17272,18 +17252,10 @@ function confirmSaveSpending(){
   }
   var total = sumSpendingItems(_SPENDING_ITEMS);
   var row = S.days[_SPENDING_DI].rows[_SPENDING_RI];
-  var tier = getBusinessTier(row.clinic) || { limitPerVisit:0 };
-  var cap  = tier.limitPerVisit || 0;
-  var overCap = (total > cap);
-  // ── PERIOD-BUDGET CHECK ─────────────────────────────────────────────────
-  // When PERIOD_BUDGET_ENABLED is on, also reject if this visit would push
-  // the 3-month pool past zero (excludes the row being edited so its own
-  // saved value doesn't double-count).
+  // PER-VISIT CAP REMOVED — only the period-budget check remains.
   var budgetInfo = checkPeriodBudget(row.clinic, total, row);
-  var overBudget = budgetInfo.exceeds;
-  if(overCap || overBudget){
-    // Either limit failed → open the Approval modal showing whichever block(s) apply.
-    _openSpendingApproval(total, cap, overBudget ? budgetInfo : null);
+  if(budgetInfo.exceeds){
+    _openSpendingApproval(total, 0, budgetInfo);
     return;
   }
   _commitSpending('');
@@ -17323,16 +17295,12 @@ function _commitSpending(reason){
 function _openSpendingApproval(total, cap, periodInfo){
   var modal = document.getElementById('spending-approval-modal');
   if(!modal) return;
-  var overCap    = (total > cap);
+  // Per-visit cap REMOVED 2026-05-15 — only the period-budget path can trigger
+  // this modal now. The cap block is always hidden.
+  var overCap    = false;
   var overBudget = !!(periodInfo && periodInfo.exceeds);
-  // Per-visit cap block — only show when actually over the cap
   var capBlock = document.getElementById('sp-appr-cap-block');
-  if(capBlock) capBlock.style.display = overCap ? 'block' : 'none';
-  if(overCap){
-    document.getElementById('sp-appr-total').textContent       = '$' + total.toFixed(2);
-    document.getElementById('sp-appr-cap').textContent         = '$' + cap.toFixed(2);
-    document.getElementById('sp-appr-over-amount').textContent = '$' + (total - cap).toFixed(2);
-  }
+  if(capBlock) capBlock.style.display = 'none';
   // Period-budget / pool-cap block — populate + show when over the pool
   var budgetBlock = document.getElementById('sp-appr-budget-block');
   if(budgetBlock) budgetBlock.style.display = overBudget ? 'block' : 'none';
@@ -21206,10 +21174,10 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
       <button onclick="closeSpending()">&#215;</button>
     </div>
     <div class="modal-body" style="overflow-y:auto;flex:1;min-height:0;padding:18px 22px;background:#fffbf5">
-      <!-- Tier banner -->
+      <!-- Tier banner (per-visit cap removed 2026-05-15 — only tier name + business type shown) -->
       <div id="sp-tier-banner" style="background:#fff7ed;border:1px solid #fcd34d;border-radius:10px;padding:11px 14px;display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">
         <div style="font-size:11px;color:#78350f"><strong id="sp-tier-name">Tier 1</strong> · <span id="sp-tier-business-type"></span> · <span id="sp-tier-refs"></span> referrals</div>
-        <div style="font-size:11px;color:#78350f">Cap per visit: <strong style="font-family:DM Mono,monospace;font-size:14px;color:#92400e" id="sp-tier-cap">$25</strong></div>
+        <span id="sp-tier-cap" style="display:none">$0</span>
       </div>
       <!-- PERIOD BUDGET BAR — live 3-month spending pool for this business.
            Hidden when PERIOD_BUDGET_ENABLED is false. Color of the bar
