@@ -5880,7 +5880,7 @@ function _buildReferralCounterBlock(name){
   var wrap = document.createElement('div');
   wrap.style.cssText = 'background:#fff;border:1px solid var(--border);border-radius:8px;padding:8px 10px;display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:4px';
   var safeName = String(name).replace(/'/g,"\\'").replace(/"/g,'&quot;');
-  wrap.innerHTML = '<div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0">'
+  wrap.innerHTML = '<div onclick="event.stopPropagation();openReferralHistory(\''+safeName+'\')" title="Click for full per-month + per-quarter history" style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;cursor:pointer">'
     +   '<span style="font-size:14px">👥</span>'
     +   '<div style="min-width:0">'
     +     '<div style="font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Patient referrals</div>'
@@ -5893,10 +5893,8 @@ function _buildReferralCounterBlock(name){
     + '</div>'
     // 2026-05-15: Manual "Adjust" UI removed — referral counts are now
     // auto-computed from the Patient Referral Log (📋 Referrals tab).
-    // Admin can edit entries there if a correction is needed; the source
-    // of truth is no longer manual on each card. The counter readout
-    // above still shows the live count (recomputed from log entries).
-    + '<span style="font-size:9px;color:var(--muted);font-style:italic;flex-shrink:0;text-align:right;line-height:1.3">Auto-updated<br>from referral log</span>';
+    // Click the count to see full per-month / per-quarter history.
+    + '<span onclick="event.stopPropagation();openReferralHistory(\''+safeName+'\')" style="font-size:9px;color:#7030A0;font-style:italic;flex-shrink:0;text-align:right;line-height:1.3;cursor:pointer;text-decoration:underline;text-decoration-style:dotted">📊 History</span>';
   // Stop card-level click handler from firing when adjust is clicked
   var btn = wrap.querySelector('button');
   if(btn){ btn.addEventListener('click', function(e){ e.stopPropagation(); }); }
@@ -7473,19 +7471,31 @@ function deleteReferralEntry(id){
 window.deleteReferralEntry = deleteReferralEntry;
 
 // ── DERIVED COUNTERS ──────────────────────────────────────────────────
-// Recompute BUSINESS_REFERRALS counters from the referral log. This keeps
-// the tier system working (which depends on BUSINESS_REFERRALS) while the
-// log is the new source of truth. Called on every CRUD operation + on
-// initial boot.
+// Recompute BUSINESS_REFERRALS.currentCount from the referral log. This
+// is what drives the tier system, so we ONLY count entries within the
+// active period (CURRENT_PERIOD.start..CURRENT_PERIOD.end). Entries
+// outside the period are preserved in the log for history — they just
+// don't contribute to the current count.
+//
+// Called on every CRUD operation + on initial boot + when the period
+// rolls over.
 function _recomputeReferralCountsFromLog(){
   if(typeof BUSINESS_REFERRALS === 'undefined') return;
+  // Compute the active window
+  var pStart = (CURRENT_PERIOD && CURRENT_PERIOD.start) ? CURRENT_PERIOD.start : null; // YYYY-MM-DD
+  var pEnd   = (CURRENT_PERIOD && CURRENT_PERIOD.end)   ? CURRENT_PERIOD.end   : null;
   // Reset all currentCount values to 0 first
   Object.keys(BUSINESS_REFERRALS).forEach(function(name){
     if(BUSINESS_REFERRALS[name]) BUSINESS_REFERRALS[name].currentCount = 0;
   });
-  // Sum log entries into per-business counts
+  // Sum log entries IN THE CURRENT PERIOD into per-business counts
   REFERRAL_LOG.forEach(function(e){
     if(!e || !e.sourceBusiness) return;
+    // Period filter: only entries whose date falls in CURRENT_PERIOD count
+    if(pStart && pEnd){
+      var eDate = (e.ts || '').slice(0, 10);   // entry date as YYYY-MM-DD
+      if(!eDate || eDate < pStart || eDate > pEnd) return;
+    }
     var rec = BUSINESS_REFERRALS[e.sourceBusiness];
     if(!rec){
       // Create a stub record for businesses that appear in the log but aren't
@@ -7503,6 +7513,48 @@ function _recomputeReferralCountsFromLog(){
   if(typeof renderOutreach === 'function') renderOutreach();
 }
 window._recomputeReferralCountsFromLog = _recomputeReferralCountsFromLog;
+
+// ── HISTORY VIEW: per-business referral breakdown ─────────────────────
+// Returns { byMonth: {'YYYY-MM': count}, byQuarter: {'YYYY-Qn': count},
+//           total: N, mostRecent: ISO, trend: 'up'|'down'|'flat' }.
+// Used by the clinic card "View history" popup AND will feed into the
+// route planner's "should we visit this clinic now?" scoring.
+function getReferralHistoryForBusiness(name){
+  if(!name) return { byMonth:{}, byQuarter:{}, total:0, mostRecent:null, trend:'flat' };
+  var byMonth = {};
+  var byQuarter = {};
+  var total = 0;
+  var mostRecent = null;
+  REFERRAL_LOG.forEach(function(e){
+    if(!e || e.sourceBusiness !== name) return;
+    var cnt = parseInt(e.patientCount, 10) || 0;
+    var d = new Date(e.ts);
+    if(isNaN(d.getTime())) return;
+    var mKey = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+    var qKey = d.getFullYear() + '-Q' + (Math.floor(d.getMonth()/3) + 1);
+    byMonth[mKey]   = (byMonth[mKey]   || 0) + cnt;
+    byQuarter[qKey] = (byQuarter[qKey] || 0) + cnt;
+    total += cnt;
+    if(!mostRecent || e.ts > mostRecent) mostRecent = e.ts;
+  });
+  // Trend: compare last 30 days vs the 30 days before that
+  var now = Date.now();
+  var last30 = 0, prev30 = 0;
+  REFERRAL_LOG.forEach(function(e){
+    if(e.sourceBusiness !== name) return;
+    var age = now - new Date(e.ts).getTime();
+    var d30 = 30 * 24 * 60 * 60 * 1000;
+    var cnt = parseInt(e.patientCount, 10) || 0;
+    if(age <= d30)              last30 += cnt;
+    else if(age <= 2 * d30)     prev30 += cnt;
+  });
+  var trend = 'flat';
+  if(last30 > prev30 * 1.2) trend = 'up';
+  else if(prev30 > 0 && last30 < prev30 * 0.8) trend = 'down';
+  return { byMonth:byMonth, byQuarter:byQuarter, total:total, mostRecent:mostRecent,
+           trend:trend, last30:last30, prev30:prev30 };
+}
+window.getReferralHistoryForBusiness = getReferralHistoryForBusiness;
 
 // Get the count of patients that (member) referred to (facilityKey).
 function getMemberFacilityCount(memberName, facilityKey){
@@ -7533,22 +7585,37 @@ function renderReferralLog(){
   var view = document.getElementById('referrals-view');
   if(!view) return;
 
-  // Populate filter dropdowns (member + facility)
+  // Populate filter dropdowns (member + facility + filler)
   var mFilter = document.getElementById('rl-filter-member');
   var fFilter = document.getElementById('rl-filter-facility');
-  if(mFilter && mFilter.options.length <= 1){
-    var mHtml = '<option value="">All members</option>';
+  var pFilter = document.getElementById('rl-filter-filler');
+  if(mFilter){
+    // Rebuild every render so newly-added members appear in the dropdown
+    var prevM = mFilter.value;
+    var mHtml = '<option value="">👥 All members</option>';
     if(typeof MEMBERS !== 'undefined' && Array.isArray(MEMBERS)){
       MEMBERS.forEach(function(m){ mHtml += '<option value="' + m + '">' + m + '</option>'; });
     }
     mFilter.innerHTML = mHtml;
+    mFilter.value = prevM || '';
   }
   if(fFilter && fFilter.options.length <= 1){
-    var fHtml = '<option value="">All facilities</option>';
+    var fHtml = '<option value="">🏥 All facilities</option>';
     REFERRAL_FACILITIES.forEach(function(f){
       fHtml += '<option value="' + f.key + '">' + f.label + '</option>';
     });
     fFilter.innerHTML = fHtml;
+  }
+  if(pFilter){
+    // Filler dropdown — collect unique filler names from the log itself
+    var prevP = pFilter.value;
+    var fillerSet = {};
+    REFERRAL_LOG.forEach(function(e){ if(e.filledByName) fillerSet[e.filledByName] = true; });
+    var fillers = Object.keys(fillerSet).sort();
+    var pHtml = '<option value="">📝 All front-desk fillers</option>';
+    fillers.forEach(function(p){ pHtml += '<option value="' + p.replace(/"/g,'&quot;') + '">' + p.replace(/</g,'&lt;') + '</option>'; });
+    pFilter.innerHTML = pHtml;
+    pFilter.value = prevP || '';
   }
 
   // ── Summary cards ───────────────────────────────────────────────────
@@ -7611,12 +7678,14 @@ function renderReferralLog(){
   if(!entriesEl) return;
   var memFilter   = (mFilter && mFilter.value) || '';
   var facFilter   = (fFilter && fFilter.value) || '';
+  var fillerFilter = (pFilter && pFilter.value) || '';
   var searchTerm  = ((document.getElementById('rl-filter-search') || {}).value || '').toLowerCase();
   var filtered = REFERRAL_LOG.filter(function(e){
     if(memFilter && e.memberName !== memFilter) return false;
     if(facFilter && e.destinationFacility !== facFilter) return false;
+    if(fillerFilter && e.filledByName !== fillerFilter) return false;
     if(searchTerm){
-      var hay = (e.sourceBusiness + ' ' + (e.filledByName||'')).toLowerCase();
+      var hay = (e.sourceBusiness || '').toLowerCase();
       if(hay.indexOf(searchTerm) < 0) return false;
     }
     return true;
@@ -7646,7 +7715,7 @@ function renderReferralLog(){
     rowsHtml += '<tr style="' + (i%2===0?'':'background:#fafbfc') + ';border-bottom:1px solid var(--border)">'
       + '<td style="padding:9px 12px;font-size:11px;color:var(--text);white-space:nowrap">' + dtStr + editedMark + '</td>'
       + '<td style="padding:9px 12px;font-size:12px;font-weight:600;color:var(--text)">' + (e.memberName || '—').replace(/</g,'&lt;') + '</td>'
-      + '<td style="padding:9px 12px;font-size:12px;color:var(--text)">' + (e.sourceBusiness || '—').replace(/</g,'&lt;') + '</td>'
+      + '<td style="padding:9px 12px;font-size:12px;color:var(--text)"><span onclick="openReferralHistory(\'' + (e.sourceBusiness||'').replace(/\\/g,'\\\\').replace(/\'/g,"\\'").replace(/"/g,'&quot;') + '\')" style="color:#1F3864;cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px" title="Click to see this business\'s full referral history">' + (e.sourceBusiness || '—').replace(/</g,'&lt;') + '</span></td>'
       + '<td style="padding:9px 12px;font-size:11px;color:var(--muted)">🏥 ' + facLabel + '</td>'
       + '<td style="padding:9px 12px;text-align:center;font-size:14px;font-weight:800;font-family:DM Mono,monospace;color:#1F3864">' + (e.patientCount || 0) + '</td>'
       + '<td style="padding:9px 12px;font-size:11px;color:var(--muted)">' + (e.filledByName || '—').replace(/</g,'&lt;') + '</td>'
@@ -7662,6 +7731,82 @@ function renderReferralLog(){
   entriesEl.innerHTML = rowsHtml;
 }
 window.renderReferralLog = renderReferralLog;
+
+// Open a popup showing the full per-month + per-quarter referral history
+// for a single business. Helps spot drop-offs (signals the marketing team
+// should re-visit the clinic to remind them about us).
+function openReferralHistory(name){
+  if(!name) return;
+  var hist = getReferralHistoryForBusiness(name);
+  // Build a sorted list of months (most recent first), with running counts
+  var months = Object.keys(hist.byMonth).sort().reverse();
+  var quarters = Object.keys(hist.byQuarter).sort().reverse();
+  var trendBadge = '';
+  if(hist.trend === 'up')        trendBadge = '<span style="background:#dcfce7;color:#166534;font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;border:1px solid #86efac">📈 Trending up</span>';
+  else if(hist.trend === 'down') trendBadge = '<span style="background:#fee2e2;color:#991b1b;font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;border:1px solid #fca5a5">📉 Trending down — visit soon!</span>';
+  else                            trendBadge = '<span style="background:#f1f5f9;color:#475569;font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;border:1px solid #cbd5e1">→ Steady</span>';
+  var monthHtml = '';
+  if(months.length === 0){
+    monthHtml = '<div style="font-size:11px;color:var(--muted);font-style:italic;padding:14px;text-align:center">No referrals logged yet for this business.</div>';
+  } else {
+    monthHtml = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:6px">';
+    var maxCount = Math.max.apply(null, months.map(function(m){ return hist.byMonth[m]; }));
+    months.forEach(function(m){
+      var c = hist.byMonth[m];
+      var pct = maxCount > 0 ? (c / maxCount) * 100 : 0;
+      var labelDate = new Date(m + '-01');
+      var label = labelDate.toLocaleDateString('en-US',{month:'short',year:'2-digit'});
+      monthHtml += '<div style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:8px 10px;position:relative;overflow:hidden">'
+                 + '<div style="position:absolute;bottom:0;left:0;width:' + pct.toFixed(0) + '%;height:3px;background:linear-gradient(90deg,#7030A0,#1F3864)"></div>'
+                 + '<div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em">' + label + '</div>'
+                 + '<div style="font-size:18px;font-weight:800;font-family:DM Mono,monospace;color:#1F3864;margin-top:2px">' + c + '</div>'
+                 + '</div>';
+    });
+    monthHtml += '</div>';
+  }
+  var qHtml = quarters.map(function(q){
+    return '<div style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;font-size:12px"><span style="color:var(--muted)">📅 ' + q + '</span><strong style="font-family:DM Mono,monospace;color:#1F3864;font-size:14px">' + hist.byQuarter[q] + '</strong></div>';
+  }).join('');
+  if(!qHtml) qHtml = '<div style="font-size:11px;color:var(--muted);font-style:italic">No quarters tracked yet.</div>';
+
+  // Build the modal on demand
+  var modal = document.getElementById('referral-history-modal');
+  if(!modal){
+    modal = document.createElement('div');
+    modal.id = 'referral-history-modal';
+    modal.className = 'modal-ov';
+    modal.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:9900;align-items:center;justify-content:center;padding:20px';
+    modal.addEventListener('click', function(e){ if(e.target === modal) modal.style.display='none'; });
+    modal.innerHTML = ''
+      + '<div style="background:#fff;border-radius:14px;max-width:600px;width:100%;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 24px 60px rgba(15,23,42,.4);overflow:hidden">'
+      +   '<div style="background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;padding:14px 20px;display:flex;align-items:center;justify-content:space-between">'
+      +     '<div style="display:flex;flex-direction:column">'
+      +       '<div id="rh-title" style="font-weight:700;font-size:14px">📋 Referral history</div>'
+      +       '<div id="rh-sub" style="font-size:11px;opacity:.85;margin-top:2px">All-time + monthly + quarterly</div>'
+      +     '</div>'
+      +     '<button onclick="document.getElementById(\'referral-history-modal\').style.display=\'none\'" style="background:rgba(255,255,255,.18);color:#fff;border:none;width:28px;height:28px;border-radius:8px;font-size:14px;cursor:pointer">×</button>'
+      +   '</div>'
+      +   '<div id="rh-body" style="padding:16px 20px;overflow-y:auto;flex:1;min-height:0;background:#fafbfc"></div>'
+      + '</div>';
+    document.body.appendChild(modal);
+  }
+  document.getElementById('rh-title').textContent = '📋 ' + name;
+  document.getElementById('rh-sub').textContent = 'Total ' + hist.total + ' patients referred · Most recent: ' + (hist.mostRecent ? new Date(hist.mostRecent).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : 'never');
+  document.getElementById('rh-body').innerHTML = ''
+    + '<div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">'
+    +   '<div>'
+    +     '<div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Recent activity</div>'
+    +     '<div style="font-size:12px;color:var(--text);margin-top:3px">Last 30 days: <strong>' + hist.last30 + '</strong> · Previous 30 days: <strong>' + hist.prev30 + '</strong></div>'
+    +   '</div>'
+    +   trendBadge
+    + '</div>'
+    + '<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">📊 By month</div>'
+    + monthHtml
+    + '<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:18px 0 8px">📅 By quarter</div>'
+    + '<div style="display:flex;flex-direction:column;gap:6px">' + qHtml + '</div>';
+  modal.style.display = 'flex';
+}
+window.openReferralHistory = openReferralHistory;
 
 function _confirmDeleteReferral(id){
   if(typeof showConfirm === 'function'){
@@ -22182,16 +22327,19 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
     <div id="rl-member-totals" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:10px"></div>
   </div>
 
-  <!-- Filters -->
+  <!-- Filters (3 dropdowns + free-text search) -->
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center">
-    <select id="rl-filter-member" onchange="renderReferralLog()" style="border:1px solid var(--border);border-radius:8px;padding:7px 12px;font-size:12px;font-family:'DM Sans',sans-serif;background:#fff">
-      <option value="">All members</option>
+    <select id="rl-filter-member" onchange="renderReferralLog()" style="border:1px solid var(--border);border-radius:8px;padding:7px 12px;font-size:12px;font-family:'DM Sans',sans-serif;background:#fff" title="Filter by the marketing team member who got the referral">
+      <option value="">👥 All members</option>
     </select>
-    <select id="rl-filter-facility" onchange="renderReferralLog()" style="border:1px solid var(--border);border-radius:8px;padding:7px 12px;font-size:12px;font-family:'DM Sans',sans-serif;background:#fff">
-      <option value="">All facilities</option>
+    <select id="rl-filter-facility" onchange="renderReferralLog()" style="border:1px solid var(--border);border-radius:8px;padding:7px 12px;font-size:12px;font-family:'DM Sans',sans-serif;background:#fff" title="Filter by destination WCG facility">
+      <option value="">🏥 All facilities</option>
     </select>
-    <input type="text" id="rl-filter-search" placeholder="🔍 Search business or filler name..." oninput="renderReferralLog()"
-           style="border:1px solid var(--border);border-radius:8px;padding:7px 12px;font-size:12px;font-family:'DM Sans',sans-serif;background:#fff;flex:1;min-width:200px">
+    <select id="rl-filter-filler" onchange="renderReferralLog()" style="border:1px solid var(--border);border-radius:8px;padding:7px 12px;font-size:12px;font-family:'DM Sans',sans-serif;background:#fff" title="Filter by the front-desk person who filled this entry">
+      <option value="">📝 All front-desk fillers</option>
+    </select>
+    <input type="text" id="rl-filter-search" placeholder="🔍 Search source business name..." oninput="renderReferralLog()"
+           style="border:1px solid var(--border);border-radius:8px;padding:7px 12px;font-size:12px;font-family:'DM Sans',sans-serif;background:#fff;flex:1;min-width:180px">
   </div>
 
   <!-- Log entries table -->
