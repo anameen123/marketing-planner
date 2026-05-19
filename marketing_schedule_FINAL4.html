@@ -6604,11 +6604,11 @@ function _finishLogin(){
     window._updateSyncBadge('local');
   }
   showToast('Welcome, '+CURRENT_USER.name+' 👋');
-  // One-time seed of clinic phone/fax/website/address from the research
-  // bundle. Field-level merge — never overwrites existing values. Runs once
-  // per browser for real admins; sandbox users re-apply each session (their
-  // writes are no-ops anyway). Deferred slightly so it doesn't compete with
-  // the welcome toast / initial paint.
+  // Seed of clinic phone/fax/website/address from the research bundle.
+  // Field-level merge — never overwrites existing values. Runs on every
+  // sign-in (auto-corrective). Deferred ~5 seconds so the first SharePoint
+  // poll completes before we patch — otherwise polling could overwrite our
+  // bundled-in fields before they flush back to SharePoint.
   setTimeout(function(){
     try {
       if(typeof _applyBundledContactsOnce === 'function'){
@@ -6619,7 +6619,7 @@ function _finishLogin(){
         if(typeof renderBank === 'function') renderBank();
       }
     } catch(e){ console.warn('[bundled-contacts] apply failed:', e); }
-  }, 600);
+  }, 5000);
   // iPhone-Safari users get a gentle "Add to Home Screen" hint 2s in.
   // No-op for desktop, Chrome, already-installed, or previously-dismissed.
   setTimeout(function(){ try { maybeShowIosInstallHint(); } catch(e){} }, 2000);
@@ -12601,22 +12601,20 @@ window.BUNDLED_CONTACTS = BUNDLED_CONTACTS;
 
 var BUNDLED_CONTACTS_APPLIED_KEY = 'wcg_bundled_contacts_v1_applied';
 
-// One-time application — runs on sign-in if not already applied. Field-level
-// merge: never overwrites an existing non-empty value. Idempotent — calling
-// twice is harmless. Returns a small report {applied, fields, skipped, unmatched}.
+// Field-level merge: never overwrites an existing non-empty value. Idempotent
+// — safe to call on every sign-in. Auto-corrects if SharePoint sync wiped
+// recent local changes, or if a record was created without contact info.
+// Returns {applied, fields, skipped, unmatched}.
 function _applyBundledContactsOnce(){
   if(typeof CURRENT_USER === 'undefined' || !CURRENT_USER) return null;
   if(CURRENT_USER.role === 'readonly') return null;  // readonly never patches
   if(typeof updateBusinessContact !== 'function') return null;
 
-  // Skip if already applied (and reapplication isn't desired). Sandbox users
-  // can't write the flag so they'll re-apply on each sign-in — that's fine,
-  // the writes are no-ops anyway.
-  try {
-    if(typeof DataLayer !== 'undefined' && DataLayer.loadRaw){
-      if(DataLayer.loadRaw(BUNDLED_CONTACTS_APPLIED_KEY)) return null;
-    }
-  } catch(e){}
+  // No one-time-flag short-circuit anymore. The apply is field-level merge
+  // (only patches empty fields), so re-running it on every sign-in is a
+  // no-op when the data is already there, and self-healing when it isn't.
+  // This also dodges the race where the first poll from SharePoint could
+  // overwrite the in-memory bundled patches before they were flushed back.
 
   var index = _allBusinessIndex();
   var report = { applied: 0, fieldsTouched: 0, skipped: 0, unmatched: [] };
@@ -15399,7 +15397,7 @@ function _doDeleteVisit(di,ri){
 function confirmRow(di,ri){
   var row=S.days[di].rows[ri];
   if(!row) return;
-  // ── PREREQUISITE: if status is Completed, the lead outcome must be saved first ──
+  // ── PREREQUISITE 1: if status is Completed, the lead outcome must be saved first ──
   // For non-outreach clinics. Outreach is excluded from the lead system.
   if(row.status === 'Completed' && row.clinic){
     var isOutreach = false;
@@ -15408,6 +15406,23 @@ function confirmRow(di,ri){
     }
     if(!isOutreach && (!row.relationship || row.relationship === '')){
       showToast('Save the lead outcome first (Set/Update Lead Status button to the left).');
+      return;
+    }
+  }
+  // ── PREREQUISITE 2: if status is Completed, spending must be recorded ──
+  // Either a real amount with items, or an explicit $0 (zeroSpending flag).
+  // The user must have engaged the 💰 spending modal at least once. This
+  // prevents the case where a member marks the visit Completed, sets the
+  // lead status, confirms — but never recorded how much (if anything) they
+  // spent. Applies to ALL completed visits regardless of business type.
+  if(row.status === 'Completed'){
+    var hasSpending = row.spending && (
+      row.spending.zeroSpending === true ||
+      (typeof row.spending.total !== 'undefined' && row.spending.total !== null) ||
+      (Array.isArray(row.spending.items) && row.spending.items.length > 0)
+    );
+    if(!hasSpending){
+      showToast('Add the spending first (even $0). Tap the 💰 Spending column on this row.');
       return;
     }
   }
