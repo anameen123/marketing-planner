@@ -2110,6 +2110,7 @@ body.member-mobile.is-call-handler .nav-handler-also {
           <option value="established_l2">🟢 Established L2</option>
           <option value="established_l3">🟢 Established L3</option>
         </select>
+        <button id="bank-bulk-import-btn" onclick="openBulkContactImport()" title="Paste a CSV to fill phone / fax / website / address for many clinics at once" style="border:1px solid var(--border);background:#f0f9ff;color:#1F3864;border-radius:8px;padding:8px 12px;font-size:12px;font-weight:600;font-family:'DM Sans',sans-serif;cursor:pointer">📥 Bulk import contacts</button>
         <select id="bank-city" onchange="renderBank()" style="border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:12px;font-family:'DM Sans',sans-serif;background:#fff;outline:none">
           <option value="">All Areas</option>
           <option value="Frisco">Frisco (168)</option>
@@ -2492,7 +2493,8 @@ body.member-mobile.is-call-handler .nav-handler-also {
 </div>
 
 <!-- ── ROUTE PLANNER DIALOG ──────────────────────────────────────────────
-     User picks a start city/address, end city/address, max clinics to fit
+     User picks a start clinic / MVA / facility, an end clinic / MVA /
+     facility (or "same as start" for a round trip), max clinics to fit
      between them, and a detour budget. The algorithm scores clinics by
      perpendicular distance from the A→B line and recommends the best
      fit. Recommendations show on the map + as a list with "Add to day"
@@ -2509,11 +2511,11 @@ body.member-mobile.is-call-handler .nav-handler-also {
       </div>
 
       <div class="kpi-input-row" style="margin-bottom:10px">
-        <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Starting city or facility *</label>
+        <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Starting clinic / MVA / facility *</label>
         <select id="rp-start" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box"></select>
       </div>
       <div class="kpi-input-row" style="margin-bottom:10px">
-        <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Ending city or facility</label>
+        <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Ending clinic / MVA / facility</label>
         <select id="rp-end" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box"></select>
         <div style="font-size:10px;color:var(--muted);margin-top:3px;font-style:italic">Pick "Same as start" for a round-trip plan.</div>
       </div>
@@ -2541,9 +2543,46 @@ body.member-mobile.is-call-handler .nav-handler-also {
 
       <div id="rp-results" style="display:none;margin-top:14px;border-top:1px solid var(--border);padding-top:12px"></div>
     </div>
-    <div class="modal-foot" style="flex-shrink:0;background:#fff;padding:12px 22px;border-top:1px solid var(--border);display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap">
-      <button onclick="closeRoutePlanner()" style="background:#e5e7eb;color:#374151;border:none;border-radius:8px;padding:9px 16px;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif">Cancel</button>
+    <div class="modal-foot" style="flex-shrink:0;background:#fff;padding:12px 22px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+      <div style="display:flex;align-items:center;gap:10px">
+        <button onclick="closeRoutePlanner()" style="background:#e5e7eb;color:#374151;border:none;border-radius:8px;padding:9px 16px;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif">Cancel</button>
+        <button id="rp-coverage-btn" onclick="showCoverageSummary()" style="background:none;border:none;color:#64748b;font-size:11px;font-family:'DM Sans',sans-serif;cursor:pointer;text-decoration:underline;padding:0">📊 Coverage report</button>
+      </div>
       <button onclick="runRoutePlanner()" id="rp-run-btn" style="background:linear-gradient(135deg,#1F3864,#3b5fa3);color:#fff;border:none;border-radius:8px;padding:9px 22px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif">Find recommendations →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── BULK CONTACT IMPORT DIALOG ────────────────────────────────────────
+     Admin pastes CSV (header row + Name, Phone, Fax, Website, Address) and
+     the tool fuzzy-matches each row to a clinic / MVA / outreach record,
+     previews matches + unmatched, and applies on confirm. CSV from the
+     contact-research agent drops straight in here. ─────────────────────── -->
+<div id="bulk-contact-modal" class="modal-ov" style="display:none;z-index:9810">
+  <div class="modal-box" style="width:760px;max-width:96vw;max-height:92vh;display:flex;flex-direction:column">
+    <div class="modal-top" style="flex-shrink:0;background:linear-gradient(135deg,#1F3864,#3b5fa3);color:#fff">
+      📥 Bulk import contact info
+      <button onclick="closeBulkContactImport()" style="background:rgba(255,255,255,.18);color:#fff;border:none">&#215;</button>
+    </div>
+    <div class="modal-body" style="overflow-y:auto;flex:1;min-height:0;padding:18px 22px">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:12px;line-height:1.5">
+        Paste a CSV (or TSV) with one row per business. Required column: <b>Name</b>. Optional columns: <b>Phone</b>, <b>Fax</b>, <b>Website</b>, <b>Address</b>. Header row required. Empty cells = leave field unchanged. Matching is fuzzy on the name (case + punctuation + suffix tolerant), so spreadsheet quirks usually still match.
+      </div>
+      <div class="kpi-input-row" style="margin-bottom:10px">
+        <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">CSV / TSV content *</label>
+        <textarea id="bci-input" placeholder="Name,Phone,Fax,Website,Address&#10;Bloomfield Medical,555-555-5555,555-555-5556,https://example.com,123 Main St Frisco TX 75033" style="width:100%;height:160px;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:12px;font-family:DM Mono,Consolas,monospace;background:#fff;box-sizing:border-box;resize:vertical"></textarea>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+        <button onclick="bciParseAndPreview()" style="background:#1F3864;color:#fff;border:none;border-radius:8px;padding:9px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif">Parse + preview →</button>
+        <button onclick="bciLoadResearchCsv()" style="background:#f0f9ff;color:#1F3864;border:1px solid #93c5fd;border-radius:8px;padding:9px 16px;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif" title="If the contact research agent finished and dropped a clinic-contact-research.csv at the repo root, paste it here.">📂 Open file…</button>
+        <input type="file" id="bci-file" accept=".csv,.tsv,.txt" style="display:none" onchange="bciHandleFile(event)">
+        <button onclick="bciClear()" style="background:#e5e7eb;color:#374151;border:none;border-radius:8px;padding:9px 16px;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif">Clear</button>
+      </div>
+      <div id="bci-preview" style="display:none;margin-top:14px;border-top:1px solid var(--border);padding-top:14px"></div>
+    </div>
+    <div class="modal-foot" style="flex-shrink:0;background:#fff;padding:12px 22px;border-top:1px solid var(--border);display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap">
+      <button onclick="closeBulkContactImport()" style="background:#e5e7eb;color:#374151;border:none;border-radius:8px;padding:9px 16px;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif">Cancel</button>
+      <button onclick="bciApply()" id="bci-apply-btn" disabled style="background:#9ca3af;color:#fff;border:none;border-radius:8px;padding:9px 22px;font-size:12px;font-weight:700;cursor:not-allowed;font-family:'DM Sans',sans-serif">Apply updates</button>
     </div>
   </div>
 </div>
@@ -4510,7 +4549,7 @@ var USERS = {
   'duaa':    { role: 'member',   name: 'Duaa',     color: '#7030A0' },
   'sadia':   { role: 'member',   name: 'Ms Sadia', color: '#2563eb' },
   'ahsan':   { role: 'member',   name: 'Dr Ahsan', color: '#059669' },
-  'manager': { role: 'readonly', name: 'Manager',  color: '#64748b' }
+  'manager': { role: 'admin', sandbox: true, name: 'Manager',  color: '#64748b' }
 };
 
 // ── DISPLAY NAME OVERRIDES ─────────────────────────────────────────────
@@ -6305,21 +6344,23 @@ var EMAIL_USER_MAP = {
   // ── Members (real M365 sign-in addresses, confirmed via Graph directory) ─
   // Duaa Khan — wcgtx tenant member
   'dkhan@wcgtx.com':        { username: 'duaa',  role: 'member', name: 'Duaa Khan',     color: USERS.duaa.color },
-  // Sadia Khan — guest user (uses Frisco-ER email; her UPN ends in #EXT#@wcgtx.onmicrosoft.com
-  // but MSAL surfaces her sign-in email as skhan@frisco-er.com)
-  'skhan@frisco-er.com':    { username: 'sadia', role: 'member', name: 'Sadia Khan',    color: USERS.sadia.color },
+  // Sadia Khan — wcgtx tenant member. Email: sadiakhan@wcgtx.com.
+  'sadiakhan@wcgtx.com':    { username: 'sadia', role: 'member', name: 'Sadia Khan',    color: USERS.sadia.color },
   // Dr Ahsan Paracha — wcgtx tenant member. NOTE: not "ahsan@wcgtx.com" —
   // his real UPN is aparacha@wcgtx.com (initial + last name pattern).
   'aparacha@wcgtx.com':     { username: 'ahsan', role: 'member', name: 'Dr Ahsan Paracha', color: USERS.ahsan.color },
 
-  // Ahmed Shuja — the Marketing manager (readonly view-only role).
-  // Added to the M365 Group as a Member at the SharePoint level so the app
-  // can fetch data on his behalf, but app role keeps his UI read-only.
-  'ashuja@wcgtx.com':       { username: 'manager', role: 'readonly', name: 'Ahmed Shuja', color: USERS.manager.color },
+  // Ahmed Shuja — the Marketing manager. Granted admin-level UI permissions
+  // but in SANDBOX MODE: all of his edits live in-memory only and are
+  // discarded on page refresh / close. SharePoint and other users never see
+  // his changes — it's a private playground for him to explore the product.
+  // The `sandbox: true` flag triggers `_enableSandboxMode()` after sign-in,
+  // which replaces DataLayer.save with a no-op and pins a banner to the top.
+  'ashuja@wcgtx.com':       { username: 'manager', role: 'admin', sandbox: true, name: 'Ahmed Shuja', color: USERS.manager.color },
 
   // NOTE: there's also a Sana Khan in the tenant with skhan@wcgtx.com — she's
   // NOT on the marketing team. We deliberately do NOT include skhan@wcgtx.com
-  // to avoid matching the wrong person. Sadia must use skhan@frisco-er.com.
+  // to avoid matching the wrong person. Sadia's email is sadiakhan@wcgtx.com.
 
   // Add new entries here when onboarding teammates:
   //   'newhire@wcgtx.com': { username: 'newhire', role: 'member', name: 'New Hire', color: '#888' }
@@ -6368,7 +6409,8 @@ async function doMsLogin(){
       role:     profile.role,
       color:    profile.color,
       email:    email,
-      authVia:  'entra-id'
+      authVia:  'entra-id',
+      sandbox:  !!profile.sandbox
     };
 
     // ── Activate the SharePoint backend on first MS sign-in ──────────────
@@ -6472,7 +6514,8 @@ async function doCredentialsLogin(){
       role:     actualProfile.role,
       color:    actualProfile.color,
       email:    actualEmail,
-      authVia:  'entra-id'
+      authVia:  'entra-id',
+      sandbox:  !!actualProfile.sandbox
     };
 
     // Activate SharePoint backend (same as doMsLogin)
@@ -6529,13 +6572,19 @@ function doLogin(){
   if(!u){ errEl.textContent='Enter a username (dev mode).'; return; }
   var user = USERS[u];
   if(!user){ errEl.textContent='Unknown username (dev mode).'; return; }
-  CURRENT_USER = { username:u, name:getDisplayName(u) || user.name, role:user.role, color:user.color, authVia:'dev-bypass' };
+  CURRENT_USER = { username:u, name:getDisplayName(u) || user.name, role:user.role, color:user.color, authVia:'dev-bypass', sandbox: !!user.sandbox };
   _finishLogin();
 }
 
 // Shared post-sign-in flow — runs identically for hardcoded + MS auth.
 function _finishLogin(){
   document.getElementById('login-screen').style.display='none';
+  // ── Sandbox mode (Mr Shuja et al.) ───────────────────────────────────
+  // Engaged BEFORE any further setup so the DataLayer.save no-op is in
+  // place by the time the rest of the bootstrap might try to persist.
+  if(CURRENT_USER && CURRENT_USER.sandbox && typeof _enableSandboxMode === 'function'){
+    _enableSandboxMode();
+  }
   applyMemberViewClass();
   renderUserBadge();
   applyRoleRestrictions();
@@ -6555,10 +6604,87 @@ function _finishLogin(){
     window._updateSyncBadge('local');
   }
   showToast('Welcome, '+CURRENT_USER.name+' 👋');
+  // One-time seed of clinic phone/fax/website/address from the research
+  // bundle. Field-level merge — never overwrites existing values. Runs once
+  // per browser for real admins; sandbox users re-apply each session (their
+  // writes are no-ops anyway). Deferred slightly so it doesn't compete with
+  // the welcome toast / initial paint.
+  setTimeout(function(){
+    try {
+      if(typeof _applyBundledContactsOnce === 'function'){
+        var r = _applyBundledContactsOnce();
+        if(r && r.applied > 0 && typeof showToast === 'function'){
+          showToast('Filled contact info for ' + r.applied + ' clinic' + (r.applied === 1 ? '' : 's') + '.');
+        }
+        if(typeof renderBank === 'function') renderBank();
+      }
+    } catch(e){ console.warn('[bundled-contacts] apply failed:', e); }
+  }, 600);
   // iPhone-Safari users get a gentle "Add to Home Screen" hint 2s in.
   // No-op for desktop, Chrome, already-installed, or previously-dismissed.
   setTimeout(function(){ try { maybeShowIosInstallHint(); } catch(e){} }, 2000);
 }
+
+// ── SANDBOX MODE ─────────────────────────────────────────────────────────
+// Grants admin-level UI permissions but never persists. Used for Mr Shuja
+// (manager role) so he can explore/test the full admin surface without his
+// changes touching localStorage or SharePoint, and without other team
+// members seeing his edits.
+//
+// What it does:
+//   • Replaces DataLayer.save with a no-op (silent — no errors). Writes to
+//     localStorage AND the SharePoint write queue both stop.
+//   • Pins a banner at the top of the page so the user is never confused
+//     about whether their changes are persistent.
+//   • Logs a console notice for support diagnostics.
+//
+// In-memory state (CLINIC_BANK, S.days, ADMIN_NOTIFICATIONS, etc.) is still
+// mutated normally by edit handlers — Shuja sees his changes immediately.
+// When the page refreshes/closes, in-memory state is rebuilt from whatever
+// localStorage / SharePoint had at sign-in time, so his edits vanish.
+function _enableSandboxMode(){
+  if(typeof DataLayer === 'undefined') return;
+  if(DataLayer._sandboxEngaged) return;  // idempotent — survive double-calls
+  DataLayer._sandboxEngaged = true;
+
+  // Snapshot the originals so we can describe what's being shadowed.
+  var _origSave   = DataLayer.save;
+  var _origRemove = DataLayer.remove;
+  // Replace save + remove with no-ops. Returns true so call sites that
+  // check the return value don't mistake this for an error.
+  DataLayer.save   = function(_key, _val){ return true; };
+  DataLayer.remove = function(_key){ return true; };
+  // Stash originals on the namespace in case any future code wants to
+  // detect sandbox mode or call through to the real impl for one specific
+  // key. (None of the call sites do today.)
+  DataLayer._origSave   = _origSave;
+  DataLayer._origRemove = _origRemove;
+
+  // Inject the persistent banner once. If it already exists, just unhide it.
+  var existing = document.getElementById('sandbox-banner');
+  if(!existing){
+    var banner = document.createElement('div');
+    banner.id = 'sandbox-banner';
+    banner.setAttribute('role', 'status');
+    banner.style.cssText = 'position:sticky;top:0;z-index:9999;background:linear-gradient(135deg,#fef3c7,#fde68a);border-bottom:2px solid #d97706;color:#78350f;padding:8px 16px;font-family:DM Sans,sans-serif;font-size:12px;font-weight:600;display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:center;text-align:center';
+    banner.innerHTML = ''
+      + '<span style="font-size:14px">🧪</span>'
+      + '<span><b>Sandbox mode</b> — you have admin-level access for testing.</span>'
+      + '<span style="opacity:.85">All your changes are temporary and exist only in this browser tab.</span>'
+      + '<span style="opacity:.85">Nothing is saved. Refresh or close the page to reset.</span>';
+    // Insert at the very top of body, before everything else
+    if(document.body.firstChild){
+      document.body.insertBefore(banner, document.body.firstChild);
+    } else {
+      document.body.appendChild(banner);
+    }
+  } else {
+    existing.style.display = 'flex';
+  }
+
+  try { console.info('[Sandbox] mode engaged for ' + ((CURRENT_USER && CURRENT_USER.name) || 'unknown user') + '. DataLayer.save is a no-op.'); } catch(e){}
+}
+window._enableSandboxMode = _enableSandboxMode;
 
 // Add / remove the .member-view body class. Historically this was role-only
 // (members got it, admin didn't), which left admin on iPhone stuck with the
@@ -11999,10 +12125,537 @@ var ROUTE_COORDS = {
   'Dallas':         { lat: 32.7767, lng: -96.7970 }
 };
 
-// Returns {lat,lng} for any known city or facility key; null otherwise.
-function getRouteCoord(key){
-  return ROUTE_COORDS[key] || null;
+// Build a normalized index of ROUTE_COORDS keys for fuzzy city matching.
+// Many bank entries have city names that don't exactly match the canonical
+// keys ("plano " / "Plano, TX" / "PLANO"). Normalization strips whitespace,
+// lowercases, drops common state suffixes, collapses double spaces.
+function _normCityKey(s){
+  if(s == null) return '';
+  return String(s)
+    .toLowerCase()
+    .replace(/[,.;]/g, ' ')
+    .replace(/\s+(tx|texas)\b/g, '')
+    .replace(/[^a-z0-9 ]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
+var _ROUTE_COORDS_NORM = (function(){
+  var idx = {};
+  Object.keys(ROUTE_COORDS).forEach(function(k){
+    if(ROUTE_COORDS[k].type === 'facility') return;  // facilities use their explicit key
+    var n = _normCityKey(k);
+    if(n) idx[n] = k;  // map normalized → canonical
+  });
+  return idx;
+})();
+
+// Returns {lat,lng} for any known city or facility key; null otherwise.
+// Falls back to a normalized match so minor spelling drift still resolves.
+function getRouteCoord(key){
+  if(!key) return null;
+  if(ROUTE_COORDS[key]) return ROUTE_COORDS[key];
+  // facilities are stored with underscore-prefixed keys — exact match only
+  if(String(key).charAt(0) === '_') return null;
+  // try normalized fallback
+  var canonical = _ROUTE_COORDS_NORM[_normCityKey(key)];
+  return canonical ? ROUTE_COORDS[canonical] : null;
+}
+
+// ── BULK CONTACT IMPORT ──────────────────────────────────────────────────
+// Lets admin paste a CSV with phone / fax / website / address for many
+// businesses at once. Rows are fuzzy-matched by name across CLINIC_BANK,
+// MVA_ATTORNEYS, OUTREACH. Preview before applying. Unmatched rows are
+// downloadable so admin can fix names and retry.
+
+// Normalize a business name for matching: lowercase, strip punctuation,
+// remove common suffixes (LLC, PLLC, P.A., MD, DO, Inc., Medical, Clinic,
+// Family Medicine, etc.), collapse whitespace.
+function _normBusinessName(s){
+  if(s == null) return '';
+  return String(s)
+    .toLowerCase()
+    .replace(/[,.;:'"&\/\\()\[\]]/g, ' ')
+    .replace(/\b(p\.?a\.?|llc|pllc|pc|inc|md|do|m\.?d\.?|d\.?o\.?)\b/g, ' ')
+    .replace(/\b(medical|clinic|center|associates|practice|primary care|family medicine|family physicians?|of texas|tx)\b/g, ' ')
+    .replace(/[^a-z0-9 ]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Token-set similarity 0..1 (Jaccard on word tokens of length >= 2).
+function _nameSimilarity(a, b){
+  var ta = _normBusinessName(a).split(' ').filter(function(t){ return t.length >= 2; });
+  var tb = _normBusinessName(b).split(' ').filter(function(t){ return t.length >= 2; });
+  if(!ta.length || !tb.length) return 0;
+  var setA = {}; ta.forEach(function(t){ setA[t] = 1; });
+  var inter = 0, union = Object.keys(setA).length;
+  tb.forEach(function(t){ if(setA[t]) inter++; else union++; });
+  return union ? inter / union : 0;
+}
+
+// Build a flat list of every business in every bank, with type tag.
+function _allBusinessIndex(){
+  var out = [];
+  if(typeof CLINIC_BANK !== 'undefined'){ CLINIC_BANK.forEach(function(c){ if(c && c.n) out.push({ name: c.n, type: 'clinic', record: c }); }); }
+  if(typeof MVA_ATTORNEYS !== 'undefined'){ MVA_ATTORNEYS.forEach(function(m){ if(m && m.firm) out.push({ name: m.firm, type: 'mva', record: m }); }); }
+  if(typeof OUTREACH !== 'undefined'){ OUTREACH.forEach(function(o){ if(o && o.name) out.push({ name: o.name, type: 'outreach', record: o }); }); }
+  return out;
+}
+
+// Match one input name against the bank index. Returns { match, alternates, score }
+// where match is the best candidate (or null), alternates are runners-up if
+// the top score isn't decisive.
+function _matchBusinessName(input, index){
+  if(!input) return { match: null, alternates: [], score: 0 };
+  var normIn = _normBusinessName(input);
+  if(!normIn) return { match: null, alternates: [], score: 0 };
+  var scored = index.map(function(item){
+    var norm = _normBusinessName(item.name);
+    var score = 0;
+    if(norm === normIn) score = 1.0;                        // exact normalized
+    else if(norm.indexOf(normIn) >= 0 || normIn.indexOf(norm) >= 0) score = 0.85; // one contains the other
+    else score = _nameSimilarity(input, item.name);
+    return { item: item, score: score };
+  });
+  scored.sort(function(a, b){ return b.score - a.score; });
+  var top = scored[0];
+  if(!top || top.score < 0.55) return { match: null, alternates: scored.slice(0, 3), score: top ? top.score : 0 };
+  // Ambiguous if next best is within 0.05 of top
+  var alts = scored.slice(1, 4).filter(function(s){ return top.score - s.score < 0.05 && s.score >= 0.55; });
+  return { match: top.item, alternates: alts.map(function(s){ return s.item; }), score: top.score };
+}
+
+// Parse a CSV string (RFC4180-ish: quoted fields, escaped quotes, comma OR
+// tab as separator — autodetected). Returns array of objects keyed by header.
+function _parseCsv(text){
+  if(!text) return { headers: [], rows: [] };
+  // Detect separator — tab if any tabs in the first line, otherwise comma
+  var firstLine = text.split(/\r?\n/)[0] || '';
+  var sep = (firstLine.indexOf('\t') >= 0) ? '\t' : ',';
+  var rows = [];
+  var i = 0, len = text.length, cur = '', row = [], inQuote = false;
+  while(i < len){
+    var ch = text.charAt(i);
+    if(inQuote){
+      if(ch === '"'){
+        if(text.charAt(i+1) === '"'){ cur += '"'; i += 2; continue; }
+        inQuote = false; i++; continue;
+      }
+      cur += ch; i++; continue;
+    }
+    if(ch === '"'){ inQuote = true; i++; continue; }
+    if(ch === sep){ row.push(cur); cur = ''; i++; continue; }
+    if(ch === '\r'){ i++; continue; }
+    if(ch === '\n'){ row.push(cur); rows.push(row); cur = ''; row = []; i++; continue; }
+    cur += ch; i++;
+  }
+  if(cur.length || row.length){ row.push(cur); rows.push(row); }
+  rows = rows.filter(function(r){ return r.some(function(c){ return c && c.trim().length; }); });
+  if(!rows.length) return { headers: [], rows: [] };
+  var headers = rows.shift().map(function(h){ return h.trim(); });
+  var headerLow = headers.map(function(h){ return h.toLowerCase().replace(/[^a-z]/g, ''); });
+  // Map common header variants to canonical keys
+  function keyFor(low){
+    if(low === 'name' || low === 'clinicname' || low === 'firm' || low === 'business' || low === 'businessname') return 'name';
+    if(low === 'phone' || low === 'tel' || low === 'telephone' || low === 'phonenumber') return 'phone';
+    if(low === 'fax' || low === 'faxnumber') return 'fax';
+    if(low === 'website' || low === 'url' || low === 'site' || low === 'web') return 'website';
+    if(low === 'address' || low === 'street' || low === 'streetaddress') return 'address';
+    if(low === 'confidence') return 'confidence';
+    if(low === 'sourceurl' || low === 'source') return 'sourceUrl';
+    if(low === 'notes' || low === 'note') return 'notes';
+    return null;
+  }
+  var keys = headerLow.map(keyFor);
+  var out = rows.map(function(r){
+    var obj = {};
+    for(var j = 0; j < headers.length; j++){
+      var k = keys[j];
+      if(!k) continue;
+      var v = (r[j] == null ? '' : String(r[j])).trim();
+      if(v) obj[k] = v;
+    }
+    return obj;
+  }).filter(function(o){ return o.name; });
+  return { headers: headers, rows: out };
+}
+
+// auditRouteCoverage() — scan CLINIC_BANK + MVA_ATTORNEYS and report how many
+// entries can be located on the map vs. which ones are unmappable (their city
+// field doesn't match any city in ROUTE_COORDS, even after normalization).
+//
+// Use cases:
+//   • Run from the console:  window.auditRouteCoverage()
+//   • From the Route Planner: click "Coverage report" to download the CSV
+//
+// Returns { clinics: {...}, mvas: {...}, summary: { ... } }
+function auditRouteCoverage(){
+  function categorize(rows, nameKey, cityKey){
+    var exact = [], fuzzy = [], unresolved = [], missingCity = [];
+    rows.forEach(function(r){
+      var name = r[nameKey] || '';
+      var city = r[cityKey] || '';
+      if(!name) return;
+      if(!city){ missingCity.push({ name: name, city: '' }); return; }
+      if(ROUTE_COORDS[city]) { exact.push({ name: name, city: city }); return; }
+      var norm = _ROUTE_COORDS_NORM[_normCityKey(city)];
+      if(norm) { fuzzy.push({ name: name, city: city, matched: norm }); return; }
+      unresolved.push({ name: name, city: city });
+    });
+    return { exact: exact, fuzzy: fuzzy, unresolved: unresolved, missingCity: missingCity };
+  }
+  var clinics = (typeof CLINIC_BANK !== 'undefined') ? categorize(CLINIC_BANK, 'n', 'c') : { exact:[], fuzzy:[], unresolved:[], missingCity:[] };
+  var mvas    = (typeof MVA_ATTORNEYS !== 'undefined') ? categorize(MVA_ATTORNEYS, 'firm', 'city') : { exact:[], fuzzy:[], unresolved:[], missingCity:[] };
+  var totalClinics = clinics.exact.length + clinics.fuzzy.length + clinics.unresolved.length + clinics.missingCity.length;
+  var totalMvas = mvas.exact.length + mvas.fuzzy.length + mvas.unresolved.length + mvas.missingCity.length;
+  var summary = {
+    clinics: { total: totalClinics, exact: clinics.exact.length, fuzzy: clinics.fuzzy.length, unresolved: clinics.unresolved.length, missingCity: clinics.missingCity.length },
+    mvas:    { total: totalMvas,    exact: mvas.exact.length,    fuzzy: mvas.fuzzy.length,    unresolved: mvas.unresolved.length,    missingCity: mvas.missingCity.length },
+    knownCities: Object.keys(ROUTE_COORDS).filter(function(k){ return !ROUTE_COORDS[k].type; })
+  };
+  // Also produce a grouped-by-city view of unresolved (so admin can quickly
+  // see "5 clinics in 'Lewisville' aren't mappable" instead of scanning all 5).
+  var unresolvedCityCounts = {};
+  clinics.unresolved.concat(mvas.unresolved).forEach(function(r){
+    unresolvedCityCounts[r.city] = (unresolvedCityCounts[r.city] || 0) + 1;
+  });
+  summary.unresolvedCityCounts = unresolvedCityCounts;
+  return { clinics: clinics, mvas: mvas, summary: summary };
+}
+window.auditRouteCoverage = auditRouteCoverage;
+
+// Download a coverage report as CSV — one row per unmappable clinic/MVA.
+function downloadCoverageReport(){
+  var report = auditRouteCoverage();
+  var rows = [['Type','Name','City as written','Resolution','Matched canonical city']];
+  report.clinics.exact.forEach(function(r){ rows.push(['clinic', r.name, r.city, 'exact match', r.city]); });
+  report.clinics.fuzzy.forEach(function(r){ rows.push(['clinic', r.name, r.city, 'fuzzy match (case/spacing)', r.matched]); });
+  report.clinics.unresolved.forEach(function(r){ rows.push(['clinic', r.name, r.city, 'UNRESOLVED — city not in ROUTE_COORDS', '']); });
+  report.clinics.missingCity.forEach(function(r){ rows.push(['clinic', r.name, '', 'UNRESOLVED — no city in source row', '']); });
+  report.mvas.exact.forEach(function(r){ rows.push(['mva', r.name, r.city, 'exact match', r.city]); });
+  report.mvas.fuzzy.forEach(function(r){ rows.push(['mva', r.name, r.city, 'fuzzy match (case/spacing)', r.matched]); });
+  report.mvas.unresolved.forEach(function(r){ rows.push(['mva', r.name, r.city, 'UNRESOLVED — city not in ROUTE_COORDS', '']); });
+  report.mvas.missingCity.forEach(function(r){ rows.push(['mva', r.name, '', 'UNRESOLVED — no city in source row', '']); });
+  // Append a summary section
+  rows.push([]);
+  rows.push(['SUMMARY']);
+  rows.push(['Clinics — total', report.summary.clinics.total]);
+  rows.push(['Clinics — mappable (exact)', report.summary.clinics.exact]);
+  rows.push(['Clinics — mappable (fuzzy)', report.summary.clinics.fuzzy]);
+  rows.push(['Clinics — UNRESOLVED city', report.summary.clinics.unresolved]);
+  rows.push(['Clinics — MISSING city',    report.summary.clinics.missingCity]);
+  rows.push(['MVAs — total',              report.summary.mvas.total]);
+  rows.push(['MVAs — mappable (exact)',   report.summary.mvas.exact]);
+  rows.push(['MVAs — mappable (fuzzy)',   report.summary.mvas.fuzzy]);
+  rows.push(['MVAs — UNRESOLVED city',    report.summary.mvas.unresolved]);
+  rows.push(['MVAs — MISSING city',       report.summary.mvas.missingCity]);
+  rows.push([]);
+  rows.push(['UNRESOLVED CITIES (count)']);
+  Object.keys(report.summary.unresolvedCityCounts).sort().forEach(function(c){
+    rows.push([c, report.summary.unresolvedCityCounts[c]]);
+  });
+  rows.push([]);
+  rows.push(['KNOWN CITIES in ROUTE_COORDS']);
+  report.summary.knownCities.forEach(function(c){ rows.push([c]); });
+
+  function esc(v){ if(v == null) return ''; var s = String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g,'""') + '"' : s; }
+  var csv = rows.map(function(r){ return r.map(esc).join(','); }).join('\n');
+  var blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = 'route-coverage-' + new Date().toISOString().slice(0,10) + '.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  if(typeof showToast === 'function') showToast('Coverage CSV downloaded (' + (report.summary.clinics.unresolved + report.summary.mvas.unresolved) + ' unresolved entries flagged).');
+}
+window.downloadCoverageReport = downloadCoverageReport;
+
+// ── Bulk Contact Importer — UI ────────────────────────────────────────
+// Holds the most recent parse + match output so Apply uses what the user saw.
+var _BCI_STATE = { rows: [], matches: [] };
+
+function openBulkContactImport(){
+  var m = document.getElementById('bulk-contact-modal');
+  if(!m) return;
+  // Admin / member only
+  if(typeof CURRENT_USER !== 'undefined' && CURRENT_USER && CURRENT_USER.role === 'readonly'){
+    showToast('Read-only role cannot import contact info.');
+    return;
+  }
+  _BCI_STATE = { rows: [], matches: [] };
+  var prev = document.getElementById('bci-preview');
+  if(prev){ prev.style.display = 'none'; prev.innerHTML = ''; }
+  var btn = document.getElementById('bci-apply-btn');
+  if(btn){ btn.disabled = true; btn.style.background = '#9ca3af'; btn.style.cursor = 'not-allowed'; }
+  m.style.display = 'flex';
+}
+function closeBulkContactImport(){ var m = document.getElementById('bulk-contact-modal'); if(m) m.style.display = 'none'; }
+window.openBulkContactImport = openBulkContactImport;
+window.closeBulkContactImport = closeBulkContactImport;
+
+function bciClear(){
+  document.getElementById('bci-input').value = '';
+  var prev = document.getElementById('bci-preview');
+  if(prev){ prev.style.display = 'none'; prev.innerHTML = ''; }
+  var btn = document.getElementById('bci-apply-btn');
+  if(btn){ btn.disabled = true; btn.style.background = '#9ca3af'; btn.style.cursor = 'not-allowed'; }
+}
+window.bciClear = bciClear;
+
+function bciHandleFile(evt){
+  var f = evt.target.files && evt.target.files[0];
+  if(!f) return;
+  var reader = new FileReader();
+  reader.onload = function(e){
+    document.getElementById('bci-input').value = e.target.result;
+    bciParseAndPreview();
+  };
+  reader.readAsText(f);
+  evt.target.value = '';
+}
+window.bciHandleFile = bciHandleFile;
+
+function bciLoadResearchCsv(){
+  document.getElementById('bci-file').click();
+}
+window.bciLoadResearchCsv = bciLoadResearchCsv;
+
+function bciParseAndPreview(){
+  var text = document.getElementById('bci-input').value;
+  var parsed = _parseCsv(text);
+  if(!parsed.rows.length){
+    showToast('No rows parsed. Check the header row and column names.');
+    return;
+  }
+  var index = _allBusinessIndex();
+  var matches = parsed.rows.map(function(r){
+    var m = _matchBusinessName(r.name, index);
+    return { row: r, match: m.match, alternates: m.alternates, score: m.score };
+  });
+  _BCI_STATE = { rows: parsed.rows, matches: matches };
+
+  var matched = matches.filter(function(m){ return m.match; });
+  var unmatched = matches.filter(function(m){ return !m.match; });
+  var summary = ''
+    + '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">'
+    +   '<div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:10px"><div style="font-size:10px;font-weight:700;color:#15803d;text-transform:uppercase;letter-spacing:.06em">Rows parsed</div><div style="font-size:20px;font-weight:800;color:#14532d">' + parsed.rows.length + '</div></div>'
+    +   '<div style="background:#eff6ff;border:1px solid #93c5fd;border-radius:8px;padding:10px"><div style="font-size:10px;font-weight:700;color:#1e40af;text-transform:uppercase;letter-spacing:.06em">Matched</div><div style="font-size:20px;font-weight:800;color:#1e3a8a">' + matched.length + '</div></div>'
+    +   '<div style="background:' + (unmatched.length ? '#fef2f2' : '#f8fafc') + ';border:1px solid ' + (unmatched.length ? '#fecaca' : '#e5e7eb') + ';border-radius:8px;padding:10px"><div style="font-size:10px;font-weight:700;color:' + (unmatched.length ? '#991b1b' : '#64748b') + ';text-transform:uppercase;letter-spacing:.06em">Unmatched</div><div style="font-size:20px;font-weight:800;color:' + (unmatched.length ? '#7f1d1d' : '#475569') + '">' + unmatched.length + '</div></div>'
+    + '</div>';
+
+  function esc(s){ return String(s == null ? '' : s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  function shortRow(r){
+    var bits = [];
+    if(r.phone)   bits.push('☎ ' + esc(r.phone));
+    if(r.fax)     bits.push('📠 ' + esc(r.fax));
+    if(r.website) bits.push('🌐 ' + esc(r.website.replace(/^https?:\/\//,'')));
+    if(r.address) bits.push('📍 ' + esc(r.address).substring(0, 60) + (r.address.length > 60 ? '…' : ''));
+    return bits.join(' &nbsp;·&nbsp; ') || '<span style="color:var(--muted);font-style:italic">no fields to update</span>';
+  }
+  var matchedHtml = matched.map(function(m, i){
+    var conf = m.score >= 0.95 ? 'exact' : (m.score >= 0.85 ? 'strong' : 'fuzzy');
+    var confColor = conf === 'exact' ? '#15803d' : (conf === 'strong' ? '#1F3864' : '#92400e');
+    var confBg = conf === 'exact' ? '#dcfce7' : (conf === 'strong' ? '#dbeafe' : '#fef3c7');
+    var sourceLabel = m.row.name === m.match.name
+      ? '<span style="color:var(--muted)">→ exact</span>'
+      : '<span style="color:var(--muted)">→ ' + esc(m.match.name) + '</span>';
+    return ''
+      + '<div style="display:flex;align-items:flex-start;gap:10px;padding:8px 10px;border-bottom:1px solid var(--border);font-size:11px">'
+      +   '<input type="checkbox" data-idx="' + i + '" class="bci-matched-cb" checked style="margin-top:2px">'
+      +   '<div style="flex:1;min-width:0">'
+      +     '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><b style="color:var(--text)">' + esc(m.row.name) + '</b> <span style="background:' + confBg + ';color:' + confColor + ';padding:1px 6px;border-radius:4px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.04em">' + conf + '</span> ' + sourceLabel + ' <span style="background:#f3f4f6;color:#475569;padding:1px 6px;border-radius:4px;font-size:9px;font-weight:600">' + m.match.type + '</span></div>'
+      +     '<div style="margin-top:4px;color:var(--text)">' + shortRow(m.row) + '</div>'
+      +     (m.row.confidence ? '<div style="margin-top:2px;color:var(--muted);font-size:10px">source confidence: ' + esc(m.row.confidence) + (m.row.notes ? ' · ' + esc(m.row.notes) : '') + '</div>' : '')
+      +   '</div>'
+      + '</div>';
+  }).join('');
+
+  var unmatchedHtml = unmatched.length === 0
+    ? ''
+    : '<div style="margin-top:14px;font-size:11px;font-weight:700;color:var(--text);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">Unmatched (no clinic / MVA in bank)</div>'
+      + unmatched.map(function(m){
+          var alt = (m.alternates && m.alternates.length)
+            ? '<div style="margin-top:3px;color:var(--muted);font-size:10px">closest in bank: ' + m.alternates.map(function(a){ return esc(a.name); }).join(' · ') + '</div>'
+            : '';
+          return '<div style="padding:7px 10px;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;margin-bottom:4px;font-size:11px">'
+               +   '<b style="color:#991b1b">' + esc(m.row.name) + '</b>'
+               +   '<div style="margin-top:2px;color:var(--text)">' + shortRow(m.row) + '</div>'
+               +   alt
+               + '</div>';
+        }).join('')
+      + '<button onclick="bciDownloadUnmatched()" style="margin-top:8px;background:none;border:1px solid var(--border);border-radius:6px;padding:5px 10px;font-size:10px;color:var(--text);cursor:pointer;font-family:DM Sans,sans-serif">⬇ Download unmatched CSV</button>';
+
+  document.getElementById('bci-preview').innerHTML = ''
+    + summary
+    + (matched.length ? '<div style="font-size:11px;font-weight:700;color:var(--text);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">Will update (uncheck to skip a row)</div>' + matchedHtml : '<div style="font-size:11px;color:var(--muted);font-style:italic">No rows matched.</div>')
+    + unmatchedHtml;
+  document.getElementById('bci-preview').style.display = 'block';
+
+  var btn = document.getElementById('bci-apply-btn');
+  if(matched.length){
+    btn.disabled = false;
+    btn.style.background = '#1F3864';
+    btn.style.cursor = 'pointer';
+    btn.textContent = 'Apply ' + matched.length + ' update' + (matched.length === 1 ? '' : 's');
+  } else {
+    btn.disabled = true;
+    btn.style.background = '#9ca3af';
+    btn.style.cursor = 'not-allowed';
+    btn.textContent = 'Apply updates';
+  }
+}
+window.bciParseAndPreview = bciParseAndPreview;
+
+function bciDownloadUnmatched(){
+  var unmatched = _BCI_STATE.matches.filter(function(m){ return !m.match; });
+  if(!unmatched.length){ showToast('Nothing unmatched.'); return; }
+  var rows = [['Name','Phone','Fax','Website','Address','Closest in bank']];
+  unmatched.forEach(function(m){
+    var alts = (m.alternates || []).map(function(a){ return a.name; }).join(' | ');
+    rows.push([m.row.name||'', m.row.phone||'', m.row.fax||'', m.row.website||'', m.row.address||'', alts]);
+  });
+  function esc(v){ if(v == null) return ''; var s = String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g,'""') + '"' : s; }
+  var csv = rows.map(function(r){ return r.map(esc).join(','); }).join('\n');
+  var blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url; a.download = 'unmatched-contacts-' + new Date().toISOString().slice(0,10) + '.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+window.bciDownloadUnmatched = bciDownloadUnmatched;
+
+function bciApply(){
+  if(typeof updateBusinessContact !== 'function'){ showToast('Update function missing.'); return; }
+  var skipIdxs = {};
+  Array.prototype.forEach.call(document.querySelectorAll('.bci-matched-cb'), function(cb){
+    if(!cb.checked) skipIdxs[cb.dataset.idx] = true;
+  });
+  var matched = _BCI_STATE.matches.filter(function(m){ return m.match; });
+  var applied = 0, failed = 0;
+  matched.forEach(function(m, i){
+    if(skipIdxs[String(i)]) return;
+    var patch = {};
+    ['phone','fax','website','address'].forEach(function(k){
+      if(m.row[k]) patch[k] = m.row[k];
+    });
+    if(!Object.keys(patch).length) return;
+    var res = updateBusinessContact(m.match.name, patch);
+    if(res && res.ok) applied++; else failed++;
+  });
+  showToast('Applied ' + applied + ' update' + (applied === 1 ? '' : 's') + (failed ? ' · ' + failed + ' failed' : '') + '. SharePoint sync in progress.');
+  closeBulkContactImport();
+}
+window.bciApply = bciApply;
+
+// ── BUNDLED CONTACT IMPORT — one-time seed of phone/fax/website/address ──
+// Sourced from clinic-contact-research.csv (33 priority DFW practices). On
+// the first sign-in by anyone with write permission, this runs once and
+// fuzzy-matches each entry against CLINIC_BANK, filling empty contact
+// fields. A one-time flag in DataLayer (`wcg_bundled_contacts_v1_applied`)
+// prevents re-application. Sandbox users will keep seeing it apply on each
+// sign-in because their DataLayer.save is a no-op — that's intentional.
+//
+// Per-field merge (not per-record): a non-empty existing value is never
+// overwritten. So if a member already filled in a phone for Bloomfield,
+// the bundle won't touch it.
+var BUNDLED_CONTACTS = [
+  { name:"Bloomfield Medical",                       phone:"214-430-4609", fax:"214-430-4704", website:"https://bloomfieldmed.com",                                                    address:"8090 Preston Rd, Suite 301, Frisco, TX 75034" },
+  { name:"Pioneer Medical Associates",               phone:"469-888-4890", fax:"866-292-0929", website:"https://pioneer.clinic",                                                       address:"14111 King Rd, Suite 320, Frisco, TX 75036" },
+  { name:"Meridian Primary Care",                    phone:"972-332-0971", fax:"972-521-9906", website:"https://mymeridianprimarycare.com",                                            address:"280 Adriatic Pkwy, McKinney, TX 75070" },
+  { name:"Nest Family Medicine",                     phone:"972-200-5666", fax:"972-294-5858", website:"https://nestfamilymedicine.com",                                               address:"4920 McDermott Rd, Ste 200, Plano, TX 75024" },
+  { name:"Craig Ranch Pediatrics",                   phone:"214-383-4400", fax:"214-383-4403", website:"https://craigranchpediatrics.com",                                             address:"6850 TPC Dr, Suite 100, McKinney, TX 75070" },
+  { name:"Hebron Pediatrics",                        phone:"972-695-9630", fax:"972-694-0000", website:"https://hebronpediatrics.com",                                                 address:"3020 E Hebron Pkwy, Ste 300, Carrollton, TX 75010" },
+  { name:"Little Lantern",                           phone:"469-788-8588", fax:"469-788-7800", website:"https://us.clinic",                                                            address:"4541 N Josey Ln, Ste 110, Carrollton, TX 75010" },
+  { name:"Plano Supreme Primary Care",               phone:"972-618-7800", fax:"972-618-7900", website:"http://www.primarycareus.com",                                                 address:"4020 Hedgcoxe Rd, Ste 700, Plano, TX 75024" },
+  { name:"Greenhill Family Physicians",              phone:"214-872-2688", fax:"",             website:"https://gfpcare.com",                                                          address:"5575 Warren Pkwy, Ste 106, Frisco, TX 75034" },
+  { name:"Johnson Family Medicine",                  phone:"469-656-4602", fax:"",             website:"https://johnsonfamilymedical.com",                                             address:"12530 Lebanon Rd, Ste 202, Frisco, TX 75035" },
+  { name:"Care Now",                                 phone:"972-529-4545", fax:"",             website:"https://www.carenow.com",                                                      address:"5644 Preston Rd, Frisco, TX 75034" },
+  { name:"Passion Health",                           phone:"214-666-6259", fax:"855-618-2235", website:"https://passionhealthphysicians.com",                                          address:"8195 Custer Rd, Ste 110, Frisco, TX 75035" },
+  { name:"Carrollton Family Physicians",             phone:"972-394-8844", fax:"972-492-9248", website:"https://www.texasmedicine.com",                                                address:"4333 N Josey Ln, Plaza II, Suite 302, Carrollton, TX 75010" },
+  { name:"WellMed at Carrollton",                    phone:"972-939-4646", fax:"972-939-6161", website:"https://doctors.wellmedhealthcare.com/locations/details/6455",                 address:"1948 E Hebron Pkwy, Ste 110, Carrollton, TX 75007" },
+  { name:"Centennial Primary Care",                  phone:"214-383-0001", fax:"214-383-0068", website:"https://doctors.wellmedhealthcare.com/locations/details/4103",                 address:"9925 Gillespie Dr, Suite 3400, Plano, TX 75025" },
+  { name:"North Texas Medical Clinic",               phone:"469-294-9999", fax:"877-919-5871", website:"https://ntmc-med.com",                                                         address:"5350 Independence Pkwy, Ste 120, Frisco, TX 75035" },
+  { name:"Frisco Primary Care, P.A.",                phone:"972-731-7717", fax:"972-731-7733", website:"https://friscoprimarycare.com",                                                address:"4525 Ohio Dr, #100, Frisco, TX 75035" },
+  { name:"West Frisco Health & Wellness",            phone:"972-464-2510", fax:"214-705-1379", website:"https://westfrisco.com",                                                       address:"4280 Main St, #200, Frisco, TX 75033" },
+  { name:"QuickMD Care Frisco",                      phone:"972-645-9400", fax:"",             website:"https://www.quickmdcare.com",                                                  address:"10101 Westridge Blvd, Suite 101, McKinney, TX 75070" },
+  { name:"McKinney Medical Village",                 phone:"214-964-0304", fax:"",             website:"https://www.catalystphysiciangroup.com",                                       address:"7300 Eldorado Pkwy, #200, McKinney, TX 75070" },
+  { name:"QuickMD Care McKinney",                    phone:"972-645-9400", fax:"",             website:"https://www.quickmdcare.com",                                                  address:"10101 Westridge Blvd, Suite 101, McKinney, TX 75070" },
+  { name:"Doctors of Internal Med McKinney",         phone:"972-382-9292", fax:"972-992-3937", website:"https://doctorsofinternalmedicine.com",                                        address:"240 Adriatic Pkwy, McKinney, TX 75070" },
+  { name:"Woven Health Carrollton",                  phone:"469-574-2022", fax:"",             website:"https://www.wovenhealth.org",                                                  address:"4325 N Josey Ln, Plaza 3, Suite 111, Carrollton, TX 75010" },
+  { name:"Family Care & Wellness Allen",             phone:"469-656-1033", fax:"855-231-4739", website:"https://www.familycareandwellness.com",                                        address:"915 W Exchange Pkwy, Suite 210, Allen, TX 75013" },
+  { name:"Express Family Clinic Allen",              phone:"972-672-4121", fax:"972-905-4690", website:"https://www.expressphysician.com",                                             address:"940 Ridgeview Drive, Suite 150, Allen, TX 75013" },
+  { name:"Family HealthCare Associates Allen",       phone:"972-727-9877", fax:"972-747-5105", website:"https://www.catalystphysiciangroup.com",                                       address:"1105 N Central Expy, #2120, Allen, TX 75013" },
+  { name:"Allen Family Practice",                    phone:"972-852-1534", fax:"972-982-7459", website:"https://allenfp.com",                                                          address:"1120 Raintree Circle, Suite 210, Allen, TX 75013" },
+  { name:"Maple Primary Care",                       phone:"972-449-5165", fax:"972-587-6740", website:"https://www.mapleprimarycare.com",                                              address:"3242 Preston Rd, Suite 203, Plano, TX 75093" },
+  { name:"North Texas Family Medicine",              phone:"972-599-2567", fax:"972-599-9257", website:"https://www.ntxfm.com",                                                         address:"4001 W 15th St, Suite 445, Plano, TX 75093" },
+  { name:"Texas Primary Care Center",                phone:"469-300-1243", fax:"469-300-1253", website:"https://texasprimarycarecenter.com",                                           address:"3617 Shire Blvd, Ste 100, Richardson, TX 75082" },
+  { name:"Catalyst Physician Group Richardson",      phone:"214-575-3422", fax:"",             website:"https://www.catalystphysiciangroup.com",                                       address:"3261 E President George Bush Hwy, #200, Richardson, TX 75082" },
+  { name:"Innovista Medical Center Richardson",      phone:"866-325-0301", fax:"",             website:"https://innovistamedicalcenter.com",                                           address:"350 S Plano Rd, Richardson, TX 75081" },
+  { name:"Spring Creek Medical",                     phone:"972-999-2676", fax:"",             website:"https://springcreekmed.com",                                                   address:"1201 Richardson Dr, Ste 100, Richardson, TX 75080" }
+];
+window.BUNDLED_CONTACTS = BUNDLED_CONTACTS;
+
+var BUNDLED_CONTACTS_APPLIED_KEY = 'wcg_bundled_contacts_v1_applied';
+
+// One-time application — runs on sign-in if not already applied. Field-level
+// merge: never overwrites an existing non-empty value. Idempotent — calling
+// twice is harmless. Returns a small report {applied, fields, skipped, unmatched}.
+function _applyBundledContactsOnce(){
+  if(typeof CURRENT_USER === 'undefined' || !CURRENT_USER) return null;
+  if(CURRENT_USER.role === 'readonly') return null;  // readonly never patches
+  if(typeof updateBusinessContact !== 'function') return null;
+
+  // Skip if already applied (and reapplication isn't desired). Sandbox users
+  // can't write the flag so they'll re-apply on each sign-in — that's fine,
+  // the writes are no-ops anyway.
+  try {
+    if(typeof DataLayer !== 'undefined' && DataLayer.loadRaw){
+      if(DataLayer.loadRaw(BUNDLED_CONTACTS_APPLIED_KEY)) return null;
+    }
+  } catch(e){}
+
+  var index = _allBusinessIndex();
+  var report = { applied: 0, fieldsTouched: 0, skipped: 0, unmatched: [] };
+
+  BUNDLED_CONTACTS.forEach(function(entry){
+    var m = _matchBusinessName(entry.name, index);
+    if(!m.match){ report.unmatched.push(entry.name); return; }
+    var rec = m.match.record;
+    var patch = {};
+    ['phone','fax','website','address'].forEach(function(k){
+      var existing = (rec[k] == null ? '' : String(rec[k])).trim();
+      var bundled  = (entry[k] == null ? '' : String(entry[k])).trim();
+      if(!existing && bundled){ patch[k] = bundled; }
+    });
+    if(Object.keys(patch).length === 0){ report.skipped++; return; }
+    var res = updateBusinessContact(m.match.name, patch);
+    if(res && res.ok){ report.applied++; report.fieldsTouched += Object.keys(patch).length; }
+  });
+
+  // Persist the one-time flag (no-op for sandbox)
+  try {
+    if(typeof DataLayer !== 'undefined' && DataLayer.save){
+      DataLayer.save(BUNDLED_CONTACTS_APPLIED_KEY, new Date().toISOString());
+    }
+  } catch(e){}
+
+  try { console.info('[bundled-contacts] applied ' + report.applied + ' clinics (' + report.fieldsTouched + ' fields). skipped: ' + report.skipped + ', unmatched: ' + report.unmatched.length); } catch(e){}
+  return report;
+}
+window._applyBundledContactsOnce = _applyBundledContactsOnce;
+
+// Force re-apply (admin escape hatch — clears the flag and runs again)
+function reapplyBundledContacts(){
+  try { if(typeof DataLayer !== 'undefined' && DataLayer.remove){ DataLayer.remove(BUNDLED_CONTACTS_APPLIED_KEY); } } catch(e){}
+  var r = _applyBundledContactsOnce();
+  if(r && typeof showToast === 'function') showToast('Bundled contacts re-applied: ' + r.applied + ' clinics, ' + r.fieldsTouched + ' fields, ' + r.unmatched.length + ' unmatched.');
+  return r;
+}
+window.reapplyBundledContacts = reapplyBundledContacts;
 
 // Haversine distance in miles between two {lat,lng} points.
 function _haversineMiles(a, b){
@@ -12157,21 +12810,56 @@ function openRoutePlanner(){
   var endSel   = document.getElementById('rp-end');
   var specSel  = document.getElementById('rp-specialty');
   if(!startSel || !endSel) return;
+  // ── Build options: WCG facilities + every clinic + every MVA firm.
+  //    Cities are intentionally excluded — start/end must be a real place
+  //    on the bank, not a generic city centroid. Each clinic/MVA option
+  //    carries its city as the value so getRouteCoord() resolves correctly
+  //    (city-level precision today; future: per-business addresses).
+  var escAttr = function(s){ return String(s||'').replace(/[&<>"']/g, function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  }); };
   var html = '';
-  // Group: WCG facilities first (most common starting points)
+
+  // Group 1: WCG facilities (most common starting point)
   html += '<optgroup label="WCG facilities">';
   Object.keys(ROUTE_COORDS).forEach(function(k){
     if(ROUTE_COORDS[k].type === 'facility'){
-      html += '<option value="' + k + '">🏥 ' + ROUTE_COORDS[k].label + '</option>';
+      html += '<option value="' + escAttr(k) + '">🏥 ' + escAttr(ROUTE_COORDS[k].label) + '</option>';
     }
   });
   html += '</optgroup>';
-  // Group: approved cities
-  html += '<optgroup label="Cities">';
-  Object.keys(ROUTE_COORDS).forEach(function(k){
-    if(!ROUTE_COORDS[k].type){ html += '<option value="' + k + '">' + k + '</option>'; }
-  });
-  html += '</optgroup>';
+
+  // Group 2: Clinics from the bank — sorted alphabetically, only those whose
+  // city resolves (otherwise getRouteCoord would fail at runRoutePlanner time).
+  if(typeof CLINIC_BANK !== 'undefined' && CLINIC_BANK.length){
+    var clinicRows = CLINIC_BANK
+      .filter(function(c){ return c && c.n && c.c && ROUTE_COORDS[c.c]; })
+      .map(function(c){ return { name: c.n, city: c.c }; })
+      .sort(function(a,b){ return a.name.localeCompare(b.name); });
+    if(clinicRows.length){
+      html += '<optgroup label="Clinics (' + clinicRows.length + ')">';
+      clinicRows.forEach(function(c){
+        html += '<option value="' + escAttr(c.city) + '" data-kind="clinic" data-name="' + escAttr(c.name) + '">🏨 ' + escAttr(c.name) + ' · ' + escAttr(c.city) + '</option>';
+      });
+      html += '</optgroup>';
+    }
+  }
+
+  // Group 3: MVA firms from the bank
+  if(typeof MVA_ATTORNEYS !== 'undefined' && MVA_ATTORNEYS.length){
+    var mvaRows = MVA_ATTORNEYS
+      .filter(function(m){ return m && m.firm && m.city && ROUTE_COORDS[m.city]; })
+      .map(function(m){ return { name: m.firm, city: m.city }; })
+      .sort(function(a,b){ return a.name.localeCompare(b.name); });
+    if(mvaRows.length){
+      html += '<optgroup label="MVA firms (' + mvaRows.length + ')">';
+      mvaRows.forEach(function(m){
+        html += '<option value="' + escAttr(m.city) + '" data-kind="mva" data-name="' + escAttr(m.name) + '">⚖️ ' + escAttr(m.name) + ' · ' + escAttr(m.city) + '</option>';
+      });
+      html += '</optgroup>';
+    }
+  }
+
   startSel.innerHTML = html;
   endSel.innerHTML = '<option value="__same__">— Same as start (round trip) —</option>' + html;
   // Default: Frisco ER → same as start
@@ -12202,6 +12890,59 @@ function closeRoutePlanner(){
 }
 window.closeRoutePlanner = closeRoutePlanner;
 
+// Show the coverage summary inline (in the rp-results panel). Lists how many
+// clinics / MVAs are mappable, groups unresolved ones by their (unrecognized)
+// city, and offers a CSV download with every record's resolution status.
+function showCoverageSummary(){
+  if(typeof auditRouteCoverage !== 'function'){ showToast('Coverage audit not loaded.'); return; }
+  var rpt = auditRouteCoverage();
+  var s = rpt.summary;
+  var res = document.getElementById('rp-results');
+  if(!res) return;
+  function esc(v){ return String(v == null ? '' : v).replace(/[&<>]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c]; }); }
+
+  var unresolvedCities = Object.keys(s.unresolvedCityCounts).sort(function(a,b){
+    return s.unresolvedCityCounts[b] - s.unresolvedCityCounts[a];
+  });
+  var unresolvedHtml = unresolvedCities.length === 0
+    ? '<div style="font-size:11px;color:#15803d;background:#dcfce7;padding:8px 10px;border-radius:6px">Every clinic and MVA in the bank resolves to a known city. Nothing to fix.</div>'
+    : '<div style="display:flex;flex-direction:column;gap:4px">'
+      + unresolvedCities.map(function(city){
+          return '<div style="display:flex;justify-content:space-between;align-items:center;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:6px 10px;font-size:11px">'
+               + '<span style="color:#991b1b;font-weight:600">' + esc(city) + '</span>'
+               + '<span style="color:#7f1d1d">' + s.unresolvedCityCounts[city] + ' record' + (s.unresolvedCityCounts[city]===1?'':'s') + '</span>'
+               + '</div>';
+        }).join('')
+      + '</div>';
+
+  var totalUnresolved = s.clinics.unresolved + s.mvas.unresolved + s.clinics.missingCity + s.mvas.missingCity;
+
+  res.style.display = 'block';
+  res.innerHTML = ''
+    + '<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">Bank coverage</div>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">'
+    +   '<div style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:10px">'
+    +     '<div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-weight:600">Clinics</div>'
+    +     '<div style="font-size:18px;font-weight:700;color:var(--text);margin:2px 0">' + (s.clinics.exact + s.clinics.fuzzy) + ' / ' + s.clinics.total + ' mappable</div>'
+    +     '<div style="font-size:10px;color:var(--muted)">' + s.clinics.exact + ' exact · ' + s.clinics.fuzzy + ' fuzzy · ' + (s.clinics.unresolved + s.clinics.missingCity) + ' unresolved</div>'
+    +   '</div>'
+    +   '<div style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:10px">'
+    +     '<div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-weight:600">MVA firms</div>'
+    +     '<div style="font-size:18px;font-weight:700;color:var(--text);margin:2px 0">' + (s.mvas.exact + s.mvas.fuzzy) + ' / ' + s.mvas.total + ' mappable</div>'
+    +     '<div style="font-size:10px;color:var(--muted)">' + s.mvas.exact + ' exact · ' + s.mvas.fuzzy + ' fuzzy · ' + (s.mvas.unresolved + s.mvas.missingCity) + ' unresolved</div>'
+    +   '</div>'
+    + '</div>'
+    + (totalUnresolved > 0
+        ? '<div style="font-size:11px;font-weight:600;color:var(--text);margin:10px 0 6px">Unresolved cities — won\'t show up in the route planner</div>' + unresolvedHtml
+        + '<div style="font-size:10px;color:var(--muted);margin-top:8px;line-height:1.5">These are city names in the bank that don\'t match any city in <code>ROUTE_COORDS</code>, even after lowercasing and stripping ", TX". Either fix the spelling in the source data (rename the clinic\'s city to match a known one) or add the missing city to <code>ROUTE_COORDS</code> with its lat/lng.</div>'
+        : unresolvedHtml)
+    + '<div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">'
+    +   '<button onclick="downloadCoverageReport()" style="background:#1F3864;color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">⬇ Download full CSV</button>'
+    +   '<button onclick="(function(){var r=document.getElementById(\'rp-results\');if(r){r.style.display=\'none\';r.innerHTML=\'\';}})()" style="background:#e5e7eb;color:#374151;border:none;border-radius:8px;padding:8px 14px;font-size:11px;font-weight:600;cursor:pointer;font-family:DM Sans,sans-serif">Hide</button>'
+    + '</div>';
+}
+window.showCoverageSummary = showCoverageSummary;
+
 // Average city-driving speed used to convert miles → minutes (very rough).
 // Future: use Google Routes API for real ETAs.
 var _ROUTE_AVG_MPH = 28;
@@ -12215,9 +12956,9 @@ function runRoutePlanner(){
   var skipVisited = !!document.getElementById('rp-skip-visited').checked;
 
   var A = getRouteCoord(startKey);
-  if(!A){ showToast('Pick a starting city or facility.'); return; }
+  if(!A){ showToast('Pick a starting clinic, MVA, or facility.'); return; }
   var B = (endKey === '__same__') ? A : getRouteCoord(endKey);
-  if(!B){ showToast('Pick an ending city or facility.'); return; }
+  if(!B){ showToast('Pick an ending clinic, MVA, or facility.'); return; }
 
   // Build candidate pool — every clinic + MVA in the bank with a known city
   var candidates = [];
