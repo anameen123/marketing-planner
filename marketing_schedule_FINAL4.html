@@ -781,6 +781,27 @@ textarea.rnotes:focus{border-color:var(--purple);outline:none}
 .user-name{font-size:12px;font-weight:600;color:#fff}
 .logout-btn{background:rgba(255,255,255,.2);border:none;color:#fff;font-size:10px;font-weight:600;padding:3px 8px;border-radius:10px;cursor:pointer;font-family:'DM Sans',sans-serif;margin-left:4px}
 .logout-btn:hover{background:rgba(255,255,255,.35)}
+/* SAFETY GUARANTEE (2026-05-19): the user-badge + logout button must be
+   visible regardless of role / view-mode / impersonation / sandbox state.
+   This is the only escape hatch out of a stuck state. !important + the
+   highest-specificity selector defends against future role-CSS that might
+   inadvertently hide the header chrome. */
+#user-badge-wrap,
+#user-badge-wrap .user-badge,
+#user-badge-wrap .logout-btn,
+body.role-front_desk #user-badge-wrap,
+body.role-front_desk #user-badge-wrap .logout-btn,
+body.member-view #user-badge-wrap,
+body.member-view #user-badge-wrap .logout-btn{
+  display:flex !important;
+  visibility:visible !important;
+  opacity:1 !important;
+  pointer-events:auto !important;
+}
+/* Bump the header z-index so it stays above any sticky banner that might
+   be injected above it (e.g. the sandbox banner at z-index:9999, which is
+   now position:relative so they don't fight, but this is belt-and-braces). */
+.header{ z-index:200 }
 
 #confirm-modal .modal-box{width:360px;text-align:center}
 .confirm-icon{font-size:36px;margin-bottom:10px}
@@ -7495,17 +7516,23 @@ function _enableSandboxMode(){
   DataLayer._origRemove = _origRemove;
 
   // Inject the persistent banner once. If it already exists, just unhide it.
+  // Hardened 2026-05-19: previous version was position:sticky which could
+  // overlap the header's own sticky positioning on some browsers, hiding
+  // the Sign Out button. Now position:relative (banner pushes content
+  // down naturally) + an embedded Sign Out button as a safety net in case
+  // any other UI hides the header logout.
   var existing = document.getElementById('sandbox-banner');
   if(!existing){
     var banner = document.createElement('div');
     banner.id = 'sandbox-banner';
     banner.setAttribute('role', 'status');
-    banner.style.cssText = 'position:sticky;top:0;z-index:9999;background:linear-gradient(135deg,#fef3c7,#fde68a);border-bottom:2px solid #d97706;color:#78350f;padding:8px 16px;font-family:DM Sans,sans-serif;font-size:12px;font-weight:600;display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:center;text-align:center';
+    banner.style.cssText = 'position:relative;z-index:9999;background:linear-gradient(135deg,#fef3c7,#fde68a);border-bottom:2px solid #d97706;color:#78350f;padding:8px 16px;font-family:DM Sans,sans-serif;font-size:12px;font-weight:600;display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:center;text-align:center';
     banner.innerHTML = ''
       + '<span style="font-size:14px">🧪</span>'
       + '<span><b>Sandbox mode</b> — you have admin-level access for testing.</span>'
       + '<span style="opacity:.85">All your changes are temporary and exist only in this browser tab.</span>'
-      + '<span style="opacity:.85">Nothing is saved. Refresh or close the page to reset.</span>';
+      + '<span style="opacity:.85">Nothing is saved. Refresh or close the page to reset.</span>'
+      + '<button onclick="doLogout()" style="background:#92400e;color:#fff;border:none;border-radius:6px;padding:4px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;margin-left:8px">Sign out</button>';
     // Insert at the very top of body, before everything else
     if(document.body.firstChild){
       document.body.insertBefore(banner, document.body.firstChild);
@@ -10798,8 +10825,16 @@ function _referralSourceExists(name){
 window._referralSourceExists = _referralSourceExists;
 
 function _loadAdminNotifs(){
-  var v = DataLayer.load(ADMIN_NOTIF_LS_KEY);
-  ADMIN_NOTIFICATIONS = Array.isArray(v) ? v : [];
+  // Hardened 2026-05-19: wrap in try/catch so a corrupt-JSON value in
+  // localStorage can never crash bootstrap (which would prevent the team
+  // from signing in at all). Worst case: notifications start empty.
+  try {
+    var v = (typeof DataLayer !== 'undefined' && DataLayer.load) ? DataLayer.load(ADMIN_NOTIF_LS_KEY) : null;
+    ADMIN_NOTIFICATIONS = Array.isArray(v) ? v : [];
+  } catch(e){
+    try { console.warn('[_loadAdminNotifs] load failed; resetting to []', e); } catch(_){}
+    ADMIN_NOTIFICATIONS = [];
+  }
 }
 function _saveAdminNotifs(){
   DataLayer.save(ADMIN_NOTIF_LS_KEY, ADMIN_NOTIFICATIONS);
@@ -10811,8 +10846,10 @@ function _readKey(){
   return 'wcg_admin_notif_read_' + u;
 }
 function _loadReadIds(){
-  var v = DataLayer.load(_readKey());
-  return Array.isArray(v) ? v : [];
+  try {
+    var v = (typeof DataLayer !== 'undefined' && DataLayer.load) ? DataLayer.load(_readKey()) : null;
+    return Array.isArray(v) ? v : [];
+  } catch(e){ return []; }
 }
 function _saveReadIds(ids){
   DataLayer.save(_readKey(), ids);
@@ -10826,8 +10863,10 @@ function _readTsKey(){
   return 'wcg_admin_notif_read_ts_' + u;
 }
 function _loadReadTs(){
-  var v = DataLayer.load(_readTsKey());
-  return (v && typeof v === 'object' && !Array.isArray(v)) ? v : {};
+  try {
+    var v = (typeof DataLayer !== 'undefined' && DataLayer.load) ? DataLayer.load(_readTsKey()) : null;
+    return (v && typeof v === 'object' && !Array.isArray(v)) ? v : {};
+  } catch(e){ return {}; }
 }
 function _saveReadTs(map){
   DataLayer.save(_readTsKey(), map);
@@ -19713,16 +19752,31 @@ function refresh(di){
   if(typeof _saveS === 'function') _saveS();
 }
 function renderDayTable(di){
+  // Hardened 2026-05-19: guard every external state read so a partially-
+  // hydrated schedule doesn't blow up the whole day view. If something is
+  // missing, render an empty-state row with the Add Visit button so the user
+  // can still do work.
+  var day = S.days && S.days[di];
+  if(!day){
+    var tbodyMissing = document.getElementById('day-tbody');
+    if(tbodyMissing) tbodyMissing.innerHTML = '<tr><td colspan="10" style="padding:20px;text-align:center;color:var(--muted);font-style:italic">Schedule data is still loading for this day. <button onclick="refresh(S.currentDay)" style="margin-left:8px;background:var(--purple);color:#fff;border:none;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer">Retry</button></td></tr>';
+    return;
+  }
+  if(!Array.isArray(day.rows)) day.rows = [];
   // Show locked banner if past date and not admin
-  var _dt_dayDate = S.days[di] && S.days[di].date;
+  var _dt_dayDate = day.date;
   var _dt_isPastLocked = isDateInPast(_dt_dayDate) && !(typeof isAdmin==='function' && isAdmin());
 
-  var day=S.days[di];
-  document.getElementById('dv-sub').textContent=day.rows.length+' visits · '+day.focus+' focus area';
+  var subEl = document.getElementById('dv-sub');
+  if(subEl) subEl.textContent = day.rows.length + ' visits · ' + (day.focus || 'no focus area') + ' focus area';
   var html='';
-  day.rows.forEach(function(_,ri){html+=rowHTML(day.rows[ri],di,ri);});
+  day.rows.forEach(function(_,ri){
+    try { html += rowHTML(day.rows[ri], di, ri); }
+    catch(rowErr){ try { console.warn('[renderDayTable] row render failed at ri='+ri, rowErr); } catch(_){} }
+  });
   html+='<tr class="add-visit-row"><td colspan="10"><button class="add-visit-btn" onclick="addVisit('+di+')">&#43; Add Visit</button></td></tr>';
-  document.getElementById('day-tbody').innerHTML=html;
+  var tbody = document.getElementById('day-tbody');
+  if(tbody) tbody.innerHTML = html;
 }
 
 function navMonth(dir){
@@ -21325,15 +21379,27 @@ function confirmAddMember(){
 var DYNAMIC_TEAM = { entries: [] };
 var _DT_LS_KEY = 'wcg_dynamic_team_v1';
 function _loadDynamicTeam(){
-  if(typeof DataLayer === 'undefined' || !DataLayer.load) return;
-  var v = DataLayer.load(_DT_LS_KEY);
-  if(v && Array.isArray(v.entries)){
-    DYNAMIC_TEAM = v;
-  } else {
+  // Hardened 2026-05-19: wrap in try/catch + per-entry try/catch so a single
+  // malformed entry (or a corrupt store as a whole) can never crash the
+  // bootstrap chain. Bootstrap continuing is more important than dynamic
+  // team data — if it's broken, the user can re-add the member.
+  try {
+    if(typeof DataLayer === 'undefined' || !DataLayer.load) return;
+    var v = null;
+    try { v = DataLayer.load(_DT_LS_KEY); } catch(loadErr){ v = null; }
+    if(v && Array.isArray(v.entries)){
+      DYNAMIC_TEAM = v;
+    } else {
+      DYNAMIC_TEAM = { entries: [] };
+    }
+    DYNAMIC_TEAM.entries.forEach(function(e){
+      try { _applyDynamicTeamEntry(e); }
+      catch(applyErr){ try { console.warn('[_loadDynamicTeam] skipped malformed entry', applyErr, e); } catch(_){} }
+    });
+  } catch(e){
+    try { console.warn('[_loadDynamicTeam] aborted', e); } catch(_){}
     DYNAMIC_TEAM = { entries: [] };
   }
-  // Replay every stored entry into the in-memory stores
-  DYNAMIC_TEAM.entries.forEach(function(e){ _applyDynamicTeamEntry(e); });
 }
 function _saveDynamicTeam(){
   if(typeof DataLayer === 'undefined' || !DataLayer.save){
