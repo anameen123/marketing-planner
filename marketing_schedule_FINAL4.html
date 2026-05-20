@@ -14410,6 +14410,11 @@ function addVisit(di){
   ['av-name','av-contact','av-spec','av-phone','av-address','av-notes'].forEach(function(id){
     var el = document.getElementById(id); if(el) el.value = '';
   });
+  // Unlock any lingering lock state from a prior openAddVisitFromCard call
+  // (same defense as openAddVisitFromPage — see comments there for why).
+  var nameElAdd = document.getElementById('av-name');
+  if(nameElAdd){ nameElAdd.readOnly = false; nameElAdd.style.background = '#fff'; }
+  document.querySelectorAll('input[name="av-type"]').forEach(function(r){ r.disabled = false; });
   var areaSel = document.getElementById('av-area');
   if(areaSel){
     areaSel.value = S.days[di].focus || (AREAS[0]||'Frisco');
@@ -14421,6 +14426,9 @@ function addVisit(di){
     var prevHint = areaSel.parentElement && areaSel.parentElement.querySelector('.av-area-locked-hint');
     if(prevHint) prevHint.remove();
   }
+  // Clear any stale autocomplete suggestions box
+  var suggestBoxAdd = document.getElementById('av-name-suggest');
+  if(suggestBoxAdd){ suggestBoxAdd.style.display = 'none'; suggestBoxAdd.innerHTML = ''; }
   var memSel = document.getElementById('av-member');
   if(memSel) memSel.value = '';
   // Default type = clinic
@@ -16432,8 +16440,34 @@ function openAddVisitFromPage(){
   ['av-name','av-contact','av-spec','av-phone','av-address','av-notes'].forEach(function(id){
     var el = document.getElementById(id); if(el) el.value = '';
   });
+  // ── UNLOCK any lingering lock state from a prior openAddVisitFromCard ──
+  // If the modal was previously opened from a Bank-of-Targets card, the name
+  // input was set readOnly + the type radios were disabled. If that modal
+  // closed by any path OTHER than closeAddVisit (e.g. modal-overlay click,
+  // route change), those flags would persist. That bug shows up as: open
+  // "+ Add Visit", type a name → no autocomplete suggestions appear because
+  // the input is still readOnly. Reset everything here so the page-level
+  // flow always starts fully unlocked.
+  var nameEl = document.getElementById('av-name');
+  if(nameEl){
+    nameEl.readOnly = false;
+    nameEl.style.background = '#fff';
+  }
+  document.querySelectorAll('input[name="av-type"]').forEach(function(r){ r.disabled = false; });
   var areaSel = document.getElementById('av-area');
-  if(areaSel) areaSel.value = (typeof AREAS !== 'undefined' && AREAS[0]) ? AREAS[0] : 'Frisco';
+  if(areaSel){
+    areaSel.value = (typeof AREAS !== 'undefined' && AREAS[0]) ? AREAS[0] : 'Frisco';
+    // Reset autocomplete-induced area lock too (added earlier in this session)
+    areaSel.disabled = false;
+    areaSel.style.opacity = '';
+    areaSel.style.cursor = '';
+    areaSel.title = '';
+    var prevHint = areaSel.parentElement && areaSel.parentElement.querySelector('.av-area-locked-hint');
+    if(prevHint) prevHint.remove();
+  }
+  // Also clear any stale autocomplete suggestions box from a prior session
+  var suggestBox = document.getElementById('av-name-suggest');
+  if(suggestBox){ suggestBox.style.display = 'none'; suggestBox.innerHTML = ''; }
   var memSel = document.getElementById('av-member');
   if(memSel) memSel.value = '';
   var def = document.querySelector('input[name="av-type"][value="clinic"]');
