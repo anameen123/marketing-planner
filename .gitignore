@@ -56,3 +56,6 @@ test-results/
 
 # Claude session memory (local-only)
 .claude/
+_tooling/google_api_key.local.txt
+_tooling/business_geocodes.partial.json
+_tooling/live.html
