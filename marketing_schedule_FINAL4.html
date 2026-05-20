@@ -11925,9 +11925,34 @@ function logAdminAction(action, target, originalAuthor, summary, before, after){
   if(ADMIN_NOTIFICATIONS.length > ADMIN_NOTIF_MAX_KEEP){
     ADMIN_NOTIFICATIONS = ADMIN_NOTIFICATIONS.slice(0, ADMIN_NOTIF_MAX_KEEP);
   }
+  // Purge entries older than 7 days (per user 2026-05-20)
+  if(typeof _purgeOldAdminNotifs === 'function') _purgeOldAdminNotifs();
   _saveAdminNotifs();
   renderAdminNotifications();
 }
+// Drop ADMIN_NOTIFICATIONS entries older than 7 days. Matches the
+// auto-purge applied to ACTIVITY_LOG. Run on every push + on bootstrap
+// + every hour while the tab is open.
+function _purgeOldAdminNotifs(){
+  if(!Array.isArray(ADMIN_NOTIFICATIONS)) return;
+  var cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  var before = ADMIN_NOTIFICATIONS.length;
+  ADMIN_NOTIFICATIONS = ADMIN_NOTIFICATIONS.filter(function(e){
+    if(!e || !e.ts) return false;
+    try { return new Date(e.ts).getTime() >= cutoff; }
+    catch(_){ return false; }
+  });
+  if(before !== ADMIN_NOTIFICATIONS.length){
+    try { _saveAdminNotifs && _saveAdminNotifs(); } catch(_){}
+    try { console.info('[admin-notif] purged ' + (before - ADMIN_NOTIFICATIONS.length) + ' entries older than 7 days'); } catch(_){}
+  }
+}
+window._purgeOldAdminNotifs = _purgeOldAdminNotifs;
+try {
+  // Run once on file load + every hour while the page is open
+  setTimeout(function(){ try { _purgeOldAdminNotifs(); } catch(e){} }, 2000);
+  setInterval(function(){ try { _purgeOldAdminNotifs(); } catch(e){} }, 60 * 60 * 1000);
+} catch(e){}
 window.logAdminAction = logAdminAction;
 
 function _formatAdminTs(iso){
@@ -33344,6 +33369,12 @@ var ACTION_COLORS={'completed':'#f0fdf4:#166534'};
 
 function logActivity(type, member, clinic, detail, date){
   var now=new Date();
+  // Per user 2026-05-20: tag every entry with the role of the user who
+  // actually performed the action (CURRENT_USER.role at the time of the
+  // event). Used to split the Activity Feed into "Administration actions"
+  // (admin-performed) and "Member actions" (member-performed) sections.
+  var actorRole = (CURRENT_USER && CURRENT_USER.role) || 'unknown';
+  var actorName = (CURRENT_USER && CURRENT_USER.name) || '';
   ACTIVITY_LOG.unshift({
     id:Date.now(),
     type:type,
@@ -33351,12 +33382,16 @@ function logActivity(type, member, clinic, detail, date){
     clinic:clinic||'',
     detail:detail||'',
     visitDate:date||'',
+    actorRole: actorRole,
+    actorName: actorName,
     timestamp:now.toISOString(),
     timeLabel:now.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}),
     dateLabel:now.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})
   });
   // Keep last 500 entries
   if(ACTIVITY_LOG.length>500)ACTIVITY_LOG=ACTIVITY_LOG.slice(0,500);
+  // Purge entries older than 7 days (per user 2026-05-20)
+  _purgeOldActivityLog();
   // Update badge if feed tab not active
   var badge=document.getElementById('feed-badge');
   if(badge){
@@ -33367,10 +33402,36 @@ function logActivity(type, member, clinic, detail, date){
 }
 window.logActivity=logActivity;
 
+// Purge any ACTIVITY_LOG entries older than 7 days. Per user 2026-05-20:
+// the activity feed should auto-clean weekly — anything that lingers past
+// 1 week gets deleted forever. Run on every logActivity + on bootstrap.
+function _purgeOldActivityLog(){
+  if(!Array.isArray(ACTIVITY_LOG)) return;
+  var cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;   // now − 7 days
+  var before = ACTIVITY_LOG.length;
+  ACTIVITY_LOG = ACTIVITY_LOG.filter(function(e){
+    if(!e || !e.timestamp) return false;
+    try { return new Date(e.timestamp).getTime() >= cutoff; }
+    catch(_){ return false; }
+  });
+  if(before !== ACTIVITY_LOG.length){
+    try { console.info('[activity] purged ' + (before - ACTIVITY_LOG.length) + ' entries older than 7 days'); } catch(_){}
+  }
+}
+window._purgeOldActivityLog = _purgeOldActivityLog;
+// Auto-purge once on bootstrap + every hour while the tab is open
+try {
+  _purgeOldActivityLog();
+  setInterval(function(){ try { _purgeOldActivityLog(); } catch(e){} }, 60 * 60 * 1000);
+} catch(e){}
+
 function renderFeed(){
   var list=document.getElementById('feed-list');
   var empty=document.getElementById('feed-empty');
   if(!list)return;
+  // Run a purge on every render so the displayed list never includes
+  // entries past the 7-day window (per user 2026-05-20).
+  if(typeof _purgeOldActivityLog === 'function') _purgeOldActivityLog();
   var mf=document.getElementById('feed-member-filter');
   var memberFilter=mf?mf.value:'';
   var entries=ACTIVITY_LOG.filter(function(e){
@@ -33383,12 +33444,29 @@ function renderFeed(){
   }
   empty.style.display='none';
 
-  list.innerHTML=entries.map(function(e){
+  // Per user 2026-05-20: split into two sections —
+  //   "🛡 Administration Actions" (admin role at time of event)
+  //   "👥 Member Actions" (everyone else)
+  // Entries without an actorRole (legacy) are inferred from e.member by
+  // checking if the name appears in MEMBERS — if yes, it's a member
+  // action; otherwise treat as admin.
+  function isAdminEntry(e){
+    if(e.actorRole === 'admin') return true;
+    if(e.actorRole) return false;   // explicitly non-admin
+    // Legacy entry (no actorRole) — best-effort inference
+    var nm = (e.actorName || e.member || '').toLowerCase();
+    if(/admin|mahmoud|althaher/i.test(nm)) return true;
+    return false;
+  }
+  var adminEntries  = entries.filter(isAdminEntry);
+  var memberEntries = entries.filter(function(e){ return !isAdminEntry(e); });
+
+  function renderEntry(e){
     var mc=MCOLORS[e.member]||'#6b7a99';
     var ac=(ACTION_COLORS[e.type]||'#f3f4f6:#374151').split(':');
     var icon=ACTION_ICONS[e.type]||'•';
     var initials=e.member.split(' ').map(function(w){return w[0];}).join('').toUpperCase().slice(0,2);
-    return '<div style="background:var(--card);border-radius:10px;border:1px solid var(--border);padding:12px 16px;display:flex;align-items:center;gap:12px;box-shadow:0 1px 4px rgba(31,56,100,.04)">'
+    return '<div style="background:var(--card);border-radius:10px;border:1px solid var(--border);padding:12px 16px;display:flex;align-items:center;gap:12px;box-shadow:0 1px 4px rgba(31,56,100,.04);margin-bottom:8px">'
       +'<div class="member-link" data-member="'+(e.member||'').replace(/"/g,'&quot;')+'" title="Open '+(e.member||'')+'\'s profile" style="width:36px;height:36px;border-radius:9px;background:'+mc+';color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;cursor:pointer">'+initials+'</div>'
       +'<div style="flex:1;min-width:0">'
       +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
@@ -33403,7 +33481,26 @@ function renderFeed(){
       +'<div style="font-size:10px;color:var(--muted)">'+e.dateLabel+'</div>'
       +'</div>'
       +'</div>';
-  }).join('');
+  }
+  function sectionHeader(title, count, accent){
+    return '<div style="display:flex;align-items:center;justify-content:space-between;background:'+accent+';color:#fff;padding:10px 14px;border-radius:10px 10px 0 0;margin-top:18px;margin-bottom:8px">'
+         +   '<div style="font-size:13px;font-weight:800;letter-spacing:.03em">'+title+'</div>'
+         +   '<div style="font-size:11px;opacity:.85">'+count+' entries · last 7 days</div>'
+         + '</div>';
+  }
+
+  var html = '';
+  // Order: Administration first (more important / fewer entries), then Members
+  html += sectionHeader('🛡 Administration Actions',  adminEntries.length,  'linear-gradient(135deg,#1F3864,#0f172a)');
+  html += adminEntries.length
+    ? adminEntries.map(renderEntry).join('')
+    : '<div style="background:#f8fafc;border:1px dashed var(--border);border-radius:10px;padding:14px;font-size:11px;color:var(--muted);font-style:italic;text-align:center">No admin actions in the last 7 days.</div>';
+  html += sectionHeader('👥 Member Actions', memberEntries.length, 'linear-gradient(135deg,#7030A0,#5b21b6)');
+  html += memberEntries.length
+    ? memberEntries.map(renderEntry).join('')
+    : '<div style="background:#f8fafc;border:1px dashed var(--border);border-radius:10px;padding:14px;font-size:11px;color:var(--muted);font-style:italic;text-align:center">No member actions in the last 7 days.</div>';
+  html += '<div style="font-size:10px;color:var(--muted);font-style:italic;text-align:center;margin-top:14px">⏱ Entries older than 7 days are automatically deleted.</div>';
+  list.innerHTML = html;
 }
 
 function clearFeed(){
