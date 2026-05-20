@@ -8982,14 +8982,21 @@ var REFERRAL_FACILITIES = [
 // friend-or-family, insurance directory, member-direct, other. Business
 // channel still bumps the per-clinic tier counter; the rest only bump the
 // per-channel monthly counter (informational, not tier-affecting).
+// Per user 2026-05-19: removed standalone "Source business" channel — it's
+// now reached via "Member direct" (a marketing member personally referred
+// the patient from a clinic / MVA / outreach event). Added "Neighborhood"
+// channel for walk-ins from the immediate area (tracks how visible our
+// location is). "Member direct" still has business:false because the
+// per-clinic tier counter is bumped from the cascading business pick
+// inside the form, not from the channel flag.
 var REFERRAL_CHANNELS = [
-  { key: 'business',      label: 'Source business',      icon: '🏥', business: true  },
   { key: 'google',        label: 'Google',               icon: '🔍', business: false },
   { key: 'walkin',        label: 'Walk-in',              icon: '🚶', business: false },
+  { key: 'neighborhood',  label: 'Neighborhood',         icon: '🏘️', business: false },
   { key: 'repeat',        label: 'Repeat patient',       icon: '🔁', business: false },
   { key: 'friend',        label: 'Friend or family',     icon: '👨‍👩‍👧', business: false },
   { key: 'insurance',     label: 'Insurance directory',  icon: '🪪', business: false },
-  { key: 'member_direct', label: 'Member direct',        icon: '🤝', business: false },
+  { key: 'member_direct', label: 'Member direct',        icon: '🤝', business: true  },
   { key: 'other',         label: 'Other',                icon: '❓', business: false }
 ];
 window.REFERRAL_CHANNELS = REFERRAL_CHANNELS;
@@ -11103,9 +11110,15 @@ function openReferralForm(editId){
   document.querySelectorAll('input[name="rl-payment"]').forEach(function(r){ r.checked = false; });
   document.getElementById('rl-insurance').value = '';
   document.getElementById('rl-insurance-wrap').style.display = 'none';
-  if(chSel) chSel.value = 'business';
+  // Per user 2026-05-19: "business" channel removed — default to walkin.
+  if(chSel) chSel.value = 'walkin';
   document.getElementById('rl-source').value   = '';
   if(document.getElementById('rl-source').dataset) document.getElementById('rl-source').dataset.sourceType = '';
+  // Reset the business-type cascade
+  document.querySelectorAll('input[name="rl-source-type"]').forEach(function(r){ r.checked = false; });
+  window._rlSourceTypeFilter = null;
+  var srcInp = document.getElementById('rl-source');
+  if(srcInp){ srcInp.disabled = true; srcInp.placeholder = 'Pick a type above first'; }
   document.getElementById('rl-filler').value   = (CURRENT_USER && CURRENT_USER.name) || '';
   document.getElementById('rl-notes').value    = '';
   // Reset the extra-members chip row so previous entries don't leak in
@@ -11141,6 +11154,13 @@ function openReferralForm(editId){
       }
       document.getElementById('rl-source').value = entry.sourceBusiness || '';
       if(document.getElementById('rl-source').dataset) document.getElementById('rl-source').dataset.sourceType = entry.sourceType || '';
+      // Restore the business-type radio + unlock the source input on edit
+      if(entry.sourceType){
+        var radioPicked = document.querySelector('input[name="rl-source-type"][value="' + entry.sourceType + '"]');
+        if(radioPicked){ radioPicked.checked = true; window._rlSourceTypeFilter = entry.sourceType; }
+        var srcInpEdit = document.getElementById('rl-source');
+        if(srcInpEdit){ srcInpEdit.disabled = false; srcInpEdit.placeholder = ''; }
+      }
       var picked = document.querySelector('input[name="rl-dest"][value="' + entry.destinationFacility + '"]');
       if(picked) picked.checked = true;
       document.getElementById('rl-filler').value = entry.filledByName || '';
@@ -11221,20 +11241,63 @@ window._rlPickInsurance = _rlPickInsurance;
 function _rlChannelChanged(){
   var ch  = document.getElementById('rl-channel');
   var wrap= document.getElementById('rl-source-wrap');
+  var hint= document.getElementById('rl-member-direct-hint');
   if(!ch || !wrap) return;
   var chDef = REFERRAL_CHANNELS.find(function(c){ return c.key === ch.value; });
   if(chDef && chDef.business){
+    // Per user 2026-05-19: only member_direct uses this section now.
     wrap.style.display = '';
+    if(hint) hint.style.display = (ch.value === 'member_direct') ? 'block' : 'none';
   } else {
     wrap.style.display = 'none';
+    if(hint) hint.style.display = 'none';
     // also clear the value so submit doesn't grab a leftover business name
     var inp = document.getElementById('rl-source');
-    if(inp){ inp.value = ''; if(inp.dataset) inp.dataset.sourceType = ''; }
+    if(inp){ inp.value = ''; if(inp.dataset) inp.dataset.sourceType = ''; inp.disabled = true; inp.placeholder = 'Pick a type above first'; }
     var sug = document.getElementById('rl-source-suggest');
     if(sug) sug.style.display = 'none';
+    // Clear the type radios too
+    document.querySelectorAll('input[name="rl-source-type"]').forEach(function(r){ r.checked = false; });
   }
 }
 window._rlChannelChanged = _rlChannelChanged;
+
+// When the user picks a Business Type radio (Clinic / MVA / Outreach),
+// unlock the name input and pre-set the search to filter by that type.
+// The autocomplete (_rlSuggestSources) reads window._rlSourceTypeFilter
+// to decide which bank to search.
+function _rlSourceTypeChanged(){
+  var picked = document.querySelector('input[name="rl-source-type"]:checked');
+  var type = picked ? picked.value : '';
+  window._rlSourceTypeFilter = type || null;
+  var inp = document.getElementById('rl-source');
+  var lbl = document.getElementById('rl-source-name-label');
+  if(inp){
+    if(type){
+      inp.disabled = false;
+      inp.value = '';
+      if(inp.dataset) inp.dataset.sourceType = type;
+      inp.placeholder = type === 'clinic'   ? 'Search clinics by name…'
+                       : type === 'mva'      ? 'Search MVA attorney firms by name…'
+                       : type === 'outreach' ? 'Search community outreach events / organizations…'
+                       : '';
+    } else {
+      inp.disabled = true;
+      inp.value = '';
+      inp.placeholder = 'Pick a type above first';
+    }
+  }
+  if(lbl){
+    lbl.innerHTML = (type === 'clinic')   ? 'Clinic name <span style="color:#ef4444">*</span>'
+                  : (type === 'mva')      ? 'MVA firm name <span style="color:#ef4444">*</span>'
+                  : (type === 'outreach') ? 'Outreach event / organization <span style="color:#ef4444">*</span>'
+                  : 'Business name <span style="color:#ef4444">*</span>';
+  }
+  // Close any open suggest dropdown
+  var sug = document.getElementById('rl-source-suggest');
+  if(sug) sug.style.display = 'none';
+}
+window._rlSourceTypeChanged = _rlSourceTypeChanged;
 
 function closeReferralForm(){
   var modal = document.getElementById('referral-form-modal');
@@ -11249,18 +11312,22 @@ function _rlSuggestSources(){
   if(!inp || !sug) return;
   var q = (inp.value || '').trim().toLowerCase();
   if(q.length < 2){ sug.style.display = 'none'; return; }
+  // Per user 2026-05-19: the autocomplete now restricts to the business
+  // TYPE picked above (clinic / mva / outreach). If no type is picked yet
+  // (legacy code path), search all three.
+  var typeFilter = window._rlSourceTypeFilter || null;
   var matches = [];
-  if(typeof CLINIC_BANK !== 'undefined'){
+  if((!typeFilter || typeFilter === 'clinic') && typeof CLINIC_BANK !== 'undefined'){
     CLINIC_BANK.forEach(function(c){
       if(c.n && c.n.toLowerCase().indexOf(q) >= 0) matches.push({name:c.n, type:'clinic', city:c.c||''});
     });
   }
-  if(typeof MVA_ATTORNEYS !== 'undefined'){
+  if((!typeFilter || typeFilter === 'mva') && typeof MVA_ATTORNEYS !== 'undefined'){
     MVA_ATTORNEYS.forEach(function(m){
       if(m.firm && m.firm.toLowerCase().indexOf(q) >= 0) matches.push({name:m.firm, type:'mva', city:m.city||''});
     });
   }
-  if(typeof OUTREACH !== 'undefined'){
+  if((!typeFilter || typeFilter === 'outreach') && typeof OUTREACH !== 'undefined'){
     OUTREACH.forEach(function(o){
       if(o.name && o.name.toLowerCase().indexOf(q) >= 0) matches.push({name:o.name, type:'outreach', city:o.city||''});
     });
@@ -11409,7 +11476,22 @@ function submitReferralForm(){
   if(!data.memberName)          { showErr('Pick the marketing team member to credit.'); return; }
   if(!data.destinationFacility) { showErr('Pick a destination facility.'); return; }
   if(!data.filledByName)        { showErr('Enter the name of the person filling this form.'); return; }
-  if(chDef && chDef.business && !data.sourceBusiness){
+  // Per user 2026-05-19: member_direct requires the full cascade —
+  // member chosen + business type + business name from the bank.
+  if(channel === 'member_direct'){
+    if(!data.memberName){
+      showErr('Pick the marketing member who referred this patient (in the "Credit & logger" section below).');
+      return;
+    }
+    if(!data.sourceType){
+      showErr('Pick the source business TYPE (Clinic / MVA / Outreach) above.');
+      return;
+    }
+    if(!data.sourceBusiness){
+      showErr('Pick the specific business name. Type a few letters and pick from the suggestion list.');
+      return;
+    }
+  } else if(chDef && chDef.business && !data.sourceBusiness){
     showErr('Pick the source business — or change the channel above (Google / Walk-in / etc).');
     return;
   }
@@ -33618,10 +33700,32 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
         </select>
       </div>
 
+      <!-- ── MEMBER-DIRECT CASCADE (per user 2026-05-19) ───────────────────
+           Visible only when channel = member_direct. The user picks the
+           marketing member first (uses the existing #rl-member dropdown
+           further down in the form via this hint, but we display a copy
+           callout here). Then the business TYPE (Clinic / MVA / Outreach)
+           via radios. Then the specific business name via autocomplete
+           filtered to that type. -->
       <div id="rl-source-wrap" class="kpi-input-row" style="margin-bottom:14px;position:relative">
-        <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Source business — who referred the patient? *</label>
-        <input type="text" id="rl-source" placeholder="Start typing — clinic, MVA firm, or outreach name"
-               autocomplete="off"
+        <div id="rl-member-direct-hint" style="display:none;background:#eff6ff;border:1px solid #bfdbfe;color:#1d4ed8;border-radius:8px;padding:9px 12px;font-size:11px;margin-bottom:10px;line-height:1.45">
+          👇 First pick the <strong>marketing member</strong> who referred this patient (in the "Credit &amp; logger" section below), then pick the business <strong>type</strong> and <strong>name</strong> here.
+        </div>
+        <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:6px">Business type <span style="color:#ef4444">*</span></label>
+        <div id="rl-source-type-row" style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px">
+          <label style="display:flex;align-items:center;gap:6px;background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:8px 10px;cursor:pointer;font-size:11px;font-weight:600;color:var(--text)">
+            <input type="radio" name="rl-source-type" value="clinic" onchange="_rlSourceTypeChanged()" style="accent-color:#3b82f6"> 🏥 Clinic
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:8px 10px;cursor:pointer;font-size:11px;font-weight:600;color:var(--text)">
+            <input type="radio" name="rl-source-type" value="mva" onchange="_rlSourceTypeChanged()" style="accent-color:#f59e0b"> ⚖ MVA Attorney
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:8px 10px;cursor:pointer;font-size:11px;font-weight:600;color:var(--text)">
+            <input type="radio" name="rl-source-type" value="outreach" onchange="_rlSourceTypeChanged()" style="accent-color:#16a34a"> 🏘 Community Outreach
+          </label>
+        </div>
+        <label id="rl-source-name-label" style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Business name <span style="color:#ef4444">*</span></label>
+        <input type="text" id="rl-source" placeholder="Pick a type above first"
+               autocomplete="off" disabled
                oninput="_rlSuggestSources()" onfocus="_rlSuggestSources()"
                style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box">
         <div id="rl-source-suggest" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid var(--border);border-top:none;border-radius:0 0 8px 8px;max-height:200px;overflow-y:auto;z-index:10;box-shadow:0 4px 12px rgba(0,0,0,.1)"></div>
