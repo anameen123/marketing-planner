@@ -5123,16 +5123,65 @@ function closeAddOutreach(){document.getElementById('add-outreach-modal').style.
 function _getAllKnownBusinesses(){
   var out = [];
   if(typeof CLINIC_BANK !== 'undefined' && Array.isArray(CLINIC_BANK)){
-    CLINIC_BANK.forEach(function(c){ if(c && c.n) out.push({name:c.n, type:'clinic', city:c.c||''}); });
+    CLINIC_BANK.forEach(function(c){ if(c && c.n) out.push({name:c.n, type:'clinic', city:c.c||'', contact:c.d||''}); });
   }
   if(typeof MVA_ATTORNEYS !== 'undefined' && Array.isArray(MVA_ATTORNEYS)){
-    MVA_ATTORNEYS.forEach(function(m){ if(m && m.firm) out.push({name:m.firm, type:'mva', city:m.city||''}); });
+    MVA_ATTORNEYS.forEach(function(m){ if(m && m.firm) out.push({name:m.firm, type:'mva', city:m.city||'', contact:m.attorney||''}); });
   }
   if(typeof OUTREACH !== 'undefined' && Array.isArray(OUTREACH)){
-    OUTREACH.forEach(function(o){ if(o && o.name) out.push({name:o.name, type:'outreach', city:o.city||''}); });
+    OUTREACH.forEach(function(o){ if(o && o.name) out.push({name:o.name, type:'outreach', city:o.city||'', contact:o.contact||''}); });
   }
   return out;
 }
+
+// Composite-key duplicate finder (per user 2026-05-19). Two businesses are
+// "the same" — regardless of casing or wording in the NAME — if they share
+// the same city AND the same physician / attorney / contact. This catches
+// typo-driven duplicates ("Heal 360" vs "Heal360") and abbreviation-driven
+// duplicates ("Dr Smith Clinic" vs "Smith Family Practice") at the source.
+// Returns the matching entry, or null. type filters by which bank to scan.
+// Skips entries with empty / TBD contact since we can't meaningfully compare.
+function _findBusinessByLocationAndContact(type, city, contact){
+  var c = String(city || '').trim().toLowerCase();
+  var p = String(contact || '').trim().toLowerCase();
+  if(!c || !p || p === 'tbd') return null;
+  var all = _getAllKnownBusinesses();
+  for(var i = 0; i < all.length; i++){
+    var b = all[i];
+    if(b.type !== type) continue;
+    var bc = String(b.city || '').trim().toLowerCase();
+    var bp = String(b.contact || '').trim().toLowerCase();
+    if(!bc || !bp || bp === 'tbd') continue;
+    if(bc === c && bp === p) return b;
+  }
+  return null;
+}
+window._findBusinessByLocationAndContact = _findBusinessByLocationAndContact;
+
+// Composite guard for the Add-business save flows. Returns true if a
+// matching (city + physician) business was found and the user was shown
+// a "duplicate" prompt. Caller should `return` early when true.
+function _guardDuplicateByLocationAndContact(type, city, contact){
+  var dup = _findBusinessByLocationAndContact(type, city, contact);
+  if(!dup) return false;
+  var typeLabel = { clinic:'clinic', mva:'MVA firm', outreach:'outreach organization' }[type] || 'business';
+  showConfirm({
+    icon: '!',
+    msg: 'This ' + typeLabel + ' already exists in the bank',
+    sub: 'A ' + typeLabel + ' with the same city AND the same '
+       + (type === 'mva' ? 'attorney' : type === 'outreach' ? 'contact' : 'physician')
+       + ' is already saved as <strong>' + dup.name + '</strong>.\n\nDuplicates are not allowed — open the existing card to update it instead of creating a new one.',
+    yesLabel: 'Open existing card',
+    onConfirm: function(){
+      try { closeAddClinic && closeAddClinic(); } catch(e){}
+      try { closeAddMVA    && closeAddMVA();    } catch(e){}
+      try { closeAddOutreach && closeAddOutreach(); } catch(e){}
+      if(typeof jumpToBusinessCard === 'function') jumpToBusinessCard(dup.name);
+    }
+  });
+  return true;
+}
+window._guardDuplicateByLocationAndContact = _guardDuplicateByLocationAndContact;
 
 // Case-insensitive duplicate finder. Returns the matching entry or null.
 function _findBusinessDuplicate(rawName){
@@ -5263,9 +5312,13 @@ function saveNewOutreach(){
   var name=(document.getElementById('out-add-name').value||'').trim();
   var type=document.getElementById('out-add-type').value;
   var city=document.getElementById('out-add-city').value;
+  var contact=(document.getElementById('out-add-contact').value||'').trim();
   if(!name||!type||!city){showToast('Name, type, and city are required.');return;}
-  // Block exact-match duplicates across clinic + MVA + outreach
+  // Block exact-match name duplicates across clinic + MVA + outreach
   if(_guardDuplicateBusiness(name)) return;
+  // Block composite-key duplicates: same city + same contact = same org
+  // even if the name typed is different.
+  if(_guardDuplicateByLocationAndContact('outreach', city, contact)) return;
   // New entries inherit the category of whichever sub-tab is currently
   // active so the user sees their addition immediately in the right bucket.
   // If they're on Holidays, the type-based default would override to random
@@ -5555,8 +5608,12 @@ function saveNewClinic(){
   var address = ((document.getElementById('clinic-add-address') || {}).value || '').trim();
   if(website && !/^https?:\/\//i.test(website)) website = 'https://' + website;
   if(!name||!city){ showToast('Clinic name and city are required.'); return; }
-  // Block exact-match duplicates across clinic + MVA + outreach
+  // Block exact-match name duplicates across clinic + MVA + outreach
   if(_guardDuplicateBusiness(name)) return;
+  // Block composite-key duplicates: same city + same physician = same clinic
+  // even if the name typed is different. Catches "Smith Family Practice"
+  // vs "Dr Smith Clinic" both at Frisco with the same doctor.
+  if(_guardDuplicateByLocationAndContact('clinic', city, doctor)) return;
   var filledBy = AC_FILLED_BY || 'manual';
   showConfirm({icon:'?',msg:'Add "'+name+'"?',sub:'New clinic in '+city + (filledBy === 'gemini' ? ' · 🤖 Gemini-assisted' : ''),yesLabel:'Add',danger:false,onConfirm:function(){
     CLINIC_BANK.push({n:name,d:doctor||'TBD',s:spec||'',c:city,t:'',notes:notes,
@@ -5842,9 +5899,13 @@ function closeAddMVA(){document.getElementById('add-mva-modal').style.display='n
 function saveNewMVA(){
   var firm=(document.getElementById('mva-add-firm').value||'').trim();
   var city=document.getElementById('mva-add-city').value;
+  var attorney = (document.getElementById('mva-add-attorney').value || '').trim();
   if(!firm||!city){showToast('Firm name and city are required.');return;}
-  // Block exact-match duplicates across clinic + MVA + outreach
+  // Block exact-match name duplicates across clinic + MVA + outreach
   if(_guardDuplicateBusiness(firm)) return;
+  // Block composite-key duplicates: same city + same attorney = same firm
+  // even if the name typed is different.
+  if(_guardDuplicateByLocationAndContact('mva', city, attorney)) return;
   showConfirm({icon:'?',msg:'Add "'+firm+'"?',sub:'New MVA attorney for '+city,yesLabel:'Add',danger:false,onConfirm:function(){
     var _mvaWebsite = ((document.getElementById('mva-add-website')||{}).value||'').trim();
     if(_mvaWebsite && !/^https?:\/\//i.test(_mvaWebsite)) _mvaWebsite = 'https://' + _mvaWebsite;
