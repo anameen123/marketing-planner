@@ -2655,14 +2655,47 @@ body.role-front_desk #referrals-view {
         Tell us where you're starting and where you want to end. The app will recommend clinics from the bank that lie along the way, so you maximize visits with minimum driving.
       </div>
 
+      <!-- ── START ENDPOINT (per user 2026-05-19) ─────────────────────────
+           Area-first filter + free-text search with autocomplete. The user
+           picks an area to narrow the candidate pool, then types to find
+           the specific clinic / MVA / facility. The hidden #rp-start input
+           preserves the value (city key) that runRoutePlanner reads. -->
       <div class="kpi-input-row" style="margin-bottom:10px">
-        <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Starting clinic / MVA / facility *</label>
-        <select id="rp-start" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box"></select>
+        <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Starting clinic / MVA / facility <span style="color:#ef4444">*</span></label>
+        <div style="display:grid;grid-template-columns:140px 1fr;gap:8px">
+          <select id="rp-start-area" onchange="_rpAreaChanged('start')" style="border:1px solid var(--border);border-radius:8px;padding:9px 10px;font-size:12px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box">
+            <option value="">All areas</option>
+          </select>
+          <div style="position:relative">
+            <input type="text" id="rp-start-search" placeholder="Type a clinic, MVA or facility name…"
+                   autocomplete="off"
+                   oninput="_rpSearchSuggest('start')" onfocus="_rpSearchSuggest('start')"
+                   onblur="setTimeout(function(){var b=document.getElementById('rp-start-suggest');if(b)b.style.display='none';},180)"
+                   style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box">
+            <div id="rp-start-suggest" style="display:none;position:absolute;left:0;right:0;top:100%;margin-top:2px;background:#fff;border:1px solid var(--border);border-radius:8px;max-height:260px;overflow-y:auto;z-index:10;box-shadow:0 8px 20px rgba(31,56,100,.12)"></div>
+          </div>
+        </div>
+        <input type="hidden" id="rp-start">
+        <div style="font-size:10px;color:var(--muted);margin-top:3px;font-style:italic">Tip: pick an area first to narrow the suggestions; leave it "All areas" to search every business.</div>
       </div>
+
       <div class="kpi-input-row" style="margin-bottom:10px">
         <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Ending clinic / MVA / facility</label>
-        <select id="rp-end" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box"></select>
-        <div style="font-size:10px;color:var(--muted);margin-top:3px;font-style:italic">Pick "Same as start" for a round-trip plan.</div>
+        <div style="display:grid;grid-template-columns:140px 1fr;gap:8px">
+          <select id="rp-end-area" onchange="_rpAreaChanged('end')" style="border:1px solid var(--border);border-radius:8px;padding:9px 10px;font-size:12px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box">
+            <option value="">All areas</option>
+          </select>
+          <div style="position:relative">
+            <input type="text" id="rp-end-search" placeholder='Type a name, or leave blank for "Same as start"'
+                   autocomplete="off"
+                   oninput="_rpSearchSuggest('end')" onfocus="_rpSearchSuggest('end')"
+                   onblur="setTimeout(function(){var b=document.getElementById('rp-end-suggest');if(b)b.style.display='none';},180)"
+                   style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box">
+            <div id="rp-end-suggest" style="display:none;position:absolute;left:0;right:0;top:100%;margin-top:2px;background:#fff;border:1px solid var(--border);border-radius:8px;max-height:260px;overflow-y:auto;z-index:10;box-shadow:0 8px 20px rgba(31,56,100,.12)"></div>
+          </div>
+        </div>
+        <input type="hidden" id="rp-end" value="__same__">
+        <div style="font-size:10px;color:var(--muted);margin-top:3px;font-style:italic">Leave the name blank to round-trip back to your starting point.</div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
         <div>
@@ -18644,67 +18677,63 @@ function renderDayMap(di){
 window.renderDayMap = renderDayMap;
 
 // ── ROUTE PLANNER DIALOG ────────────────────────────────────────────────
+// Per user 2026-05-19: start + end use an area-first filter + free-text
+// search with autocomplete instead of one giant dropdown. The candidate
+// pool (clinics + MVAs + WCG facilities) is built once on open and stored
+// on window._RP_POOL; the autocomplete reads from there.
 function openRoutePlanner(){
-  // Populate start/end dropdowns
-  var startSel = document.getElementById('rp-start');
-  var endSel   = document.getElementById('rp-end');
+  var startInp = document.getElementById('rp-start');
+  var endInp   = document.getElementById('rp-end');
   var specSel  = document.getElementById('rp-specialty');
-  if(!startSel || !endSel) return;
-  // ── Build options: WCG facilities + every clinic + every MVA firm.
-  //    Cities are intentionally excluded — start/end must be a real place
-  //    on the bank, not a generic city centroid. Each clinic/MVA option
-  //    carries its city as the value so getRouteCoord() resolves correctly
-  //    (city-level precision today; future: per-business addresses).
-  var escAttr = function(s){ return String(s||'').replace(/[&<>"']/g, function(c){
-    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
-  }); };
-  var html = '';
-
-  // Group 1: WCG facilities (most common starting point)
-  html += '<optgroup label="WCG facilities">';
+  if(!startInp || !endInp) return;
+  // ── Build the candidate pool (each entry: name, city, kind, value) ──
+  // value = the key getRouteCoord() resolves on (city key for clinics/MVAs;
+  // facility key for WCG locations).
+  var pool = [];
   Object.keys(ROUTE_COORDS).forEach(function(k){
     if(ROUTE_COORDS[k].type === 'facility'){
-      html += '<option value="' + escAttr(k) + '">🏥 ' + escAttr(ROUTE_COORDS[k].label) + '</option>';
+      pool.push({
+        name:  ROUTE_COORDS[k].label,
+        city:  ROUTE_COORDS[k].city || ROUTE_COORDS[k].label,
+        kind:  'facility',
+        value: k,
+        icon:  '🏥'
+      });
     }
   });
-  html += '</optgroup>';
-
-  // Group 2: Clinics from the bank — sorted alphabetically, only those whose
-  // city resolves (otherwise getRouteCoord would fail at runRoutePlanner time).
-  if(typeof CLINIC_BANK !== 'undefined' && CLINIC_BANK.length){
-    var clinicRows = CLINIC_BANK
-      .filter(function(c){ return c && c.n && c.c && ROUTE_COORDS[c.c]; })
-      .map(function(c){ return { name: c.n, city: c.c }; })
-      .sort(function(a,b){ return a.name.localeCompare(b.name); });
-    if(clinicRows.length){
-      html += '<optgroup label="Clinics (' + clinicRows.length + ')">';
-      clinicRows.forEach(function(c){
-        html += '<option value="' + escAttr(c.city) + '" data-kind="clinic" data-name="' + escAttr(c.name) + '">🏨 ' + escAttr(c.name) + ' · ' + escAttr(c.city) + '</option>';
-      });
-      html += '</optgroup>';
-    }
+  if(typeof CLINIC_BANK !== 'undefined'){
+    CLINIC_BANK.forEach(function(c){
+      if(!(c && c.n && c.c && ROUTE_COORDS[c.c])) return;
+      pool.push({ name:c.n, city:c.c, kind:'clinic', value:c.c, icon:'🏨' });
+    });
   }
-
-  // Group 3: MVA firms from the bank
-  if(typeof MVA_ATTORNEYS !== 'undefined' && MVA_ATTORNEYS.length){
-    var mvaRows = MVA_ATTORNEYS
-      .filter(function(m){ return m && m.firm && m.city && ROUTE_COORDS[m.city]; })
-      .map(function(m){ return { name: m.firm, city: m.city }; })
-      .sort(function(a,b){ return a.name.localeCompare(b.name); });
-    if(mvaRows.length){
-      html += '<optgroup label="MVA firms (' + mvaRows.length + ')">';
-      mvaRows.forEach(function(m){
-        html += '<option value="' + escAttr(m.city) + '" data-kind="mva" data-name="' + escAttr(m.name) + '">⚖️ ' + escAttr(m.name) + ' · ' + escAttr(m.city) + '</option>';
-      });
-      html += '</optgroup>';
-    }
+  if(typeof MVA_ATTORNEYS !== 'undefined'){
+    MVA_ATTORNEYS.forEach(function(m){
+      if(!(m && m.firm && m.city && ROUTE_COORDS[m.city])) return;
+      pool.push({ name:m.firm, city:m.city, kind:'mva', value:m.city, icon:'⚖️' });
+    });
   }
-
-  startSel.innerHTML = html;
-  endSel.innerHTML = '<option value="__same__">— Same as start (round trip) —</option>' + html;
-  // Default: Frisco ER → same as start
-  startSel.value = '_facility_frisco_er';
-  endSel.value = '__same__';
+  pool.sort(function(a,b){ return a.name.localeCompare(b.name); });
+  window._RP_POOL = pool;
+  // ── Populate the area-filter dropdowns from the cities that actually
+  // appear in the pool (sorted alpha, plus "All areas" as the default).
+  var areas = {};
+  pool.forEach(function(p){ if(p.city) areas[p.city] = true; });
+  var areaList = Object.keys(areas).sort();
+  ['rp-start-area','rp-end-area'].forEach(function(id){
+    var sel = document.getElementById(id);
+    if(!sel) return;
+    sel.innerHTML = '<option value="">All areas</option>'
+      + areaList.map(function(a){ return '<option value="'+a.replace(/"/g,'&quot;')+'">'+a+'</option>'; }).join('');
+  });
+  // Reset the search inputs + hidden values
+  var sIn = document.getElementById('rp-start-search'); if(sIn) sIn.value = '';
+  var eIn = document.getElementById('rp-end-search');   if(eIn) eIn.value = '';
+  // Default start = Frisco ER (matches prior behavior); end = same as start
+  startInp.value = '_facility_frisco_er';
+  var friscoFacility = pool.find(function(p){ return p.value === '_facility_frisco_er'; });
+  if(friscoFacility && sIn) sIn.value = friscoFacility.icon + ' ' + friscoFacility.name;
+  endInp.value = '__same__';
 
   // Populate specialty filter from the actual specialties in the bank
   var specs = {};
@@ -18724,6 +18753,93 @@ function openRoutePlanner(){
   document.getElementById('route-planner-modal').style.display = 'flex';
 }
 window.openRoutePlanner = openRoutePlanner;
+
+// ── ROUTE-PLANNER ENDPOINT AUTOCOMPLETE (per user 2026-05-19) ───────────
+// When the user changes the area dropdown, clear the search input + hidden
+// value so they re-pick within the new area. When they type into the
+// search input, render up to 8 candidates from the pool filtered by area
+// + typed query. Clicking a suggestion fills the input + hidden value.
+
+// `which` is 'start' or 'end' — both pickers share this code.
+function _rpAreaChanged(which){
+  var inp = document.getElementById('rp-'+which+'-search');
+  var hid = document.getElementById('rp-'+which);
+  if(inp) inp.value = '';
+  if(hid) hid.value = (which === 'end') ? '__same__' : '';
+  var box = document.getElementById('rp-'+which+'-suggest');
+  if(box){ box.style.display = 'none'; box.innerHTML = ''; }
+}
+window._rpAreaChanged = _rpAreaChanged;
+
+function _rpSearchSuggest(which){
+  var inp = document.getElementById('rp-'+which+'-search');
+  var box = document.getElementById('rp-'+which+'-suggest');
+  var areaEl = document.getElementById('rp-'+which+'-area');
+  if(!inp || !box) return;
+  var q = (inp.value || '').toLowerCase().trim();
+  var area = areaEl ? (areaEl.value || '') : '';
+  var pool = window._RP_POOL || [];
+  // For the END picker only: if the search box is EMPTY, treat that as
+  // "same as start" — show a one-row hint instead of suggestions.
+  if(which === 'end' && !q && !area){
+    box.innerHTML = '<div onmousedown="event.preventDefault();_rpPickSame()" '
+      + 'style="padding:10px 14px;cursor:pointer;font-size:12px;color:#1F3864;background:#eff6ff;border-left:3px solid #3b82f6" '
+      + 'onmouseover="this.style.background=\'#dbeafe\'" onmouseout="this.style.background=\'#eff6ff\'">'
+      + '↩ Round trip — same as start</div>';
+    box.style.display = 'block';
+    return;
+  }
+  var matches = pool.filter(function(p){
+    if(area && p.city !== area) return false;
+    if(!q) return true;
+    return p.name.toLowerCase().indexOf(q) >= 0 || p.city.toLowerCase().indexOf(q) >= 0;
+  }).slice(0, 8);
+  if(matches.length === 0){
+    box.innerHTML = '<div style="padding:10px 14px;font-size:11px;color:var(--muted);font-style:italic">No matches'
+      + (area ? ' in ' + area : '') + '. Try a different area or clear it.</div>';
+    box.style.display = 'block';
+    return;
+  }
+  var typeColors = { facility:'#7030A0', clinic:'#3b82f6', mva:'#f59e0b' };
+  box.innerHTML = matches.map(function(p, i){
+    var safeName = String(p.name).replace(/</g,'&lt;');
+    var color = typeColors[p.kind] || '#64748b';
+    return '<div onmousedown="event.preventDefault();_rpPickEndpoint(\''+which+'\','+i+')" '
+      + 'style="padding:8px 12px;cursor:pointer;border-bottom:1px solid #f1f5f9;font-size:12px;display:flex;align-items:center;justify-content:space-between" '
+      + 'onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'#fff\'">'
+      + '<span><strong>'+p.icon+' '+safeName+'</strong><span style="color:var(--muted);font-size:10px;margin-left:6px">'+p.city+'</span></span>'
+      + '<span style="background:'+color+'22;color:'+color+';font-size:9px;font-weight:700;padding:1px 6px;border-radius:4px;border:1px solid '+color+'66">'
+      + (p.kind === 'facility' ? 'WCG' : p.kind === 'mva' ? 'MVA' : 'Clinic') + '</span>'
+      + '</div>';
+  }).join('');
+  // Stash the current match list so _rpPickEndpoint can read by index
+  window['_RP_MATCHES_'+which] = matches;
+  box.style.display = 'block';
+}
+window._rpSearchSuggest = _rpSearchSuggest;
+
+function _rpPickEndpoint(which, idx){
+  var matches = window['_RP_MATCHES_'+which] || [];
+  var p = matches[idx];
+  if(!p) return;
+  var inp = document.getElementById('rp-'+which+'-search');
+  var hid = document.getElementById('rp-'+which);
+  if(inp) inp.value = p.icon + ' ' + p.name + ' · ' + p.city;
+  if(hid) hid.value = p.value;
+  var box = document.getElementById('rp-'+which+'-suggest');
+  if(box) box.style.display = 'none';
+}
+window._rpPickEndpoint = _rpPickEndpoint;
+
+function _rpPickSame(){
+  var inp = document.getElementById('rp-end-search');
+  var hid = document.getElementById('rp-end');
+  if(inp) inp.value = '↩ Round trip — same as start';
+  if(hid) hid.value = '__same__';
+  var box = document.getElementById('rp-end-suggest');
+  if(box) box.style.display = 'none';
+}
+window._rpPickSame = _rpPickSame;
 
 function closeRoutePlanner(){
   document.getElementById('route-planner-modal').style.display = 'none';
