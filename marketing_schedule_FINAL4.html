@@ -6633,6 +6633,13 @@ var DataLayer = (function(){
     config.lastPollISO = _lastPollISO;
     _updateSyncBadge(anyFailed ? 'error' : 'ok');
   }
+  // Public: force a sync right now (don't wait for the next 5-second poll).
+  // Used by the "Pull latest now" button in the sync-status popup and by
+  // any code that needs to be sure it's looking at the freshest server data.
+  async function _pollNow(){
+    try { await _pollOnce(); return true; }
+    catch(e){ return false; }
+  }
 
   // ── Sync status badge — visible in the header. Reflects backend state.
   // States: 'local' (gray) · 'syncing' (yellow pulse) · 'ok' (green) · 'error' (red)
@@ -6749,7 +6756,8 @@ var DataLayer = (function(){
     setConfig: setConfig,
     mode: mode,
     _config: config,           // exposed for debugging only
-    _writeQueue: _writeQueue
+    _writeQueue: _writeQueue,
+    pollNow: _pollNow          // public: force a sync without waiting for the 5s poll
   };
 })();
 window.DataLayer = DataLayer;
@@ -8367,19 +8375,44 @@ function showSyncStatus(){
     + '</div>';
 
   if(typeof showConfirm === 'function'){
+    // When healthy SharePoint sync is active, the "yes" button becomes
+    // "Pull latest now" so the user can force a fetch instead of waiting
+    // for the next 5-second poll — handy when a teammate just added a
+    // visit and the user wants to see it immediately.
+    var isSharePoint = (mode === 'sharepoint');
     showConfirm({
       icon: '📊',
       msg: 'Sync status',
       sub: msg,
-      yesLabel: isStuck ? 'Reconnect' : 'OK',
-      noLabel:  isStuck ? 'Cancel' : '',
-      onConfirm: isStuck ? reconnectSharePoint : function(){}
+      yesLabel: isStuck ? 'Reconnect'
+              : isSharePoint ? '⟳ Pull latest now'
+              : 'OK',
+      noLabel:  isStuck ? 'Cancel' : (isSharePoint ? 'Close' : ''),
+      onConfirm: isStuck ? reconnectSharePoint
+               : isSharePoint ? pullLatestFromServer
+               : function(){}
     });
   } else {
     alert(msg.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' '));
   }
 }
 window.showSyncStatus = showSyncStatus;
+
+// Force a sync right now — used by the "Pull latest now" button. Fires
+// the same _pollOnce that the 5-second polling timer fires, but on demand.
+// Shows a toast on completion so the user knows it worked.
+async function pullLatestFromServer(){
+  if(typeof DataLayer === 'undefined' || !DataLayer.pollNow){
+    if(typeof showToast === 'function') showToast('Sync isn\'t available right now.');
+    return;
+  }
+  if(typeof showToast === 'function') showToast('Pulling latest from server…');
+  var ok = await DataLayer.pollNow();
+  if(typeof showToast === 'function'){
+    showToast(ok ? '✓ Up to date — pulled latest from the team.' : '⚠ Pull failed — check network and try again.');
+  }
+}
+window.pullLatestFromServer = pullLatestFromServer;
 
 // Manual retry for SharePoint bootstrap. Called from the sync-status popup
 // "Reconnect" button when the user is signed in via Entra ID but bootstrap
