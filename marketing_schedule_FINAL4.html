@@ -6220,7 +6220,7 @@ var DataLayer = (function(){
     driveId: '',                                                    // default Document Library drive (resolved on bootstrap)
     tenantId: '36db94fb-80e4-470d-a675-2ee06ddf3d89',               // wcgtx.com tenant
     clientId: '0447f26e-7a21-4c67-90a0-e967ee70a10f',               // ICC Marketing Planner app registration
-    pollIntervalMs: 2000,                                           // 2-sec near-real-time sync (cheap thanks to ETag caching — see _readFile)
+    pollIntervalMs: 1500,                                           // 1.5-sec safety net (cheap thanks to ETag caching — see _readFile). Tick poller (500ms) catches almost everything sooner.
     dataFolder: 'MarketingPlannerData',                             // folder name inside the Document Library
     // Mapping: localStorage key → filename inside the data folder.
     keyToFile: {
@@ -6704,6 +6704,7 @@ var DataLayer = (function(){
     try { localStorage.setItem(key, remoteStr); }
     catch(e){ /* quota — skip */ }
     _emitChange(key);
+    return true;   // (fix per user 2026-05-20) — caller logs "(none)" without this
   }
 
   function _emitChange(key){
@@ -6792,14 +6793,20 @@ var DataLayer = (function(){
     _updateSyncBadge('syncing');
     var anyFailed = false;
     var changedKeys = [];
+    // ── PARALLEL READS (per user 2026-05-20 sync push) ───────────────────
+    // Was sequential await per key (10 keys × ~150ms = 1.5s). Promise.all
+    // collapses to one round-trip duration. ETag 304s make most of these
+    // ~80-byte responses anyway, but we still pay TCP/TLS per request.
     var keys = Object.keys(config.keyToList);
-    for(var i = 0; i < keys.length; i++){
-      try {
-        var changed = await _fetchKeyIntoCache(keys[i]);
-        if(changed) changedKeys.push(keys[i]);
-      }
-      catch(e){ anyFailed = true; try { console.warn('[sync] key failed:', keys[i], e); } catch(_){} }
-    }
+    var pollResults = await Promise.all(keys.map(function(k){
+      return _fetchKeyIntoCache(k)
+        .then(function(changed){ return { k: k, changed: !!changed }; })
+        .catch(function(e){ return { k: k, failed: true, e: e }; });
+    }));
+    pollResults.forEach(function(r){
+      if(r.failed){ anyFailed = true; try { console.warn('[sync] key failed:', r.k, r.e); } catch(_){} }
+      else if(r.changed){ changedKeys.push(r.k); }
+    });
     _lastPollISO = new Date().toISOString();
     config.lastPollISO = _lastPollISO;
     _updateSyncBadge(anyFailed ? 'error' : 'ok');
@@ -6884,7 +6891,7 @@ var DataLayer = (function(){
   function _enqueueRemoteWrite(key, value){
     _writeQueue.push({ key: key, value: value, at: Date.now() });
     if(_writeTimer) clearTimeout(_writeTimer);
-    _writeTimer = setTimeout(_flushWrites, 300);   // debounce 300ms
+    _writeTimer = setTimeout(_flushWrites, 100);   // debounce 100ms (per user 2026-05-20 sync push — minimize outbound latency)
     // Notify any OTHER tabs of this browser instantly — they re-hydrate
     // from localStorage even before the SharePoint write completes.
     _broadcastKeyChange(key);
@@ -6906,18 +6913,24 @@ var DataLayer = (function(){
       latestByKey[w.key] = w;
     });
     _writeQueue = [];
+    // ── PARALLEL WRITES (per user 2026-05-20 sync push) ─────────────────
+    // Old code awaited each key sequentially → N round trips. New code
+    // fires them all at once → ~1 round trip total. Big latency win on
+    // multi-key saves (e.g. schedule + referral-log written together).
     var keys = Object.keys(latestByKey);
     var anySucceeded = false;
-    for(var i = 0; i < keys.length; i++){
-      try {
-        await _writeKey(keys[i], latestByKey[keys[i]].value);
-        anySucceeded = true;
+    var writeResults = await Promise.all(keys.map(function(k){
+      return _writeKey(k, latestByKey[k].value)
+        .then(function(){ return { k: k, ok: true }; })
+        .catch(function(e){ return { k: k, ok: false, e: e }; });
+    }));
+    writeResults.forEach(function(r){
+      if(r.ok){ anySucceeded = true; }
+      else {
+        try { console.warn('[DataLayer] write failed for ' + r.k + ', re-queueing:', r.e); } catch(_){}
+        _writeQueue.push(latestByKey[r.k]);
       }
-      catch(e){
-        console.warn('[DataLayer] write failed for ' + keys[i] + ', re-queueing:', e);
-        _writeQueue.push(latestByKey[keys[i]]);  // retry next cycle
-      }
-    }
+    });
     // ── TICK (per user 2026-05-20) ─────────────────────────────────────
     // After any successful write, touch the tick file so other clients
     // know to pull. Fire-and-forget; failures are non-fatal (next poll
@@ -6931,7 +6944,7 @@ var DataLayer = (function(){
       // badge flip green right after a save so the user sees activity.
       setTimeout(function(){
         try { if(typeof _tickPollOnce === 'function') _tickPollOnce(); } catch(_){}
-      }, 500);
+      }, 200);   // (was 500) — fire write-verify sooner so the green "Live" badge flips immediately on save
     }
   }
 
@@ -6970,8 +6983,12 @@ var DataLayer = (function(){
       if(_lastSeenTick === remoteStr){ _tickPollInFlight = false; return; }
       _lastSeenTick = remoteStr;
       try { console.info('[sync] tick changed → pulling all keys'); } catch(_){}
-      // Tick moved — full poll right now (don't wait for the 2s timer)
-      await _pollOnce();
+      // ── FIRE-AND-FORGET FULL POLL (per user 2026-05-20 sync push) ──────
+      // Old code awaited _pollOnce here, which blocked the next tick check
+      // for the full ~1s read cycle. New code kicks it off and returns
+      // immediately, freeing up the next tick to fire on schedule. If
+      // _pollOnce throws, the in-flight flag still releases below.
+      _pollOnce().catch(function(e){ try { console.warn('[sync] background poll failed:', e); } catch(_){} });
     } catch(e){
       try { console.warn('[sync] tick poll failed:', e); } catch(_){}
     } finally {
@@ -6982,7 +6999,7 @@ var DataLayer = (function(){
     if(_tickTimer) clearInterval(_tickTimer);
     // Seed last-seen so we don't trigger a full poll on the very first tick.
     try { _lastSeenTick = localStorage.getItem('wcg_sync_tick_v1') || null; } catch(_){}
-    _tickTimer = setInterval(_tickPollOnce, 1000);   // 1-sec tick check
+    _tickTimer = setInterval(_tickPollOnce, 500);    // 500ms tick check (per user 2026-05-20 sync push — half the cross-device wait)
   }
 
   async function _writeKey(key, value){
