@@ -6832,6 +6832,30 @@ var DataLayer = (function(){
     dot.style.background = s.color;
     lbl.textContent = s.label;
     wrap.style.background = s.bg;
+    // ── PROMINENT OFFLINE BANNER (per user 2026-05-20) ──────────────────
+    // If the user is signed in via Microsoft but sync is in localStorage
+    // mode (bootstrap failed, network issue, etc.), make it IMPOSSIBLE
+    // to miss. A bright red strip pins to the top of the page until
+    // reconnect succeeds. Without this, users edit for an hour thinking
+    // teammates can see them — they can't.
+    var isMs = (CURRENT_USER.authVia === 'entra-id');
+    var stuck = isMs && (state === 'local');
+    var banner = document.getElementById('sync-offline-banner');
+    if(stuck){
+      if(!banner){
+        banner = document.createElement('div');
+        banner.id = 'sync-offline-banner';
+        banner.style.cssText = 'position:relative;z-index:9998;background:#dc2626;color:#fff;padding:10px 16px;text-align:center;font-family:DM Sans,sans-serif;font-size:13px;font-weight:700;letter-spacing:.02em;display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;box-shadow:0 2px 6px rgba(220,38,38,.35)';
+        banner.innerHTML = ''
+          + '<span style="font-size:16px">⚠️</span>'
+          + '<span><b>SYNC OFFLINE</b> — your changes are NOT being shared with the team yet.</span>'
+          + '<button onclick="reconnectSharePoint()" style="background:#fff;color:#dc2626;border:none;border-radius:6px;padding:5px 14px;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit">⟳ Reconnect to team</button>';
+        if(document.body.firstChild) document.body.insertBefore(banner, document.body.firstChild);
+        else document.body.appendChild(banner);
+      }
+    } else if(banner){
+      banner.remove();
+    }
   }
   window._updateSyncBadge = _updateSyncBadge;
 
@@ -6900,6 +6924,14 @@ var DataLayer = (function(){
     // will still catch the change within ~2 seconds via the safety net).
     if(anySucceeded){
       _touchTickFile().catch(function(e){ try { console.warn('[sync] tick touch failed:', e); } catch(_){} });
+      // Self-verify: immediately after writing, also do a tick-poll on
+      // OUR OWN side. If our localStorage is somehow out of date (e.g.
+      // we wrote stale data and a teammate's newer data is in the
+      // remote), this catches it within ~500ms. Also makes the "Live"
+      // badge flip green right after a save so the user sees activity.
+      setTimeout(function(){
+        try { if(typeof _tickPollOnce === 'function') _tickPollOnce(); } catch(_){}
+      }, 500);
     }
   }
 
@@ -6909,8 +6941,15 @@ var DataLayer = (function(){
   async function _touchTickFile(){
     if(!config.enabled) return;
     var payload = JSON.stringify({ ts: Date.now(), by: (CURRENT_USER && CURRENT_USER.username) || 'unknown' });
+    try { console.info('[sync] ↑ touching tick file for', (CURRENT_USER && CURRENT_USER.username) || '?'); } catch(_){}
     await _writeFile('wcg_sync_tick_v1', payload);
     try { localStorage.setItem('wcg_sync_tick_v1', payload); } catch(_){}
+    // Brief visual confirmation that a sync just happened (toast)
+    try {
+      if(typeof showToast === 'function'){
+        showToast('✓ Saved & synced to team');
+      }
+    } catch(_){}
   }
 
   // The tick poller — fires every 1 second, fetches ONLY the tick file
