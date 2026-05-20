@@ -1080,8 +1080,14 @@ body.member-view.member-mobile .header{padding-left:60px !important}
     width:240px;
     height:100vh;
     transition:none;
-    box-shadow:1px 0 0 #dbeafe;
-    z-index:80;
+    box-shadow:2px 0 6px rgba(15,23,42,.06);
+    /* Per user 2026-05-20: page content was sliding OVER the sidebar on
+       narrow viewports. Bumping the sidebar's z-index above the header
+       (200) and tab content guarantees it stays on top regardless of
+       any other stacking context. Also opaque background ensures nothing
+       bleeds through. */
+    z-index:300;
+    background:#fff;
   }
   /* No backdrop on desktop — clicking outside doesn't close it (it never closes) */
   body.has-sidebar .member-drawer-backdrop{display:none !important}
@@ -1113,6 +1119,13 @@ body.member-view.member-mobile .header{padding-left:60px !important}
        right edge so wide screens center the content rather than left-
        jamming it against the sidebar. */
     margin-right:auto !important;
+    /* Per user 2026-05-20: clamp width to AVAILABLE space (viewport
+       minus 240px sidebar) so the content can never overflow into the
+       sidebar's column. Without this, content with max-width:1180px on
+       a 1280px viewport tries to be 1180px but only has 1040px to work
+       with — and visually slides over the sidebar. */
+    max-width:calc(100vw - 240px) !important;
+    box-sizing:border-box !important;
   }
   /* The marquee tagline strip + announcement bar also need the offset
      because they're position:sticky inside #landing */
@@ -6219,7 +6232,14 @@ var DataLayer = (function(){
       'wcg_clinic_leads_v1':            'clinic-leads.json',
       'wcg_display_names_v1':           'display-names.json',
       'wcg_reset_interval_v1':          'settings-reset-interval.json',
-      'wcg_referral_log_v1':            'referral-log.json'
+      'wcg_referral_log_v1':            'referral-log.json',
+      // ── TICK FILE (per user 2026-05-20) ─────────────────────────────
+      // Tiny single-line file touched after EVERY write. Clients poll
+      // JUST this file every 1 second (cheap — one ~80-byte request with
+      // ETag). When its content changes, we know SOMETHING upstream did
+      // and we pull the full key set immediately. Gets us ~1-sec cross-
+      // device latency without burning Graph API quota on 10 files.
+      'wcg_sync_tick_v1':               'sync-tick.json'
       // Per-user "which notifs I've read" keys stay in localStorage (per-user, not shared)
     }
   };
@@ -6716,6 +6736,10 @@ var DataLayer = (function(){
   function _startPolling(){
     if(_pollTimer) clearInterval(_pollTimer);
     _pollTimer = setInterval(_pollOnce, config.pollIntervalMs);
+    // Start the 1-second TICK poller too (per user 2026-05-20).
+    // Tick poll = one tiny file, cheap with ETag → 304s.
+    // Full poll = safety net at the configured 2s/5s interval.
+    if(typeof _startTickPolling === 'function') _startTickPolling();
     // ── BACKGROUND-TAB FIX (per user 2026-05-19) ────────────────────────
     // Browsers throttle setInterval HARD when a tab is in the background —
     // from "every 5 seconds" to "every minute or more". So if the admin's
@@ -6850,18 +6874,76 @@ var DataLayer = (function(){
       _writeQueue = [];
       return;
     }
-    // Coalesce: only keep the most recent write per key
+    // Coalesce: only keep the most recent write per key (filter out the
+    // tick file itself — _touchTickFile handles it directly below)
     var latestByKey = {};
-    _writeQueue.forEach(function(w){ latestByKey[w.key] = w; });
+    _writeQueue.forEach(function(w){
+      if(w.key === 'wcg_sync_tick_v1') return;  // never enqueue tick from outside
+      latestByKey[w.key] = w;
+    });
     _writeQueue = [];
     var keys = Object.keys(latestByKey);
+    var anySucceeded = false;
     for(var i = 0; i < keys.length; i++){
-      try { await _writeKey(keys[i], latestByKey[keys[i]].value); }
+      try {
+        await _writeKey(keys[i], latestByKey[keys[i]].value);
+        anySucceeded = true;
+      }
       catch(e){
         console.warn('[DataLayer] write failed for ' + keys[i] + ', re-queueing:', e);
         _writeQueue.push(latestByKey[keys[i]]);  // retry next cycle
       }
     }
+    // ── TICK (per user 2026-05-20) ─────────────────────────────────────
+    // After any successful write, touch the tick file so other clients
+    // know to pull. Fire-and-forget; failures are non-fatal (next poll
+    // will still catch the change within ~2 seconds via the safety net).
+    if(anySucceeded){
+      _touchTickFile().catch(function(e){ try { console.warn('[sync] tick touch failed:', e); } catch(_){} });
+    }
+  }
+
+  // Write a fresh timestamp into the tick file. Other clients' tick
+  // pollers (running every 1 second) will see the change and fire an
+  // immediate full sync.
+  async function _touchTickFile(){
+    if(!config.enabled) return;
+    var payload = JSON.stringify({ ts: Date.now(), by: (CURRENT_USER && CURRENT_USER.username) || 'unknown' });
+    await _writeFile('wcg_sync_tick_v1', payload);
+    try { localStorage.setItem('wcg_sync_tick_v1', payload); } catch(_){}
+  }
+
+  // The tick poller — fires every 1 second, fetches ONLY the tick file
+  // (which is tiny + ETag-cached, so most requests return 304 with ~80
+  // bytes of headers). If the tick value changed, trigger a full poll
+  // of all keys immediately. This is what gets us 1-sec cross-device
+  // sync without burning Graph API quota.
+  var _tickTimer = null;
+  var _tickPollInFlight = false;
+  var _lastSeenTick = null;
+  async function _tickPollOnce(){
+    if(!config.enabled || !config.listIds) return;
+    if(_tickPollInFlight) return;   // skip if a previous tick fetch is still running
+    _tickPollInFlight = true;
+    try {
+      var remoteStr = await _readFile('wcg_sync_tick_v1');
+      if(remoteStr === null){ _tickPollInFlight = false; return; }
+      if(_lastSeenTick === remoteStr){ _tickPollInFlight = false; return; }
+      _lastSeenTick = remoteStr;
+      try { console.info('[sync] tick changed → pulling all keys'); } catch(_){}
+      // Tick moved — full poll right now (don't wait for the 2s timer)
+      await _pollOnce();
+    } catch(e){
+      try { console.warn('[sync] tick poll failed:', e); } catch(_){}
+    } finally {
+      _tickPollInFlight = false;
+    }
+  }
+  function _startTickPolling(){
+    if(_tickTimer) clearInterval(_tickTimer);
+    // Seed last-seen so we don't trigger a full poll on the very first tick.
+    try { _lastSeenTick = localStorage.getItem('wcg_sync_tick_v1') || null; } catch(_){}
+    _tickTimer = setInterval(_tickPollOnce, 1000);   // 1-sec tick check
   }
 
   async function _writeKey(key, value){
