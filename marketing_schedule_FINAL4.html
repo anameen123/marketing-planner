@@ -16785,6 +16785,50 @@ function _rpDrawRouteLine(){
 // Live driving times go through Map v2 in a future step; for now we show
 // straight-line miles with a "approximate" note so the feature is usable
 // even without API keys.
+// In-memory cache for OSRM responses, keyed by coords concatenation. Same
+// route requested twice (Edit → Review again) reuses the cached result so
+// we don't hammer the public OSRM server.
+var _RP_OSRM_CACHE = {};
+
+// Call OSRM public demo (free, no API key) to get real road-network
+// driving distance + duration through a series of waypoints. Returns a
+// promise resolving to {legs:[{distMi,durMin}...], totalDistMi, totalDurMin}
+// or null on any failure (the caller falls back to straight-line + speed).
+function _rpFetchOsrmRoute(waypoints){
+  if(!waypoints || waypoints.length < 2) return Promise.resolve(null);
+  // Key the cache on the ordered coordinate sequence (rounded to 4 dp ~10m)
+  var cacheKey = waypoints.map(function(w){
+    return w.lat.toFixed(4) + ',' + w.lng.toFixed(4);
+  }).join('|');
+  if(_RP_OSRM_CACHE[cacheKey]) return Promise.resolve(_RP_OSRM_CACHE[cacheKey]);
+  // OSRM expects lng,lat (NOT lat,lng — common pitfall)
+  var coordsParam = waypoints.map(function(w){ return w.lng + ',' + w.lat; }).join(';');
+  var url = 'https://router.project-osrm.org/route/v1/driving/' + coordsParam
+          + '?overview=false&steps=false&annotations=false';
+  // 8-second timeout — public demo can be slow under load. If it doesn't
+  // respond by then, we fall back gracefully.
+  var ctrl = new AbortController();
+  var to = setTimeout(function(){ ctrl.abort(); }, 8000);
+  return fetch(url, { signal: ctrl.signal })
+    .then(function(r){ clearTimeout(to); return r.ok ? r.json() : null; })
+    .then(function(j){
+      if(!j || !j.routes || !j.routes[0] || !j.routes[0].legs) return null;
+      var legs = j.routes[0].legs.map(function(l){
+        return {
+          distMi: (l.distance || 0) / 1609.344,
+          durMin: (l.duration || 0) / 60
+        };
+      });
+      var totalDistMi = legs.reduce(function(s, l){ return s + l.distMi; }, 0);
+      var totalDurMin = legs.reduce(function(s, l){ return s + l.durMin; }, 0);
+      var result = { legs:legs, totalDistMi:totalDistMi, totalDurMin:totalDurMin, source:'osrm' };
+      _RP_OSRM_CACHE[cacheKey] = result;
+      return result;
+    })
+    .catch(function(){ clearTimeout(to); return null; });
+}
+window._rpFetchOsrmRoute = _rpFetchOsrmRoute;
+
 function _rpFinalizeSmart(){
   var picks = _RP_SLOT_PICKS.filter(function(p){ return p && p.name; });
   if(picks.length === 0){
@@ -16794,42 +16838,82 @@ function _rpFinalizeSmart(){
   var startCoord = _rpResolveCoord(_RP_START_NAME);
   var endCoord   = _rpResolveCoord(_RP_END_NAME);
   if(!startCoord || !endCoord) return;
-  // Build the leg list with straight-line miles.
+  // Build the leg list — straight-line miles as the initial estimate.
+  // Distances get REPLACED with real road-network values once OSRM responds.
   var legs = [];
   var prev = { name: _RP_START_NAME, coord: startCoord };
   picks.forEach(function(p){
-    legs.push({ from: prev, to: { name: p.name, coord: p.coord, days: p.days, bizType: p.bizType }, dist: _rpHaversineMiles(prev.coord, p.coord) });
+    legs.push({ from: prev, to: { name: p.name, coord: p.coord, days: p.days, bizType: p.bizType }, dist: _rpHaversineMiles(prev.coord, p.coord), durMin: null });
     prev = { name: p.name, coord: p.coord };
   });
-  legs.push({ from: prev, to: { name: _RP_END_NAME, coord: endCoord }, dist: _rpHaversineMiles(prev.coord, endCoord) });
+  legs.push({ from: prev, to: { name: _RP_END_NAME, coord: endCoord }, dist: _rpHaversineMiles(prev.coord, endCoord), durMin: null });
+  // Render the pane immediately with straight-line estimates so the user
+  // sees something fast, then upgrade in-place when OSRM responds.
+  _rpRenderReviewPane(legs, /*pending*/ true);
+  // Fire OSRM in the background. Waypoints in order: start, each pick, end.
+  var waypoints = [startCoord].concat(picks.map(function(p){ return p.coord; })).concat([endCoord]);
+  _rpFetchOsrmRoute(waypoints).then(function(res){
+    if(!res){
+      // OSRM didn't answer in time / server down. Fall back gracefully.
+      _rpRenderReviewPane(legs, /*pending*/ false, /*osrmFailed*/ true);
+      return;
+    }
+    // Replace leg distances + durations with the real road-network values.
+    res.legs.forEach(function(rl, i){
+      if(legs[i]){
+        legs[i].dist   = rl.distMi;
+        legs[i].durMin = rl.durMin;
+      }
+    });
+    _rpRenderReviewPane(legs, /*pending*/ false, /*osrmFailed*/ false);
+  });
+}
+window._rpFinalizeSmart = _rpFinalizeSmart;
+
+// Render the Review pane. Called twice: once immediately with straight-
+// line estimates (pending=true), then again once OSRM has responded with
+// real numbers (pending=false). The HTML structure is identical so the
+// user sees a smooth update without the pane flickering.
+function _rpRenderReviewPane(legs, pending, osrmFailed){
+  var panel = document.getElementById('rp-smart-panel');
+  if(!panel) return;
+  var avgMph = 28;
   var totalDist = legs.reduce(function(s, l){ return s + l.dist; }, 0);
-  var avgMph = 28;   // metro-area rough average
-  var totalMinutes = Math.round(totalDist / avgMph * 60);
-  // Build the confirmation HTML
+  var totalMinutes = legs.reduce(function(s, l){
+    return s + (l.durMin != null ? l.durMin : (l.dist / avgMph * 60));
+  }, 0);
   var rowsHtml = legs.map(function(l, i){
     var rec = (l.to.days != null) ? recencyBucket(l.to.days) : (l.to.name === _RP_END_NAME ? null : recencyBucket(null));
     var recChip = rec ? '<span style="display:inline-flex;align-items:center;gap:3px;font-size:9px;color:#374151;background:#fff;border:1px solid var(--border);border-radius:8px;padding:1px 6px;margin-left:6px"><span style="display:inline-block;width:7px;height:7px;background:' + rec.color + ';border-radius:50%"></span>' + rec.short + '</span>' : '';
+    var minutes = l.durMin != null ? l.durMin : (l.dist / avgMph * 60);
     return '<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px dashed var(--border);font-size:12px">'
       +   '<div style="font-size:10px;color:var(--muted);min-width:40px">' + (i === legs.length-1 ? 'Final' : 'Leg ' + (i+1)) + '</div>'
       +   '<div style="flex:1;min-width:0">' + String(l.from.name).replace(/</g,'&lt;') + ' → <b>' + String(l.to.name).replace(/</g,'&lt;') + '</b>' + recChip + '</div>'
-      +   '<div style="font-family:DM Mono,monospace;font-size:11px;color:#1F3864;min-width:90px;text-align:right">' + l.dist.toFixed(1) + ' mi · ~' + Math.round(l.dist / avgMph * 60) + ' min</div>'
+      +   '<div style="font-family:DM Mono,monospace;font-size:11px;color:#1F3864;min-width:100px;text-align:right">' + l.dist.toFixed(1) + ' mi · ~' + Math.round(minutes) + ' min</div>'
       + '</div>';
   }).join('');
-  var panel = document.getElementById('rp-smart-panel');
-  if(!panel) return;
+  // Status line — explains what numbers the user is looking at.
+  var statusHtml;
+  if(pending){
+    statusHtml = '<div style="font-size:10px;color:#1d4ed8;font-style:italic;margin-bottom:10px;display:flex;align-items:center;gap:6px">⏳ Estimates shown — fetching real driving times from OSRM…</div>';
+  } else if(osrmFailed){
+    statusHtml = '<div style="font-size:10px;color:#92400e;font-style:italic;margin-bottom:10px">⚠ Live routing server unavailable — showing straight-line estimates at ~28 mph metro average. Try again in a moment or just proceed.</div>';
+  } else {
+    statusHtml = '<div style="font-size:10px;color:#166534;font-style:italic;margin-bottom:10px">✓ Real road-network driving times via <a href="https://project-osrm.org/" target="_blank" rel="noopener" style="color:#166534">OSRM</a> (free, open-source routing).</div>';
+  }
   panel.innerHTML = ''
     + '<div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:10px">📋 Review your route</div>'
     + '<div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px 14px;margin-bottom:10px">'
     +   rowsHtml
-    +   '<div style="display:flex;justify-content:space-between;padding-top:10px;margin-top:6px;border-top:1px solid var(--border);font-size:13px;font-weight:700;color:#1F3864"><div>Total</div><div style="font-family:DM Mono,monospace">' + totalDist.toFixed(1) + ' mi · ~' + totalMinutes + ' min</div></div>'
+    +   '<div style="display:flex;justify-content:space-between;padding-top:10px;margin-top:6px;border-top:1px solid var(--border);font-size:13px;font-weight:700;color:#1F3864"><div>Total</div><div style="font-family:DM Mono,monospace">' + totalDist.toFixed(1) + ' mi · ~' + Math.round(totalMinutes) + ' min</div></div>'
     + '</div>'
-    + '<div style="font-size:10px;color:var(--muted);font-style:italic;margin-bottom:10px">⚠ Times are estimates (straight-line @ ~28 mph metro average). Live driving times will use real routing in a future step.</div>'
+    + statusHtml
     + '<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">'
     +   '<button onclick="_rpBuildSmartPanel()" style="background:#fff;border:1px solid var(--border);color:#1F3864;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">← Edit</button>'
     +   '<button onclick="_rpLockInRoute()" style="background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">✓ Lock in route &amp; add visits to schedule</button>'
     + '</div>';
 }
-window._rpFinalizeSmart = _rpFinalizeSmart;
+window._rpRenderReviewPane = _rpRenderReviewPane;
 
 // Lock-in: add each picked visit to today's schedule, in order.
 function _rpLockInRoute(){
@@ -22208,7 +22292,7 @@ function renderOrgTree(){
     var pos = (typeof MEMBER_POSITIONS !== 'undefined' && MEMBER_POSITIONS[m]) ? MEMBER_POSITIONS[m] : 'Marketing Agent';
     var initials = m.split(' ').map(function(w){return w[0];}).join('').toUpperCase().slice(0,2);
     var note = (m === 'Ms Sadia') ? ' <span style="font-style:italic;color:var(--muted)">· also VP above</span>' : '';
-    return '<div onclick="loadMemberProfile(\''+m.replace(/\'/g,"\\'")+'\')" '
+    return '<div onclick="window._teamProfileOrigin=\'tree\';loadMemberProfile(\''+m.replace(/\'/g,"\\'")+'\')" '
       +'style="cursor:pointer;background:#fff;border:1px solid var(--border);border-left:4px solid '+color+';border-radius:10px;padding:11px 13px;display:flex;align-items:center;gap:11px;transition:transform .12s,box-shadow .12s" '
       +'onmouseover="this.style.transform=\'translateX(4px)\';this.style.boxShadow=\'0 4px 12px rgba(0,0,0,.10)\'" '
       +'onmouseout="this.style.transform=\'\';this.style.boxShadow=\'\'">'
@@ -22418,14 +22502,30 @@ function loadMemberProfile(name){
   // Keep the dropdown in sync (e.g. when triggered by a tree-card click)
   var picker = document.querySelector('.member-picker select');
   if(picker && picker.value !== name) picker.value = name;
-  // Add a "← Back to team" affordance if not present
+  // Add a "← Back" affordance if not present. Label + behavior depends on
+  // where the user opened the profile FROM (set by pickMemberFromStats /
+  // any other entry point). Default: back to the Tree (team org chart).
+  // Per user 2026-05-19: if they came from Stats (Team Overview), the
+  // button must route them back to Stats — otherwise the only way back is
+  // re-clicking the sub-tab, which is a discoverability dead-end.
   if(!document.getElementById('back-to-team-btn')){
     var card = document.getElementById('profile-card');
     if(card){
       var back = document.createElement('button');
       back.id = 'back-to-team-btn';
-      back.innerHTML = '&larr; Back to team';
-      back.onclick = function(){ loadMemberProfile(''); };
+      var origin = window._teamProfileOrigin || 'tree';
+      back.innerHTML = (origin === 'stats')
+        ? '&larr; Back to Team Overview'
+        : '&larr; Back to team';
+      back.onclick = function(){
+        // Clear the profile, then route back to whichever sub-tab they came from
+        loadMemberProfile('');
+        if(origin === 'stats' && typeof switchTeamTab === 'function'){
+          switchTeamTab('stats');
+        }
+        // Reset the origin tracker so the next member-profile open starts clean
+        window._teamProfileOrigin = null;
+      };
       back.style.cssText = 'background:none;border:1px solid var(--border);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--muted);cursor:pointer;font-family:DM Sans,sans-serif;margin-bottom:12px';
       card.insertBefore(back, card.firstChild);
     }
@@ -22600,7 +22700,12 @@ function renderStatsMemberPicker(){
   if(!host) return;
   if(typeof MEMBERS === 'undefined') return;
   function pickMemberFromStats(name){
-    // Match the old dropdown's UX: no "are you sure" — direct navigation.
+    // Per user 2026-05-19: track that the user came from the Stats sub-tab
+    // so the "← Back to team" button on the member profile returns HERE
+    // instead of to the Tree (which is the default origin). Without this
+    // flag, the only way back to Team Overview was to re-click the Stats
+    // tab button.
+    window._teamProfileOrigin = 'stats';
     if(typeof switchTeamTab === 'function') switchTeamTab('tree');
     if(typeof loadMemberProfile === 'function') loadMemberProfile(name);
   }
