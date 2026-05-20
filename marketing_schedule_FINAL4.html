@@ -6246,6 +6246,11 @@ if(typeof _loadDisplayNames === 'function') _loadDisplayNames();
 if(typeof _loadClinicLeads === 'function') _loadClinicLeads();
 // Community-outreach engagement counters (reached/interested/emails/phones)
 if(typeof _loadOutreachEngagement === 'function') _loadOutreachEngagement();
+// Dynamic team members (added at runtime via the Add Member modal) — merge
+// them into USERS / EMAIL_USER_MAP / MEMBERS / etc. before any code reads
+// those stores. After this call, a member added via the UI on any device
+// can sign in via Microsoft on every device with no code change needed.
+if(typeof _loadDynamicTeam === 'function') _loadDynamicTeam();
 // Reset interval (quarterly/monthly) — admin-configurable
 if(typeof _loadResetInterval === 'function'){ _loadResetInterval(); CURRENT_PERIOD = _computeCurrentPeriod(); }
 _loadPeriodBudgetEnabled();
@@ -21242,14 +21247,25 @@ function confirmAddMember(){
   var baseSlug = email.split('@')[0].toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'') || 'member';
   var slug = baseSlug; var n = 2;
   while(USERS[slug]){ slug = baseSlug + '_' + n; n++; }
-  // Push to the global stores everything else loops over
-  MEMBERS.push(name);
-  MEMBER_POSITIONS[name] = pos;
-  MCOLORS[name] = color;
-  if(isHandler) CALL_HANDLERS[name] = true;
-  // Wire into auth: USERS entry + email→user mapping (so M365 sign-in works for them)
-  USERS[slug] = { role:'member', name:name, color:color };
-  EMAIL_USER_MAP[email] = { username:slug, role:'member', name:name, color:color };
+  // ── PERSIST so the member survives page reloads ──
+  // Without this, the in-memory USERS / EMAIL_USER_MAP / MEMBERS additions
+  // below would be lost on the next refresh (the file's literal definitions
+  // would reload them as if the new teammate never existed). DataLayer.save
+  // routes to localStorage today + SharePoint when the SP backend is on, so
+  // the new entry is visible to other signed-in users too.
+  _addDynamicTeamMember({
+    slug: slug,
+    name: name,
+    email: email,
+    position: pos,
+    color: color,
+    isCallHandler: !!isHandler,
+    addedAt: new Date().toISOString(),
+    addedBy: (CURRENT_USER && CURRENT_USER.name) || ''
+  });
+  // Apply to the in-memory stores so the rest of the UI sees the change
+  // immediately without a reload.
+  _applyDynamicTeamEntry({slug:slug, name:name, email:email, position:pos, color:color, isCallHandler:!!isHandler});
   // Re-render every surface that lists members
   renderOrgTree();
   refreshMemberDropdowns();
@@ -21259,8 +21275,76 @@ function confirmAddMember(){
     refresh(S.currentDay);
   }
   closeAddMemberModal();
-  showToast('Added '+name+'. They can sign in with '+email+'.');
+  showToast('Added '+name+'. They can sign in with '+email+' — no code change needed.');
 }
+
+// ── DYNAMIC TEAM STORE ────────────────────────────────────────────────────
+// Members added via the Add Member modal at runtime persist here so they
+// survive page reloads. On bootstrap (see _loadDynamicTeam below) each
+// stored entry is replayed into the in-memory USERS / EMAIL_USER_MAP /
+// MEMBERS / MEMBER_POSITIONS / MCOLORS / CALL_HANDLERS objects, exactly
+// as if the entry had been hardcoded into the source file.
+//
+// Shape on disk:
+//   { entries: [{ slug, name, email, position, color, isCallHandler,
+//                 addedAt, addedBy }, ...] }
+var DYNAMIC_TEAM = { entries: [] };
+var _DT_LS_KEY = 'wcg_dynamic_team_v1';
+function _loadDynamicTeam(){
+  if(typeof DataLayer === 'undefined' || !DataLayer.load) return;
+  var v = DataLayer.load(_DT_LS_KEY);
+  if(v && Array.isArray(v.entries)){
+    DYNAMIC_TEAM = v;
+  } else {
+    DYNAMIC_TEAM = { entries: [] };
+  }
+  // Replay every stored entry into the in-memory stores
+  DYNAMIC_TEAM.entries.forEach(function(e){ _applyDynamicTeamEntry(e); });
+}
+function _saveDynamicTeam(){
+  if(typeof DataLayer === 'undefined' || !DataLayer.save){
+    try { localStorage.setItem(_DT_LS_KEY, JSON.stringify(DYNAMIC_TEAM)); } catch(e){}
+    return;
+  }
+  DataLayer.save(_DT_LS_KEY, DYNAMIC_TEAM);
+}
+function _addDynamicTeamMember(entry){
+  if(!entry || !entry.slug || !entry.email) return;
+  // De-dupe by email — if the same email is being re-added, replace
+  DYNAMIC_TEAM.entries = (DYNAMIC_TEAM.entries || []).filter(function(e){
+    return (e.email || '').toLowerCase() !== entry.email.toLowerCase();
+  });
+  DYNAMIC_TEAM.entries.push(entry);
+  _saveDynamicTeam();
+}
+// Apply a dynamic entry into the in-memory stores. Safe to call multiple
+// times (idempotent — same input produces the same final state).
+function _applyDynamicTeamEntry(e){
+  if(!e || !e.name || !e.email || !e.slug) return;
+  // Auth side
+  if(!USERS[e.slug]){
+    USERS[e.slug] = { role:'member', name:e.name, color:e.color || '#0d9488' };
+  }
+  if(!EMAIL_USER_MAP[e.email]){
+    EMAIL_USER_MAP[e.email] = { username:e.slug, role:'member', name:e.name, color:e.color || '#0d9488' };
+  }
+  // Team side
+  if(typeof MEMBERS !== 'undefined' && MEMBERS.indexOf(e.name) < 0){
+    MEMBERS.push(e.name);
+  }
+  if(typeof MEMBER_POSITIONS !== 'undefined' && !MEMBER_POSITIONS[e.name]){
+    MEMBER_POSITIONS[e.name] = e.position || 'Marketing Agent';
+  }
+  if(typeof MCOLORS !== 'undefined' && !MCOLORS[e.name]){
+    MCOLORS[e.name] = e.color || '#0d9488';
+  }
+  if(e.isCallHandler && typeof CALL_HANDLERS !== 'undefined'){
+    CALL_HANDLERS[e.name] = true;
+  }
+}
+window._loadDynamicTeam = _loadDynamicTeam;
+window._addDynamicTeamMember = _addDynamicTeamMember;
+window._applyDynamicTeamEntry = _applyDynamicTeamEntry;
 window.confirmAddMember = confirmAddMember;
 
 function loadMemberProfile(name){
