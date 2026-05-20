@@ -16609,8 +16609,68 @@ function _perpDistanceMiles(P, A, B){
 
 // Returns the city coordinate for a given clinic / MVA / outreach entry.
 // Falls back to null if the city isn't in our coord map.
+// ── PER-BUSINESS GEOCODES ─────────────────────────────────────────────
+// One-time geocoded coords for businesses that have a real street
+// address (generated 2026-05-20 via Nominatim — see _tooling/geocode_*).
+// 39 businesses geocoded (all MVA firms + outreach orgs with addresses).
+// Clinics fall through to city centroid because the CLINIC_BANK literal
+// has no street-address field — they need a separate data-entry pass
+// before geocoding can help them.
+//
+// `getCoordForBusiness` checks this map first; falls back to city centroid
+// if not found here. Adding more entries is safe — just paste the
+// {name: {lat, lng}} key in alphabetical order, no other code changes.
+var BUSINESS_GEOCODES = {
+  'Wormington & Bollinger': {lat:33.1978925,lng:-96.6145},
+  'Frisco Chamber of Commerce': {lat:33.1505222,lng:-96.8258095},
+  'Plano Chamber of Commerce': {lat:33.019612,lng:-96.69744},
+  'Allen-Fairview Chamber of Commerce': {lat:33.1015625,lng:-96.6728371},
+  'Carrollton Chamber of Commerce': {lat:32.9704538,lng:-96.8937492},
+  'Richardson Chamber of Commerce': {lat:32.9582375,lng:-96.7318359},
+  'Lewisville Chamber of Commerce': {lat:33.0484366,lng:-97.0205841},
+  'Addison Chamber of Commerce': {lat:32.9525399,lng:-96.8157266},
+  'Farmers Branch Chamber': {lat:32.931458,lng:-96.873353},
+  'Frisco Fire Department HQ': {lat:33.1492026,lng:-96.8096039},
+  'Plano Fire-Rescue': {lat:33.025991,lng:-96.699348},
+  'McKinney Fire Department': {lat:33.2242669,lng:-96.6409694},
+  'Carrollton Fire Department': {lat:32.9756536,lng:-96.8882469},
+  'Allen Fire Department': {lat:33.1016138,lng:-96.674716},
+  'Richardson Fire Department': {lat:32.948684,lng:-96.7298225},
+  'Frisco Police Department': {lat:33.1343428,lng:-96.8230558},
+  'Plano Police Department': {lat:33.01798,lng:-96.7030214},
+  'McKinney Police Department': {lat:33.198057,lng:-96.610596},
+  'Carrollton Police Department': {lat:32.9764652,lng:-96.8868954},
+  'Islamic Center of Collin County (ICQC)': {lat:33.1161439,lng:-96.7838366},
+  'East Plano Islamic Center (EPIC)': {lat:33.0109325,lng:-96.6466438},
+  'Islamic Association of Collin County': {lat:33.059573,lng:-96.750665},
+  'Islamic Association of Carrollton (IAC)': {lat:32.962055,lng:-96.877206},
+  'Islamic Association of Allen (IAA)': {lat:33.0971229,lng:-96.683494},
+  'Islamic Association of North Texas (IANT)': {lat:32.9377892,lng:-96.7308854},
+  'Islamic Assoc. of Lewisville/Flower Mound': {lat:33.0341587,lng:-97.082983},
+  'Qalam Institute': {lat:33.0120832,lng:-96.8440858},
+  'Hindu Temple of Frisco': {lat:33.1505998,lng:-96.8238183},
+  'Frisco ISD - District Office': {lat:33.124747,lng:-96.7965079},
+  'Plano ISD - District Office': {lat:33.0185135,lng:-96.7460209},
+  'McKinney ISD - District Office': {lat:33.206724,lng:-96.6324445},
+  'Allen ISD - District Office': {lat:33.100649,lng:-96.65903},
+  'Richardson ISD': {lat:32.963899,lng:-96.710937},
+  'Frisco Family Services': {lat:33.1496917,lng:-96.8262889},
+  'The Samaritan Inn (McKinney)': {lat:33.222219,lng:-96.613357},
+  'Network of Community Ministries (Richardson)': {lat:32.9367576,lng:-96.7419227},
+  'Frisco Square Community Events': {lat:33.1504469,lng:-96.8376231},
+  'Legacy West Plano': {lat:33.0878633,lng:-96.8258684},
+  'The Star in Frisco (Dallas Cowboys HQ)': {lat:33.1090939,lng:-96.8341453}
+};
+window.BUSINESS_GEOCODES = BUSINESS_GEOCODES;
+
 function getCoordForBusiness(name){
   if(!name) return null;
+  // 1. Per-business geocoded coord (preferred — actual street address)
+  if(BUSINESS_GEOCODES && BUSINESS_GEOCODES[name]){
+    return { lat: BUSINESS_GEOCODES[name].lat, lng: BUSINESS_GEOCODES[name].lng };
+  }
+  // 2. Fall back to city centroid (older data — all clinics in same city
+  //    will share one point until per-clinic addresses are added).
   var type = (typeof getBizTypeForName === 'function') ? getBizTypeForName(name) : 'clinic';
   var city = '';
   if(type === 'mva' && typeof MVA_ATTORNEYS !== 'undefined'){
