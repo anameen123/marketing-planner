@@ -1357,7 +1357,7 @@ body.role-front_desk #referrals-view {
          mode (no team sharing) vs SharePoint mode (live sync). Hidden until
          a user is signed in. Click for diagnostic info. -->
     <div id="sync-status-wrap" style="display:none;align-items:center;gap:6px;font-size:10px;font-weight:600;letter-spacing:.04em;padding:5px 9px;border-radius:9px;cursor:pointer;transition:background .15s"
-         title="Sync status — click for details"
+         title="Sync status — green = up to date with the team · yellow = pulling latest changes from your teammates · gray = not connected to the team (this browser only). Click for details + a manual Pull-now button."
          onclick="showSyncStatus()">
       <span id="sync-status-dot" style="width:8px;height:8px;border-radius:50%;background:#94a3b8;display:inline-block;transition:background .25s"></span>
       <span id="sync-status-label" style="color:#fff;opacity:.85">Local</span>
@@ -20100,8 +20100,17 @@ function rowHTML(row,di,ri){
   } else if(row.isManual){
     confirmCell = '';
   } else if(row.rowConfirmed){
+    // Per user 2026-05-20: confirmed rows need a VISIBLE Edit button at
+    // the end of the row (not just in the hidden ⋮ menu) so it's
+    // obvious that's how to change anything after confirmation.
+    var _canEditHere2 = (typeof canEditVisitRow === 'function') ? canEditVisitRow(row) : true;
+    var _dateOpen2    = (typeof canEditDate === 'function') ? canEditDate(day.date) : true;
+    var _showEditBtn  = _canEditHere2 && (_dateOpen2 || (typeof isAdmin === 'function' && isAdmin()));
     confirmCell = '<div style="display:flex;flex-direction:column;align-items:center;gap:3px">'
       +'<span style="background:#f0fdf4;color:#166534;border:1px solid #86efac;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px">&#10003; Done</span>'
+      +(_showEditBtn
+          ? '<button onclick="openEditVisit('+di+','+ri+')" style="background:var(--purple);color:#fff;border:none;border-radius:6px;padding:3px 10px;font-size:10px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;margin-top:1px" title="Edit this confirmed visit — opens the full edit dialog">&#9998; Edit</button>'
+          : '')
       +(canEditDate(day.date)?'<button onclick="unconfirmRow('+di+','+ri+')" style="font-size:9px;color:#adb5bd;background:none;border:none;cursor:pointer;font-family:DM Sans,sans-serif">undo</button>':'')
       +'</div>';
   } else if(st === 'Completed' && !rowOutcomeSet){
@@ -24223,25 +24232,33 @@ function switchTab(tab, opts){
       el.style.display=tab===k?'block':'none';
     }
   });
-  // ── PAGE ISOLATION (per user 2026-05-19) ────────────────────────────
-  // The schedule has TWO top-level containers — #landing (calendar view)
-  // and #day-view (one-day detail view) — that are toggled by openDay()
-  // / showLanding(), NOT by switchTab. Result: when the user navigates
-  // to Bank / Team / Finances / etc., those two divs keep whatever
-  // display state they were left in. The user scrolls past the active
-  // tab's content and sees the schedule bleeding through underneath.
-  // Force both to display:none for every non-schedule tab so each tab is
-  // a clean, isolated page. On 'schedule', show the landing calendar
-  // (the day-view is opened separately by openDay).
-  var landingEl = document.getElementById('landing');
-  var dayViewEl = document.getElementById('day-view');
+  // ── PAGE ISOLATION (per user 2026-05-19, revised 2026-05-20) ────────
+  // Earlier version of this fix hid #landing entirely on non-schedule
+  // tabs — but the HEADER + main-nav live INSIDE #landing, so hiding
+  // #landing also hid the header. That broke navigation for the user.
+  //
+  // Fix: leave #landing in the layout (so its sticky header stays).
+  // Hide only its INNER body container (#schedule-view + events-section
+  // + counters-col), which is what causes the scroll-through bleed.
+  // Day-view stays hidden unless explicitly opened.
+  var landingEl   = document.getElementById('landing');
+  var schedBody   = document.getElementById('schedule-view');
+  var eventsEl    = document.getElementById('events-section');
+  var countersEl  = document.getElementById('counters-col');
+  var dayViewEl   = document.getElementById('day-view');
+  if(landingEl) landingEl.style.display = 'flex';   // ALWAYS show — keeps the header sticky
   if(tab === 'schedule'){
-    if(landingEl) landingEl.style.display = 'flex';
-    // day-view stays hidden unless explicitly opened via openDay()
-    if(dayViewEl) dayViewEl.style.display = 'none';
+    if(schedBody)  schedBody.style.display  = 'grid';
+    if(eventsEl)   eventsEl.style.display   = '';
+    if(countersEl) countersEl.style.display = '';
+    if(dayViewEl)  dayViewEl.style.display  = 'none';
   } else {
-    if(landingEl) landingEl.style.display = 'none';
-    if(dayViewEl) dayViewEl.style.display = 'none';
+    // Hide the schedule's body content on every other tab so it doesn't
+    // bleed through under the active tab's view.
+    if(schedBody)  schedBody.style.display  = 'none';
+    if(eventsEl)   eventsEl.style.display   = 'none';
+    if(countersEl) countersEl.style.display = 'none';
+    if(dayViewEl)  dayViewEl.style.display  = 'none';
   }
   // (events-section now lives INSIDE schedule-view's left column — its
   // visibility is handled automatically by the parent's display toggle
