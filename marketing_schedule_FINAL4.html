@@ -16487,16 +16487,23 @@ function _rpUpdateStatus(){
   }
 }
 
-// Compute up to 4 candidate businesses at a given checkpoint, within an
-// expanding search radius. Returns at most `limit` entries, prioritized
-// by recency-bucket (ripe > yellow > warm > fresh > never), then distance.
-// Excludes Community Outreach by default — outreach is event-based and is
-// added manually via "+ Outreach instead" on each slot.
+// Compute candidate businesses near a checkpoint. Per user 2026-05-20:
+//
+//   1. RANK by longest-since-visited first (oldest visit OR never visited
+//      goes to the top). Closest wins inside ties.
+//   2. EXCLUDE businesses whose clinic-lead status is 'dead_end' — those
+//      are confirmed-dead relationships and shouldn't be auto-suggested.
+//      (They can still be added manually elsewhere, with a warning.)
+//   3. Outreach already excluded by default (event-based, planned ahead).
+//
+// Each returned candidate carries its lead status + level so the slot
+// row can render an L1/L2/L3/Needs Work/etc. chip next to the name.
 function _rpFindCandidates(checkpoint, opts){
   opts = opts || {};
-  var limit = opts.limit || 4;
+  var limit = opts.limit || 5;
   var minStaleDays = opts.minStaleDays != null ? opts.minStaleDays : 14;
   var excludeSet = opts.exclude || {};
+  var excludeDeadEnd = opts.includeDeadEnd ? false : true;   // default: exclude
   // Build the candidate pool (clinic + MVA, skip outreach unless opted in)
   var pool = [];
   function consider(name, bizType){
@@ -16505,10 +16512,20 @@ function _rpFindCandidates(checkpoint, opts){
     if(!coord) return;
     var days  = (typeof daysSinceLastVisit === 'function') ? daysSinceLastVisit(name) : null;
     // Recency filter: only include businesses that are stale enough (or
-    // never visited). Members can relax the filter in v2.
+    // never visited). 14d default; user can relax in a future pass.
     if(days != null && days < minStaleDays) return;
+    // ── Dead-end filter: per user request 2026-05-20, businesses that
+    // are confirmed-dead (lead.status === 'dead_end') are NOT eligible
+    // for auto-recommendation. The member can still add them by hand
+    // from the manual search affordance, where a warning will appear.
+    var lead = (typeof getClinicLead === 'function') ? getClinicLead(name) : null;
+    if(excludeDeadEnd && lead && lead.status === 'dead_end') return;
     var dist  = _rpHaversineMiles(coord, checkpoint);
-    pool.push({ name:name, bizType:bizType, coord:coord, days:days, dist:dist });
+    pool.push({
+      name:name, bizType:bizType, coord:coord, days:days, dist:dist,
+      leadStatus: lead ? lead.status : 'not_visited',
+      leadLevel:  lead ? (lead.level || 0) : 0
+    });
   }
   if(typeof CLINIC_BANK !== 'undefined'){
     CLINIC_BANK.forEach(function(c){ if(c && c.n) consider(c.n, 'clinic'); });
@@ -16520,36 +16537,58 @@ function _rpFindCandidates(checkpoint, opts){
     OUTREACH.forEach(function(o){ if(o && o.name) consider(o.name, 'outreach'); });
   }
   // Expanding-radius search: start tight at 0.5 mi, expand outward.
-  // The cap is INTENTIONALLY high (12 mi) because the current data only
-  // has CITY-CENTROID coordinates per business (all 100+ Frisco clinics
-  // share the same lat/lng — the Frisco centroid). So a midpoint on a
-  // route between cities is several miles from any centroid. Bumping the
-  // cap keeps the algorithm useful until per-business geocoding lands in
-  // a future Map v2 milestone.
+  // High cap because data uses CITY-CENTROID coordinates today.
   var radii = [0.5, 1, 1.5, 2, 3, 4, 5, 6, 8, 10, 12];
   for(var i = 0; i < radii.length; i++){
     var r = radii[i];
     var within = pool.filter(function(p){ return p.dist <= r; });
     if(within.length >= limit || i === radii.length - 1){
-      // Rank: ripe (21+) → yellow → warm → fresh → never (gray last because
-      // we don't know if a never-visit is actually valuable yet); within
-      // each bucket, closer wins.
-      var rank = function(p){
-        if(p.days == null) return 4;             // never
-        if(p.days >= 21)   return 0;             // ripe
-        if(p.days >= 14)   return 1;             // yellow
-        if(p.days >= 7)    return 2;             // warm
-        return 3;                                // fresh
-      };
+      // ── Sort: longest-since-visited FIRST (per user 2026-05-20).
+      // Treat null (never visited) as Infinity so it bubbles to the top —
+      // semantically "we have no relationship at all, this is the oldest
+      // possible candidate." Ties broken by distance (closer wins).
       within.sort(function(a, b){
-        var ra = rank(a), rb = rank(b);
-        if(ra !== rb) return ra - rb;
+        var aDays = (a.days == null) ? Infinity : a.days;
+        var bDays = (b.days == null) ? Infinity : b.days;
+        if(aDays !== bDays) return bDays - aDays;   // descending (older first)
         return a.dist - b.dist;
       });
       return within.slice(0, limit);
     }
   }
   return [];
+}
+
+// Short, human label for a business's current lead status. bizType-aware
+// so MVAs show "L1 Reception / L2 Attorney" instead of the clinic ladder.
+// Used in the route-planner candidate rows.
+function _rpLeadStatusShort(name, bizType){
+  if(!name) return '';
+  var lead = (typeof getClinicLead === 'function') ? getClinicLead(name) : null;
+  if(!lead) return 'Not visited';
+  if(lead.status === 'established'){
+    var lv = (typeof getEstablishedLevel === 'function')
+      ? getEstablishedLevel(lead.level, bizType)
+      : (typeof ESTABLISHED_LEVELS !== 'undefined' ? ESTABLISHED_LEVELS[lead.level] : null);
+    return lv ? lv.label : ('L' + lead.level);
+  }
+  if(lead.status === 'needs_work') return 'Needs Work';
+  if(lead.status === 'dead_end')   return 'Dead End';
+  return 'Not visited';
+}
+function _rpLeadStatusColor(name, bizType){
+  if(!name) return '#9ca3af';
+  var lead = (typeof getClinicLead === 'function') ? getClinicLead(name) : null;
+  if(!lead) return '#9ca3af';
+  if(lead.status === 'established'){
+    var lv = (typeof getEstablishedLevel === 'function')
+      ? getEstablishedLevel(lead.level, bizType)
+      : (typeof ESTABLISHED_LEVELS !== 'undefined' ? ESTABLISHED_LEVELS[lead.level] : null);
+    return (lv && lv.color) || '#16a34a';
+  }
+  if(lead.status === 'needs_work') return '#d97706';
+  if(lead.status === 'dead_end')   return '#dc2626';
+  return '#9ca3af';
 }
 
 // State for the slot picks (which candidate the user chose per slot).
@@ -16620,24 +16659,44 @@ function _rpRenderSlots(){
 }
 
 function _rpRenderSlotRow(k, pick, cands){
-  var pickName = pick ? pick.name : '— none —';
   var pickRec  = pick ? recencyBucket(pick.days) : recencyBucket(null);
+  // Build the dropdown options — each option now shows:
+  //   name  ·  type  ·  recency (e.g. "never" or "37d")  ·  lead status  ·  X.X mi
+  // Sorted at the source so the longest-since-visited candidate is at top.
   var dropdownOpts = cands.length === 0
-    ? '<option value="">No stale candidates within 3 mi of this checkpoint</option>'
+    ? '<option value="">No candidates found within 12 mi — try fewer visits or relocate Start/End</option>'
     : cands.map(function(c, i){
         var bucket = recencyBucket(c.days);
+        var leadShort = _rpLeadStatusShort(c.name, c.bizType);
         var picked = (pick && pick.name === c.name) ? ' selected' : '';
-        var lbl = c.name + '  ·  ' + (c.bizType === 'mva' ? 'MVA' : c.bizType === 'outreach' ? 'Outreach' : 'Clinic')
-                + '  ·  ' + bucket.short + '  ·  ' + c.dist.toFixed(1) + ' mi';
+        var typeLbl = c.bizType === 'mva' ? 'MVA' : c.bizType === 'outreach' ? 'Outreach' : 'Clinic';
+        var staleLbl = (c.days == null) ? 'never visited' : (c.days + 'd ago');
+        var lbl = c.name + '  ·  ' + typeLbl
+                + '  ·  ' + staleLbl
+                + '  ·  ' + leadShort
+                + '  ·  ' + c.dist.toFixed(1) + ' mi';
         return '<option value="' + i + '"' + picked + '>' + lbl.replace(/</g,'&lt;') + '</option>';
       }).join('');
-  return '<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px dashed var(--border)">'
+  // Lead-status chip for the currently-picked candidate. Color matches the
+  // lead status (green for established, orange for needs work, red for
+  // dead end, gray for not visited).
+  var leadChipHtml = '';
+  if(pick){
+    var leadColor = _rpLeadStatusColor(pick.name, pick.bizType);
+    var leadLabel = _rpLeadStatusShort(pick.name, pick.bizType);
+    leadChipHtml = '<span title="Current lead status" style="display:inline-flex;align-items:center;gap:4px;font-size:10px;color:#fff;background:' + leadColor + ';border-radius:10px;padding:2px 8px;flex-shrink:0;font-weight:700">' + leadLabel + '</span>';
+  }
+  // Recency chip
+  var stalenessLbl = pick ? (pick.days == null ? 'never visited' : pick.days + 'd ago') : 'no pick';
+  var recencyChipHtml = '<span title="' + pickRec.label + '" style="display:inline-flex;align-items:center;gap:4px;font-size:10px;color:#374151;background:#fff;border:1px solid var(--border);border-radius:10px;padding:2px 8px;flex-shrink:0"><span style="display:inline-block;width:8px;height:8px;background:' + pickRec.color + ';border-radius:50%"></span>' + stalenessLbl + '</span>';
+  return '<div style="display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px dashed var(--border);flex-wrap:wrap">'
     +   '<div style="background:#1F3864;color:#fff;border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex-shrink:0">' + k + '</div>'
-    +   '<div style="flex:1;min-width:0">'
-    +     '<div style="font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Visit ' + k + '</div>'
+    +   '<div style="flex:1;min-width:200px">'
+    +     '<div style="font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Visit ' + k + ' — sorted longest-not-visited first</div>'
     +     '<select onchange="_rpPickSlotCandidate(' + k + ', this.value)" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:6px 8px;font-size:12px;font-family:DM Sans,sans-serif;background:#fff;margin-top:2px">' + dropdownOpts + '</select>'
     +   '</div>'
-    +   '<span title="' + pickRec.label + '" style="display:inline-flex;align-items:center;gap:4px;font-size:10px;color:#374151;background:#fff;border:1px solid var(--border);border-radius:10px;padding:2px 8px;flex-shrink:0"><span style="display:inline-block;width:8px;height:8px;background:' + pickRec.color + ';border-radius:50%"></span>' + pickRec.short + '</span>'
+    +   recencyChipHtml
+    +   leadChipHtml
     +   '<button onclick="_rpRemoveSlot(' + k + ')" title="Remove this stop" style="background:none;border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:4px 8px;font-size:11px;cursor:pointer">✕</button>'
     + '</div>';
 }
