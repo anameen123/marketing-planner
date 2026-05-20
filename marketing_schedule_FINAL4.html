@@ -6545,21 +6545,27 @@ var DataLayer = (function(){
   // (or any other local state) doesn't get wiped when the team first goes live.
   // Last-writer-wins semantics from there on — works fine for a 6-user team.
   async function _initialFetch(){
+    // ── PARALLEL INITIAL FETCH (per user 2026-05-20 "prototype feel" fix) ─
+    // Was sequential await — 10 keys × ~200ms = ~2 seconds before the user
+    // saw teammate data, with NO loading indicator. UI rendered from stale
+    // localStorage in the meantime, making the app feel like a prototype.
+    // Promise.all collapses to one round-trip duration (~250-400ms).
     var keys = Object.keys(config.keyToList);
+    var _t0 = Date.now();
+    try { console.info('[sync] initial pull starting — ' + keys.length + ' keys'); } catch(_){}
+    var results = await Promise.all(keys.map(function(k){
+      return _fetchOrSeedKey(k)
+        .then(function(r){ return { k: k, r: r }; })
+        .catch(function(e){ return { k: k, err: e }; });
+    }));
     var seededCount = 0, pulledCount = 0;
-    for(var i = 0; i < keys.length; i++){
-      try {
-        var result = await _fetchOrSeedKey(keys[i]);
-        if(result === 'pulled')  pulledCount++;
-        else if(result === 'seeded') seededCount++;
-      } catch(e){ /* tolerate single-key failures */ }
-    }
+    results.forEach(function(x){
+      if(x.r === 'pulled')      pulledCount++;
+      else if(x.r === 'seeded') seededCount++;
+    });
+    try { console.info('[sync] initial pull done in ' + (Date.now()-_t0) + 'ms · pulled=' + pulledCount + ' · seeded=' + seededCount); } catch(_){}
     if(seededCount > 0){
-      console.info('[DataLayer] Seeded ' + seededCount + ' empty SharePoint List(s) from local cache');
       if(typeof showToast === 'function') showToast('Uploaded ' + seededCount + ' data set(s) to SharePoint');
-    }
-    if(pulledCount > 0){
-      console.info('[DataLayer] Pulled ' + pulledCount + ' List(s) from SharePoint into local cache');
     }
     _lastPollISO = new Date().toISOString();
     config.lastPollISO = _lastPollISO;
@@ -6790,6 +6796,9 @@ var DataLayer = (function(){
     }
     var _t0 = Date.now();
     _updateSyncBadge('syncing');
+    // Visible top-of-page progress bar for ANY active pull. Refcount-guarded
+    // so concurrent polls don't double-hide.
+    try { if(typeof showSyncBar === 'function') showSyncBar(); } catch(_){}
     var anyFailed = false;
     var changedKeys = [];
     // ── PARALLEL READS (per user 2026-05-20 sync push) ───────────────────
@@ -6809,6 +6818,7 @@ var DataLayer = (function(){
     _lastPollISO = new Date().toISOString();
     config.lastPollISO = _lastPollISO;
     _updateSyncBadge(anyFailed ? 'error' : 'ok');
+    try { if(typeof hideSyncBar === 'function') hideSyncBar(); } catch(_){}
     try { console.info('[sync] poll done in', (Date.now()-_t0)+'ms', '· changed:', changedKeys.length ? changedKeys.join(',') : '(none)', '· failed:', anyFailed); } catch(_){}
   }
   // Public: force a sync right now (don't wait for the next 5-second poll).
@@ -8174,7 +8184,9 @@ async function doMsLogin(){
     // If it fails (network, missing permission, etc.), we silently fall back
     // to localStorage so the user can still work — we'll retry on next login.
     DataLayer._config.enabled = true;
+    if(typeof showSyncBar === 'function') showSyncBar();
     var bootResult = await DataLayer.bootstrap();
+    if(typeof hideSyncBar === 'function') hideSyncBar();
     if(bootResult.ok && bootResult.mode === 'sharepoint'){
       showToast('Connected to SharePoint · live sync on');
     } else {
@@ -8275,13 +8287,20 @@ async function doCredentialsLogin(){
 
     // Activate SharePoint backend (same as doMsLogin)
     DataLayer._config.enabled = true;
-    DataLayer.bootstrap().then(function(r){
+    // ── AWAIT BEFORE RENDER (per user 2026-05-20 prototype-feel fix) ─────
+    // Was fire-and-forget — UI rendered from stale localStorage while the
+    // initial pull was still in flight. Now we show a progress bar, wait
+    // for the data, then render.
+    if(typeof showSyncBar === 'function') showSyncBar();
+    try {
+      var r = await DataLayer.bootstrap();
       if(r && r.ok && r.mode === 'sharepoint'){
         showToast('Connected to SharePoint · live sync on');
       } else {
         showToast('Working offline — SharePoint sync unavailable');
       }
-    });
+    } catch(e){ console.warn('[Auth] credentials bootstrap failed:', e); }
+    if(typeof hideSyncBar === 'function') hideSyncBar();
     _finishLogin();
   } catch(e){
     console.warn('[Auth] credentials sign-in failed:', e);
@@ -8639,11 +8658,19 @@ async function tryAutoResumeMsSession(){
       authVia:  'entra-id'
     };
     DataLayer._config.enabled = true;
-    DataLayer.bootstrap().then(function(r){
-      if(r.ok && r.mode === 'sharepoint'){
+    // ── WAIT FOR INITIAL PULL BEFORE RENDERING (per user 2026-05-20 prototype-feel fix) ─
+    // Was fire-and-forget — _finishLogin() rendered the UI from stale
+    // localStorage while bootstrap was still pulling. Result: user saw
+    // their last session's data with no indication that fresh data was
+    // landing. Now we show the progress bar, await the pull, THEN render.
+    if(typeof showSyncBar === 'function') showSyncBar();
+    try {
+      var r = await DataLayer.bootstrap();
+      if(r && r.ok && r.mode === 'sharepoint'){
         if(typeof showToast === 'function') showToast('Welcome back · live sync on');
       }
-    });
+    } catch(e){ console.warn('[Auth] auto-resume bootstrap failed:', e); }
+    if(typeof hideSyncBar === 'function') hideSyncBar();
     _finishLogin();
     return true;
   } catch(e){
@@ -20083,6 +20110,49 @@ function showToast(msg){
   clearTimeout(S._tt);S._tt=setTimeout(function(){el.style.display='none';},3500);
 }
 
+// ── TOP-OF-PAGE SYNC PROGRESS BAR (per user 2026-05-20 prototype-feel fix) ──
+// A thin animated strip that pins to the very top of the viewport whenever
+// the app is actively pulling from SharePoint. Visible during:
+//   • Initial bootstrap (the ~300-400ms window after sign-in)
+//   • Manual "Pull latest now" button
+//   • Reconnect attempts
+// Without this, the page renders from localStorage and feels like a static
+// prototype — the user has no signal that fresh data is landing.
+function _ensureSyncBarEl(){
+  var bar = document.getElementById('sync-progress-bar');
+  if(bar) return bar;
+  // Inject the keyframes once
+  if(!document.getElementById('sync-progress-bar-style')){
+    var st = document.createElement('style');
+    st.id = 'sync-progress-bar-style';
+    st.textContent =
+      '#sync-progress-bar{position:fixed;top:0;left:0;right:0;height:3px;z-index:99999;background:rgba(34,197,94,.18);overflow:hidden;display:none;pointer-events:none}' +
+      '#sync-progress-bar::before{content:"";position:absolute;left:-30%;top:0;bottom:0;width:30%;background:linear-gradient(90deg,transparent,#22c55e,transparent);animation:sync-bar-slide 1.1s linear infinite}' +
+      '@keyframes sync-bar-slide{0%{left:-30%}100%{left:100%}}';
+    document.head.appendChild(st);
+  }
+  bar = document.createElement('div');
+  bar.id = 'sync-progress-bar';
+  bar.setAttribute('aria-label', 'Syncing with team');
+  document.body.appendChild(bar);
+  return bar;
+}
+var _syncBarRefs = 0;
+function showSyncBar(){
+  var bar = _ensureSyncBarEl();
+  _syncBarRefs++;
+  bar.style.display = 'block';
+}
+function hideSyncBar(){
+  _syncBarRefs = Math.max(0, _syncBarRefs - 1);
+  if(_syncBarRefs === 0){
+    var bar = document.getElementById('sync-progress-bar');
+    if(bar) bar.style.display = 'none';
+  }
+}
+window.showSyncBar = showSyncBar;
+window.hideSyncBar = hideSyncBar;
+
 function rowHTML(row,di,ri){
   var day=S.days[di];
   var city=row.city||day.focus;
@@ -24429,6 +24499,17 @@ var KPI_TARGETS={
 
 function switchTab(tab, opts){
   window.scrollTo(0,0);
+  // ── PULL-ON-NAV (per user 2026-05-20 prototype-feel fix) ─────────────
+  // Every tab/page switch fires a cheap tick check. If the tick file moved,
+  // the tick poller cascades into a full re-fetch of changed keys. This
+  // ensures the user ALWAYS lands on the freshest data — not whatever was
+  // in localStorage from minutes ago. The progress bar (showSyncBar) gives
+  // them visual confirmation that data is coming in fresh.
+  try {
+    if(window.DataLayer && DataLayer.mode && DataLayer.mode() === 'sharepoint'){
+      DataLayer.pollNow && DataLayer.pollNow();
+    }
+  } catch(_){}
   // Front-desk role is locked to the Referrals tab. Any attempt to switch
   // elsewhere (deep-link, bookmark, devtools) silently bounces back.
   if(CURRENT_USER && CURRENT_USER.role === 'front_desk' && tab !== 'referrals'){
