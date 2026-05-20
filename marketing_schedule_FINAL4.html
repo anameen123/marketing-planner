@@ -2857,9 +2857,19 @@ var OUTREACH_ENGAGEMENT = {};
 var _OE_LS_KEY = 'wcg_outreach_engagement_v1';
 
 function _loadOutreachEngagement(){
-  if(typeof DataLayer === 'undefined' || !DataLayer.load) return;
-  var v = DataLayer.load(_OE_LS_KEY);
-  OUTREACH_ENGAGEMENT = (v && typeof v === 'object' && !Array.isArray(v)) ? v : {};
+  // Hardened 2026-05-19: try/catch + null-safe. If this throws here it can
+  // kill the bootstrap chain BEFORE CLINIC_BANK (line ~24890) is declared —
+  // which made the Bank of Targets render empty even though the data is
+  // perfectly fine in the file. NEVER let a single bad localStorage entry
+  // take down the whole app.
+  try {
+    if(typeof DataLayer === 'undefined' || !DataLayer.load){ OUTREACH_ENGAGEMENT = {}; return; }
+    var v = DataLayer.load(_OE_LS_KEY);
+    OUTREACH_ENGAGEMENT = (v && typeof v === 'object' && !Array.isArray(v)) ? v : {};
+  } catch(e){
+    try { console.warn('[_loadOutreachEngagement] reset to {} due to load error', e); } catch(_){}
+    OUTREACH_ENGAGEMENT = {};
+  }
 }
 function _saveOutreachEngagement(){
   if(typeof DataLayer === 'undefined' || !DataLayer.save){
@@ -6264,19 +6274,22 @@ function _loadTiers(){
     }
   } catch(e){}
 }
-_loadReferrals();
-_loadTiers();
-// Display-name overrides depend on DataLayer being defined — load them now
-if(typeof _loadDisplayNames === 'function') _loadDisplayNames();
-// Clinic lead status (L1-L4) also persists via DataLayer
-if(typeof _loadClinicLeads === 'function') _loadClinicLeads();
-// Community-outreach engagement counters (reached/interested/emails/phones)
-if(typeof _loadOutreachEngagement === 'function') _loadOutreachEngagement();
-// Dynamic team members (added at runtime via the Add Member modal) — merge
-// them into USERS / EMAIL_USER_MAP / MEMBERS / etc. before any code reads
-// those stores. After this call, a member added via the UI on any device
-// can sign in via Microsoft on every device with no code change needed.
-if(typeof _loadDynamicTeam === 'function') _loadDynamicTeam();
+// ── BOOTSTRAP LOADER CHAIN ───────────────────────────────────────────────
+// CRITICAL: every loader is wrapped in its own try/catch. If ANY ONE of
+// these throws unwrapped, the entire <script> aborts — and downstream
+// declarations like CLINIC_BANK (line ~24890) never execute, leaving the
+// app with an empty bank and an unrecoverable blank Businesses tab.
+// This happened in production 2026-05-19. NEVER again.
+function _safeLoad(name, fn){
+  try { if(typeof fn === 'function') fn(); }
+  catch(e){ try { console.warn('[bootstrap] '+name+' failed (continuing):', e); } catch(_){} }
+}
+_safeLoad('_loadReferrals',           typeof _loadReferrals === 'function' ? _loadReferrals : null);
+_safeLoad('_loadTiers',               typeof _loadTiers === 'function' ? _loadTiers : null);
+_safeLoad('_loadDisplayNames',        typeof _loadDisplayNames === 'function' ? _loadDisplayNames : null);
+_safeLoad('_loadClinicLeads',         typeof _loadClinicLeads === 'function' ? _loadClinicLeads : null);
+_safeLoad('_loadOutreachEngagement',  typeof _loadOutreachEngagement === 'function' ? _loadOutreachEngagement : null);
+_safeLoad('_loadDynamicTeam',         typeof _loadDynamicTeam === 'function' ? _loadDynamicTeam : null);
 // Reset interval (quarterly/monthly) — admin-configurable
 if(typeof _loadResetInterval === 'function'){ _loadResetInterval(); CURRENT_PERIOD = _computeCurrentPeriod(); }
 _loadPeriodBudgetEnabled();
