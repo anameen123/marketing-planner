@@ -2672,6 +2672,15 @@ body.role-front_desk #referrals-view {
         <div>
           <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Max detour (miles)</label>
           <input type="number" id="rp-detour" value="5" min="1" max="30" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box">
+          <!-- "Cap the detour" checkbox (per user 2026-05-19). Default checked.
+               When unchecked, the detour input is disabled and the planner
+               treats max detour as ∞ (no cap) — useful for "show me ALL
+               clinics along the way, no matter how far off the line". -->
+          <label style="display:flex;align-items:center;gap:6px;margin-top:6px;cursor:pointer;font-size:11px;color:var(--text)">
+            <input type="checkbox" id="rp-detour-cap" checked onchange="_rpToggleDetourCap()" style="cursor:pointer">
+            <span>Limit the detour to this many miles</span>
+          </label>
+          <div id="rp-detour-infinity-hint" style="display:none;font-size:10px;color:var(--muted);margin-top:4px;font-style:italic">∞ No detour cap — every business in range is eligible.</div>
         </div>
       </div>
       <div class="kpi-input-row" style="margin-bottom:10px">
@@ -18778,11 +18787,41 @@ window.showCoverageSummary = showCoverageSummary;
 // Future: use Google Routes API for real ETAs.
 var _ROUTE_AVG_MPH = 28;
 
+// Enable/disable the detour-mile input based on the "Limit detour" checkbox.
+// Wired to the checkbox's onchange. When unchecked, the input greys out +
+// the ∞ hint shows underneath.
+function _rpToggleDetourCap(){
+  var cb = document.getElementById('rp-detour-cap');
+  var inp = document.getElementById('rp-detour');
+  var hint = document.getElementById('rp-detour-infinity-hint');
+  if(!cb || !inp) return;
+  if(cb.checked){
+    inp.disabled = false;
+    inp.style.opacity = '';
+    inp.style.cursor = '';
+    if(hint) hint.style.display = 'none';
+  } else {
+    inp.disabled = true;
+    inp.style.opacity = '.55';
+    inp.style.cursor = 'not-allowed';
+    if(hint) hint.style.display = 'block';
+  }
+}
+window._rpToggleDetourCap = _rpToggleDetourCap;
+
 function runRoutePlanner(){
   var startKey = document.getElementById('rp-start').value;
   var endKey   = document.getElementById('rp-end').value;
   var count    = Math.max(1, parseInt(document.getElementById('rp-count').value, 10) || 5);
-  var detour   = Math.max(1, parseFloat(document.getElementById('rp-detour').value) || 5);
+  // Per user 2026-05-19: if the "Limit detour" checkbox is UNCHECKED,
+  // treat the cap as Infinity — every candidate in range is eligible.
+  var detourCb = document.getElementById('rp-detour-cap');
+  var detour;
+  if(detourCb && !detourCb.checked){
+    detour = Infinity;
+  } else {
+    detour = Math.max(1, parseFloat(document.getElementById('rp-detour').value) || 5);
+  }
   var specFilter = document.getElementById('rp-specialty').value || '';
   var skipVisited = !!document.getElementById('rp-skip-visited').checked;
 
