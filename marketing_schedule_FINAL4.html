@@ -6611,6 +6611,7 @@ var DataLayer = (function(){
 
   // Lower-level fetch wrapper that returns the raw Response so we can read
   // the status (e.g. 304) + headers (e.g. ETag). Used by _readFile only.
+  // cache:'no-store' so the browser HTTP cache never returns a stale 200.
   async function _graphFetchRaw(path, options){
     options = options || {};
     var token = await _getToken();
@@ -6619,7 +6620,7 @@ var DataLayer = (function(){
       'Authorization': 'Bearer ' + token,
       'Accept':        'application/json'
     }, options.headers || {});
-    var resp = await fetch(url, { method: options.method || 'GET', headers: headers });
+    var resp = await fetch(url, { method: options.method || 'GET', headers: headers, cache: 'no-store' });
     if(resp.status === 429){
       var retryAfter = parseInt(resp.headers.get('Retry-After') || '2', 10);
       await new Promise(function(r){ setTimeout(r, retryAfter * 1000); });
@@ -6632,6 +6633,14 @@ var DataLayer = (function(){
   async function _writeFile(key, valueStr){
     var path = _filePathFor(key);
     if(!path) throw new Error('No file mapping for key ' + key);
+    // ── ETag CACHE INVALIDATION (per user 2026-05-20) ───────────────────
+    // After a write, our cached ETag for this key is stale. If we leave it
+    // in place, the next If-None-Match could (theoretically) yield a 304
+    // and we'd return the pre-write body. Drop both cached fields so the
+    // next read does a fresh GET that returns the new content + new ETag.
+    delete _etagByKey[key];
+    delete _bodyByKey[key];
+    try { console.info('[sync] write fired:', key, '(' + (valueStr||'').length + ' bytes)'); } catch(_){}
     return _graphFetch('/drives/' + config.driveId + '/root:/' + path + ':/content', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -6666,11 +6675,12 @@ var DataLayer = (function(){
 
   // Polling path — pull-only (never seeds). Stays defensive against the admin
   // manually deleting a file in SharePoint UI (the file just stays absent).
+  // Returns true if a change was detected + applied; false otherwise.
   async function _fetchKeyIntoCache(key){
     var remoteStr = await _readFile(key);
-    if(remoteStr === null) return;
+    if(remoteStr === null) return false;
     var localStr = localStorage.getItem(key);
-    if(localStr === remoteStr) return;
+    if(localStr === remoteStr) return false;
     try { localStorage.setItem(key, remoteStr); }
     catch(e){ /* quota — skip */ }
     _emitChange(key);
@@ -6750,17 +6760,26 @@ var DataLayer = (function(){
   async function _pollOnce(){
     // Re-fetch every tracked key. Cheap because the server returns a 304
     // for unchanged items + we only update cache when remote differs.
-    if(!config.enabled || !config.listIds) return;
+    if(!config.enabled || !config.listIds) {
+      try { console.info('[sync] pollOnce SKIPPED — config.enabled=', config.enabled, 'listIds=', !!config.listIds); } catch(_){}
+      return;
+    }
+    var _t0 = Date.now();
     _updateSyncBadge('syncing');
     var anyFailed = false;
+    var changedKeys = [];
     var keys = Object.keys(config.keyToList);
     for(var i = 0; i < keys.length; i++){
-      try { await _fetchKeyIntoCache(keys[i]); }
-      catch(e){ anyFailed = true; /* tolerate single-key failures */ }
+      try {
+        var changed = await _fetchKeyIntoCache(keys[i]);
+        if(changed) changedKeys.push(keys[i]);
+      }
+      catch(e){ anyFailed = true; try { console.warn('[sync] key failed:', keys[i], e); } catch(_){} }
     }
     _lastPollISO = new Date().toISOString();
     config.lastPollISO = _lastPollISO;
     _updateSyncBadge(anyFailed ? 'error' : 'ok');
+    try { console.info('[sync] poll done in', (Date.now()-_t0)+'ms', '· changed:', changedKeys.length ? changedKeys.join(',') : '(none)', '· failed:', anyFailed); } catch(_){}
   }
   // Public: force a sync right now (don't wait for the next 5-second poll).
   // Used by the "Pull latest now" button in the sync-status popup and by
