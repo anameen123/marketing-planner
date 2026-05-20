@@ -9946,11 +9946,16 @@ function _renderClinicContactPanel(name){
   } else if(city){
     distHtml = '<div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:8px 12px;font-size:11px;color:#92400e;margin-bottom:10px">📍 City "' + city.replace(/</g,'&lt;') + '" is outside the WCG service area — distance unknown.</div>';
   }
+  // Per user 2026-05-19: the contact label must match the business TYPE.
+  // Clinics = "Physician"; MVA firms = "Attorney"; outreach orgs = "Contact".
+  var contactLabel = (ref.type === 'mva') ? 'Attorney'
+                   : (ref.type === 'outreach') ? 'Contact'
+                   : 'Physician';
   panel.innerHTML = ''
     + '<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 16px">'
     +   '<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">📞 Contact info</div>'
     +   distHtml
-    +   row('Physician', physician, null, null)
+    +   row(contactLabel, physician, null, null)
     +   row('Phone',     phone,     'phone', 'tel')
     +   row('Fax',       fax,       'fax',   null)
     +   row('Website',   website,   'website', 'url')
@@ -23621,10 +23626,14 @@ function _renderClinicHistoryVisits(){
     html +=   '<span style="font-size:10px;font-weight:700;color:'+stColor+';background:'+stColor+'22;padding:2px 8px;border-radius:5px">'+v.status+'</span>';
     html += '</div></div>';
 
-    // Doctor + specialty
+    // Doctor / Attorney / Contact + specialty (label depends on business type)
     if(v.doctor || v.specialty){
+      var _bizForLabel = (typeof getBizTypeForName === 'function' && window._chCurrentName) ? getBizTypeForName(window._chCurrentName) : '';
+      var _docLbl = (_bizForLabel === 'mva') ? 'Attorney'
+                  : (_bizForLabel === 'outreach') ? 'Contact'
+                  : 'Doctor';
       html += '<div style="display:flex;gap:12px;font-size:11px;color:var(--muted);margin-bottom:4px">';
-      if(v.doctor && v.doctor !== 'TBD') html += '<span><strong style="color:var(--text)">Doctor:</strong> '+v.doctor+'</span>';
+      if(v.doctor && v.doctor !== 'TBD') html += '<span><strong style="color:var(--text)">'+_docLbl+':</strong> '+v.doctor+'</span>';
       if(v.specialty)                     html += '<span><strong style="color:var(--text)">Specialty:</strong> '+v.specialty+'</span>';
       html += '</div>';
     }
