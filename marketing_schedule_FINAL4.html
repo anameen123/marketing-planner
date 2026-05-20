@@ -16809,10 +16809,28 @@ function renderAllBusinessPins(){
     var days = (typeof daysSinceLastVisit === 'function') ? daysSinceLastVisit(name) : null;
     var rec  = (typeof recencyBucket === 'function')      ? recencyBucket(days) : {color:'#9ca3af', label:'?', short:'?'};
     var border = (typeof typeBorderColor === 'function')  ? typeBorderColor(bizType) : '#1F3864';
-    // Tiny dither so overlapping same-city pins stay visible
-    var dither = (Math.abs(name.charCodeAt(0) + (name.charCodeAt(1)||0)) % 13) * 0.0006;
-    var lat = coord.lat + dither;
-    var lng = coord.lng + dither;
+    // ── DITHER ────────────────────────────────────────────────────────
+    // Per user 2026-05-20: same-city clinics share the same centroid in
+    // the current data, so without dither, 100+ Frisco clinics stack into
+    // a single visible pin. Spread each pin to a deterministic polar
+    // position around the city centroid based on a hash of the name, so:
+    //   • Each clinic gets a unique, stable position (re-renders match)
+    //   • Pins fan out across ~2-3 km area (city-scale visible)
+    //   • If we later switch to per-clinic geocoded coords, this code is
+    //     a no-op since BUSINESS_GEOCODES coords are already unique.
+    // Skip the dither for pins that already came from BUSINESS_GEOCODES
+    // (those are real addresses — leave them where they are).
+    var lat = coord.lat, lng = coord.lng;
+    if(!(typeof BUSINESS_GEOCODES !== 'undefined' && BUSINESS_GEOCODES[name])){
+      // Hash the name to a stable angle + radius
+      var h = 0;
+      for(var _i = 0; _i < name.length; _i++) h = ((h << 5) - h + name.charCodeAt(_i)) | 0;
+      var angle = (Math.abs(h) % 360) * Math.PI / 180;
+      // Radius 0.003°–0.030° ≈ 0.3–3.3 km from centroid
+      var radius = 0.003 + ((Math.abs(h >> 8) % 100) / 100) * 0.027;
+      lat += Math.cos(angle) * radius;
+      lng += Math.sin(angle) * radius;
+    }
     var typeLabel = bizType === 'mva' ? '⚖ MVA' : bizType === 'outreach' ? '🏘 Outreach' : '🏥 Clinic';
     var safeName = String(name).replace(/</g,'&lt;');
     var popupHtml = '<div style="font-family:DM Sans,sans-serif;font-size:12px;min-width:170px">'
