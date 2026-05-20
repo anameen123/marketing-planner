@@ -15061,6 +15061,325 @@ function pinCity(di,ri){
 }
 function startEdit(di,ri){S.days[di].rows[ri].editing=true;refresh(di);}
 function saveEdit(di,ri){S.days[di].rows[ri].editing=false;refresh(di);}
+
+// ════════════════════════════════════════════════════════════════════════
+// EDIT VISIT MODAL — per user request 2026-05-19
+// ════════════════════════════════════════════════════════════════════════
+// Atomic edit dialog for confirmed visits. Opens with every editable field
+// pre-filled. User reviews + changes whatever they need + clicks Confirm.
+// On confirm we:
+//   1. Snapshot the BEFORE state of the row
+//   2. Tear down old side effects (ghost rescheduled row, row.rowConfirmed,
+//      row.relationship, etc. — anything from the prior confirmation)
+//   3. Apply the NEW values
+//   4. Refresh + persist
+// No piecemeal in-place edits — the dialog is a clean replace.
+var _evDi = null, _evRi = null;
+
+function openEditVisit(di, ri){
+  var row = S.days[di] && S.days[di].rows && S.days[di].rows[ri];
+  if(!row){ return; }
+  // Permission check — only the row's assigned member or admin can edit
+  if(typeof canEditVisitRow === 'function' && !canEditVisitRow(row)){
+    var owner = row.addedBy || row.member || 'another member';
+    showToast('Only ' + owner + ' or admin can edit this visit.');
+    return;
+  }
+  // Date-lock check
+  var dayDate = S.days[di] && S.days[di].date;
+  if(typeof canEditDate === 'function' && !canEditDate(dayDate)){
+    showToast((typeof lockReason === 'function' && lockReason(dayDate)) || 'This visit is locked.');
+    return;
+  }
+  _evDi = di; _evRi = ri;
+  // Context block
+  var ctxName = document.getElementById('ev-clinic-line');
+  var ctxMeta = document.getElementById('ev-meta-line');
+  if(ctxName) ctxName.textContent = row.clinic || '(no clinic)';
+  if(ctxMeta){
+    var bizLabel = {clinic:'🏥 Clinic',mva:'⚖ MVA Attorney',outreach:'🏘 Community Outreach'}[row.bizType || 'clinic'] || 'Visit';
+    var dateStr = '';
+    try { dateStr = new Date(dayDate+'T00:00:00').toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'}); }
+    catch(e){ dateStr = dayDate; }
+    ctxMeta.textContent = bizLabel + '  ·  ' + dateStr + '  ·  ' + (row.city || 'no area');
+  }
+  // Member dropdown
+  var memSel = document.getElementById('ev-member');
+  var memHint = document.getElementById('ev-member-hint');
+  var isAdminUser = (typeof isAdmin === 'function' && isAdmin());
+  if(memSel){
+    var opts = '<option value="">-- Unassigned --</option>';
+    (typeof MEMBERS !== 'undefined' ? MEMBERS : []).forEach(function(m){
+      opts += '<option value="'+m.replace(/"/g,'&quot;')+'"'+(m===row.member?' selected':'')+'>'+m+'</option>';
+    });
+    memSel.innerHTML = opts;
+    memSel.value = row.member || '';
+    // Per user 2026-05-19: a member can't reassign a visit to someone else.
+    // Admin can pick any member. Members see their own name only (no dropdown).
+    if(!isAdminUser){
+      memSel.disabled = true;
+      memSel.style.opacity = '.7';
+      memSel.style.cursor = 'not-allowed';
+      if(memHint) memHint.textContent = 'Only admin can re-assign this visit to a different member.';
+    } else {
+      memSel.disabled = false;
+      memSel.style.opacity = '';
+      memSel.style.cursor = '';
+      if(memHint) memHint.textContent = 'Admin — you can reassign this visit to any team member.';
+    }
+  }
+  // Status
+  var statSel = document.getElementById('ev-status');
+  if(statSel){ statSel.value = row.status || 'Pending'; }
+  // Reschedule date
+  var rdInput = document.getElementById('ev-rd');
+  if(rdInput){
+    // row.rd is stored as MM/DD/YYYY; convert to YYYY-MM-DD for the date input
+    var rdIso = '';
+    if(row.rd){
+      var p = row.rd.split('/');
+      if(p.length === 3) rdIso = p[2] + '-' + p[0].padStart(2,'0') + '-' + p[1].padStart(2,'0');
+    }
+    rdInput.value = rdIso;
+  }
+  // Cancel reason
+  var crEl = document.getElementById('ev-cancel-reason');
+  if(crEl) crEl.value = row.cancelReason || '';
+  // Spending summary
+  _evRenderSpendingSummary(row);
+  // Lead summary
+  _evRenderLeadSummary(row);
+  // Notes
+  var notesEl = document.getElementById('ev-notes');
+  if(notesEl) notesEl.value = row.leadNotes || '';
+  // Toggle conditional rows based on the current status
+  _evOnStatusChange();
+  // Reset error banner
+  var errEl = document.getElementById('ev-form-err');
+  if(errEl){ errEl.style.display = 'none'; errEl.textContent = ''; }
+  document.getElementById('edit-visit-modal').style.display = 'flex';
+}
+window.openEditVisit = openEditVisit;
+
+function closeEditVisit(){
+  var m = document.getElementById('edit-visit-modal');
+  if(m) m.style.display = 'none';
+  _evDi = null; _evRi = null;
+}
+window.closeEditVisit = closeEditVisit;
+
+// Show/hide the conditional sub-rows based on the picked status.
+function _evOnStatusChange(){
+  var st = (document.getElementById('ev-status') || {}).value || 'Pending';
+  var rdRow      = document.getElementById('ev-rd-row');
+  var cancelRow  = document.getElementById('ev-cancel-row');
+  var spendRow   = document.getElementById('ev-spending-row');
+  var leadRow    = document.getElementById('ev-lead-row');
+  if(rdRow)     rdRow.style.display     = (st === 'Postponed') ? 'block' : 'none';
+  if(cancelRow) cancelRow.style.display = (st === 'Canceled')  ? 'block' : 'none';
+  if(spendRow)  spendRow.style.display  = (st === 'Completed') ? 'block' : 'none';
+  // Lead outcome — Completed AND not outreach
+  var row = (_evDi != null && _evRi != null) ? (S.days[_evDi] && S.days[_evDi].rows[_evRi]) : null;
+  var isOutreach = false;
+  if(row && row.clinic && typeof OUTREACH !== 'undefined'){
+    isOutreach = OUTREACH.some(function(o){ return o.name === row.clinic; });
+  }
+  if(leadRow) leadRow.style.display = (st === 'Completed' && !isOutreach) ? 'block' : 'none';
+}
+window._evOnStatusChange = _evOnStatusChange;
+
+function _evRenderSpendingSummary(row){
+  var box = document.getElementById('ev-spending-summary');
+  if(!box) return;
+  var s = row && row.spending;
+  var total = s ? (s.total || 0) : 0;
+  var recorded = !!(s && (s.zeroSpending === true || typeof s.total === 'number' || (s.items && s.items.length)));
+  var label = recorded
+    ? ('💰 $' + total.toFixed(2) + (s && s.items ? ' · ' + s.items.length + ' item(s)' : ''))
+    : '⚠ No spending recorded yet';
+  var btn = '<button onclick="_evOpenSpendingFromEdit()" style="background:#92400e;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer;font-family:DM Sans,sans-serif">'
+          + (recorded ? 'Change' : 'Enter spending') + '</button>';
+  box.innerHTML = '<span>' + label + '</span>' + btn;
+}
+
+function _evRenderLeadSummary(row){
+  var box = document.getElementById('ev-lead-summary');
+  if(!box) return;
+  var lead = (row && row.clinic && typeof getClinicLead === 'function') ? getClinicLead(row.clinic) : null;
+  var hasOutcome = !!(row && row.relationship);
+  var label = hasOutcome
+    ? ('🎯 Outcome saved · ' + (row.relationship || '(set)'))
+    : '⚠ No lead outcome saved yet';
+  if(lead && lead.status === 'established' && lead.level){
+    var _bt = (typeof getBizTypeForName === 'function') ? getBizTypeForName(row.clinic) : '';
+    var lv = (typeof getEstablishedLevel === 'function') ? getEstablishedLevel(lead.level, _bt) : null;
+    if(lv) label += ' · ' + lv.label;
+  }
+  var btn = '<button onclick="_evOpenLeadStatusFromEdit()" style="background:#7030A0;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer;font-family:DM Sans,sans-serif">'
+          + (hasOutcome ? 'Change' : 'Set outcome') + '</button>';
+  box.innerHTML = '<span>' + label + '</span>' + btn;
+}
+
+// Bridge into the existing spending / lead-status modals from inside the Edit
+// dialog. The user finishes those flows and lands back here — the summary
+// boxes refresh automatically because they read from the row's live state.
+function _evOpenSpendingFromEdit(){
+  if(_evDi == null || _evRi == null) return;
+  if(typeof openSpendingModal === 'function'){
+    openSpendingModal(_evDi, _evRi);
+  } else if(typeof showToast === 'function'){
+    showToast('Spending editor is unavailable in this build.');
+  }
+}
+window._evOpenSpendingFromEdit = _evOpenSpendingFromEdit;
+
+function _evOpenLeadStatusFromEdit(){
+  if(_evDi == null || _evRi == null) return;
+  var row = S.days[_evDi] && S.days[_evDi].rows[_evRi];
+  if(!row) return;
+  if(typeof openLeadStatusModal === 'function'){
+    openLeadStatusModal(row.clinic, row.member, _evDi, _evRi);
+  } else if(typeof showToast === 'function'){
+    showToast('Lead-status editor is unavailable in this build.');
+  }
+}
+window._evOpenLeadStatusFromEdit = _evOpenLeadStatusFromEdit;
+
+// THE ATOMIC APPLY. Captures BEFORE state, tears down old effects, writes
+// new values, refreshes. The user sees a single confirm-and-done flow.
+function confirmEditVisit(){
+  if(_evDi == null || _evRi == null){ return; }
+  var di = _evDi, ri = _evRi;
+  var row = S.days[di] && S.days[di].rows && S.days[di].rows[ri];
+  if(!row){ closeEditVisit(); return; }
+  var errEl = document.getElementById('ev-form-err');
+  function showErr(msg){ if(errEl){ errEl.textContent = msg; errEl.style.display = 'block'; } else if(typeof showToast === 'function') showToast(msg); }
+  // Read new values
+  var newMember = (document.getElementById('ev-member') || {}).value || '';
+  var newStatus = (document.getElementById('ev-status') || {}).value || 'Pending';
+  var newRdIso  = (document.getElementById('ev-rd')     || {}).value || '';
+  var newCancelReason = ((document.getElementById('ev-cancel-reason') || {}).value || '').trim();
+  var newNotes  = ((document.getElementById('ev-notes') || {}).value || '').trim();
+  // Validate
+  if(newStatus === 'Postponed' && !newRdIso){
+    showErr('Pick the rescheduled date.');
+    return;
+  }
+  if(newStatus === 'Canceled' && !newCancelReason){
+    showErr('Enter a cancellation reason.');
+    return;
+  }
+  if(newStatus === 'Completed'){
+    // Spending must be recorded
+    var s = row.spending;
+    var spendingOk = !!(s && (s.zeroSpending === true || typeof s.total === 'number' || (s.items && s.items.length)));
+    if(!spendingOk){
+      showErr('Enter spending for this Completed visit (use $0 if nothing was spent). Click "Enter spending" above.');
+      return;
+    }
+    // Lead outcome must be saved (unless outreach)
+    var isOutreach = false;
+    if(typeof OUTREACH !== 'undefined' && OUTREACH){
+      isOutreach = OUTREACH.some(function(o){ return o.name === row.clinic; });
+    }
+    if(!isOutreach && !row.relationship){
+      showErr('Set the lead outcome for this Completed visit. Click "Set outcome" above.');
+      return;
+    }
+  }
+  // ── TEARDOWN of old confirmation's side effects ─────────────────────
+  // Snapshot the previous status + rd before we mutate.
+  var prevStatus = row.status;
+  var prevRd     = row.rd;
+  // 1) Always clear rowConfirmed — the edit must be re-confirmed on the row
+  //    (via the existing ✓ Confirm button) before it counts as final.
+  row.rowConfirmed = false;
+  // 2) If the row WAS Completed, clear the saved outcome flag on the row so
+  //    the new path can re-set it cleanly. The clinic-level lead history
+  //    (CLINIC_LEADS) is preserved for auditability — only the row's local
+  //    relationship marker resets.
+  if(prevStatus === 'Completed' && newStatus !== 'Completed'){
+    row.relationship = '';
+    row.relNotes = '';
+  }
+  // 3) If the row WAS Postponed (with a ghost row at the target date) and is
+  //    no longer Postponed, remove the ghost so the new state is the only one.
+  if(prevStatus === 'Postponed' && newStatus !== 'Postponed' && prevRd){
+    var srcDate = S.days[di] && S.days[di].date;
+    var targetIso = '';
+    var p = prevRd.split('/');
+    if(p.length === 3) targetIso = p[2] + '-' + p[0].padStart(2,'0') + '-' + p[1].padStart(2,'0');
+    if(targetIso){
+      for(var _i = 0; _i < S.days.length; _i++){
+        if(S.days[_i].date !== targetIso) continue;
+        var rows = S.days[_i].rows;
+        for(var _j = rows.length - 1; _j >= 0; _j--){
+          var gr = rows[_j];
+          if(gr && gr.isRescheduled && gr.rescheduledFrom === srcDate && gr.clinic === row.clinic && !gr.rowConfirmed){
+            if(gr._spId && typeof spDeleteItem === 'function'){
+              try { spDeleteItem('VisitSchedule', gr._spId); } catch(e){}
+            }
+            rows.splice(_j, 1);
+          }
+        }
+        break;
+      }
+    }
+  }
+  // ── APPLY NEW STATE ─────────────────────────────────────────────────
+  if(newMember !== row.member){
+    row.member = newMember;
+    row.memberConfirmed = !!newMember;
+  }
+  row.status = newStatus;
+  row.leadNotes = newNotes;
+  row.cancelReason = (newStatus === 'Canceled') ? newCancelReason : '';
+  // Reschedule date — store in row.rd as MM/DD/YYYY (existing format) and
+  // create the ghost row at the target date.
+  if(newStatus === 'Postponed' && newRdIso){
+    var pp = newRdIso.split('-');
+    var rdStr = pp[1] + '/' + pp[2] + '/' + pp[0];
+    row.rd = rdStr;
+    // Create ghost row only if not already present at the target date
+    var hasGhost = false;
+    var tDi = -1;
+    for(var k = 0; k < S.days.length; k++){
+      if(S.days[k].date === newRdIso){ tDi = k; break; }
+    }
+    if(tDi >= 0){
+      hasGhost = S.days[tDi].rows.some(function(r){
+        return r && r.isRescheduled && r.rescheduledFrom === (S.days[di] && S.days[di].date) && r.clinic === row.clinic;
+      });
+      if(!hasGhost){
+        S.days[tDi].rows.push({
+          clinic: row.clinic, doctor: row.doctor, spec: row.spec, team: row.team,
+          city: row.city, last: row.last, status: 'Pending', rd: '',
+          member: row.member, memberConfirmed: row.memberConfirmed,
+          relationship: '', relNotes: '', leadNotes: '', rowConfirmed: false,
+          rescheduledFrom: (S.days[di] && S.days[di].date) || '', isRescheduled: true,
+          isMosque: false, isManual: false, editing: false, customCity: '',
+          bizType: row.bizType
+        });
+      }
+    }
+  } else {
+    row.rd = '';
+  }
+  // Log the admin override (for audit trail)
+  if(typeof logAdminVisitChange === 'function'){
+    try {
+      logAdminVisitChange('Edited (atomic)', row, S.days[di] && S.days[di].date,
+        'Visit was edited via the Edit dialog. Status: '+prevStatus+' → '+newStatus,
+        prevStatus, newStatus);
+    } catch(e){}
+  }
+  closeEditVisit();
+  if(typeof refresh === 'function') refresh(di);
+  if(typeof renderCounters === 'function') renderCounters();
+  if(typeof renderCalGrid === 'function') renderCalGrid();
+  if(typeof showToast === 'function') showToast('Visit updated. Click ✓ Confirm on the row when you\'re ready to finalize.');
+}
+window.confirmEditVisit = confirmEditVisit;
 function confirmManual(di,ri){
   var row=S.days[di].rows[ri];
   if(!row.clinic.trim()){showToast('Please enter a clinic name first');return;}
@@ -19065,7 +19384,7 @@ function rowHTML(row,di,ri){
       +     'style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:16px;padding:2px 6px;line-height:1;font-weight:700">&#8942;</button>'
       +   '<div id="'+menuId+'" style="display:none;position:absolute;top:calc(100% + 4px);left:0;background:#fff;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.15);padding:4px;min-width:140px;z-index:9000;font-family:DM Sans,sans-serif;text-align:left">'
       +     (canEditHere
-          ? '<button onclick="event.stopPropagation();_closeVisitMenu(\''+menuId+'\');startEdit('+di+','+ri+')" style="display:flex;align-items:center;gap:6px;width:100%;text-align:left;background:transparent;border:0;padding:7px 10px;border-radius:6px;cursor:pointer;font-size:12px;color:#1e293b;font-family:inherit" onmouseover="this.style.background=\'#f1f5f9\'" onmouseout="this.style.background=\'transparent\'"><span>&#9998;</span> Edit visit</button>'
+          ? '<button onclick="event.stopPropagation();_closeVisitMenu(\''+menuId+'\');openEditVisit('+di+','+ri+')" style="display:flex;align-items:center;gap:6px;width:100%;text-align:left;background:transparent;border:0;padding:7px 10px;border-radius:6px;cursor:pointer;font-size:12px;color:#1e293b;font-family:inherit" onmouseover="this.style.background=\'#f1f5f9\'" onmouseout="this.style.background=\'transparent\'"><span>&#9998;</span> Edit visit</button>'
           : '')
       +     (canDelHere
           ? '<button onclick="event.stopPropagation();_closeVisitMenu(\''+menuId+'\');deleteVisit('+di+','+ri+')" style="display:flex;align-items:center;gap:6px;width:100%;text-align:left;background:transparent;border:0;padding:7px 10px;border-radius:6px;cursor:pointer;font-size:12px;color:#991b1b;font-family:inherit" onmouseover="this.style.background=\'#fee2e2\'" onmouseout="this.style.background=\'transparent\'"><span>&#128465;</span> Delete visit</button>'
@@ -34231,6 +34550,90 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
 </div>
 
 
+
+<!-- ── EDIT VISIT MODAL (per user request 2026-05-19) ──────────────────────
+     A unified dialog that shows every editable field of a confirmed visit
+     row at once: Status, Reschedule Date (when Postponed), Lead outcome
+     (when Completed), Member (admin-editable; members locked to self),
+     Spending, Notes. The user changes whatever they need and clicks
+     "Confirm changes" — at which point any side effects from the OLD
+     confirmation (counters, lead-state, rowConfirmed, rescheduled-ghost
+     row) are torn down first, then the new values are applied. No
+     piecemeal in-place edits — atomic and reversible. -->
+<div id="edit-visit-modal" style="display:none" class="modal-ov">
+  <div class="modal-box" style="width:540px;max-height:90vh;display:flex;flex-direction:column">
+    <div class="modal-top" style="flex-shrink:0;background:linear-gradient(135deg,#1F3864,#7030A0)">✎ Edit visit <button onclick="closeEditVisit()">&#215;</button></div>
+    <div class="modal-body" style="overflow-y:auto;flex:1;min-height:0">
+      <!-- Read-only context block — clinic name, date, type (cannot be changed
+           here; if they need to change the clinic, delete + re-add) -->
+      <div id="ev-context" style="background:#f4f5f9;border:1px solid var(--border);border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--text)">
+        <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Visit context (locked)</div>
+        <div id="ev-clinic-line" style="font-weight:700;font-size:13px"></div>
+        <div id="ev-meta-line" style="font-size:11px;color:var(--muted);margin-top:2px"></div>
+      </div>
+
+      <!-- Member assignment -->
+      <div class="kpi-input-row">
+        <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Assigned Member</label>
+        <select id="ev-member" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box"></select>
+        <div id="ev-member-hint" style="font-size:10px;color:var(--muted);margin-top:4px;font-style:italic"></div>
+      </div>
+
+      <!-- Status -->
+      <div class="kpi-input-row" style="margin-top:12px">
+        <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Status <span style="color:#ef4444">*</span></label>
+        <select id="ev-status" onchange="_evOnStatusChange()" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box">
+          <option value="Pending">Pending</option>
+          <option value="Completed">Completed</option>
+          <option value="Postponed">Postponed</option>
+          <option value="Canceled">Canceled</option>
+        </select>
+      </div>
+
+      <!-- Rescheduled date — shown only when Status = Postponed -->
+      <div class="kpi-input-row" id="ev-rd-row" style="margin-top:12px;display:none">
+        <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Rescheduled to (date) <span style="color:#ef4444">*</span></label>
+        <input type="date" id="ev-rd" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;outline:none;background:#fff;box-sizing:border-box">
+        <div style="font-size:10px;color:var(--muted);margin-top:4px;font-style:italic">A new "rescheduled" row will appear on this date.</div>
+      </div>
+
+      <!-- Cancel reason — shown only when Status = Canceled -->
+      <div class="kpi-input-row" id="ev-cancel-row" style="margin-top:12px;display:none">
+        <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Cancellation reason <span style="color:#ef4444">*</span></label>
+        <textarea id="ev-cancel-reason" rows="2" placeholder="Why is this visit canceled?" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:12px;font-family:'DM Sans',sans-serif;outline:none;background:#fff;box-sizing:border-box;resize:vertical"></textarea>
+      </div>
+
+      <!-- Spending shortcut — shown only when Status = Completed -->
+      <div class="kpi-input-row" id="ev-spending-row" style="margin-top:12px;display:none">
+        <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Spending <span style="color:#ef4444">*</span></label>
+        <div id="ev-spending-summary" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;font-size:12px;color:#78350f"></div>
+        <div style="font-size:10px;color:var(--muted);margin-top:4px;font-style:italic">Required for Completed visits. Use $0 if nothing was spent.</div>
+      </div>
+
+      <!-- Lead outcome shortcut — shown only when Status = Completed AND not outreach -->
+      <div class="kpi-input-row" id="ev-lead-row" style="margin-top:12px;display:none">
+        <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Lead outcome <span style="color:#ef4444">*</span></label>
+        <div id="ev-lead-summary" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;background:#ede9fe;border:1px solid #c4b5fd;border-radius:8px;font-size:12px;color:#4c1d95"></div>
+      </div>
+
+      <!-- Visit notes -->
+      <div class="kpi-input-row" style="margin-top:12px">
+        <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Notes (optional)</label>
+        <textarea id="ev-notes" rows="2" placeholder="Anything worth recording about this visit" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:12px;font-family:'DM Sans',sans-serif;outline:none;background:#fff;box-sizing:border-box;resize:vertical"></textarea>
+      </div>
+
+      <div id="ev-form-err" style="display:none;background:#fee2e2;border:1px solid #fecaca;color:#991b1b;border-radius:8px;padding:9px 12px;font-size:11px;margin-top:10px"></div>
+
+      <div style="margin-top:14px;padding:10px 12px;background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;font-size:11px;color:#78350f;line-height:1.5">
+        ⚠ <strong>Confirming will OVERWRITE prior data.</strong> All side effects from this visit's previous confirmation (counters, lead state on the clinic card, rescheduled ghost row, etc.) will be reverted and replaced by the new values. There will be no trace of the old values.
+      </div>
+    </div>
+    <div class="modal-foot" style="flex-shrink:0;background:#fff">
+      <button class="btn-cancel" onclick="closeEditVisit()">Cancel — no changes</button>
+      <button class="btn-save" onclick="confirmEditVisit()">✓ Confirm changes</button>
+    </div>
+  </div>
+</div>
 
 <!-- ── CANCEL VISIT (REASON) MODAL ────────────────────────────────────── -->
 <div id="cancel-reason-modal" style="display:none" class="modal-ov">
