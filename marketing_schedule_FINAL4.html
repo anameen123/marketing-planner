@@ -7905,11 +7905,21 @@ function _resolveMsUser(email){
   if(!email) return null;
   email = String(email).toLowerCase().trim();
   // 1. Explicit map (preferred path)
-  if(EMAIL_USER_MAP[email]) return Object.assign({ email: email }, EMAIL_USER_MAP[email]);
+  if(EMAIL_USER_MAP[email]){
+    var resolved = Object.assign({ email: email }, EMAIL_USER_MAP[email]);
+    try { console.info('[auth] resolved (explicit map):', email, '→', resolved.username, resolved.role); } catch(_){}
+    return resolved;
+  }
   // 2. Username = email prefix (e.g. duaa@wcgtx.com → USERS.duaa)
   var prefix = email.split('@')[0];
-  if(USERS[prefix]) return Object.assign({ email: email, username: prefix }, USERS[prefix]);
+  if(USERS[prefix]){
+    var resolvedPfx = Object.assign({ email: email, username: prefix }, USERS[prefix]);
+    try { console.info('[auth] resolved (prefix fallback):', email, '→', resolvedPfx.username, resolvedPfx.role,
+      '— ⚠ NOTE: this email is NOT in EMAIL_USER_MAP. To make this stable, add it explicitly.'); } catch(_){}
+    return resolvedPfx;
+  }
   // 3. Not authorized
+  try { console.warn('[auth] NOT AUTHORIZED:', email, '— not in EMAIL_USER_MAP and no USERS prefix match.'); } catch(_){}
   return null;
 }
 
