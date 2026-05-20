@@ -11119,7 +11119,13 @@ function openReferralForm(editId){
   window._rlSourceTypeFilter = null;
   var srcInp = document.getElementById('rl-source');
   if(srcInp){ srcInp.disabled = true; srcInp.placeholder = 'Pick a type above first'; }
-  document.getElementById('rl-filler').value   = (CURRENT_USER && CURRENT_USER.name) || '';
+  // Pre-fill the filler name with the signed-in user's display name, BUT
+  // leave it BLANK for front-desk users — their CURRENT_USER.name is the
+  // shared mailbox label ("Frisco ER front desk"), not a real human. We
+  // need them to actually type their own name (multiple shifts share the
+  // same mailbox, so the email alone doesn't identify the human).
+  var _fdShared = (CURRENT_USER && CURRENT_USER.role === 'front_desk');
+  document.getElementById('rl-filler').value = _fdShared ? '' : ((CURRENT_USER && CURRENT_USER.name) || '');
   document.getElementById('rl-notes').value    = '';
   // Reset the extra-members chip row so previous entries don't leak in
   var extrasBox = document.getElementById('rl-member-extras');
@@ -33754,10 +33760,23 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
           <button type="button" onclick="addReferralExtraMember()" style="margin-top:6px;background:#fff;color:#1F3864;border:1px solid #1F3864;border-radius:6px;padding:5px 11px;font-size:10px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif" title="Credit more than one member for this referral (useful when 2+ members were at the same outreach event)">+ Add another member</button>
         </div>
         <div>
-          <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Your name (person filling this) *</label>
-          <input type="text" id="rl-filler" placeholder="e.g. Maria — Frisco ER shift A"
-                 style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box">
+          <!-- Placeholder kept here for grid layout symmetry; the actual
+               "Your name" field is promoted to its own full-width row
+               below for visibility (per user 2026-05-19). -->
         </div>
+      </div>
+      <!-- ── FRONT-DESK FILLER NAME (per user 2026-05-19) ───────────────────
+           Multiple staff share each facility's front-desk mailbox across
+           shifts (Morning / Afternoon / Overnight). We need to record
+           WHICH HUMAN actually filled the entry. Free text for now — a
+           dropdown will replace this once the user provides the staff
+           list per facility. Pulled out of the 2-column grid above so it
+           stands out as a required field. -->
+      <div class="kpi-input-row" style="margin-bottom:14px;padding:10px 12px;background:#fef3c7;border:1px solid #fcd34d;border-radius:8px">
+        <label style="font-size:11px;font-weight:700;color:#78350f;display:block;margin-bottom:4px">📝 Your name — the person filling this form <span style="color:#dc2626">*</span></label>
+        <input type="text" id="rl-filler" placeholder="e.g. Maria · morning shift"
+               style="width:100%;border:1px solid #fcd34d;border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box">
+        <div style="font-size:10px;color:#78350f;margin-top:5px;font-style:italic;line-height:1.4">Front-desk emails are shared across shifts, so the system can't know which person logged the referral. Enter your name (and shift, if helpful) so admin can follow up with the right person if needed.</div>
       </div>
 
       <!-- ── SECTION 5: Optional notes ───────────────────────────────── -->
