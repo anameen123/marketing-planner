@@ -6207,7 +6207,7 @@ var DataLayer = (function(){
     driveId: '',                                                    // default Document Library drive (resolved on bootstrap)
     tenantId: '36db94fb-80e4-470d-a675-2ee06ddf3d89',               // wcgtx.com tenant
     clientId: '0447f26e-7a21-4c67-90a0-e967ee70a10f',               // ICC Marketing Planner app registration
-    pollIntervalMs: 5000,                                           // 5-sec live sync for team-wide updates
+    pollIntervalMs: 2000,                                           // 2-sec near-real-time sync (cheap thanks to ETag caching — see _readFile)
     dataFolder: 'MarketingPlannerData',                             // folder name inside the Document Library
     // Mapping: localStorage key → filename inside the data folder.
     keyToFile: {
@@ -6577,22 +6577,55 @@ var DataLayer = (function(){
   }
 
   // GET a file's body. Returns null if the file doesn't exist.
+  // Per-file ETag + body cache. Lets polls send If-None-Match so the
+  // server replies 304 Not Modified with no body when nothing changed —
+  // huge bandwidth + latency win at 2-sec poll cadence.
+  var _etagByKey = {};
+  var _bodyByKey = {};
+
   async function _readFile(key){
     var path = _filePathFor(key);
     if(!path) return null;
+    var url = '/drives/' + config.driveId + '/root:/' + path + ':/content';
+    var prevEtag = _etagByKey[key] || null;
     try {
-      var raw = await _graphFetch('/drives/' + config.driveId + '/root:/' + path + ':/content');
-      if(raw === null) return null;
-      // Graph returns parsed JSON if Content-Type is application/json, or string otherwise.
-      // Our _graphFetch returns JSON if response is JSON; we standardize to string here.
-      if(typeof raw === 'string') return raw;
-      // Re-serialize so caller compares strings consistently with localStorage
-      return JSON.stringify(raw);
+      var res = await _graphFetchRaw(url, { method: 'GET', headers: prevEtag ? { 'If-None-Match': prevEtag } : {} });
+      if(!res) return null;
+      // 304 Not Modified — return cached body, no network transfer of the file
+      if(res.status === 304){
+        return _bodyByKey[key] != null ? _bodyByKey[key] : null;
+      }
+      if(res.status === 404) return null;
+      if(!res.ok) throw new Error('Graph API ' + res.status + ' on ' + url);
+      // Capture new ETag for the next If-None-Match
+      var et = res.headers.get('ETag') || res.headers.get('etag');
+      if(et) _etagByKey[key] = et;
+      var body = await res.text();
+      _bodyByKey[key] = body;
+      return body;
     } catch(e){
-      // 404 = file doesn't exist yet (treat as null)
       if(/404|not.?found/i.test((e && e.message) || '')) return null;
       throw e;
     }
+  }
+
+  // Lower-level fetch wrapper that returns the raw Response so we can read
+  // the status (e.g. 304) + headers (e.g. ETag). Used by _readFile only.
+  async function _graphFetchRaw(path, options){
+    options = options || {};
+    var token = await _getToken();
+    var url = path.indexOf('http') === 0 ? path : 'https://graph.microsoft.com/v1.0' + path;
+    var headers = Object.assign({
+      'Authorization': 'Bearer ' + token,
+      'Accept':        'application/json'
+    }, options.headers || {});
+    var resp = await fetch(url, { method: options.method || 'GET', headers: headers });
+    if(resp.status === 429){
+      var retryAfter = parseInt(resp.headers.get('Retry-After') || '2', 10);
+      await new Promise(function(r){ setTimeout(r, retryAfter * 1000); });
+      return _graphFetchRaw(path, options);
+    }
+    return resp;
   }
 
   // PUT a file's body. Creates the file if missing; overwrites if it exists.
@@ -6759,11 +6792,35 @@ var DataLayer = (function(){
   }
   window._updateSyncBadge = _updateSyncBadge;
 
+  // Per user 2026-05-20: BroadcastChannel propagates a "key changed" signal
+  // INSTANTLY between tabs of the same browser on the same device. So if the
+  // admin has the planner open in two tabs (or two windows side-by-side),
+  // writes in one tab show up in the other within a few milliseconds —
+  // far faster than waiting for the SharePoint roundtrip.
+  var _bcastChan = null;
+  try { if(typeof BroadcastChannel !== 'undefined') _bcastChan = new BroadcastChannel('wcg_sync_v1'); } catch(e){}
+  if(_bcastChan){
+    _bcastChan.onmessage = function(ev){
+      var msg = ev && ev.data;
+      if(!msg || msg.type !== 'key-changed' || !msg.key) return;
+      // Another tab in this browser saved to localStorage — re-hydrate
+      // immediately. This is the cross-tab path; SharePoint sync still runs
+      // for cross-device updates.
+      try { _emitChange(msg.key); } catch(_){}
+    };
+  }
+  function _broadcastKeyChange(key){
+    try { if(_bcastChan) _bcastChan.postMessage({ type:'key-changed', key:key, at:Date.now() }); } catch(_){}
+  }
+
   // ── PRIVATE — Write path ───────────────────────────────────────────────
   function _enqueueRemoteWrite(key, value){
     _writeQueue.push({ key: key, value: value, at: Date.now() });
     if(_writeTimer) clearTimeout(_writeTimer);
     _writeTimer = setTimeout(_flushWrites, 300);   // debounce 300ms
+    // Notify any OTHER tabs of this browser instantly — they re-hydrate
+    // from localStorage even before the SharePoint write completes.
+    _broadcastKeyChange(key);
   }
 
   async function _flushWrites(){
