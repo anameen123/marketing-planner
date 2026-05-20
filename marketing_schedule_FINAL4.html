@@ -27485,6 +27485,22 @@ function getRecordSummary(memberFilter){
 // and offers quick-jump buttons to the other tabs. This function pulls
 // live data from S.days + ANNOUNCEMENTS on every Home open.
 function renderHomePage(){
+  try { _renderHomePageInternal(); }
+  catch(err){
+    try { console.error('[renderHomePage] failed — page will still show static content:', err); } catch(_){}
+    // Even if rendering errors, make sure the static structure is visible
+    var hv = document.getElementById('home-view');
+    if(hv && getComputedStyle(hv).display === 'none'){ hv.style.display = 'block'; }
+  }
+}
+function _renderHomePageInternal(){
+  // ── Force-visible guard (per user 2026-05-20) ───────────────────────
+  // If anything above flipped #home-view to display:none unexpectedly,
+  // make sure the user sees the welcome banner + quick-action cards.
+  var hv = document.getElementById('home-view');
+  if(hv && getComputedStyle(hv).display === 'none'){
+    hv.style.display = 'block';
+  }
   // Welcome banner — greeting adjusts to time of day
   var hr = new Date().getHours();
   var greet = hr < 12 ? 'Good morning' : hr < 18 ? 'Good afternoon' : 'Good evening';
