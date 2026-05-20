@@ -3857,6 +3857,21 @@ function saveLeadStatus(){
                : (noLeadOutcomes.indexOf(outcome) >= 0)      ? 'None'
                : 'set';
     S.days[_leadModalDi].rows[_leadModalRi].relationship = rowRel;
+    // ── LEAD-EFFECT TAG (per user 2026-05-19) ─────────────────────────
+    // Record what THIS visit row did to the clinic's lead state so the
+    // Edit / Cancel flow can retract the change later. Stored on the row
+    // (lightweight) — when the user cancels or undoes Completed, the
+    // Edit dialog reads this and reverts CLINIC_LEADS to the prev state
+    // IF the clinic hasn't been moved by a later visit since then.
+    S.days[_leadModalDi].rows[_leadModalRi].leadEffect = {
+      prev: _leadBefore || { status:'not_visited', level:0, member:'' },
+      applied: {
+        status: (update.status || existing.status || 'not_visited'),
+        level:  (typeof update.level === 'number' ? update.level : (existing.level || 0))
+      },
+      outcome: outcome,
+      savedAt: new Date().toISOString()
+    };
   }
 
   // Activity log entry
@@ -14906,6 +14921,37 @@ function setSt(di,ri,val){
     row.rowConfirmed = false;
     row.relationship = '';     // clears "outcome saved" so leadsCell goes back to "Set Lead Status"
     row.relNotes     = '';
+    // ── LEAD RETRACTION (per user 2026-05-19) ──
+    // If THIS row had set the clinic's lead status, and the clinic's
+    // current lead state still matches what this row set, revert the
+    // CLINIC_LEADS entry to whatever was there before. Don't overwrite
+    // later visits' work — if the lead has moved beyond this row's
+    // contribution, leave it alone and warn the user.
+    if(row.leadEffect && row.clinic && typeof getClinicLead === 'function' && typeof setClinicLead === 'function'){
+      var _curL = getClinicLead(row.clinic);
+      var _ok = _curL
+        && _curL.status === row.leadEffect.applied.status
+        && (_curL.level || 0) === (row.leadEffect.applied.level || 0);
+      if(_ok){
+        var _prev = row.leadEffect.prev;
+        setClinicLead(row.clinic,
+          { status:_prev.status || 'not_visited', level:_prev.level || 0, member:_prev.member || '' },
+          'Reverted: visit on '+dayDate+' changed from Completed → '+val,
+          (CURRENT_USER && CURRENT_USER.name) || ''
+        );
+        if(typeof showToast === 'function'){
+          showToast('Lead on '+row.clinic+' reverted ('+(_prev.status || 'not_visited')+(_prev.level?' L'+_prev.level:'')+').');
+        }
+      } else if(typeof showToast === 'function'){
+        showToast('⚠ Lead on '+row.clinic+' was already updated by a later visit — not reverting.');
+      }
+      row.leadEffect = null;
+    }
+    // Activity-log breadcrumb for audit
+    if(typeof logActivity === 'function'){
+      try { logActivity('canceled_or_undone', row.member || 'Unknown', row.clinic,
+        'Confirmation rolled back via status dropdown: Completed → '+val+'.', dayDate); } catch(_){}
+    }
   }
   // Going INTO Completed from Postponed: clear the stale reschedule date so
   // the row no longer reads as "rescheduled to X" alongside "Completed".
@@ -15295,12 +15341,40 @@ function confirmEditVisit(){
   //    (via the existing ✓ Confirm button) before it counts as final.
   row.rowConfirmed = false;
   // 2) If the row WAS Completed, clear the saved outcome flag on the row so
-  //    the new path can re-set it cleanly. The clinic-level lead history
-  //    (CLINIC_LEADS) is preserved for auditability — only the row's local
-  //    relationship marker resets.
+  //    the new path can re-set it cleanly. ALSO retract the clinic-level
+  //    lead change that this visit applied — but ONLY if the clinic's
+  //    current lead state still matches what this visit set. If a later
+  //    visit has moved the lead since, we don't overwrite that later work;
+  //    we just warn the user.
   if(prevStatus === 'Completed' && newStatus !== 'Completed'){
     row.relationship = '';
     row.relNotes = '';
+    // Lead retraction (per user 2026-05-19)
+    if(row.leadEffect && row.clinic && typeof getClinicLead === 'function' && typeof setClinicLead === 'function'){
+      var curLead = getClinicLead(row.clinic);
+      var matches = curLead
+        && curLead.status === row.leadEffect.applied.status
+        && (curLead.level || 0) === (row.leadEffect.applied.level || 0);
+      if(matches){
+        var prev = row.leadEffect.prev;
+        setClinicLead(row.clinic,
+          { status: prev.status || 'not_visited', level: prev.level || 0, member: prev.member || '' },
+          'Reverted: visit on ' + (S.days[di] && S.days[di].date) + ' was changed to ' + newStatus + ' (was Completed).',
+          (CURRENT_USER && CURRENT_USER.name) || ''
+        );
+        if(typeof showToast === 'function') showToast('Lead on ' + row.clinic + ' reverted (' + (prev.status || 'not_visited') + (prev.level ? ' L'+prev.level : '') + ').');
+      } else if(typeof showToast === 'function'){
+        showToast('⚠ Lead on ' + row.clinic + ' was already updated by a later visit — not reverting. Update it manually if needed.');
+      }
+      // Clear the tag either way — this visit no longer owns any lead effect
+      row.leadEffect = null;
+    }
+    // Log the retraction so it's visible in the activity feed for audit
+    if(typeof logActivity === 'function'){
+      try { logActivity('canceled_or_undone', row.member || 'Unknown', row.clinic,
+        'Confirmation rolled back: status changed from Completed → ' + newStatus + '. Counters, spending and lead state retracted.',
+        (S.days[di] && S.days[di].date) || ''); } catch(_){}
+    }
   }
   // 3) If the row WAS Postponed (with a ghost row at the target date) and is
   //    no longer Postponed, remove the ghost so the new state is the only one.
