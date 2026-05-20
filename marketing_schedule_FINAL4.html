@@ -1987,18 +1987,29 @@ body.role-front_desk #referrals-view {
         <div style="font-size:10px;color:var(--muted);margin-top:4px;font-style:italic">Type a few letters → click a match to auto-fill the rest, or keep typing to enter a brand-new name</div>
       </div>
 
-      <!-- Area -->
+      <!-- Address (NEW PRIMARY LOCATION FIELD — replaces Area dropdown
+           per user request 2026-05-19). When the user picks a known
+           business from autocomplete, this auto-fills + locks. When typing
+           a new business, the user enters the address manually. The area
+           (Frisco / Plano / etc.) is auto-derived from the address text on
+           submit — no second dropdown to keep in sync. -->
       <div class="kpi-input-row" style="margin-top:12px">
-        <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Area <span style="color:#ef4444">*</span></label>
-        <select id="av-area" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;outline:none;background:#fff;box-sizing:border-box">
-          <option value="Frisco">Frisco</option>
-          <option value="Plano">Plano</option>
-          <option value="McKinney">McKinney</option>
-          <option value="Carrollton">Carrollton</option>
-          <option value="Allen">Allen</option>
-          <option value="Other">Other</option>
-        </select>
+        <label id="av-address-label" style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Address <span style="color:#ef4444">*</span></label>
+        <input type="text" id="av-address" placeholder="e.g. 6843 Main St, Frisco TX 75034" oninput="_avMaybeUnlockArea()" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;outline:none;background:#fff;box-sizing:border-box">
+        <div style="font-size:10px;color:var(--muted);margin-top:4px;font-style:italic">The area (Frisco / Plano / McKinney / etc.) is auto-detected from this address.</div>
       </div>
+
+      <!-- Hidden legacy Area dropdown — kept for back-compat with old code paths
+           that read #av-area.value. The active value is set programmatically
+           by _deriveCityFromAddress() in confirmAddVisit. -->
+      <select id="av-area" style="display:none">
+        <option value="Frisco">Frisco</option>
+        <option value="Plano">Plano</option>
+        <option value="McKinney">McKinney</option>
+        <option value="Carrollton">Carrollton</option>
+        <option value="Allen">Allen</option>
+        <option value="Other">Other</option>
+      </select>
 
       <!-- Contact (label changes per type) -->
       <div class="kpi-input-row" style="margin-top:12px">
@@ -2012,16 +2023,10 @@ body.role-front_desk #referrals-view {
         <input type="text" id="av-spec" placeholder="e.g. Primary Care, Pain Management" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;outline:none;background:#fff;box-sizing:border-box">
       </div>
 
-      <!-- Phone + Address -->
-      <div style="display:grid;grid-template-columns:1fr 2fr;gap:10px;margin-top:12px">
-        <div class="kpi-input-row" style="margin:0">
-          <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Phone (optional)</label>
-          <input type="text" id="av-phone" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;outline:none;background:#fff;box-sizing:border-box">
-        </div>
-        <div class="kpi-input-row" style="margin:0">
-          <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Address (optional)</label>
-          <input type="text" id="av-address" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;outline:none;background:#fff;box-sizing:border-box">
-        </div>
+      <!-- Phone -->
+      <div class="kpi-input-row" style="margin-top:12px">
+        <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Phone (optional)</label>
+        <input type="text" id="av-phone" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;outline:none;background:#fff;box-sizing:border-box">
       </div>
 
       <!-- ── REPEAT (recurring visits) ───────────────────────────────────── -->
@@ -14703,13 +14708,16 @@ function addVisit(di){
   var areaSel = document.getElementById('av-area');
   if(areaSel){
     areaSel.value = S.days[di].focus || (AREAS[0]||'Frisco');
-    // Reset any lock from a previous autocomplete pick
-    areaSel.disabled = false;
-    areaSel.style.opacity = '';
-    areaSel.style.cursor = '';
-    areaSel.title = '';
-    var prevHint = areaSel.parentElement && areaSel.parentElement.querySelector('.av-area-locked-hint');
-    if(prevHint) prevHint.remove();
+  }
+  // Reset the address field's lock state from a previous autocomplete pick
+  var addrElReset = document.getElementById('av-address');
+  if(addrElReset){
+    addrElReset.readOnly = false;
+    addrElReset.style.background = '#fff';
+    addrElReset.style.cursor = '';
+    addrElReset.title = '';
+    var prevHintA = addrElReset.parentElement && addrElReset.parentElement.querySelector('.av-address-locked-hint');
+    if(prevHintA) prevHintA.remove();
   }
   // Clear any stale autocomplete suggestions box
   var suggestBoxAdd = document.getElementById('av-name-suggest');
@@ -14845,61 +14853,98 @@ function pickAddVisitSuggestion(i){
   if(!m) return;
   document.getElementById('av-name').value = m.name;
   if(m.contact) document.getElementById('av-contact').value = m.contact;
-  // Area dropdown — only set if the option exists
+  // Set the hidden Area dropdown for back-compat with code that reads #av-area
   var areaSel = document.getElementById('av-area');
   if(m.area && areaSel){
     var hasOpt = false;
     for(var k=0;k<areaSel.options.length;k++){ if(areaSel.options[k].value === m.area){ hasOpt = true; break; } }
     areaSel.value = hasOpt ? m.area : (areaSel.value || 'Other');
   }
-  // Per user 2026-05-19: area belongs to the clinic record, NOT to the
-  // individual visit. Once the user picks a known clinic / MVA / outreach
-  // from autocomplete, the area is fixed — disable the dropdown and show a
-  // hint. If they later type a different name (breaking the match), the
-  // area dropdown re-enables (handled in updateAddVisitNameSuggestions on
-  // the next keystroke).
-  if(areaSel){
-    areaSel.disabled = true;
-    areaSel.title = 'Area is set from the clinic record. Type a different name to enter a brand-new business.';
-    areaSel.style.opacity = '.7';
-    areaSel.style.cursor = 'not-allowed';
-    var hintBox = areaSel.parentElement;
-    if(hintBox && !hintBox.querySelector('.av-area-locked-hint')){
-      var hint = document.createElement('div');
-      hint.className = 'av-area-locked-hint';
-      hint.style.cssText = 'font-size:10px;color:var(--muted);margin-top:4px;font-style:italic';
-      hint.textContent = '🔒 Area is fixed by the '+(_avNameType==='mva'?'firm':_avNameType==='outreach'?'organization':'clinic')+' record';
-      hintBox.appendChild(hint);
-    }
-  }
   if(m.spec) document.getElementById('av-spec').value = m.spec;
   if(m.phone) document.getElementById('av-phone').value = m.phone;
-  if(m.address) document.getElementById('av-address').value = m.address;
+  // ── ADDRESS LOCK (NEW per user 2026-05-19) ────────────────────────────
+  // The address is the source of truth for location now. When a known
+  // business is picked, lock the address field — the user cannot change
+  // it (the clinic record's address is canonical). If they later type a
+  // different name (breaking the autocomplete match), the field unlocks
+  // again so they can enter a brand-new address.
+  var addrEl = document.getElementById('av-address');
+  if(addrEl){
+    if(m.address){ addrEl.value = m.address; }
+    addrEl.readOnly = true;
+    addrEl.style.background = '#f4f5f9';
+    addrEl.style.cursor = 'not-allowed';
+    addrEl.title = 'Address is set from the '+(_avNameType==='mva'?'firm':_avNameType==='outreach'?'organization':'clinic')+' record. Type a different name to enter a brand-new address.';
+    // Show a small lock hint just under the input (idempotent)
+    var addrRow = addrEl.parentElement;
+    if(addrRow && !addrRow.querySelector('.av-address-locked-hint')){
+      var hint = document.createElement('div');
+      hint.className = 'av-address-locked-hint';
+      hint.style.cssText = 'font-size:10px;color:#1F3864;margin-top:4px;font-style:italic;font-weight:600';
+      hint.textContent = '🔒 Address is fixed by the '+(_avNameType==='mva'?'firm':_avNameType==='outreach'?'organization':'clinic')+' record';
+      addrRow.appendChild(hint);
+    }
+  }
   var box = document.getElementById('av-name-suggest');
   if(box) box.style.display = 'none';
 }
-// Re-enable the area dropdown when the user breaks the autocomplete match
-// (types after picking, or clears the name). Called from the input handler.
+// When the user types into the NAME field (breaking the autocomplete
+// match) OR into the ADDRESS field (only possible if not currently
+// locked), unlock the address so a brand-new business can be added.
 function _avMaybeUnlockArea(){
   var nameEl = document.getElementById('av-name');
-  var areaSel = document.getElementById('av-area');
-  if(!nameEl || !areaSel || !areaSel.disabled) return;
-  // If the current name no longer EXACTLY matches any known business, unlock.
+  var addrEl = document.getElementById('av-address');
+  if(!nameEl || !addrEl) return;
+  // If the address is locked, decide whether to unlock based on whether the
+  // typed name still matches a known business exactly. The name input also
+  // calls us via oninput so we get a chance on every keystroke.
+  if(!addrEl.readOnly) return;
   var v = (nameEl.value || '').trim().toLowerCase();
   var stillMatches = (_avNameMatches || []).some(function(m){
     return (m.name || '').toLowerCase() === v;
   });
   if(!stillMatches){
-    areaSel.disabled = false;
-    areaSel.style.opacity = '';
-    areaSel.style.cursor = '';
-    areaSel.title = '';
-    var hint = areaSel.parentElement && areaSel.parentElement.querySelector('.av-area-locked-hint');
+    addrEl.readOnly = false;
+    addrEl.style.background = '#fff';
+    addrEl.style.cursor = '';
+    addrEl.title = '';
+    var hint = addrEl.parentElement && addrEl.parentElement.querySelector('.av-address-locked-hint');
     if(hint) hint.remove();
   }
 }
 window._avMaybeUnlockArea = _avMaybeUnlockArea;
 window.pickAddVisitSuggestion = pickAddVisitSuggestion;
+
+// ── DERIVE AREA FROM ADDRESS ───────────────────────────────────────────
+// Per user 2026-05-19: the Add Visit form no longer has an Area dropdown.
+// Instead, we extract the area from the address text on submit. Strategy:
+//   1. Try to find one of the known AREAS as a substring (e.g. "Frisco").
+//   2. Fall back to APPROVED_AREAS (the broader 21-city list).
+//   3. Fall back to parsing the "CITY ST ZIP" tail of the address.
+//   4. Default to 'Other' if nothing recognizable.
+function _deriveCityFromAddress(addr){
+  var s = String(addr || '').trim();
+  if(!s) return '';
+  var lower = s.toLowerCase();
+  if(typeof AREAS !== 'undefined' && AREAS){
+    for(var i = 0; i < AREAS.length; i++){
+      var a = AREAS[i];
+      if(a === 'Other') continue;
+      if(lower.indexOf(a.toLowerCase()) >= 0) return a;
+    }
+  }
+  if(typeof APPROVED_AREAS !== 'undefined' && APPROVED_AREAS){
+    for(var j = 0; j < APPROVED_AREAS.length; j++){
+      if(lower.indexOf(APPROVED_AREAS[j].toLowerCase()) >= 0) return APPROVED_AREAS[j];
+    }
+  }
+  // Parse "CITY ST ZIP" or "..., CITY ST ZIP"
+  var lastChunk = s.split(',').pop().trim();
+  var match = lastChunk.match(/^(.+?)\s+[A-Z]{2}\s+\d{5}/);
+  if(match) return match[1].trim();
+  return 'Other';
+}
+window._deriveCityFromAddress = _deriveCityFromAddress;
 
 // ── RECURRING VISIT HELPERS ────────────────────────────────────────────────
 // Toggle the repeat options row + refresh the preview text.
@@ -17622,6 +17667,16 @@ function closeAddVisit(){
   var nameEl = document.getElementById('av-name');
   if(nameEl){ nameEl.readOnly = false; nameEl.style.background = '#fff'; }
   document.querySelectorAll('input[name="av-type"]').forEach(function(r){ r.disabled = false; });
+  // Unlock the address field + remove the lock hint (added 2026-05-19)
+  var addrElClose = document.getElementById('av-address');
+  if(addrElClose){
+    addrElClose.readOnly = false;
+    addrElClose.style.background = '#fff';
+    addrElClose.style.cursor = '';
+    addrElClose.title = '';
+    var hint = addrElClose.parentElement && addrElClose.parentElement.querySelector('.av-address-locked-hint');
+    if(hint) hint.remove();
+  }
 }
 window.closeAddVisit = closeAddVisit;
 
@@ -17676,13 +17731,17 @@ function openAddVisitFromPage(){
   var areaSel = document.getElementById('av-area');
   if(areaSel){
     areaSel.value = (typeof AREAS !== 'undefined' && AREAS[0]) ? AREAS[0] : 'Frisco';
-    // Reset autocomplete-induced area lock too (added earlier in this session)
-    areaSel.disabled = false;
-    areaSel.style.opacity = '';
-    areaSel.style.cursor = '';
-    areaSel.title = '';
-    var prevHint = areaSel.parentElement && areaSel.parentElement.querySelector('.av-area-locked-hint');
-    if(prevHint) prevHint.remove();
+  }
+  // Reset the ADDRESS field's lock state from a previous autocomplete pick
+  // (the new primary location field as of 2026-05-19)
+  var addrElPg = document.getElementById('av-address');
+  if(addrElPg){
+    addrElPg.readOnly = false;
+    addrElPg.style.background = '#fff';
+    addrElPg.style.cursor = '';
+    addrElPg.title = '';
+    var prevHintPg = addrElPg.parentElement && addrElPg.parentElement.querySelector('.av-address-locked-hint');
+    if(prevHintPg) prevHintPg.remove();
   }
   // Also clear any stale autocomplete suggestions box from a prior session
   var suggestBox = document.getElementById('av-name-suggest');
@@ -17779,15 +17838,31 @@ function confirmAddVisit(){
   var typeEl = document.querySelector('input[name="av-type"]:checked');
   var type = typeEl ? typeEl.value : 'clinic';
   var name    = (document.getElementById('av-name').value||'').trim();
-  var area    = document.getElementById('av-area').value || S.days[di].focus;
   var contact = (document.getElementById('av-contact').value||'').trim();
   var spec    = (document.getElementById('av-spec').value||'').trim();
   var phone   = (document.getElementById('av-phone').value||'').trim();
   var address = (document.getElementById('av-address').value||'').trim();
   var member  = document.getElementById('av-member').value || '';
   var notes   = (document.getElementById('av-notes').value||'').trim();
+  // ── ADDRESS-DRIVEN AREA (per user 2026-05-19) ─────────────────────────
+  // The Area dropdown is hidden. Derive the area from the address text.
+  // If the user provided no address AND we can't infer one, fall back to
+  // the day's focus area so we never break downstream code that expects
+  // row.city to be a non-empty string.
+  var area = (typeof _deriveCityFromAddress === 'function')
+    ? _deriveCityFromAddress(address)
+    : '';
+  if(!area){ area = (S.days[di] && S.days[di].focus) || (typeof AREAS !== 'undefined' ? AREAS[0] : 'Frisco'); }
+  // Sync the hidden #av-area dropdown for back-compat with any other reader
+  var areaSelHidden = document.getElementById('av-area');
+  if(areaSelHidden){
+    var hasOpt = false;
+    for(var ai=0; ai<areaSelHidden.options.length; ai++){ if(areaSelHidden.options[ai].value === area){ hasOpt = true; break; } }
+    areaSelHidden.value = hasOpt ? area : 'Other';
+  }
 
   if(!name){ showToast('Please enter the business name.'); return; }
+  if(!address){ showToast('Please enter the address. (Pick a known clinic from suggestions to auto-fill it.)'); return; }
 
   // ── DUPLICATE CHECK ──────────────────────────────────────────────────
   // Block adding the same business twice on the same date — EXCEPT for
