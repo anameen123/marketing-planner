@@ -8965,7 +8965,10 @@ var ADMIN_NOTIF_LS_KEY = 'wcg_admin_notifications_v1';
 //   }
 var REFERRAL_LOG = [];
 var REFERRAL_LOG_LS_KEY = 'wcg_referral_log_v1'; // existing key kept; entries get new fields in-place
-var REFERRAL_EDIT_WINDOW_MS = 60 * 60 * 1000; // 1 hour self-edit window
+// Per user 2026-05-19: front-desk users can edit / delete their OWN
+// entries only within 1 DAY of submission. Past that window, only admin
+// can touch them. Previously this was 1 hour.
+var REFERRAL_EDIT_WINDOW_MS = 24 * 60 * 60 * 1000; // 24 hours
 // The 3 WCG facilities — keyed for stable storage. Labels for display.
 var REFERRAL_FACILITIES = [
   { key: 'frisco_er',        label: 'Frisco ER',        short: 'Frisco',     city: 'Frisco' },
@@ -9384,20 +9387,30 @@ function addReferralEntry(data){
 }
 window.addReferralEntry = addReferralEntry;
 
-// Edit an existing entry. Permission rules:
+// Edit an existing entry. Permission rules (updated 2026-05-19 per user):
 //   • Admin can edit any entry forever
-//   • Submitter can edit their own entry within REFERRAL_EDIT_WINDOW_MS
+//   • Front-desk can ONLY edit entries from their own facility, and only
+//     within REFERRAL_EDIT_WINDOW_MS (1 day) of submission. After that
+//     window OR for entries from a different facility, only admin can.
+//   • Members / other roles can edit their own entries within the window.
 function canEditReferralEntry(entry){
   if(!entry) return false;
   if(typeof isAdmin === 'function' && isAdmin()) return true;
   if(!CURRENT_USER) return false;
+  // Front-desk: facility-locked + within 1-day window.
+  if(CURRENT_USER.role === 'front_desk'){
+    if(!CURRENT_USER.facilityKey || entry.destinationFacility !== CURRENT_USER.facilityKey) return false;
+    var ageFD = Date.now() - new Date(entry.ts).getTime();
+    if(ageFD > REFERRAL_EDIT_WINDOW_MS) return false;
+    return true;
+  }
+  // Other non-admin roles: must be theirs + within the window.
   var myEmail = (CURRENT_USER.email || '').toLowerCase();
   var myName  = (CURRENT_USER.name  || '').toLowerCase();
   var entryEmail = (entry.filledByEmail || '').toLowerCase();
   var entryName  = (entry.filledByName  || '').toLowerCase();
   var mine = (myEmail && myEmail === entryEmail) || (myName && myName === entryName);
   if(!mine) return false;
-  // Within the 1-hour window?
   var age = Date.now() - new Date(entry.ts).getTime();
   return age <= REFERRAL_EDIT_WINDOW_MS;
 }
@@ -11049,16 +11062,28 @@ function openReferralForm(editId){
     });
     chSel.innerHTML = chHtml;
   }
-  // Populate destination radios as styled buttons
+  // Populate destination radios as styled buttons.
+  // Per user 2026-05-19: front-desk users can ONLY log referrals for their
+  // own facility — they cannot pick another location. The list collapses to
+  // just their facilityKey (and their radio is pre-checked + locked).
   var dRow = document.getElementById('rl-destination-row');
   if(dRow){
+    var isFD = (CURRENT_USER && CURRENT_USER.role === 'front_desk');
+    var fdKey = (isFD && CURRENT_USER.facilityKey) || null;
+    var facList = REFERRAL_FACILITIES.filter(function(f){
+      return isFD ? (f.key === fdKey) : true;
+    });
     var dHtml = '';
-    REFERRAL_FACILITIES.forEach(function(f){
-      dHtml += '<label style="display:flex;align-items:center;gap:6px;background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:8px 12px;cursor:pointer;font-size:11px;font-weight:600;color:var(--text)">'
-            + '<input type="radio" name="rl-dest" value="' + f.key + '" style="accent-color:#1F3864">'
-            + '<span>🏥 ' + f.label + '</span>'
+    facList.forEach(function(f){
+      var isFixedForFD = (isFD && f.key === fdKey);
+      dHtml += '<label style="display:flex;align-items:center;gap:6px;background:'+(isFixedForFD?'#eff6ff':'#f8fafc')+';border:1px solid '+(isFixedForFD?'#3b82f6':'var(--border)')+';border-radius:8px;padding:8px 12px;cursor:'+(isFixedForFD?'default':'pointer')+';font-size:11px;font-weight:600;color:var(--text)">'
+            + '<input type="radio" name="rl-dest" value="' + f.key + '"'+(isFixedForFD?' checked disabled':'')+' style="accent-color:#1F3864">'
+            + '<span>🏥 ' + f.label + (isFixedForFD?' <span style=\"color:#1d4ed8;font-weight:700\">(your facility)</span>':'') + '</span>'
             + '</label>';
     });
+    if(isFD){
+      dHtml += '<div style="grid-column:1/-1;font-size:10px;color:#1d4ed8;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;padding:6px 10px;margin-top:6px">🔒 You can only log referrals for your own facility.</div>';
+    }
     dRow.innerHTML = dHtml;
   }
   // Defaults for new entries (date=today, time=now)
@@ -11357,9 +11382,30 @@ function submitReferralForm(){
     // extras
     extraNotes:    document.getElementById('rl-notes').value
   };
+  // ── FRONT-DESK FACILITY LOCK (per user 2026-05-19) ─────────────────
+  // A front-desk user can ONLY log referrals for their own facility.
+  // The destination radios are pre-filled + disabled in the form, but we
+  // also enforce server-side here so a tweaked DOM can't slip through.
+  if(CURRENT_USER && CURRENT_USER.role === 'front_desk' && CURRENT_USER.facilityKey){
+    if(data.destinationFacility && data.destinationFacility !== CURRENT_USER.facilityKey){
+      showErr('Your account is locked to one facility — you can\'t log a referral for a different location.');
+      return;
+    }
+    // Force the value even if the DOM passed an empty string
+    data.destinationFacility = CURRENT_USER.facilityKey;
+  }
   // Validation
   if(!data.entryDate)           { showErr('Pick the date of the referral.'); return; }
   if(!data.entryTime)           { showErr('Pick the time of the referral.'); return; }
+  // ── NO FUTURE DATES (per user 2026-05-19) ──────────────────────────
+  // A referral represents a patient who already walked in — it can't be
+  // logged in the future. Admin bypasses for back-corrections.
+  var _todayIso = (function(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); })();
+  var _isAdminNow = (typeof isAdmin === 'function' && isAdmin());
+  if(!_isAdminNow && data.entryDate > _todayIso){
+    showErr('You can\'t log a referral for a future date. Use today\'s date or an earlier one.');
+    return;
+  }
   if(!data.memberName)          { showErr('Pick the marketing team member to credit.'); return; }
   if(!data.destinationFacility) { showErr('Pick a destination facility.'); return; }
   if(!data.filledByName)        { showErr('Enter the name of the person filling this form.'); return; }
