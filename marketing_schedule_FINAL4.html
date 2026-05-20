@@ -1975,7 +1975,10 @@ body.role-front_desk #referrals-view {
 
       <!-- Name + autocomplete suggestions -->
       <div class="kpi-input-row" style="margin-top:14px;position:relative">
-        <label id="av-name-label" style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Clinic Name <span style="color:#ef4444">*</span></label>
+        <label id="av-name-label" style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px;display:flex;align-items:center;justify-content:space-between;gap:8px">
+          <span>Clinic Name <span style="color:#ef4444">*</span></span>
+          <button type="button" onclick="_avStartMapPick()" title="Click any pin on the map to pre-fill this visit's clinic" style="background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;border:none;border-radius:6px;padding:3px 9px;font-size:10px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif">📍 Pick from map</button>
+        </label>
         <input type="text" id="av-name" placeholder="Start typing — suggestions appear from Bank of Targets"
                oninput="updateAddVisitNameSuggestions();_avMaybeUnlockArea()"
                onfocus="updateAddVisitNameSuggestions()"
@@ -1984,7 +1987,7 @@ body.role-front_desk #referrals-view {
                style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;outline:none;background:#fff;box-sizing:border-box">
         <!-- Suggestion dropdown — absolutely positioned below the input -->
         <div id="av-name-suggest" style="display:none;position:absolute;left:0;right:0;top:100%;margin-top:2px;background:#fff;border:1px solid var(--border);border-radius:8px;max-height:260px;overflow-y:auto;z-index:10;box-shadow:0 8px 20px rgba(31,56,100,.12)"></div>
-        <div style="font-size:10px;color:var(--muted);margin-top:4px;font-style:italic">Type a few letters → click a match to auto-fill the rest, or keep typing to enter a brand-new name</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:4px;font-style:italic">Type a few letters → click a match to auto-fill the rest. OR use 📍 Pick from map to click a clinic visually.</div>
       </div>
 
       <!-- Address (NEW PRIMARY LOCATION FIELD — replaces Area dropdown
@@ -16791,6 +16794,94 @@ function _initDayMap(){
   }
 }
 
+// ── ADD VISIT — PICK FROM MAP ─────────────────────────────────────────
+// User clicks the "📍 Pick from map" button in the Add Visit modal →
+// modal hides, map gets a hint banner, every pin popup shows an extra
+// "✓ Use this for the visit" button. When the user clicks one of those,
+// the name fills back into the modal and the modal reopens.
+var _AV_MAP_PICK_MODE = false;
+var _PIN_POPUP_SEQ = 0;   // unique id per popup so we can selectively show buttons
+
+function _avStartMapPick(){
+  _AV_MAP_PICK_MODE = true;
+  // Hide the Add Visit modal so the map is visible
+  var modal = document.getElementById('add-visit-modal');
+  if(modal) modal.style.display = 'none';
+  // Open the day view's map if not already open
+  if(typeof S !== 'undefined' && S.currentDay == null && S.days && S.days.length){
+    // No day open — open today (or the first available day) so the map renders
+    var todayIso = new Date().toISOString().slice(0, 10);
+    var di = -1;
+    for(var i = 0; i < S.days.length; i++){ if(S.days[i].date === todayIso){ di = i; break; } }
+    if(di < 0) di = 0;
+    if(typeof openDay === 'function') openDay(di);
+  }
+  // Show a top banner so the user knows what to do
+  var banner = document.getElementById('av-map-pick-banner');
+  if(!banner){
+    banner = document.createElement('div');
+    banner.id = 'av-map-pick-banner';
+    banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9998;background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;padding:10px 16px;font-family:DM Sans,sans-serif;font-size:13px;font-weight:700;text-align:center;box-shadow:0 4px 12px rgba(15,23,42,.25);display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap';
+    banner.innerHTML = ''
+      + '<span>📍 Click any pin on the map to use it as this visit\'s clinic</span>'
+      + '<button onclick="_avCancelMapPick()" style="background:rgba(255,255,255,.2);color:#fff;border:1px solid rgba(255,255,255,.5);border-radius:6px;padding:4px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">✕ Cancel</button>';
+    document.body.appendChild(banner);
+  } else {
+    banner.style.display = 'flex';
+  }
+  // Scroll to the map
+  setTimeout(function(){
+    var mapEl = document.getElementById('dv-map');
+    if(mapEl) mapEl.scrollIntoView({ behavior:'smooth', block:'start' });
+  }, 80);
+  // Re-render pin popups so the new "Use this" button is visible in all of them
+  if(typeof renderAllBusinessPins === 'function') renderAllBusinessPins();
+}
+window._avStartMapPick = _avStartMapPick;
+
+function _avCancelMapPick(){
+  _AV_MAP_PICK_MODE = false;
+  var banner = document.getElementById('av-map-pick-banner');
+  if(banner) banner.style.display = 'none';
+  // Restore the modal
+  var modal = document.getElementById('add-visit-modal');
+  if(modal) modal.style.display = 'flex';
+  if(typeof renderAllBusinessPins === 'function') renderAllBusinessPins();
+}
+window._avCancelMapPick = _avCancelMapPick;
+
+// Called by the green "✓ Use this for the visit" button in any pin popup.
+function _avFinishMapPick(name, bizType){
+  if(!_AV_MAP_PICK_MODE){ return; }   // safety — shouldn't be reachable
+  _AV_MAP_PICK_MODE = false;
+  var banner = document.getElementById('av-map-pick-banner');
+  if(banner) banner.style.display = 'none';
+  // Set the business-type radio in the modal to match the picked pin's type
+  var typeRadio = document.querySelector('input[name="av-type"][value="' + (bizType || 'clinic') + '"]');
+  if(typeRadio){ typeRadio.checked = true; if(typeof updateAddVisitForm === 'function') updateAddVisitForm(); }
+  // Fill the name field
+  var nameEl = document.getElementById('av-name');
+  if(nameEl){ nameEl.value = name; }
+  // Run the autocomplete logic so contact/area/spec/etc. pre-fill from the bank record
+  if(typeof updateAddVisitNameSuggestions === 'function') updateAddVisitNameSuggestions();
+  // Find the matching candidate in _avNameMatches and apply it (this also locks the area)
+  if(typeof _avNameMatches !== 'undefined' && _avNameMatches){
+    var matchIdx = -1;
+    for(var i = 0; i < _avNameMatches.length; i++){
+      if(_avNameMatches[i].name === name){ matchIdx = i; break; }
+    }
+    if(matchIdx >= 0 && typeof pickAddVisitSuggestion === 'function'){
+      pickAddVisitSuggestion(matchIdx);
+    }
+  }
+  // Restore the modal
+  var modal = document.getElementById('add-visit-modal');
+  if(modal) modal.style.display = 'flex';
+  if(typeof renderAllBusinessPins === 'function') renderAllBusinessPins();
+  if(typeof showToast === 'function') showToast('Picked from map: ' + name);
+}
+window._avFinishMapPick = _avFinishMapPick;
+
 // ── ALL-BUSINESS PIN LAYER ────────────────────────────────────────────
 // Renders every clinic / MVA / outreach from the bank as a small circle
 // marker. Color = recency (visited X days ago). Border = type. Cheap
@@ -16833,13 +16924,22 @@ function renderAllBusinessPins(){
     }
     var typeLabel = bizType === 'mva' ? '⚖ MVA' : bizType === 'outreach' ? '🏘 Outreach' : '🏥 Clinic';
     var safeName = String(name).replace(/</g,'&lt;');
-    var popupHtml = '<div style="font-family:DM Sans,sans-serif;font-size:12px;min-width:170px">'
+    var escName = name.replace(/'/g,"\\'");
+    // Three action buttons in the popup:
+    //   • Set as Start / End — for Smart Plan workflow
+    //   • Use this clinic for the visit — for Add Visit flow (only visible
+    //     when the user clicked the "📍 Pick from map" button in the modal)
+    var popupHtml = '<div style="font-family:DM Sans,sans-serif;font-size:12px;min-width:180px">'
       +   '<div style="font-weight:700;color:#1F3864;font-size:13px;margin-bottom:4px">' + safeName + '</div>'
       +   '<div style="font-size:10px;color:#64748b;margin-bottom:6px">' + typeLabel + ' · ' + rec.label + '</div>'
-      +   '<div style="display:flex;gap:5px;margin-top:6px">'
-      +     '<button onclick="_rpPickFromMap(\'' + name.replace(/'/g,"\\'") + '\',\'start\')" style="flex:1;background:#1F3864;color:#fff;border:none;border-radius:5px;padding:5px 8px;font-size:10px;font-weight:700;cursor:pointer">Set as Start</button>'
-      +     '<button onclick="_rpPickFromMap(\'' + name.replace(/'/g,"\\'") + '\',\'end\')"   style="flex:1;background:#7030A0;color:#fff;border:none;border-radius:5px;padding:5px 8px;font-size:10px;font-weight:700;cursor:pointer">Set as End</button>'
+      +   '<div style="display:flex;gap:5px;margin-top:6px;flex-wrap:wrap">'
+      +     '<button onclick="_rpPickFromMap(\'' + escName + '\',\'start\')" style="flex:1;min-width:70px;background:#1F3864;color:#fff;border:none;border-radius:5px;padding:5px 8px;font-size:10px;font-weight:700;cursor:pointer">Set as Start</button>'
+      +     '<button onclick="_rpPickFromMap(\'' + escName + '\',\'end\')"   style="flex:1;min-width:70px;background:#7030A0;color:#fff;border:none;border-radius:5px;padding:5px 8px;font-size:10px;font-weight:700;cursor:pointer">Set as End</button>'
       +   '</div>'
+      +   '<button id="popup-pick-' + (++_PIN_POPUP_SEQ) + '" data-business="' + escName + '" onclick="_avFinishMapPick(this.getAttribute(\'data-business\'),\'' + bizType + '\')" '
+      +     'style="width:100%;margin-top:5px;background:#16a34a;color:#fff;border:none;border-radius:5px;padding:6px 8px;font-size:10px;font-weight:700;cursor:pointer;display:' + (_AV_MAP_PICK_MODE ? 'block' : 'none') + '">'
+      +     '✓ Use this for the visit'
+      +   '</button>'
       + '</div>';
     var marker = L.circleMarker([lat, lng], {
       radius: 5,
@@ -16975,18 +17075,31 @@ window._rpPickFromMap = _rpPickFromMap;
 function _rpRefreshHighlights(){
   if(!_RP_HIGHLIGHTS) return;
   _RP_HIGHLIGHTS.clearLayers();
-  function addRing(name, label, color){
+  function addHighlight(name, letter, fullLabel, color){
     if(!name) return;
     var c = _rpResolveCoord(name);
     if(!c) return;
+    // Dashed ring around the pin so the location is clearly marked
     var ring = L.circleMarker([c.lat, c.lng], {
-      radius: 14, color: color, weight: 3, fillOpacity: 0, dashArray: '4,3'
+      radius: 16, color: color, weight: 3, fillOpacity: 0, dashArray: '4,3'
     });
-    ring.bindPopup('<b>' + label + ':</b> ' + String(name).replace(/</g,'&lt;'));
+    ring.bindPopup('<b>' + fullLabel + ':</b> ' + String(name).replace(/</g,'&lt;'));
     _RP_HIGHLIGHTS.addLayer(ring);
+    // Big, visible S/E badge marker so the user can tell at a glance
+    // which pin is Start and which is End (without hovering or zooming in).
+    var badge = L.marker([c.lat, c.lng], {
+      icon: L.divIcon({
+        className: 'rp-se-badge',
+        html: '<div style="background:' + color + ';color:#fff;width:28px;height:28px;border-radius:50%;border:3px solid #fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;font-family:DM Sans,sans-serif;box-shadow:0 2px 8px rgba(15,23,42,.4)">' + letter + '</div>',
+        iconSize: [28, 28],
+        iconAnchor: [14, 36]   // anchor BELOW the pin so the badge sits above it
+      }),
+      interactive: false   // clicks pass through to the underlying pin
+    });
+    _RP_HIGHLIGHTS.addLayer(badge);
   }
-  addRing(_RP_START_NAME, 'Start', '#1F3864');
-  addRing(_RP_END_NAME,   'End',   '#7030A0');
+  addHighlight(_RP_START_NAME, 'S', 'Start', '#1F3864');
+  addHighlight(_RP_END_NAME,   'E', 'End',   '#7030A0');
 }
 
 function _rpUpdateStatus(){
