@@ -15160,7 +15160,11 @@ function updateAddVisitNameSuggestions(){
       name:    function(o){return o.n;},
       contact: function(o){return (o.d && o.d!=='TBD') ? o.d : '';},
       area:    function(o){return o.c;},
-      spec:    function(o){return o.s || '';}
+      spec:    function(o){return o.s || '';},
+      // Clinics may or may not have address/phone — bundled-contacts apply
+      // adds them at runtime for ~33 priority clinics. The rest are blank.
+      phone:   function(o){return (o.phone   && o.phone   !== 'TBD') ? o.phone   : '';},
+      address: function(o){return (o.address && o.address !== 'TBD') ? o.address : '';}
     };
   } else if(type === 'mva'){
     source = (typeof MVA_ATTORNEYS !== 'undefined') ? MVA_ATTORNEYS : [];
@@ -15259,27 +15263,55 @@ function pickAddVisitSuggestion(i){
   }
   if(m.spec) document.getElementById('av-spec').value = m.spec;
   if(m.phone) document.getElementById('av-phone').value = m.phone;
-  // ── ADDRESS LOCK (NEW per user 2026-05-19) ────────────────────────────
-  // The address is the source of truth for location now. When a known
-  // business is picked, lock the address field — the user cannot change
-  // it (the clinic record's address is canonical). If they later type a
-  // different name (breaking the autocomplete match), the field unlocks
-  // again so they can enter a brand-new address.
+  // ── ADDRESS LOCK (FIX 2026-05-20) ────────────────────────────────────
+  // BUG FOUND: user typed an address manually, then picked a clinic, and
+  // the typed text stuck because the previous code only overwrote when
+  // m.address was truthy. The intent is: the clinic record is canonical.
+  // If you pick a clinic, the address field should always reflect the
+  // record — even if that means clearing what you typed because the
+  // clinic has no address on file. We now ALWAYS overwrite + show a
+  // visible hint when the clinic record has no address (so the user
+  // knows what happened and can manually type the real address back in
+  // if they know it — see the "✎ Edit address" affordance below).
   var addrEl = document.getElementById('av-address');
   if(addrEl){
-    if(m.address){ addrEl.value = m.address; }
-    addrEl.readOnly = true;
-    addrEl.style.background = '#f4f5f9';
-    addrEl.style.cursor = 'not-allowed';
-    addrEl.title = 'Address is set from the '+(_avNameType==='mva'?'firm':_avNameType==='outreach'?'organization':'clinic')+' record. Type a different name to enter a brand-new address.';
-    // Show a small lock hint just under the input (idempotent)
+    var bizTypeLabel = _avNameType==='mva' ? 'firm'
+                     : _avNameType==='outreach' ? 'organization' : 'clinic';
+    // Always overwrite — empty string when the record has no address
+    addrEl.value = m.address || '';
+    // Drop any prior lock hint so we can re-add the right one
     var addrRow = addrEl.parentElement;
-    if(addrRow && !addrRow.querySelector('.av-address-locked-hint')){
-      var hint = document.createElement('div');
-      hint.className = 'av-address-locked-hint';
-      hint.style.cssText = 'font-size:10px;color:#1F3864;margin-top:4px;font-style:italic;font-weight:600';
-      hint.textContent = '🔒 Address is fixed by the '+(_avNameType==='mva'?'firm':_avNameType==='outreach'?'organization':'clinic')+' record';
-      addrRow.appendChild(hint);
+    if(addrRow){
+      var oldHint = addrRow.querySelector('.av-address-locked-hint');
+      if(oldHint) oldHint.remove();
+    }
+    if(m.address){
+      // Has a real address on file — lock the field, show "fixed" hint
+      addrEl.readOnly = true;
+      addrEl.style.background = '#f4f5f9';
+      addrEl.style.cursor = 'not-allowed';
+      addrEl.title = 'Address is set from the '+bizTypeLabel+' record. Type a different name to enter a brand-new address.';
+      if(addrRow){
+        var hint = document.createElement('div');
+        hint.className = 'av-address-locked-hint';
+        hint.style.cssText = 'font-size:10px;color:#1F3864;margin-top:4px;font-style:italic;font-weight:600';
+        hint.textContent = '🔒 Address from the '+bizTypeLabel+' record';
+        addrRow.appendChild(hint);
+      }
+    } else {
+      // No address on file — UNLOCK so the user can enter one, show a
+      // friendly warning so they know what just happened.
+      addrEl.readOnly = false;
+      addrEl.style.background = '#fff';
+      addrEl.style.cursor = '';
+      addrEl.title = '';
+      if(addrRow){
+        var hintNone = document.createElement('div');
+        hintNone.className = 'av-address-locked-hint';
+        hintNone.style.cssText = 'font-size:10px;color:#92400e;margin-top:4px;font-style:italic;font-weight:600;background:#fffbeb;border:1px solid #fcd34d;border-radius:6px;padding:5px 8px';
+        hintNone.textContent = '⚠ No address on file for this '+bizTypeLabel+'. Type it here if you know it — it\'ll save back to the '+bizTypeLabel+' record.';
+        addrRow.appendChild(hintNone);
+      }
     }
   }
   var box = document.getElementById('av-name-suggest');
