@@ -16527,13 +16527,23 @@ function _rpFindCandidates(checkpoint, opts){
       leadLevel:  lead ? (lead.level || 0) : 0
     });
   }
-  if(typeof CLINIC_BANK !== 'undefined'){
+  // Type whitelist (opts.onlyTypes) — when set, ONLY those biz types
+  // contribute to the pool. Used by Outreach mode to limit candidates to
+  // outreach orgs only. If not set, defaults to clinic + MVA, with
+  // outreach added in if includeOutreach is true.
+  var onlyTypes = opts.onlyTypes;   // e.g. ['outreach'] or ['clinic','mva']
+  function typeAllowed(t){
+    if(onlyTypes && onlyTypes.length) return onlyTypes.indexOf(t) >= 0;
+    if(t === 'outreach') return !!opts.includeOutreach;
+    return true;
+  }
+  if(typeof CLINIC_BANK !== 'undefined' && typeAllowed('clinic')){
     CLINIC_BANK.forEach(function(c){ if(c && c.n) consider(c.n, 'clinic'); });
   }
-  if(typeof MVA_ATTORNEYS !== 'undefined'){
+  if(typeof MVA_ATTORNEYS !== 'undefined' && typeAllowed('mva')){
     MVA_ATTORNEYS.forEach(function(m){ if(m && m.firm) consider(m.firm, 'mva'); });
   }
-  if(opts.includeOutreach && typeof OUTREACH !== 'undefined'){
+  if(typeof OUTREACH !== 'undefined' && typeAllowed('outreach')){
     OUTREACH.forEach(function(o){ if(o && o.name) consider(o.name, 'outreach'); });
   }
   // Expanding-radius search per user 2026-05-20: start at 0.5 mi, expand
@@ -16655,8 +16665,20 @@ function _rpRenderSlots(){
     var slotExclude = Object.assign({}, excludeSet);
     var pick = _RP_SLOT_PICKS[k-1];
     if(pick && pick.name) delete slotExclude[pick.name];   // allow current pick to show
-    var cands = _rpFindCandidates(checkpoint, { limit:5, minStaleDays:14, exclude: slotExclude });
-    // If no pick yet, default to the top candidate
+    // Mode-aware candidate set:
+    //   • auto (default)  → clinic + MVA, dead-ends excluded, ≥14d stale
+    //   • outreach        → outreach only, no dead-end filter (none on outreach), no staleness filter
+    var mode = _RP_SLOT_MODE[k] || 'auto';
+    var cands;
+    if(mode === 'outreach'){
+      cands = _rpFindCandidates(checkpoint, {
+        limit: 5, minStaleDays: 0, exclude: slotExclude,
+        onlyTypes: ['outreach']
+      });
+    } else {
+      cands = _rpFindCandidates(checkpoint, { limit:5, minStaleDays:14, exclude: slotExclude });
+    }
+    // If no pick yet, default to the top candidate (or null if mode produced none)
     if(!pick && cands.length){ _RP_SLOT_PICKS[k-1] = cands[0]; pick = cands[0]; excludeSet[pick.name] = true; }
     html += _rpRenderSlotRow(k, pick, cands);
   }
@@ -16664,15 +16686,24 @@ function _rpRenderSlots(){
   _rpDrawRouteLine();
 }
 
+// Per-slot UI state — which candidate-source mode is active and whether
+// the manual-search panel is open. Default mode 'auto' = clinic + MVA
+// auto-recommendations (dead-ends excluded, recency-filtered). 'outreach'
+// = outreach-only candidates near the path. Manual search is independent
+// of mode — opens an inline finder that searches ALL businesses by name.
+var _RP_SLOT_MODE   = {};    // { k: 'auto' | 'outreach' }
+var _RP_MANUAL_OPEN = {};    // { k: true } when manual search panel is open
+
 function _rpRenderSlotRow(k, pick, cands){
+  var mode  = _RP_SLOT_MODE[k]   || 'auto';
+  var manualOpen = !!_RP_MANUAL_OPEN[k];
   var pickRec  = pick ? recencyBucket(pick.days) : recencyBucket(null);
   // Build the dropdown options — each option now shows:
   //   name  ·  type  ·  recency (e.g. "never" or "37d")  ·  lead status  ·  X.X mi
   // Sorted at the source so the longest-since-visited candidate is at top.
   var dropdownOpts = cands.length === 0
-    ? '<option value="">No candidates found within 12 mi — try fewer visits or relocate Start/End</option>'
+    ? '<option value="">No candidates found within 12 mi — try fewer visits or use manual search below</option>'
     : cands.map(function(c, i){
-        var bucket = recencyBucket(c.days);
         var leadShort = _rpLeadStatusShort(c.name, c.bizType);
         var picked = (pick && pick.name === c.name) ? ' selected' : '';
         var typeLbl = c.bizType === 'mva' ? 'MVA' : c.bizType === 'outreach' ? 'Outreach' : 'Clinic';
@@ -16683,29 +16714,165 @@ function _rpRenderSlotRow(k, pick, cands){
                 + '  ·  ' + c.dist.toFixed(1) + ' mi';
         return '<option value="' + i + '"' + picked + '>' + lbl.replace(/</g,'&lt;') + '</option>';
       }).join('');
-  // Lead-status chip for the currently-picked candidate. Color matches the
-  // lead status (green for established, orange for needs work, red for
-  // dead end, gray for not visited).
+  // Chips for the picked candidate
   var leadChipHtml = '';
+  var warningChipHtml = '';
   if(pick){
     var leadColor = _rpLeadStatusColor(pick.name, pick.bizType);
     var leadLabel = _rpLeadStatusShort(pick.name, pick.bizType);
     leadChipHtml = '<span title="Current lead status" style="display:inline-flex;align-items:center;gap:4px;font-size:10px;color:#fff;background:' + leadColor + ';border-radius:10px;padding:2px 8px;flex-shrink:0;font-weight:700">' + leadLabel + '</span>';
+    // Warning if this was a manually-picked dead-end or outreach
+    var pickLead = (typeof getClinicLead === 'function') ? getClinicLead(pick.name) : null;
+    if(pickLead && pickLead.status === 'dead_end'){
+      warningChipHtml = '<span title="Manually picked: this clinic\'s lead status is DEAD END. Visit only if you have a reason to re-engage." style="display:inline-flex;align-items:center;gap:3px;font-size:10px;background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;border-radius:10px;padding:2px 8px;flex-shrink:0;font-weight:700">⚠ Dead End</span>';
+    } else if(pick.bizType === 'outreach'){
+      warningChipHtml = '<span title="Outreach event — pre-planned, takes more time than a clinic visit." style="display:inline-flex;align-items:center;gap:3px;font-size:10px;background:#ede9fe;color:#5b21b6;border:1px solid #c4b5fd;border-radius:10px;padding:2px 8px;flex-shrink:0;font-weight:700">🏘 Outreach</span>';
+    }
   }
-  // Recency chip
   var stalenessLbl = pick ? (pick.days == null ? 'never visited' : pick.days + 'd ago') : 'no pick';
   var recencyChipHtml = '<span title="' + pickRec.label + '" style="display:inline-flex;align-items:center;gap:4px;font-size:10px;color:#374151;background:#fff;border:1px solid var(--border);border-radius:10px;padding:2px 8px;flex-shrink:0"><span style="display:inline-block;width:8px;height:8px;background:' + pickRec.color + ';border-radius:50%"></span>' + stalenessLbl + '</span>';
-  return '<div style="display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px dashed var(--border);flex-wrap:wrap">'
+  // Slot-mode toggle button — switches between auto (clinic+MVA) and outreach-only suggestions
+  var outreachBtnLabel = (mode === 'outreach') ? '✓ Outreach mode' : '🏘 Outreach instead';
+  var outreachBtnStyle = (mode === 'outreach')
+    ? 'background:#7030A0;color:#fff;border:1px solid #7030A0;'
+    : 'background:#fff;color:#5b21b6;border:1px solid #c4b5fd;';
+  var manualBtnLabel = manualOpen ? '✕ Close search' : '🔍 Manual search';
+  var manualBtnStyle = manualOpen
+    ? 'background:#1F3864;color:#fff;border:1px solid #1F3864;'
+    : 'background:#fff;color:#1F3864;border:1px solid var(--border);';
+  // Manual-search panel (only when open)
+  var manualPanel = manualOpen ? _rpRenderManualSearch(k) : '';
+  var slotLabel = (mode === 'outreach')
+    ? 'Visit ' + k + ' — OUTREACH MODE (manual outreach picks near path)'
+    : 'Visit ' + k + ' — sorted longest-not-visited first';
+  return '<div style="padding:9px 0;border-bottom:1px dashed var(--border)">'
+    + '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
     +   '<div style="background:#1F3864;color:#fff;border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex-shrink:0">' + k + '</div>'
     +   '<div style="flex:1;min-width:200px">'
-    +     '<div style="font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Visit ' + k + ' — sorted longest-not-visited first</div>'
+    +     '<div style="font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">' + slotLabel + '</div>'
     +     '<select onchange="_rpPickSlotCandidate(' + k + ', this.value)" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:6px 8px;font-size:12px;font-family:DM Sans,sans-serif;background:#fff;margin-top:2px">' + dropdownOpts + '</select>'
     +   '</div>'
     +   recencyChipHtml
     +   leadChipHtml
+    +   warningChipHtml
     +   '<button onclick="_rpRemoveSlot(' + k + ')" title="Remove this stop" style="background:none;border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:4px 8px;font-size:11px;cursor:pointer">✕</button>'
+    + '</div>'
+    + '<div style="display:flex;gap:6px;margin-top:6px;margin-left:34px;flex-wrap:wrap">'
+    +   '<button onclick="_rpToggleSlotMode(' + k + ')" style="' + outreachBtnStyle + 'border-radius:14px;padding:3px 10px;font-size:10px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">' + outreachBtnLabel + '</button>'
+    +   '<button onclick="_rpToggleManualSearch(' + k + ')" style="' + manualBtnStyle + 'border-radius:14px;padding:3px 10px;font-size:10px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">' + manualBtnLabel + '</button>'
+    + '</div>'
+    + manualPanel
     + '</div>';
 }
+
+// Manual-search panel inside a slot row. User types any business name;
+// matches across CLINIC_BANK + MVA_ATTORNEYS + OUTREACH appear with full
+// info (recency, lead status, distance, dead-end / outreach warnings).
+// Click any result to assign it to the slot.
+function _rpRenderManualSearch(k){
+  var q = (_RP_MANUAL_OPEN[k+'_q'] || '').toLowerCase().trim();
+  var resultsHtml = '';
+  if(q.length >= 2){
+    var startCoord = _rpResolveCoord(_RP_START_NAME);
+    var endCoord   = _rpResolveCoord(_RP_END_NAME);
+    var t = k / (_RP_N + 1);
+    var checkpoint = (startCoord && endCoord) ? _rpInterp(startCoord, endCoord, t) : null;
+    var matches = [];
+    function consider(name, bizType){
+      if(!name) return;
+      if(name.toLowerCase().indexOf(q) < 0) return;
+      var coord = (typeof getCoordForBusiness === 'function') ? getCoordForBusiness(name) : null;
+      if(!coord) return;
+      var days  = (typeof daysSinceLastVisit === 'function') ? daysSinceLastVisit(name) : null;
+      var lead  = (typeof getClinicLead === 'function') ? getClinicLead(name) : null;
+      var dist  = checkpoint ? _rpHaversineMiles(coord, checkpoint) : 0;
+      matches.push({ name:name, bizType:bizType, coord:coord, days:days, dist:dist, leadStatus: lead ? lead.status : 'not_visited', leadLevel: lead ? (lead.level||0) : 0 });
+    }
+    if(typeof CLINIC_BANK !== 'undefined')    CLINIC_BANK.forEach(function(c){ if(c) consider(c.n, 'clinic'); });
+    if(typeof MVA_ATTORNEYS !== 'undefined')  MVA_ATTORNEYS.forEach(function(m){ if(m) consider(m.firm, 'mva'); });
+    if(typeof OUTREACH !== 'undefined')       OUTREACH.forEach(function(o){ if(o) consider(o.name, 'outreach'); });
+    matches.sort(function(a, b){ return a.dist - b.dist; });
+    matches = matches.slice(0, 12);
+    if(matches.length === 0){
+      resultsHtml = '<div style="padding:8px 12px;font-size:11px;color:var(--muted);font-style:italic">No matches for "' + q.replace(/</g,'&lt;') + '"</div>';
+    } else {
+      resultsHtml = matches.map(function(m){
+        var typeLbl = m.bizType === 'mva' ? 'MVA' : m.bizType === 'outreach' ? 'Outreach' : 'Clinic';
+        var staleLbl = (m.days == null) ? 'never visited' : (m.days + 'd ago');
+        var leadShort = _rpLeadStatusShort(m.name, m.bizType);
+        var warning = '';
+        if(m.leadStatus === 'dead_end') warning = '<span style="background:#fee2e2;color:#991b1b;font-size:9px;font-weight:700;padding:1px 5px;border-radius:4px;margin-left:4px">⚠ DEAD END</span>';
+        else if(m.bizType === 'outreach') warning = '<span style="background:#ede9fe;color:#5b21b6;font-size:9px;font-weight:700;padding:1px 5px;border-radius:4px;margin-left:4px">🏘 OUTREACH</span>';
+        var safeName = m.name.replace(/'/g,"\\'").replace(/"/g,'&quot;');
+        return '<button onclick="_rpAssignManual(' + k + ',\'' + safeName + '\',\'' + m.bizType + '\')" style="display:flex;align-items:center;width:100%;text-align:left;background:#fff;border:1px solid var(--border);border-radius:6px;padding:7px 10px;font-size:11px;cursor:pointer;font-family:DM Sans,sans-serif;margin-bottom:4px"><span style="flex:1"><b style="color:#1F3864">' + m.name.replace(/</g,'&lt;') + '</b>' + warning + '<br><span style="color:var(--muted);font-size:10px">' + typeLbl + ' · ' + staleLbl + ' · ' + leadShort + ' · ' + m.dist.toFixed(1) + ' mi from checkpoint</span></span></button>';
+      }).join('');
+    }
+  } else {
+    resultsHtml = '<div style="padding:8px 12px;font-size:11px;color:var(--muted);font-style:italic">Type 2+ letters to search ALL businesses (including dead-ends and outreach — warnings shown)</div>';
+  }
+  return '<div style="margin-top:8px;margin-left:34px;background:#fff;border:1px solid var(--border);border-radius:8px;padding:10px">'
+    + '<input type="text" placeholder="Search any clinic / MVA / outreach by name…" oninput="_rpManualSearchInput(' + k + ',this.value)" value="' + (q.replace(/"/g,'&quot;')) + '" autocomplete="off" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:12px;font-family:DM Sans,sans-serif;margin-bottom:8px">'
+    + '<div style="max-height:200px;overflow-y:auto">' + resultsHtml + '</div>'
+    + '</div>';
+}
+
+function _rpToggleManualSearch(k){
+  _RP_MANUAL_OPEN[k] = !_RP_MANUAL_OPEN[k];
+  _rpRenderSlots();
+}
+window._rpToggleManualSearch = _rpToggleManualSearch;
+
+function _rpManualSearchInput(k, v){
+  _RP_MANUAL_OPEN[k+'_q'] = v || '';
+  _rpRenderSlots();
+  // Re-focus the input so typing doesn't lose focus across re-renders
+  setTimeout(function(){
+    var slotsEl = document.getElementById('rp-slots');
+    if(!slotsEl) return;
+    var inputs = slotsEl.querySelectorAll('input[type="text"]');
+    if(inputs[k-1]){
+      inputs[k-1].focus();
+      var val = inputs[k-1].value;
+      inputs[k-1].setSelectionRange(val.length, val.length);
+    }
+  }, 0);
+}
+window._rpManualSearchInput = _rpManualSearchInput;
+
+function _rpAssignManual(k, name, bizType){
+  var coord = (typeof getCoordForBusiness === 'function') ? getCoordForBusiness(name) : null;
+  if(!coord) return;
+  var days  = (typeof daysSinceLastVisit === 'function') ? daysSinceLastVisit(name) : null;
+  var lead  = (typeof getClinicLead === 'function') ? getClinicLead(name) : null;
+  // Compute distance from this slot's checkpoint for display
+  var startCoord = _rpResolveCoord(_RP_START_NAME);
+  var endCoord   = _rpResolveCoord(_RP_END_NAME);
+  var dist = 0;
+  if(startCoord && endCoord){
+    var t = k / (_RP_N + 1);
+    var checkpoint = _rpInterp(startCoord, endCoord, t);
+    dist = _rpHaversineMiles(coord, checkpoint);
+  }
+  _RP_SLOT_PICKS[k-1] = {
+    name: name, bizType: bizType, coord: coord, days: days, dist: dist,
+    leadStatus: lead ? lead.status : 'not_visited',
+    leadLevel:  lead ? (lead.level || 0) : 0,
+    manualPick: true
+  };
+  _RP_MANUAL_OPEN[k] = false;
+  _RP_MANUAL_OPEN[k+'_q'] = '';
+  _rpRenderSlots();
+  if(typeof showToast === 'function') showToast('Slot ' + k + ' → ' + name);
+}
+window._rpAssignManual = _rpAssignManual;
+
+function _rpToggleSlotMode(k){
+  _RP_SLOT_MODE[k] = (_RP_SLOT_MODE[k] === 'outreach') ? 'auto' : 'outreach';
+  // Clear the current pick so the new mode's candidates take over
+  _RP_SLOT_PICKS[k-1] = null;
+  _rpRenderSlots();
+}
+window._rpToggleSlotMode = _rpToggleSlotMode;
 
 function _rpPickSlotCandidate(k, idx){
   var i = parseInt(idx, 10);
