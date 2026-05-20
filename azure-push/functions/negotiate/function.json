@@ -1,0 +1,24 @@
+{
+  "bindings": [
+    {
+      "type": "httpTrigger",
+      "direction": "in",
+      "name": "req",
+      "authLevel": "anonymous",
+      "methods": ["get", "post", "options"],
+      "route": "negotiate"
+    },
+    {
+      "type": "signalRConnectionInfo",
+      "direction": "in",
+      "name": "connectionInfo",
+      "hubName": "wcgsync",
+      "connectionStringSetting": "AzureSignalRConnectionString"
+    },
+    {
+      "type": "http",
+      "direction": "out",
+      "name": "res"
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "name": "wcg-sync-push",
+  "version": "1.0.0",
+  "description": "Azure SignalR push channel for the WCG Marketing Planner. Two HTTP triggers: negotiate (issues client connection URL) and broadcast (fans out 'data changed' messages to all connected clients).",
+  "main": "index.js",
+  "scripts": {
+    "start": "func start"
+  },
+  "dependencies": {}
+}

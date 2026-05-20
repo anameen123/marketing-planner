@@ -1,0 +1,139 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "title": "WCG Marketing Planner — Real-time push channel",
+    "description": "Provisions Azure SignalR Service (Free F1) + Storage Account + Function App (Node 20 Consumption) and deploys the negotiate + broadcast functions. After deploy, copy the Function App URL into the planner's settings to enable real-time push (instead of polling)."
+  },
+  "parameters": {
+    "resourcePrefix": {
+      "type": "string",
+      "defaultValue": "wcg-sync",
+      "minLength": 3,
+      "maxLength": 18,
+      "metadata": { "description": "Short prefix for the resources Azure creates. Lowercase letters, numbers, hyphens. e.g. 'wcg-sync'." }
+    },
+    "allowedClientOrigin": {
+      "type": "string",
+      "defaultValue": "https://anameen123.github.io",
+      "metadata": { "description": "Origin allowed to call the Function App. Default is your GitHub Pages URL." }
+    },
+    "packageUrl": {
+      "type": "string",
+      "defaultValue": "https://github.com/anameen123/marketing-planner/raw/main/azure-push/deploy.zip",
+      "metadata": { "description": "Public URL of the Function App deployment ZIP. Leave default to deploy from this repo." }
+    }
+  },
+  "variables": {
+    "uniqueSuffix": "[uniqueString(resourceGroup().id, parameters('resourcePrefix'))]",
+    "signalRName": "[concat(parameters('resourcePrefix'), '-signalr-', variables('uniqueSuffix'))]",
+    "storageName": "[take(concat(replace(parameters('resourcePrefix'), '-', ''), variables('uniqueSuffix')), 24)]",
+    "planName": "[concat(parameters('resourcePrefix'), '-plan')]",
+    "functionAppName": "[concat(parameters('resourcePrefix'), '-fn-', variables('uniqueSuffix'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.SignalRService/signalR",
+      "apiVersion": "2023-02-01",
+      "name": "[variables('signalRName')]",
+      "location": "[resourceGroup().location]",
+      "sku": {
+        "name": "Free_F1",
+        "tier": "Free",
+        "capacity": 1
+      },
+      "properties": {
+        "features": [
+          { "flag": "ServiceMode", "value": "Serverless" },
+          { "flag": "EnableConnectivityLogs", "value": "true" }
+        ],
+        "cors": {
+          "allowedOrigins": [
+            "[parameters('allowedClientOrigin')]",
+            "http://localhost:5500",
+            "http://localhost:8080"
+          ]
+        },
+        "publicNetworkAccess": "Enabled"
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2023-01-01",
+      "name": "[variables('storageName')]",
+      "location": "[resourceGroup().location]",
+      "kind": "StorageV2",
+      "sku": { "name": "Standard_LRS" },
+      "properties": {
+        "supportsHttpsTrafficOnly": true,
+        "minimumTlsVersion": "TLS1_2",
+        "allowBlobPublicAccess": false
+      }
+    },
+    {
+      "type": "Microsoft.Web/serverfarms",
+      "apiVersion": "2022-03-01",
+      "name": "[variables('planName')]",
+      "location": "[resourceGroup().location]",
+      "sku": { "name": "Y1", "tier": "Dynamic" },
+      "properties": { "reserved": false }
+    },
+    {
+      "type": "Microsoft.Web/sites",
+      "apiVersion": "2022-03-01",
+      "name": "[variables('functionAppName')]",
+      "location": "[resourceGroup().location]",
+      "kind": "functionapp",
+      "dependsOn": [
+        "[resourceId('Microsoft.SignalRService/signalR', variables('signalRName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageName'))]",
+        "[resourceId('Microsoft.Web/serverfarms', variables('planName'))]"
+      ],
+      "properties": {
+        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('planName'))]",
+        "httpsOnly": true,
+        "siteConfig": {
+          "cors": {
+            "allowedOrigins": [
+              "[parameters('allowedClientOrigin')]",
+              "http://localhost:5500",
+              "http://localhost:8080"
+            ],
+            "supportCredentials": false
+          },
+          "appSettings": [
+            { "name": "FUNCTIONS_EXTENSION_VERSION", "value": "~4" },
+            { "name": "FUNCTIONS_WORKER_RUNTIME", "value": "node" },
+            { "name": "WEBSITE_NODE_DEFAULT_VERSION", "value": "~20" },
+            {
+              "name": "AzureWebJobsStorage",
+              "value": "[concat('DefaultEndpointsProtocol=https;AccountName=', variables('storageName'), ';AccountKey=', listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageName')), '2023-01-01').keys[0].value, ';EndpointSuffix=core.windows.net')]"
+            },
+            {
+              "name": "AzureSignalRConnectionString",
+              "value": "[listKeys(resourceId('Microsoft.SignalRService/signalR', variables('signalRName')), '2023-02-01').primaryConnectionString]"
+            },
+            {
+              "name": "WEBSITE_RUN_FROM_PACKAGE",
+              "value": "[parameters('packageUrl')]"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "functionAppUrl": {
+      "type": "string",
+      "value": "[concat('https://', variables('functionAppName'), '.azurewebsites.net')]"
+    },
+    "signalRServiceName": {
+      "type": "string",
+      "value": "[variables('signalRName')]"
+    },
+    "nextStep": {
+      "type": "string",
+      "value": "Copy the functionAppUrl above. Paste it into the planner's Settings → Real-time push → Endpoint URL. Done."
+    }
+  }
+}
