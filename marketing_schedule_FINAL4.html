@@ -7974,7 +7974,7 @@ function _ensureEmergencySignOut(){
   btn.id = 'emergency-signout-btn';
   btn.type = 'button';
   btn.title = 'Sign out (emergency button — always visible)';
-  btn.onclick = function(){ try { doLogout(); } catch(e){ try { window.location.reload(); } catch(_){} } };
+  btn.onclick = function(){ try { confirmAndLogout(); } catch(e){ try { window.location.reload(); } catch(_){} } };
   btn.innerHTML = '<span style="font-size:11px">🚪</span> Sign out';
   btn.style.cssText = 'position:fixed;top:8px;right:12px;z-index:99999;background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:8px;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;box-shadow:0 4px 12px rgba(0,0,0,.25);display:flex;align-items:center;gap:5px;opacity:.85;transition:opacity .15s';
   btn.onmouseover = function(){ btn.style.opacity = '1'; };
@@ -8093,7 +8093,7 @@ function _enableSandboxMode(){
       + '<span><b>Sandbox mode</b> — you have admin-level access for testing.</span>'
       + '<span style="opacity:.85">All your changes are temporary and exist only in this browser tab.</span>'
       + '<span style="opacity:.85">Nothing is saved. Refresh or close the page to reset.</span>'
-      + '<button onclick="doLogout()" style="background:#92400e;color:#fff;border:none;border-radius:6px;padding:4px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;margin-left:8px">Sign out</button>';
+      + '<button onclick="confirmAndLogout()" style="background:#92400e;color:#fff;border:none;border-radius:6px;padding:4px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;margin-left:8px">Sign out</button>';
     // Insert at the very top of body, before everything else
     if(document.body.firstChild){
       document.body.insertBefore(banner, document.body.firstChild);
@@ -8178,6 +8178,30 @@ window.addEventListener('resize', function(){
 // already at a phone width but no one's logged in yet).
 _updateMemberMobileClass();
 window.doLogin=doLogin;
+
+// Sign-out confirmation gate (per user 2026-05-19). Every Sign Out button
+// in the UI now goes through this wrapper instead of calling doLogout()
+// directly — a misclick can't accidentally kick the user out anymore.
+// Applies to admin, member, readonly, and front-desk roles equally.
+function confirmAndLogout(){
+  if(typeof showConfirm === 'function'){
+    showConfirm({
+      icon: '?',
+      msg: 'Sign out?',
+      sub: 'Any unsaved work will need to be re-entered after you sign back in.',
+      yesLabel: 'Yes, sign me out',
+      danger: false,
+      onConfirm: function(){
+        try { doLogout(); }
+        catch(e){ try { window.location.reload(); } catch(_){} }
+      }
+    });
+  } else {
+    // Fallback if showConfirm isn't available (very early in bootstrap)
+    if(window.confirm('Sign out?')){ doLogout(); }
+  }
+}
+window.confirmAndLogout = confirmAndLogout;
 
 function doLogout(){
   // ── INSTANT local sign-out FIRST ──────────────────────────────────────
@@ -8509,7 +8533,7 @@ function renderUserBadge(){
     +renameBtn
     +viewAsBtn
     +'<button class="logout-btn" onclick="openChangePassword()" title="Change Password" style="margin-right:2px">&#128273;</button>'
-    +'<button class="logout-btn" onclick="doLogout()">Sign out</button>'
+    +'<button class="logout-btn" onclick="confirmAndLogout()">Sign out</button>'
     +'</div>';
 }
 
@@ -35059,7 +35083,7 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
     <button class="md-nav-item nav-admin-only" onclick="memberDrawerGo('activity')"><span class="md-ico">📡</span><span class="md-lbl">Activity Feed</span></button>
   </div>
   <div class="member-drawer-footer">
-    <button class="md-signout-btn" onclick="toggleMemberDrawer(false); doLogout();">↩ Sign out</button>
+    <button class="md-signout-btn" onclick="toggleMemberDrawer(false); confirmAndLogout();">↩ Sign out</button>
   </div>
 </aside>
 <script>
