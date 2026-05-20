@@ -5768,7 +5768,12 @@ var DataLayer = (function(){
         redirectUri: window.location.origin + window.location.pathname
       },
       cache: {
-        cacheLocation: 'localStorage',   // survives page reloads
+        // Per user 2026-05-19: closing the browser / tab should sign the
+        // user out for security. sessionStorage survives page RELOAD inside
+        // the same tab (good UX — F5 doesn't kick them out) but is wiped
+        // when the tab/window closes (good security — next open requires
+        // a fresh Microsoft sign-in).
+        cacheLocation: 'sessionStorage',
         storeAuthStateInCookie: false
       }
     });
