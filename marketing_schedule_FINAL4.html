@@ -6612,7 +6612,42 @@ var DataLayer = (function(){
   function _startPolling(){
     if(_pollTimer) clearInterval(_pollTimer);
     _pollTimer = setInterval(_pollOnce, config.pollIntervalMs);
+    // ── BACKGROUND-TAB FIX (per user 2026-05-19) ────────────────────────
+    // Browsers throttle setInterval HARD when a tab is in the background —
+    // from "every 5 seconds" to "every minute or more". So if the admin's
+    // tab loses focus (other tab in front, screen locked, etc.), the poll
+    // basically stops and teammates' edits feel like they take forever.
+    //
+    // Defense: every time the tab REGAINS focus / visibility, fire an
+    // immediate poll. Also listen for user activity (focus/visibilitychange)
+    // — within 1 second of the user touching the tab, they have the
+    // freshest data. Belt-and-braces: keep the 5s interval running too.
+    if(!_pollVisibilityWired){
+      _pollVisibilityWired = true;
+      var triggerPoll = function(){
+        // Throttle: don't fire if we already polled within the last 1.5s
+        var now = Date.now();
+        if(now - _lastVisibilityPoll < 1500) return;
+        _lastVisibilityPoll = now;
+        if(!config.enabled) return;
+        _pollOnce();
+      };
+      document.addEventListener('visibilitychange', function(){
+        if(!document.hidden) triggerPoll();
+      });
+      window.addEventListener('focus', triggerPoll);
+      // Also poll on first user interaction after a long idle period —
+      // catches the "I was AFK for an hour, clicked around" case.
+      ['mousemove','keydown','click','touchstart'].forEach(function(evt){
+        document.addEventListener(evt, function(){
+          // Long-idle = no poll in the last 30s; force one to catch up.
+          if(Date.now() - _lastVisibilityPoll > 30000) triggerPoll();
+        }, { passive: true });
+      });
+    }
   }
+  var _pollVisibilityWired = false;
+  var _lastVisibilityPoll = 0;
 
   function _stopPolling(){
     if(_pollTimer){ clearInterval(_pollTimer); _pollTimer = null; }
