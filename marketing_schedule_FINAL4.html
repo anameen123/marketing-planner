@@ -1175,9 +1175,10 @@ body.member-mobile.is-call-handler .nav-handler-also {
    leads, or anything outside the Referrals view.
    ──────────────────────────────────────────────────────────────────── */
 /* Per user 2026-05-19: front-desk role should ONLY see Referrals — not Home.
-   The previous rules allowed Home through; we now hide it too. */
-body.role-front_desk .top-nav-btn:not([data-tab="referrals"]),
-body.role-front_desk .nav-tab:not([data-tab="referrals"]),
+   The previous rules allowed Home through; we now hide it too. Uses #tab-referrals
+   (the actual ID on the button) since the data-tab attribute isn't present. */
+body.role-front_desk .top-nav-btn:not(#tab-referrals),
+body.role-front_desk .nav-tab:not(#tab-referrals),
 body.role-front_desk [data-tab="home"],
 body.role-front_desk [data-tab="month"],
 body.role-front_desk [data-tab="dashboard"],
@@ -1191,7 +1192,7 @@ body.role-front_desk [data-tab="activity"] {
   display: none !important;
 }
 /* Hide everything in the member-bottom-nav for front-desk except Referrals */
-body.role-front_desk .member-bottom-nav .mb-nav-btn:not([data-tab="referrals"]) {
+body.role-front_desk .member-bottom-nav .mb-nav-btn:not([data-tab="referrals"]):not(#mb-nav-referrals) {
   display: none !important;
 }
 /* Hide the admin gear / search / member-profile / utility chrome */
@@ -7728,12 +7729,11 @@ var EMAIL_USER_MAP = {
 
   // ── FRONT-DESK SHARED LOGINS (one per facility) ──────────────────────────
   // Per user 2026-05-19: front-desk users are locked to the Referrals tab.
-  // The keys below should match the actual M365 mailbox addresses for each
-  // facility's front-desk shared inbox. REPLACE these placeholders when IT
-  // provides the real addresses, then the front desk can sign in directly.
-  'frontdesk-frisco@wcgtx.com':       { username: 'frontdesk_frisco',      role: 'front_desk', name: 'Frisco ER front desk',       color: '#dc2626', facilityKey: 'frisco_er' },
-  'frontdesk-castlehills@wcgtx.com':  { username: 'frontdesk_castlehills', role: 'front_desk', name: 'Castle Hills ER front desk', color: '#dc2626', facilityKey: 'castle_hills_er' },
-  'frontdesk-plano@wcgtx.com':        { username: 'frontdesk_plano',       role: 'front_desk', name: 'Plano UC front desk',        color: '#dc2626', facilityKey: 'plano_uc' },
+  // Real M365 addresses confirmed by user 2026-05-19. These are the ONLY
+  // accounts (other than admin) that can access the Referrals page.
+  'fd.friscoer@wcgtx.com':   { username: 'frontdesk_frisco',      role: 'front_desk', name: 'Frisco ER front desk',       color: '#dc2626', facilityKey: 'frisco_er' },
+  'fd.cher@wcgtx.com':       { username: 'frontdesk_castlehills', role: 'front_desk', name: 'Castle Hills ER front desk', color: '#dc2626', facilityKey: 'castle_hills_er' },
+  'fd.ucplano@wcgtx.com':    { username: 'frontdesk_plano',       role: 'front_desk', name: 'Plano UC front desk',        color: '#dc2626', facilityKey: 'plano_uc' },
 
   // Ahmed Shuja — the Marketing manager. Granted admin-level UI permissions
   // but in SANDBOX MODE: all of his edits live in-memory only and are
@@ -8655,13 +8655,15 @@ function applyRoleRestrictions(){
     var obsAddBtn=document.getElementById('obs-add-btn');
     if(obsAddBtn)obsAddBtn.style.display='inline-block';
   }
-  // 📋 Referrals tab — admin-only for now. Members/readonly never see this
-  // button. Later, when the 3 front-desk accounts are created, they'll be
-  // unlocked here too.
+  // 📋 Referrals tab — visible to admin + front-desk. Members/readonly hide.
+  // Note: ON DESKTOP the top-nav is hidden by the sidebar (body.has-sidebar
+  // .main-nav{display:none}), so the SIDEBAR variant of this tab must also
+  // be toggled — handled below.
+  var canSeeReferrals = (CURRENT_USER.role === 'admin' || CURRENT_USER.role === 'front_desk');
   var refTab = document.getElementById('tab-referrals');
-  if(refTab){
-    refTab.style.display = (CURRENT_USER.role === 'admin') ? '' : 'none';
-  }
+  if(refTab) refTab.style.display = canSeeReferrals ? '' : 'none';
+  var refSidebarTab = document.getElementById('sidebar-tab-referrals');
+  if(refSidebarTab) refSidebarTab.style.display = canSeeReferrals ? '' : 'none';
 }
 
 function applyReadonlyMode(){
@@ -34879,6 +34881,11 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
 
     <!-- Secondary destinations — admin-only on phone -->
     <div class="md-section-label nav-admin-only">More</div>
+    <!-- Patient Referrals — admin only (front-desk uses a different layout
+         where they're locked to this tab). Per user 2026-05-19: this was
+         missing from the sidebar, which is why admin reported "I don't see
+         the referrals page" after the sidebar replaced the top nav. -->
+    <button id="sidebar-tab-referrals" class="md-nav-item nav-admin-only" onclick="memberDrawerGo('referrals')"><span class="md-ico">📋</span><span class="md-lbl">Referrals</span></button>
     <button class="md-nav-item nav-admin-only" onclick="memberDrawerGo('reports')"><span class="md-ico">📋</span><span class="md-lbl">Reports</span></button>
     <button class="md-nav-item nav-admin-only" onclick="memberDrawerGo('activity')"><span class="md-ico">📡</span><span class="md-lbl">Activity Feed</span></button>
   </div>
@@ -35043,7 +35050,8 @@ var _MEMBER_NAV_TARGET = {
   businesses: 'bank',         // 🏢 Businesses
   finances:   'finances',     // 💰 Finances
   reports:    'reports',      // 📋 Reports
-  activity:   'feed'          // 📡 Activity Feed
+  activity:   'feed',         // 📡 Activity Feed
+  referrals:  'referrals'     // 📋 Patient Referrals (admin + front-desk)
 };
 function memberBottomNavGo(tab){
   var target = _MEMBER_NAV_TARGET[tab];
