@@ -17460,6 +17460,75 @@ var _RP_OSRM_CACHE = {};
 // driving distance + duration through a series of waypoints. Returns a
 // promise resolving to {legs:[{distMi,durMin}...], totalDistMi, totalDurMin}
 // or null on any failure (the caller falls back to straight-line + speed).
+// Smart router: try Google Directions FIRST when key is configured (more
+// reliable, traffic-aware via "now" departure time). If no key or Google
+// fails, fall back to OSRM public demo (free, no key). Same return shape
+// either way so caller doesn't care which source answered.
+function _rpFetchRoute(waypoints){
+  if(typeof hasMapsKey === 'function' && hasMapsKey()){
+    return _rpFetchGoogleRoute(waypoints).then(function(r){
+      if(r) return r;
+      return _rpFetchOsrmRoute(waypoints);   // graceful fallback
+    });
+  }
+  return _rpFetchOsrmRoute(waypoints);
+}
+window._rpFetchRoute = _rpFetchRoute;
+
+// Google Directions API caller — uses the user's Map v2 key. Same return
+// shape as _rpFetchOsrmRoute: {legs:[{distMi, durMin}...], totalDistMi,
+// totalDurMin, source}. Returns null on any failure (caller falls back).
+// Costs ~$0.005/route — first $200/month is free credit from Google.
+var _RP_GOOGLE_CACHE = {};
+function _rpFetchGoogleRoute(waypoints){
+  if(!waypoints || waypoints.length < 2) return Promise.resolve(null);
+  if(typeof hasMapsKey !== 'function' || !hasMapsKey()) return Promise.resolve(null);
+  var cacheKey = waypoints.map(function(w){
+    return w.lat.toFixed(4) + ',' + w.lng.toFixed(4);
+  }).join('|');
+  if(_RP_GOOGLE_CACHE[cacheKey]) return Promise.resolve(_RP_GOOGLE_CACHE[cacheKey]);
+  // Quota guard — Map v2 has a per-day quota set by admin in the settings.
+  if(typeof _bumpQuota === 'function' && !_bumpQuota('maps')){
+    return Promise.resolve(null);
+  }
+  // Build the Directions API URL. Origin = first, destination = last,
+  // waypoints = everything in between (in order, no optimization since
+  // user has already picked the order).
+  var origin = waypoints[0];
+  var dest   = waypoints[waypoints.length - 1];
+  var middle = waypoints.slice(1, -1);
+  var waypointParam = middle.map(function(w){ return w.lat + ',' + w.lng; }).join('|');
+  var url = 'https://maps.googleapis.com/maps/api/directions/json'
+          + '?origin=' + origin.lat + ',' + origin.lng
+          + '&destination=' + dest.lat + ',' + dest.lng
+          + (waypointParam ? '&waypoints=' + encodeURIComponent(waypointParam) : '')
+          + '&departure_time=now'      // traffic-aware
+          + '&mode=driving'
+          + '&key=' + encodeURIComponent(MAPV2_CONFIG.mapsKey);
+  var ctrl = new AbortController();
+  var to = setTimeout(function(){ ctrl.abort(); }, 8000);
+  return fetch(url, { signal: ctrl.signal })
+    .then(function(r){ clearTimeout(to); return r.ok ? r.json() : null; })
+    .then(function(j){
+      if(!j || j.status !== 'OK' || !j.routes || !j.routes[0]) return null;
+      var legs = j.routes[0].legs.map(function(l){
+        // duration_in_traffic when available (live), else plain duration
+        var dur = (l.duration_in_traffic && l.duration_in_traffic.value) || (l.duration && l.duration.value) || 0;
+        return {
+          distMi: (l.distance && l.distance.value || 0) / 1609.344,
+          durMin: dur / 60
+        };
+      });
+      var totalDistMi = legs.reduce(function(s, l){ return s + l.distMi; }, 0);
+      var totalDurMin = legs.reduce(function(s, l){ return s + l.durMin; }, 0);
+      var result = { legs:legs, totalDistMi:totalDistMi, totalDurMin:totalDurMin, source:'google' };
+      _RP_GOOGLE_CACHE[cacheKey] = result;
+      return result;
+    })
+    .catch(function(){ clearTimeout(to); return null; });
+}
+window._rpFetchGoogleRoute = _rpFetchGoogleRoute;
+
 function _rpFetchOsrmRoute(waypoints){
   if(!waypoints || waypoints.length < 2) return Promise.resolve(null);
   // Key the cache on the ordered coordinate sequence (rounded to 4 dp ~10m)
@@ -17516,12 +17585,13 @@ function _rpFinalizeSmart(){
   // Render the pane immediately with straight-line estimates so the user
   // sees something fast, then upgrade in-place when OSRM responds.
   _rpRenderReviewPane(legs, /*pending*/ true);
-  // Fire OSRM in the background. Waypoints in order: start, each pick, end.
+  // Fire the smart router (Google → OSRM fallback) in the background.
+  // Waypoints in order: start, each pick, end.
   var waypoints = [startCoord].concat(picks.map(function(p){ return p.coord; })).concat([endCoord]);
-  _rpFetchOsrmRoute(waypoints).then(function(res){
+  _rpFetchRoute(waypoints).then(function(res){
     if(!res){
-      // OSRM didn't answer in time / server down. Fall back gracefully.
-      _rpRenderReviewPane(legs, /*pending*/ false, /*osrmFailed*/ true);
+      // Neither Google nor OSRM responded. Fall back to straight-line.
+      _rpRenderReviewPane(legs, /*pending*/ false, /*routingFailed*/ true);
       return;
     }
     // Replace leg distances + durations with the real road-network values.
@@ -17531,7 +17601,7 @@ function _rpFinalizeSmart(){
         legs[i].durMin = rl.durMin;
       }
     });
-    _rpRenderReviewPane(legs, /*pending*/ false, /*osrmFailed*/ false);
+    _rpRenderReviewPane(legs, /*pending*/ false, /*routingFailed*/ false, /*source*/ res.source);
   });
 }
 window._rpFinalizeSmart = _rpFinalizeSmart;
@@ -17540,7 +17610,7 @@ window._rpFinalizeSmart = _rpFinalizeSmart;
 // line estimates (pending=true), then again once OSRM has responded with
 // real numbers (pending=false). The HTML structure is identical so the
 // user sees a smooth update without the pane flickering.
-function _rpRenderReviewPane(legs, pending, osrmFailed){
+function _rpRenderReviewPane(legs, pending, routingFailed, source){
   var panel = document.getElementById('rp-smart-panel');
   if(!panel) return;
   var avgMph = 28;
@@ -17562,8 +17632,10 @@ function _rpRenderReviewPane(legs, pending, osrmFailed){
   var statusHtml;
   if(pending){
     statusHtml = '<div style="font-size:10px;color:#1d4ed8;font-style:italic;margin-bottom:10px;display:flex;align-items:center;gap:6px">⏳ Estimates shown — fetching real driving times from OSRM…</div>';
-  } else if(osrmFailed){
+  } else if(routingFailed){
     statusHtml = '<div style="font-size:10px;color:#92400e;font-style:italic;margin-bottom:10px">⚠ Live routing server unavailable — showing straight-line estimates at ~28 mph metro average. Try again in a moment or just proceed.</div>';
+  } else if(source === 'google'){
+    statusHtml = '<div style="font-size:10px;color:#166534;font-style:italic;margin-bottom:10px">✓ Real driving times via <b>Google Maps</b> (traffic-aware live routing).</div>';
   } else {
     statusHtml = '<div style="font-size:10px;color:#166534;font-style:italic;margin-bottom:10px">✓ Real road-network driving times via <a href="https://project-osrm.org/" target="_blank" rel="noopener" style="color:#166534">OSRM</a> (free, open-source routing).</div>';
   }
