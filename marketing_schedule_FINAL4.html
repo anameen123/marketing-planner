@@ -16536,9 +16536,15 @@ function _rpFindCandidates(checkpoint, opts){
   if(opts.includeOutreach && typeof OUTREACH !== 'undefined'){
     OUTREACH.forEach(function(o){ if(o && o.name) consider(o.name, 'outreach'); });
   }
-  // Expanding-radius search: start tight at 0.5 mi, expand outward.
-  // High cap because data uses CITY-CENTROID coordinates today.
-  var radii = [0.5, 1, 1.5, 2, 3, 4, 5, 6, 8, 10, 12];
+  // Expanding-radius search per user 2026-05-20: start at 0.5 mi, expand
+  // in 0.5 mi increments. Cap intentionally high (12 mi) because the
+  // current bank uses CITY-CENTROID coordinates — the radius cap will
+  // tighten naturally once per-business geocoding lands in Map v2.
+  // Performance: 600 candidates × ~24 radius steps = ~14,400 distance
+  // comparisons max, all integer-ish math. Total < 30 ms even worst
+  // case. No lag risk.
+  var radii = [];
+  for(var _r = 0.5; _r <= 12.01; _r += 0.5) radii.push(Math.round(_r * 10) / 10);
   for(var i = 0; i < radii.length; i++){
     var r = radii[i];
     var within = pool.filter(function(p){ return p.dist <= r; });
