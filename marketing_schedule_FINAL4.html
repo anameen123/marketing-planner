@@ -2163,7 +2163,7 @@ body.role-front_desk #referrals-view {
              between "Add Clinic / Select to delete" and "Cancel / Delete N" -->
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-        <input id="bank-search" type="text" placeholder="🔍  Search clinic or doctor..." oninput="renderBank()" style="border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:12px;font-family:'DM Sans',sans-serif;outline:none;width:220px">
+        <input id="bank-search" type="text" placeholder="🔍  Search clinic or doctor..." oninput="renderBank()" autocomplete="off" style="border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:12px;font-family:'DM Sans',sans-serif;outline:none;width:220px">
         <select id="bank-leadstatus" onchange="renderBank()" style="border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:12px;font-family:'DM Sans',sans-serif;background:#fff;outline:none">
           <option value="">All Lead Statuses</option>
           <option value="not_visited">⚪ Not Visited</option>
@@ -4350,7 +4350,7 @@ function renderOutreach(){
 
   // Filters
   h+='<div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap">';
-  h+='<input id="out-search" type="text" placeholder="Search..." value="'+sv+'" oninput="renderOutreach()" style="padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:12px;font-family:inherit;width:180px">';
+  h+='<input id="out-search" type="text" placeholder="Search..." value="'+sv+'" oninput="renderOutreach()" autocomplete="off" style="padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:12px;font-family:inherit;width:180px">';
   h+='<select id="out-city" onchange="renderOutreach()" style="padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:12px;font-family:inherit"><option value="">All Cities</option>';
   cities.forEach(function(c){h+='<option value="'+c+'"'+(c===cf?' selected':'')+'>'+c+'</option>';});
   h+='</select><select id="out-type" onchange="renderOutreach()" style="padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:12px;font-family:inherit"><option value="">All Types</option>';
@@ -5096,7 +5096,7 @@ function renderMVABank(){
   }
   h+='</div></div>';
   h+='<div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap">';
-  h+='<input id="mva-search" type="text" placeholder="Search firms..." value="'+searchVal+'" oninput="renderMVABank()" style="padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:12px;font-family:inherit;width:200px">';
+  h+='<input id="mva-search" type="text" placeholder="Search firms..." value="'+searchVal+'" oninput="renderMVABank()" autocomplete="off" style="padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:12px;font-family:inherit;width:200px">';
   h+='<select id="mva-city-filter" onchange="renderMVABank()" style="padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:12px;font-family:inherit">';
   h+='<option value="">All Cities</option>';
   cities.forEach(function(c){h+='<option value="'+c+'"'+(c===cityF?' selected':'')+'>'+c+'</option>';});
@@ -29315,24 +29315,53 @@ function initBank(){
 }
 
 function getBankFiltered(){
-  var q=(document.getElementById('bank-search').value||'').toLowerCase().trim();
-  var city=document.getElementById('bank-city').value;
-  var spec=document.getElementById('bank-spec').value;
-  var ls=(document.getElementById('bank-leadstatus')||{}).value||'';
-  return (CLINIC_BANK||[]).filter(function(c){
-    if(city&&c.c!==city)return false;
-    if(spec&&c.s!==spec)return false;
-    if(q&&!(c.n.toLowerCase().includes(q)||c.d.toLowerCase().includes(q)||c.s.toLowerCase().includes(q)))return false;
+  // Hardened 2026-05-19: defensive reads on every field. Previously if any
+  // CLINIC_BANK entry had a non-string .n / .d / .s the .toLowerCase() call
+  // would throw and the whole filter loop would die — silently producing 0
+  // clinics on the page. Now we coerce + skip cleanly.
+  var qEl = document.getElementById('bank-search');
+  var cityEl = document.getElementById('bank-city');
+  var specEl = document.getElementById('bank-spec');
+  var lsEl = document.getElementById('bank-leadstatus');
+  var q = qEl ? (qEl.value || '').toLowerCase().trim() : '';
+  var city = cityEl ? (cityEl.value || '') : '';
+  var spec = specEl ? (specEl.value || '') : '';
+  var ls = lsEl ? (lsEl.value || '') : '';
+  return (CLINIC_BANK || []).filter(function(c){
+    if(!c) return false;
+    if(city && c.c !== city) return false;
+    if(spec && c.s !== spec) return false;
+    if(q){
+      var n = (c.n == null ? '' : String(c.n)).toLowerCase();
+      var d = (c.d == null ? '' : String(c.d)).toLowerCase();
+      var s = (c.s == null ? '' : String(c.s)).toLowerCase();
+      if(n.indexOf(q) < 0 && d.indexOf(q) < 0 && s.indexOf(q) < 0) return false;
+    }
     if(ls){
-      var lead = (typeof getClinicLead==='function') ? getClinicLead(c.n) : {status:'not_visited',level:0};
-      if(ls==='established_l1') return lead.status==='established' && lead.level===1;
-      if(ls==='established_l2') return lead.status==='established' && lead.level===2;
-      if(ls==='established_l3') return lead.status==='established' && lead.level===3;
+      var lead = (typeof getClinicLead === 'function') ? getClinicLead(c.n) : {status:'not_visited', level:0};
+      if(ls === 'established_l1') return lead.status === 'established' && lead.level === 1;
+      if(ls === 'established_l2') return lead.status === 'established' && lead.level === 2;
+      if(ls === 'established_l3') return lead.status === 'established' && lead.level === 3;
       if(lead.status !== ls) return false;
     }
     return true;
   });
 }
+
+// Reset all the bank filters back to "show everything". Wired to the
+// empty-state CTA shown when filters hide everything (see renderBankPage).
+function _resetBankFilters(){
+  var ids = ['bank-search','bank-city','bank-spec','bank-leadstatus'];
+  ids.forEach(function(id){
+    var el = document.getElementById(id);
+    if(!el) return;
+    if(el.tagName === 'INPUT')      el.value = '';
+    else if(el.tagName === 'SELECT')el.selectedIndex = 0;
+  });
+  if(typeof renderBank === 'function') renderBank();
+  if(typeof showToast === 'function') showToast('Filters cleared');
+}
+window._resetBankFilters = _resetBankFilters;
 
 function renderBank(){
   BANK_PAGE=1;
@@ -29408,6 +29437,20 @@ function renderBankPage(filtered){
   var page=filtered.slice(start,start+BANK_PER_PAGE);
 
   var grid=document.getElementById('bank-grid');
+  // Hardened 2026-05-19: if the filters wiped everything (or CLINIC_BANK is
+  // empty for any reason), show a friendly empty-state with a Clear filters
+  // CTA INSTEAD of an unexplained empty grid. This way a stuck "browser
+  // restored a stale search value" never looks like data loss.
+  if(grid && total === 0){
+    var totalInBank = (typeof CLINIC_BANK !== 'undefined' && CLINIC_BANK) ? CLINIC_BANK.length : 0;
+    var msg = totalInBank > 0
+      ? '<div style="grid-column:1/-1;padding:30px 24px;background:#fffbeb;border:1px solid #fcd34d;border-radius:12px;text-align:center;color:#78350f"><div style="font-size:14px;font-weight:700;margin-bottom:6px">No clinics match your current filters</div><div style="font-size:12px;margin-bottom:14px">The Bank still has <b>'+totalInBank+'</b> clinics — they\'re just hidden by the search / area / specialty / lead-status filters above.</div><button onclick="_resetBankFilters()" style="background:#92400e;color:#fff;border:none;border-radius:8px;padding:9px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">Clear all filters &amp; show all '+totalInBank+' clinics</button></div>'
+      : '<div style="grid-column:1/-1;padding:30px 24px;background:#fee2e2;border:1px solid #fca5a5;border-radius:12px;text-align:center;color:#991b1b"><div style="font-size:14px;font-weight:700;margin-bottom:6px">The Clinic Bank looks empty</div><div style="font-size:12px;margin-bottom:14px">This shouldn\'t happen — the seed data has 589 clinics. Try hard-refreshing (Ctrl+Shift+R). If that doesn\'t help, open the F12 console and look for a red error.</div></div>';
+    grid.innerHTML = msg;
+    var pagEl = document.getElementById('bank-pagination');
+    if(pagEl) pagEl.innerHTML = '';
+    return;
+  }
   grid.innerHTML='';
   page.forEach(function(c){
     var cc=c.c.replace(/[^a-zA-Z]/g,'');
