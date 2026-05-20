@@ -19395,6 +19395,32 @@ function confirmAddVisit(){
   if(!name){ showToast('Please enter the business name.'); return; }
   if(!address){ showToast('Please enter the address. (Pick a known clinic from suggestions to auto-fill it.)'); return; }
 
+  // ── STRICT-MODE CHECK FOR NON-ADMIN (per user 2026-05-19) ──────────
+  // Members cannot add a brand-new business via the Add Visit modal —
+  // they must pick from the existing Clinic / MVA / Outreach bank by
+  // selecting from the autocomplete suggestions. This is the only way
+  // to prevent typo duplicates (e.g. "Heal 360" vs "Heal360" vs
+  // "heal 360 ") that ended up creating multiple cards for one business.
+  // Admin retains the ability to add brand-new businesses (that's how
+  // the bank grows). Outreach is allowed for everyone since outreach
+  // names are often new events that don't preexist in the bank.
+  var _isAdminUser = (typeof isAdmin === 'function' && isAdmin());
+  if(!_isAdminUser && type !== 'outreach'){
+    var lowerName = name.toLowerCase().trim();
+    var bankList = (type === 'mva')
+      ? (typeof MVA_ATTORNEYS !== 'undefined' ? MVA_ATTORNEYS : [])
+      : (typeof CLINIC_BANK !== 'undefined'   ? CLINIC_BANK   : []);
+    var nameKey  = (type === 'mva') ? 'firm' : 'n';
+    var found = bankList.some(function(b){
+      return b && (b[nameKey] || '').toLowerCase().trim() === lowerName;
+    });
+    if(!found){
+      var label = (type === 'mva') ? 'MVA firm' : 'clinic';
+      showToast('"'+name+'" isn\'t in our '+label+' bank. Pick from the autocomplete suggestions — or ask admin to add it first. (This prevents typo duplicates.)');
+      return;
+    }
+  }
+
   // ── DUPLICATE CHECK ──────────────────────────────────────────────────
   // Block adding the same business twice on the same date — EXCEPT for
   // Community Outreach where multiple members commonly attend the same event.
