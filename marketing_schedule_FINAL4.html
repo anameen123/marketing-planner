@@ -6365,38 +6365,13 @@ var DataLayer = (function(){
   // mode() — diagnostic; returns 'localStorage' or 'sharepoint'
   function mode(){ return config.enabled ? 'sharepoint' : 'localStorage'; }
 
-  // ── ONE-TIME LOCALSTORAGE MSAL SCRUB ──────────────────────────────────
-  // Migration from older builds where cacheLocation was 'localStorage'. We
-  // switched to sessionStorage so the user is signed out when the browser
-  // closes — but if their localStorage still has the OLD MSAL entries from
-  // a prior session, MSAL could still pick them up and silently auto-resume.
-  // Wipe anything that looks like an MSAL key out of localStorage on every
-  // page load (cheap; idempotent once it's done).
-  (function _scrubStaleMsalLocalStorage(){
-    try {
-      if(typeof localStorage === 'undefined') return;
-      var keysToKill = [];
-      for(var i = 0; i < localStorage.length; i++){
-        var k = localStorage.key(i);
-        if(!k) continue;
-        // MSAL.js v2 prefixes its keys with the clientId or with "msal.".
-        // We match the canonical "msal." prefix + the well-known auth-cache
-        // shapes ("login.windows.net", "{clientId}-login.windows.net-...").
-        if(k.indexOf('msal.') === 0
-           || k.indexOf('login.windows.net') !== -1
-           || k.indexOf('login.microsoftonline.com') !== -1
-           || k.indexOf('-login.windows.net-') !== -1
-           || k.indexOf('msal.account.keys') !== -1
-           || k.indexOf('msal.token.keys') !== -1){
-          keysToKill.push(k);
-        }
-      }
-      keysToKill.forEach(function(k){ try { localStorage.removeItem(k); } catch(_){} });
-      if(keysToKill.length){
-        try { console.info('[auth] scrubbed ' + keysToKill.length + ' stale MSAL keys from localStorage (migration to sessionStorage).'); } catch(_){}
-      }
-    } catch(e){ /* best-effort */ }
-  })();
+  // ── MSAL CACHE LOCATION ───────────────────────────────────────────────
+  // We now keep MSAL tokens in localStorage (sticky sign-in across browser
+  // closes and phone restarts). The boot-time scrub that used to wipe them
+  // for the sessionStorage migration has been removed (per user 2026-05-20
+  // — "live every day without re-login").
+  //
+  // Explicit sign-out clears both stores: see _signOut_external below.
 
   // ── PRIVATE — MSAL authentication ──────────────────────────────────────
   // Initializes MSAL.js once. The script tag in <head> loads the library;
@@ -6421,12 +6396,13 @@ var DataLayer = (function(){
         redirectUri: window.location.origin + window.location.pathname
       },
       cache: {
-        // Per user 2026-05-19: closing the browser / tab should sign the
-        // user out for security. sessionStorage survives page RELOAD inside
-        // the same tab (good UX — F5 doesn't kick them out) but is wiped
-        // when the tab/window closes (good security — next open requires
-        // a fresh Microsoft sign-in).
-        cacheLocation: 'sessionStorage',
+        // Per user 2026-05-20 (REVERSED from 2026-05-19): keep members signed
+        // in across browser/phone restarts so the planner stays live without
+        // anyone having to re-authenticate every morning. MSAL refresh tokens
+        // last 90 days; this is the standard "remember me" behavior of every
+        // Microsoft 365 app. Explicit sign-out (header button) still works
+        // and now also calls logoutPopup(), which wipes both stores.
+        cacheLocation: 'localStorage',
         storeAuthStateInCookie: false
       }
     });
@@ -6753,24 +6729,47 @@ var DataLayer = (function(){
     // freshest data. Belt-and-braces: keep the 5s interval running too.
     if(!_pollVisibilityWired){
       _pollVisibilityWired = true;
-      var triggerPoll = function(){
-        // Throttle: don't fire if we already polled within the last 1.5s
+      var triggerPoll = function(reason){
+        // ── PHONE-WAKE TIGHTENED (per user 2026-05-20) ──────────────────
+        // Throttle dropped from 1500ms → 250ms so quick double-events
+        // (visibilitychange + focus) on phone wake don't get swallowed.
+        // Also fire the cheap tick check FIRST (one ~80-byte request)
+        // — if nothing changed, we've spent ~50ms and skip the full poll.
         var now = Date.now();
-        if(now - _lastVisibilityPoll < 1500) return;
+        if(now - _lastVisibilityPoll < 250) return;
         _lastVisibilityPoll = now;
         if(!config.enabled) return;
+        try { console.info('[sync] wake-trigger:', reason || '?'); } catch(_){}
+        // Cheap tick first (it'll cascade to a full poll if the tick moved)
+        try { _tickPollOnce && _tickPollOnce(); } catch(_){}
+        // And a full poll as belt-and-braces (covers cases where the tick
+        // file itself is stuck / our cache is racy)
         _pollOnce();
       };
       document.addEventListener('visibilitychange', function(){
-        if(!document.hidden) triggerPoll();
+        if(!document.hidden) triggerPoll('visibilitychange');
       });
-      window.addEventListener('focus', triggerPoll);
+      window.addEventListener('focus', function(){ triggerPoll('focus'); });
+      // ── PHONE-WAKE / BFCACHE RESTORE (per user 2026-05-20) ────────────
+      // pageshow fires when the page is restored from the browser's BFCache —
+      // critical on iOS Safari and Android Chrome where switching back to
+      // the tab restores from cache rather than reloading. Without this,
+      // a phone that was locked for an hour shows stale data until the next
+      // 1.5s tick timer recovers.
+      window.addEventListener('pageshow', function(ev){
+        if(ev.persisted) triggerPoll('pageshow-bfcache');
+        else triggerPoll('pageshow');
+      });
+      // ── NETWORK RECONNECT (per user 2026-05-20) ──────────────────────
+      // Phone walks out of WiFi range / back in → 'online' fires the
+      // moment the network heartbeat returns. Sync immediately.
+      window.addEventListener('online', function(){ triggerPoll('online'); });
       // Also poll on first user interaction after a long idle period —
       // catches the "I was AFK for an hour, clicked around" case.
       ['mousemove','keydown','click','touchstart'].forEach(function(evt){
         document.addEventListener(evt, function(){
-          // Long-idle = no poll in the last 30s; force one to catch up.
-          if(Date.now() - _lastVisibilityPoll > 30000) triggerPoll();
+          // Long-idle = no poll in the last 15s; force one to catch up.
+          if(Date.now() - _lastVisibilityPoll > 15000) triggerPoll('user-activity');
         }, { passive: true });
       });
     }
@@ -6999,7 +6998,7 @@ var DataLayer = (function(){
     if(_tickTimer) clearInterval(_tickTimer);
     // Seed last-seen so we don't trigger a full poll on the very first tick.
     try { _lastSeenTick = localStorage.getItem('wcg_sync_tick_v1') || null; } catch(_){}
-    _tickTimer = setInterval(_tickPollOnce, 500);    // 500ms tick check (per user 2026-05-20 sync push — half the cross-device wait)
+    _tickTimer = setInterval(_tickPollOnce, 300);    // 300ms tick check (per user 2026-05-20 "live every day" — bottom of safe Graph throttle band)
   }
 
   async function _writeKey(key, value){
