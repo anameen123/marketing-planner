@@ -1495,11 +1495,29 @@ body.role-front_desk #referrals-view {
       </div><div class="cal-card">
         <div class="cal-month-nav">
           <span id="cal-month-label">May 2026</span>
-          <div style="display:flex;gap:6px">
+          <div style="display:flex;gap:6px;align-items:center">
+            <!-- Member filter (per user 2026-05-19) — pick a member to show
+                 only days containing visits assigned to / completed by /
+                 canceled by them. Populated at runtime by renderCalGrid. -->
+            <select id="cal-member-filter" onchange="setCalMemberFilter(this.value)"
+                    title="Filter the calendar to one member's visits"
+                    style="background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.25);color:#fff;border-radius:6px;padding:5px 8px;font-size:11px;font-family:'DM Sans',sans-serif;cursor:pointer;outline:none">
+              <option value="">👥 All members</option>
+            </select>
+            <select id="cal-status-filter" onchange="setCalStatusFilter(this.value)"
+                    title="Optionally limit to one status"
+                    style="background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.25);color:#fff;border-radius:6px;padding:5px 8px;font-size:11px;font-family:'DM Sans',sans-serif;cursor:pointer;outline:none">
+              <option value="">Any status</option>
+              <option value="Pending">Pending</option>
+              <option value="Completed">Completed</option>
+              <option value="Postponed">Postponed</option>
+              <option value="Canceled">Canceled</option>
+            </select>
             <button onclick="navMonth(-1)">&#8249;</button>
             <button onclick="navMonth(1)">&#8250;</button>
           </div>
         </div>
+        <div id="cal-filter-banner" style="display:none;background:#fef3c7;border-bottom:1px solid #fcd34d;color:#78350f;padding:6px 14px;font-size:11px;font-weight:600"></div>
         <div class="cal-grid-wrap">
           <div class="cal-dow">
             <span>SUN</span><span>MON</span><span>TUE</span><span>WED</span><span>THU</span><span>FRI</span><span>SAT</span>
@@ -22307,23 +22325,91 @@ function closeBigCalendar(){
 }
 window.openBigCalendar  = openBigCalendar;
 window.closeBigCalendar = closeBigCalendar;
+// Calendar filter state (per user 2026-05-19). When set, the calendar's
+// day-cell badges + dot indicators show ONLY days that have visits
+// matching the filter. The day-table still shows everything once opened —
+// the filter is a calendar-level "where did I work?" lens.
+var _CAL_MEMBER_FILTER = '';   // '' = all members
+var _CAL_STATUS_FILTER = '';   // '' = any status
+
+function setCalMemberFilter(name){
+  _CAL_MEMBER_FILTER = name || '';
+  renderCalGrid();
+}
+function setCalStatusFilter(st){
+  _CAL_STATUS_FILTER = st || '';
+  renderCalGrid();
+}
+window.setCalMemberFilter = setCalMemberFilter;
+window.setCalStatusFilter = setCalStatusFilter;
+
+// Does this visit row match the active calendar filter?
+function _calRowMatchesFilter(row){
+  if(!row) return false;
+  if(_CAL_MEMBER_FILTER){
+    // Match primary member OR any co-member (outreach events)
+    var members = (typeof getRowMembers === 'function') ? getRowMembers(row) : [];
+    if(!members.length && row.member) members = [row.member];
+    if(members.indexOf(_CAL_MEMBER_FILTER) < 0) return false;
+  }
+  if(_CAL_STATUS_FILTER){
+    if((row.status || 'Pending') !== _CAL_STATUS_FILTER) return false;
+  }
+  return true;
+}
+
 function renderCalGrid(){
   var y=S.cal.y,m=S.cal.m;
   document.getElementById('cal-month-label').textContent=MN[m]+' '+y;
   var fd2=new Date(y,m,1).getDay(),last=new Date(y,m+1,0).getDate(),t=new Date();
   var dateMap={};S.days.forEach(function(day,di){dateMap[day.date]=di;});
   var mosqueSet={};S.days.forEach(function(day){if(day.rows.some(function(r){return r.isMosque;}))mosqueSet[day.date]=true;});
+  // ── REFRESH FILTER DROPDOWN OPTIONS (cheap; idempotent) ─────────────
+  var memSel = document.getElementById('cal-member-filter');
+  if(memSel && typeof MEMBERS !== 'undefined'){
+    var current = memSel.value;
+    memSel.innerHTML = '<option value="">👥 All members</option>'
+      + MEMBERS.map(function(m){ return '<option value="'+m.replace(/"/g,'&quot;')+'">'+m+'</option>'; }).join('');
+    memSel.value = (MEMBERS.indexOf(current) >= 0) ? current : '';
+    _CAL_MEMBER_FILTER = memSel.value;
+  }
+  var stSel = document.getElementById('cal-status-filter');
+  if(stSel) stSel.value = _CAL_STATUS_FILTER || '';
+  // ── FILTER BANNER (top of the calendar card) ────────────────────────
+  var banner = document.getElementById('cal-filter-banner');
+  if(banner){
+    if(_CAL_MEMBER_FILTER || _CAL_STATUS_FILTER){
+      var parts = [];
+      if(_CAL_MEMBER_FILTER) parts.push('👤 ' + _CAL_MEMBER_FILTER);
+      if(_CAL_STATUS_FILTER) parts.push('● ' + _CAL_STATUS_FILTER);
+      banner.style.display = 'block';
+      banner.innerHTML = 'Filtered: ' + parts.join('  ·  ')
+        + '  <button onclick="setCalMemberFilter(\'\');setCalStatusFilter(\'\');" style="margin-left:10px;background:#fff;border:1px solid #fcd34d;color:#78350f;border-radius:4px;padding:1px 8px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit">Clear</button>';
+    } else {
+      banner.style.display = 'none';
+    }
+  }
   var html='';
   for(var i=0;i<fd2;i++)html+='<div class="cd"></div>';
   for(var d=1;d<=last;d++){
     var iso=y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
-    var di=dateMap[iso];var hasV=(di!==undefined);
+    var di=dateMap[iso];
+    // Compute the filtered visit count for this day
+    var matchCount = 0;
+    if(di !== undefined && S.days[di] && Array.isArray(S.days[di].rows)){
+      S.days[di].rows.forEach(function(r){
+        if(_calRowMatchesFilter(r)) matchCount++;
+      });
+    }
+    var hasV = matchCount > 0;
     var isT=t.getFullYear()===y&&t.getMonth()===m&&t.getDate()===d;
     var isW=((fd2+d-1)%7===0)||((fd2+d-1)%7===6);
     var cls='cd'+(hasV?' has-visits':'')+(isT?' today':'')+(isW?' wknd':'');
     var dot=hasV?(mosqueSet[iso]?'<div class="cd-dot" style="background:#059669"></div>':'<div class="cd-dot"></div>'):'';
-    var badge=hasV?'<div class="visit-count-badge">'+S.days[di].rows.length+'</div>':'';
-    var oc=hasV?'onclick="openDay('+di+')"':'';
+    var badge=hasV?'<div class="visit-count-badge">'+matchCount+'</div>':'';
+    // Click handler — pass through to openDay even if filtered out, but only
+    // when there are visits to drill into.
+    var oc = (di !== undefined && hasV) ? 'onclick="openDay('+di+')"' : '';
     html+='<div class="'+cls+'" '+oc+'>'+d+dot+badge+'</div>';
   }
   document.getElementById('cal-grid').innerHTML=html;
@@ -23647,6 +23733,26 @@ function switchTab(tab, opts){
       el.style.display=tab===k?'block':'none';
     }
   });
+  // ── PAGE ISOLATION (per user 2026-05-19) ────────────────────────────
+  // The schedule has TWO top-level containers — #landing (calendar view)
+  // and #day-view (one-day detail view) — that are toggled by openDay()
+  // / showLanding(), NOT by switchTab. Result: when the user navigates
+  // to Bank / Team / Finances / etc., those two divs keep whatever
+  // display state they were left in. The user scrolls past the active
+  // tab's content and sees the schedule bleeding through underneath.
+  // Force both to display:none for every non-schedule tab so each tab is
+  // a clean, isolated page. On 'schedule', show the landing calendar
+  // (the day-view is opened separately by openDay).
+  var landingEl = document.getElementById('landing');
+  var dayViewEl = document.getElementById('day-view');
+  if(tab === 'schedule'){
+    if(landingEl) landingEl.style.display = 'flex';
+    // day-view stays hidden unless explicitly opened via openDay()
+    if(dayViewEl) dayViewEl.style.display = 'none';
+  } else {
+    if(landingEl) landingEl.style.display = 'none';
+    if(dayViewEl) dayViewEl.style.display = 'none';
+  }
   // (events-section now lives INSIDE schedule-view's left column — its
   // visibility is handled automatically by the parent's display toggle
   // above, so no separate hide/show needed here.)
