@@ -2577,9 +2577,34 @@ body.role-front_desk #referrals-view {
           <button class="admin-only" onclick="openMapV2Settings()" title="Map v2 settings — paste Google Cloud + Gemini API keys" style="background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:8px;padding:7px 10px;font-size:12px;cursor:pointer;font-family:inherit">⚙️</button>
         </div>
       </div>
+      <!-- ── BUSINESS LAYER + RECENCY LEGEND ──────────────────────────
+           Filter chips toggle clinic / MVA / outreach pin visibility.
+           Recency legend shows what each fill color means. Smart Plan
+           button starts the click-to-pick Start/End workflow. -->
+      <div id="dv-map-controls" style="background:#f8fafc;border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:10px 18px;display:flex;flex-wrap:wrap;align-items:center;gap:10px;justify-content:space-between">
+        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px">
+          <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-right:4px">Show:</span>
+          <button id="biz-layer-chip-clinic"   onclick="toggleBusinessLayer('clinic')"   style="background:#fff;border:1.5px solid #eab308;color:#854d0e;border-radius:14px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">🏥 Clinics</button>
+          <button id="biz-layer-chip-mva"      onclick="toggleBusinessLayer('mva')"      style="background:#fff;border:1.5px solid #16a34a;color:#166534;border-radius:14px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">⚖ MVAs</button>
+          <button id="biz-layer-chip-outreach" onclick="toggleBusinessLayer('outreach')" style="background:#fff;border:1.5px solid #7030A0;color:#5b21b6;border-radius:14px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">🏘 Outreach</button>
+          <span style="border-left:1px solid var(--border);height:18px;margin:0 4px"></span>
+          <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-right:2px">Recency:</span>
+          <span title="Visited 0–6 days ago — wait before re-visiting" style="display:inline-flex;align-items:center;gap:4px;font-size:10px;color:#7f1d1d"><span style="display:inline-block;width:10px;height:10px;background:#ef4444;border-radius:50%;border:1px solid #fff;box-shadow:0 0 0 1px #ef4444"></span>0–6d</span>
+          <span title="Visited 7–13 days ago" style="display:inline-flex;align-items:center;gap:4px;font-size:10px;color:#7c2d12"><span style="display:inline-block;width:10px;height:10px;background:#f97316;border-radius:50%;border:1px solid #fff;box-shadow:0 0 0 1px #f97316"></span>7–13d</span>
+          <span title="Visited 14–20 days ago" style="display:inline-flex;align-items:center;gap:4px;font-size:10px;color:#854d0e"><span style="display:inline-block;width:10px;height:10px;background:#eab308;border-radius:50%;border:1px solid #fff;box-shadow:0 0 0 1px #eab308"></span>14–20d</span>
+          <span title="Visited 21+ days ago — ripe for re-engagement" style="display:inline-flex;align-items:center;gap:4px;font-size:10px;color:#14532d;font-weight:700"><span style="display:inline-block;width:10px;height:10px;background:#16a34a;border-radius:50%;border:1px solid #fff;box-shadow:0 0 0 1px #16a34a"></span>21d+ (ripe)</span>
+          <span title="Never visited" style="display:inline-flex;align-items:center;gap:4px;font-size:10px;color:#475569"><span style="display:inline-block;width:10px;height:10px;background:#9ca3af;border-radius:50%;border:1px solid #fff;box-shadow:0 0 0 1px #9ca3af"></span>never</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          <button id="rp-smart-plan-btn" onclick="rpStartSmartPlan()" title="Click two pins on the map to set Start and End, then we'll recommend stale clinics in between." style="background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;border:none;border-radius:8px;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;display:inline-flex;align-items:center;gap:5px">✨ Smart Plan</button>
+          <span id="rp-pick-status" style="font-size:10px;color:var(--muted);font-style:italic"></span>
+        </div>
+      </div>
       <div id="dv-map" style="height:320px;background:#e2e8f0"></div>
       <div id="dv-map-fallback" style="display:none;padding:30px 20px;text-align:center;font-size:12px;color:var(--muted);font-style:italic">Map will appear here once the library loads (a few seconds after sign-in).</div>
       <div id="dv-route-summary" style="display:none;padding:10px 18px;background:#f8fafc;border-top:1px solid var(--border);font-size:12px;color:var(--text)"></div>
+      <!-- Smart Plan working area — appears below the map once Start + End are picked -->
+      <div id="rp-smart-panel" style="display:none;background:#f8fafc;border-top:1px solid var(--border);padding:14px 18px"></div>
     </div>
   </div>
 </div>
@@ -16163,15 +16188,83 @@ function getCoordForBusiness(name){
 }
 window.getCoordForBusiness = getCoordForBusiness;
 
+// ── RECENCY HELPER ─────────────────────────────────────────────────────
+// daysSinceLastVisit(name) — returns the number of days since the last
+// Completed visit to this business. Returns null if never visited.
+//
+// Only Completed counts — Pending / Postponed / Canceled do NOT reset the
+// clock, since the relationship wasn't actually touched. Multi-member
+// outreach events count as one visit regardless of how many members
+// attended (the relationship event is what matters, not the headcount).
+//
+// Used by:
+//   • Map pin coloring (red 0-6d, orange 7-13d, yellow 14-20d, green 21+d)
+//   • Route Planner candidate filtering (only candidates ≥ 14 days stale)
+//   • Recency chips on the route planner recommendation rows
+function daysSinceLastVisit(name){
+  if(!name || typeof S === 'undefined' || !S || !S.days) return null;
+  var mostRecent = null;
+  for(var i = 0; i < S.days.length; i++){
+    var d = S.days[i];
+    if(!d || !d.date || !d.rows) continue;
+    for(var j = 0; j < d.rows.length; j++){
+      var r = d.rows[j];
+      if(!r || r.clinic !== name) continue;
+      if(r.status !== 'Completed') continue;
+      if(!mostRecent || d.date > mostRecent) mostRecent = d.date;
+    }
+  }
+  if(!mostRecent) return null;   // never visited
+  var then = new Date(mostRecent + 'T00:00:00');
+  var now = new Date(); now.setHours(0,0,0,0);
+  var ms = now.getTime() - then.getTime();
+  return Math.max(0, Math.floor(ms / (1000 * 60 * 60 * 24)));
+}
+window.daysSinceLastVisit = daysSinceLastVisit;
+
+// Color buckets for recency. Used by map pins + chips throughout the app.
+// Days 0-6 → red (just touched, don't re-visit), 7-13 → orange, 14-20 →
+// yellow, 21+ → green (ripe), null → gray (never visited).
+function recencyBucket(days){
+  if(days == null) return { key:'never',  color:'#9ca3af', label:'Never visited',     short:'never'   };
+  if(days <= 6)    return { key:'fresh',  color:'#ef4444', label:'Visited '+days+'d ago', short:days+'d'  };
+  if(days <= 13)   return { key:'warm',   color:'#f97316', label:'Visited '+days+'d ago', short:days+'d'  };
+  if(days <= 20)   return { key:'yellow', color:'#eab308', label:'Visited '+days+'d ago', short:days+'d'  };
+  return            { key:'ripe',   color:'#16a34a', label:'Visited '+days+'d ago', short:days+'d'  };
+}
+window.recencyBucket = recencyBucket;
+
+// Border color for a business marker = type encoding.
+// (Yellow for clinic, green for MVA, purple for outreach — per user 2026-05-20.)
+function typeBorderColor(bizType){
+  if(bizType === 'mva')      return '#16a34a';
+  if(bizType === 'outreach') return '#7030A0';
+  return '#eab308'; // clinic (default)
+}
+window.typeBorderColor = typeBorderColor;
+
 // ── MAP MANAGEMENT ─────────────────────────────────────────────────────
 // Keep a single Leaflet map instance lazy-initialized — only created once
 // the day view opens for the first time. Subsequent openDay() calls just
 // clear the marker layer and redraw with the new day's pins.
 var _DV_MAP = null;
-var _DV_MARKERS = null;    // L.layerGroup of visit pins
-var _DV_RECS = null;       // L.layerGroup of recommended-clinic pins
-var _DV_ROUTELINE = null;  // L.polyline showing the planned route
+var _DV_MARKERS = null;     // L.layerGroup of TODAY's visit pins (existing behavior)
+var _DV_RECS = null;        // L.layerGroup of recommended-clinic pins (existing)
+var _DV_ROUTELINE = null;   // L.polyline showing the planned route (existing)
 var _DV_LAST_DI = null;
+// New 2026-05-20: separate layer per business type so members can toggle them
+// individually. Type filter chips above the map control these. Recency color
+// (red/orange/yellow/green/gray) drives the fill; type encoded as border.
+var _BIZ_LAYER_CLINIC   = null;
+var _BIZ_LAYER_MVA      = null;
+var _BIZ_LAYER_OUTREACH = null;
+var _BIZ_LAYER_VISIBLE  = { clinic:true, mva:true, outreach:true };
+// Route Planner click-to-pick state — set when the user clicks pins to
+// designate Start and End.
+var _RP_PICK_MODE   = null;   // 'start' | 'end' | null (not in pick mode)
+var _RP_START_NAME  = null;
+var _RP_END_NAME    = null;
+var _RP_HIGHLIGHTS  = null;   // L.layerGroup for Start/End highlight rings
 
 function _initDayMap(){
   if(typeof L === 'undefined') return false;   // Leaflet not loaded yet
@@ -16184,14 +16277,550 @@ function _initDayMap(){
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
       maxZoom: 19
     }).addTo(_DV_MAP);
+    // Order matters: business-pin layers below day-visit pins so today's
+    // visits (bigger markers) draw on top.
+    _BIZ_LAYER_CLINIC   = L.layerGroup().addTo(_DV_MAP);
+    _BIZ_LAYER_MVA      = L.layerGroup().addTo(_DV_MAP);
+    _BIZ_LAYER_OUTREACH = L.layerGroup().addTo(_DV_MAP);
     _DV_MARKERS    = L.layerGroup().addTo(_DV_MAP);
     _DV_RECS       = L.layerGroup().addTo(_DV_MAP);
+    _RP_HIGHLIGHTS = L.layerGroup().addTo(_DV_MAP);
     return true;
   } catch(e){
     console.warn('Map init failed:', e);
     return false;
   }
 }
+
+// ── ALL-BUSINESS PIN LAYER ────────────────────────────────────────────
+// Renders every clinic / MVA / outreach from the bank as a small circle
+// marker. Color = recency (visited X days ago). Border = type. Cheap
+// because we use L.circleMarker (vector) — 729 pins render in <50ms.
+// Re-rendered on demand (cheap to recompute), filtered by the visibility
+// toggles set via the type-filter chips above the map.
+function renderAllBusinessPins(){
+  if(!_BIZ_LAYER_CLINIC) return;   // map not ready
+  _BIZ_LAYER_CLINIC.clearLayers();
+  _BIZ_LAYER_MVA.clearLayers();
+  _BIZ_LAYER_OUTREACH.clearLayers();
+  // Helper to add one pin
+  function addPin(name, bizType, layer){
+    var coord = (typeof getCoordForBusiness === 'function') ? getCoordForBusiness(name) : null;
+    if(!coord) return;
+    var days = (typeof daysSinceLastVisit === 'function') ? daysSinceLastVisit(name) : null;
+    var rec  = (typeof recencyBucket === 'function')      ? recencyBucket(days) : {color:'#9ca3af', label:'?', short:'?'};
+    var border = (typeof typeBorderColor === 'function')  ? typeBorderColor(bizType) : '#1F3864';
+    // Tiny dither so overlapping same-city pins stay visible
+    var dither = (Math.abs(name.charCodeAt(0) + (name.charCodeAt(1)||0)) % 13) * 0.0006;
+    var lat = coord.lat + dither;
+    var lng = coord.lng + dither;
+    var typeLabel = bizType === 'mva' ? '⚖ MVA' : bizType === 'outreach' ? '🏘 Outreach' : '🏥 Clinic';
+    var safeName = String(name).replace(/</g,'&lt;');
+    var popupHtml = '<div style="font-family:DM Sans,sans-serif;font-size:12px;min-width:170px">'
+      +   '<div style="font-weight:700;color:#1F3864;font-size:13px;margin-bottom:4px">' + safeName + '</div>'
+      +   '<div style="font-size:10px;color:#64748b;margin-bottom:6px">' + typeLabel + ' · ' + rec.label + '</div>'
+      +   '<div style="display:flex;gap:5px;margin-top:6px">'
+      +     '<button onclick="_rpPickFromMap(\'' + name.replace(/'/g,"\\'") + '\',\'start\')" style="flex:1;background:#1F3864;color:#fff;border:none;border-radius:5px;padding:5px 8px;font-size:10px;font-weight:700;cursor:pointer">Set as Start</button>'
+      +     '<button onclick="_rpPickFromMap(\'' + name.replace(/'/g,"\\'") + '\',\'end\')"   style="flex:1;background:#7030A0;color:#fff;border:none;border-radius:5px;padding:5px 8px;font-size:10px;font-weight:700;cursor:pointer">Set as End</button>'
+      +   '</div>'
+      + '</div>';
+    var marker = L.circleMarker([lat, lng], {
+      radius: 5,
+      color: border,
+      weight: 2,
+      fillColor: rec.color,
+      fillOpacity: 0.85
+    }).bindPopup(popupHtml);
+    layer.addLayer(marker);
+  }
+  if(typeof CLINIC_BANK !== 'undefined' && _BIZ_LAYER_VISIBLE.clinic){
+    CLINIC_BANK.forEach(function(c){ if(c && c.n) addPin(c.n, 'clinic', _BIZ_LAYER_CLINIC); });
+  }
+  if(typeof MVA_ATTORNEYS !== 'undefined' && _BIZ_LAYER_VISIBLE.mva){
+    MVA_ATTORNEYS.forEach(function(m){ if(m && m.firm) addPin(m.firm, 'mva', _BIZ_LAYER_MVA); });
+  }
+  if(typeof OUTREACH !== 'undefined' && _BIZ_LAYER_VISIBLE.outreach){
+    OUTREACH.forEach(function(o){ if(o && o.name) addPin(o.name, 'outreach', _BIZ_LAYER_OUTREACH); });
+  }
+}
+window.renderAllBusinessPins = renderAllBusinessPins;
+
+// Toggle visibility of one business-type layer. Called by the type-filter
+// chips above the map.
+function toggleBusinessLayer(bizType){
+  _BIZ_LAYER_VISIBLE[bizType] = !_BIZ_LAYER_VISIBLE[bizType];
+  renderAllBusinessPins();
+  // Update the chip styling so the user can see what's on/off
+  var chip = document.getElementById('biz-layer-chip-' + bizType);
+  if(chip){
+    if(_BIZ_LAYER_VISIBLE[bizType]){
+      chip.style.opacity = '1';
+      chip.style.textDecoration = 'none';
+    } else {
+      chip.style.opacity = '.45';
+      chip.style.textDecoration = 'line-through';
+    }
+  }
+}
+window.toggleBusinessLayer = toggleBusinessLayer;
+
+// ── SMART ROUTE PLANNER (click-to-pick + recommendations) ─────────────
+// User clicks two pins on the map (Start, End), the algorithm finds N
+// stale candidates between them, and the user picks one per slot. No AI,
+// no expensive API calls during candidate selection — pure geometry over
+// the in-memory CLINIC_BANK + MVA_ATTORNEYS lists. Live driving time is
+// computed only once at the end on the FINAL route via Map v2.
+
+// Resolve a Start/End picker label to lat/lng. Accepts EITHER a business
+// from the bank (clinic / MVA / outreach) OR a WCG facility label (Frisco
+// ER / Castle Hills ER / Plano UC) so members can start a route from
+// their facility just by picking the facility pin on the map.
+function _rpResolveCoord(name){
+  if(!name) return null;
+  // 1. business in the bank
+  var c = (typeof getCoordForBusiness === 'function') ? getCoordForBusiness(name) : null;
+  if(c) return c;
+  // 2. WCG facility by label
+  if(typeof ROUTE_COORDS !== 'undefined' && ROUTE_COORDS){
+    var keys = Object.keys(ROUTE_COORDS);
+    for(var i = 0; i < keys.length; i++){
+      var rc = ROUTE_COORDS[keys[i]];
+      if(rc && rc.type === 'facility' && (rc.label === name || keys[i] === name)){
+        return { lat: rc.lat, lng: rc.lng };
+      }
+    }
+  }
+  return null;
+}
+window._rpResolveCoord = _rpResolveCoord;
+
+// Haversine distance between two lat/lng points, in miles.
+function _rpHaversineMiles(a, b){
+  if(!a || !b) return Infinity;
+  var R = 3958.8;   // earth radius in miles
+  var toRad = function(d){ return d * Math.PI / 180; };
+  var dLat = toRad(b.lat - a.lat);
+  var dLng = toRad(b.lng - a.lng);
+  var lat1 = toRad(a.lat);
+  var lat2 = toRad(b.lat);
+  var s = Math.sin(dLat/2)*Math.sin(dLat/2) + Math.sin(dLng/2)*Math.sin(dLng/2)*Math.cos(lat1)*Math.cos(lat2);
+  return 2 * R * Math.asin(Math.sqrt(s));
+}
+
+// Linear interpolation between two lat/lng points at fraction t (0..1).
+// Good enough at metro-area scale where great-circle vs straight-line
+// difference is in the millimeters.
+function _rpInterp(a, b, t){
+  return { lat: a.lat + (b.lat - a.lat) * t, lng: a.lng + (b.lng - a.lng) * t };
+}
+
+// Default N suggestion based on Start→End distance (per design table).
+function _rpDefaultN(distMiles){
+  if(distMiles < 3)  return 1;
+  if(distMiles < 7)  return 2;
+  if(distMiles < 15) return 4;
+  if(distMiles < 25) return 5;
+  return 6;
+}
+
+// Start the Smart Plan workflow — switch the map to "pick mode" so the
+// next two pin clicks become Start and End.
+function rpStartSmartPlan(){
+  _RP_PICK_MODE  = 'start';
+  _RP_START_NAME = null;
+  _RP_END_NAME   = null;
+  if(_RP_HIGHLIGHTS) _RP_HIGHLIGHTS.clearLayers();
+  var status = document.getElementById('rp-pick-status');
+  if(status) status.textContent = '👆 Click a pin to set the START point';
+  var panel = document.getElementById('rp-smart-panel');
+  if(panel){ panel.style.display = 'none'; panel.innerHTML = ''; }
+  if(typeof showToast === 'function') showToast('Smart Plan started — click a pin to set Start');
+}
+window.rpStartSmartPlan = rpStartSmartPlan;
+
+// Called from pin popups ("Set as Start" / "Set as End" buttons).
+function _rpPickFromMap(name, slot){
+  if(slot === 'start'){
+    _RP_START_NAME = name;
+    if(!_RP_PICK_MODE) _RP_PICK_MODE = 'end';   // next click should be end
+  } else if(slot === 'end'){
+    _RP_END_NAME = name;
+  }
+  _rpRefreshHighlights();
+  _rpUpdateStatus();
+  if(_RP_START_NAME && _RP_END_NAME){
+    _rpBuildSmartPanel();
+  }
+  if(_DV_MAP) _DV_MAP.closePopup();
+}
+window._rpPickFromMap = _rpPickFromMap;
+
+function _rpRefreshHighlights(){
+  if(!_RP_HIGHLIGHTS) return;
+  _RP_HIGHLIGHTS.clearLayers();
+  function addRing(name, label, color){
+    if(!name) return;
+    var c = _rpResolveCoord(name);
+    if(!c) return;
+    var ring = L.circleMarker([c.lat, c.lng], {
+      radius: 14, color: color, weight: 3, fillOpacity: 0, dashArray: '4,3'
+    });
+    ring.bindPopup('<b>' + label + ':</b> ' + String(name).replace(/</g,'&lt;'));
+    _RP_HIGHLIGHTS.addLayer(ring);
+  }
+  addRing(_RP_START_NAME, 'Start', '#1F3864');
+  addRing(_RP_END_NAME,   'End',   '#7030A0');
+}
+
+function _rpUpdateStatus(){
+  var el = document.getElementById('rp-pick-status');
+  if(!el) return;
+  if(_RP_START_NAME && _RP_END_NAME){
+    el.textContent = '✓ Start: ' + _RP_START_NAME + '  ·  End: ' + _RP_END_NAME;
+    el.style.color = '#16a34a';
+  } else if(_RP_START_NAME){
+    el.textContent = '👆 Click another pin to set the END point  (Start: ' + _RP_START_NAME + ')';
+    el.style.color = 'var(--muted)';
+  } else {
+    el.textContent = '👆 Click a pin to set the START point';
+    el.style.color = 'var(--muted)';
+  }
+}
+
+// Compute up to 4 candidate businesses at a given checkpoint, within an
+// expanding search radius. Returns at most `limit` entries, prioritized
+// by recency-bucket (ripe > yellow > warm > fresh > never), then distance.
+// Excludes Community Outreach by default — outreach is event-based and is
+// added manually via "+ Outreach instead" on each slot.
+function _rpFindCandidates(checkpoint, opts){
+  opts = opts || {};
+  var limit = opts.limit || 4;
+  var minStaleDays = opts.minStaleDays != null ? opts.minStaleDays : 14;
+  var excludeSet = opts.exclude || {};
+  // Build the candidate pool (clinic + MVA, skip outreach unless opted in)
+  var pool = [];
+  function consider(name, bizType){
+    if(!name || excludeSet[name]) return;
+    var coord = (typeof getCoordForBusiness === 'function') ? getCoordForBusiness(name) : null;
+    if(!coord) return;
+    var days  = (typeof daysSinceLastVisit === 'function') ? daysSinceLastVisit(name) : null;
+    // Recency filter: only include businesses that are stale enough (or
+    // never visited). Members can relax the filter in v2.
+    if(days != null && days < minStaleDays) return;
+    var dist  = _rpHaversineMiles(coord, checkpoint);
+    pool.push({ name:name, bizType:bizType, coord:coord, days:days, dist:dist });
+  }
+  if(typeof CLINIC_BANK !== 'undefined'){
+    CLINIC_BANK.forEach(function(c){ if(c && c.n) consider(c.n, 'clinic'); });
+  }
+  if(typeof MVA_ATTORNEYS !== 'undefined'){
+    MVA_ATTORNEYS.forEach(function(m){ if(m && m.firm) consider(m.firm, 'mva'); });
+  }
+  if(opts.includeOutreach && typeof OUTREACH !== 'undefined'){
+    OUTREACH.forEach(function(o){ if(o && o.name) consider(o.name, 'outreach'); });
+  }
+  // Expanding-radius search: start tight at 0.5 mi, expand outward.
+  // The cap is INTENTIONALLY high (12 mi) because the current data only
+  // has CITY-CENTROID coordinates per business (all 100+ Frisco clinics
+  // share the same lat/lng — the Frisco centroid). So a midpoint on a
+  // route between cities is several miles from any centroid. Bumping the
+  // cap keeps the algorithm useful until per-business geocoding lands in
+  // a future Map v2 milestone.
+  var radii = [0.5, 1, 1.5, 2, 3, 4, 5, 6, 8, 10, 12];
+  for(var i = 0; i < radii.length; i++){
+    var r = radii[i];
+    var within = pool.filter(function(p){ return p.dist <= r; });
+    if(within.length >= limit || i === radii.length - 1){
+      // Rank: ripe (21+) → yellow → warm → fresh → never (gray last because
+      // we don't know if a never-visit is actually valuable yet); within
+      // each bucket, closer wins.
+      var rank = function(p){
+        if(p.days == null) return 4;             // never
+        if(p.days >= 21)   return 0;             // ripe
+        if(p.days >= 14)   return 1;             // yellow
+        if(p.days >= 7)    return 2;             // warm
+        return 3;                                // fresh
+      };
+      within.sort(function(a, b){
+        var ra = rank(a), rb = rank(b);
+        if(ra !== rb) return ra - rb;
+        return a.dist - b.dist;
+      });
+      return within.slice(0, limit);
+    }
+  }
+  return [];
+}
+
+// State for the slot picks (which candidate the user chose per slot).
+var _RP_SLOT_PICKS = [];   // [{name, bizType, coord, days, dist}, ...]
+var _RP_N = 3;
+
+// Build the Smart Plan working panel under the map.
+function _rpBuildSmartPanel(){
+  var panel = document.getElementById('rp-smart-panel');
+  if(!panel) return;
+  var startCoord = _rpResolveCoord(_RP_START_NAME);
+  var endCoord   = _rpResolveCoord(_RP_END_NAME);
+  if(!startCoord || !endCoord){
+    panel.innerHTML = '<div style="color:#b91c1c;font-size:12px">Could not resolve coordinates for Start or End. Pick businesses that have a known city in our bank.</div>';
+    panel.style.display = 'block';
+    return;
+  }
+  var totalDist = _rpHaversineMiles(startCoord, endCoord);
+  _RP_N = _rpDefaultN(totalDist);
+  _RP_SLOT_PICKS = new Array(_RP_N).fill(null);
+  panel.style.display = 'block';
+  panel.innerHTML = ''
+    + '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:10px">'
+    +   '<div style="font-size:13px;font-weight:700;color:var(--text)">✨ Smart Plan — Start → ' + _RP_N + ' stops → End</div>'
+    +   '<div style="display:flex;align-items:center;gap:8px;font-size:11px">'
+    +     '<label style="color:var(--muted)">Visits between Start &amp; End:</label>'
+    +     '<input id="rp-n-input" type="number" min="1" max="8" value="' + _RP_N + '" oninput="_rpChangeN(this.value)" style="width:54px;border:1px solid var(--border);border-radius:6px;padding:4px 6px;font-size:12px;font-family:DM Mono,monospace">'
+    +     '<span style="color:var(--muted);font-style:italic">total ~' + totalDist.toFixed(1) + ' mi straight-line</span>'
+    +   '</div>'
+    + '</div>'
+    + '<div style="font-size:10px;color:var(--muted);font-style:italic;margin-bottom:10px">Start and End are NOT counted in the number above — only the stops in between. Each slot below shows clinics + MVAs near the path that haven\'t been visited in 14+ days. Outreach events can be picked manually if needed.</div>'
+    + '<div id="rp-slots"></div>'
+    + '<div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;justify-content:flex-end">'
+    +   '<button onclick="_rpCancelSmart()" style="background:#e5e7eb;color:#374151;border:none;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">Cancel</button>'
+    +   '<button onclick="_rpFinalizeSmart()" id="rp-finalize-btn" style="background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">Review route →</button>'
+    + '</div>';
+  _rpRenderSlots();
+}
+
+// Recompute candidates + redraw the slot picker UI.
+function _rpRenderSlots(){
+  var startCoord = _rpResolveCoord(_RP_START_NAME);
+  var endCoord   = _rpResolveCoord(_RP_END_NAME);
+  if(!startCoord || !endCoord) return;
+  var slotsEl = document.getElementById('rp-slots');
+  if(!slotsEl) return;
+  // Pre-pick the closest candidate per slot if none picked yet.
+  // Build exclude-set so the same business doesn't show twice across slots.
+  var excludeSet = {};
+  excludeSet[_RP_START_NAME] = true;
+  excludeSet[_RP_END_NAME]   = true;
+  _RP_SLOT_PICKS.forEach(function(p){ if(p && p.name) excludeSet[p.name] = true; });
+  var html = '';
+  for(var k = 1; k <= _RP_N; k++){
+    var t = k / (_RP_N + 1);
+    var checkpoint = _rpInterp(startCoord, endCoord, t);
+    // Build a per-slot exclude set: don't recommend the same business across slots
+    var slotExclude = Object.assign({}, excludeSet);
+    var pick = _RP_SLOT_PICKS[k-1];
+    if(pick && pick.name) delete slotExclude[pick.name];   // allow current pick to show
+    var cands = _rpFindCandidates(checkpoint, { limit:5, minStaleDays:14, exclude: slotExclude });
+    // If no pick yet, default to the top candidate
+    if(!pick && cands.length){ _RP_SLOT_PICKS[k-1] = cands[0]; pick = cands[0]; excludeSet[pick.name] = true; }
+    html += _rpRenderSlotRow(k, pick, cands);
+  }
+  slotsEl.innerHTML = html;
+  _rpDrawRouteLine();
+}
+
+function _rpRenderSlotRow(k, pick, cands){
+  var pickName = pick ? pick.name : '— none —';
+  var pickRec  = pick ? recencyBucket(pick.days) : recencyBucket(null);
+  var dropdownOpts = cands.length === 0
+    ? '<option value="">No stale candidates within 3 mi of this checkpoint</option>'
+    : cands.map(function(c, i){
+        var bucket = recencyBucket(c.days);
+        var picked = (pick && pick.name === c.name) ? ' selected' : '';
+        var lbl = c.name + '  ·  ' + (c.bizType === 'mva' ? 'MVA' : c.bizType === 'outreach' ? 'Outreach' : 'Clinic')
+                + '  ·  ' + bucket.short + '  ·  ' + c.dist.toFixed(1) + ' mi';
+        return '<option value="' + i + '"' + picked + '>' + lbl.replace(/</g,'&lt;') + '</option>';
+      }).join('');
+  return '<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px dashed var(--border)">'
+    +   '<div style="background:#1F3864;color:#fff;border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex-shrink:0">' + k + '</div>'
+    +   '<div style="flex:1;min-width:0">'
+    +     '<div style="font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Visit ' + k + '</div>'
+    +     '<select onchange="_rpPickSlotCandidate(' + k + ', this.value)" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:6px 8px;font-size:12px;font-family:DM Sans,sans-serif;background:#fff;margin-top:2px">' + dropdownOpts + '</select>'
+    +   '</div>'
+    +   '<span title="' + pickRec.label + '" style="display:inline-flex;align-items:center;gap:4px;font-size:10px;color:#374151;background:#fff;border:1px solid var(--border);border-radius:10px;padding:2px 8px;flex-shrink:0"><span style="display:inline-block;width:8px;height:8px;background:' + pickRec.color + ';border-radius:50%"></span>' + pickRec.short + '</span>'
+    +   '<button onclick="_rpRemoveSlot(' + k + ')" title="Remove this stop" style="background:none;border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:4px 8px;font-size:11px;cursor:pointer">✕</button>'
+    + '</div>';
+}
+
+function _rpPickSlotCandidate(k, idx){
+  var i = parseInt(idx, 10);
+  if(isNaN(i)) return;
+  // Rebuild the candidate list with the current state to pick the right one
+  var startCoord = _rpResolveCoord(_RP_START_NAME);
+  var endCoord   = _rpResolveCoord(_RP_END_NAME);
+  if(!startCoord || !endCoord) return;
+  var t = k / (_RP_N + 1);
+  var checkpoint = _rpInterp(startCoord, endCoord, t);
+  var excludeSet = {};
+  excludeSet[_RP_START_NAME] = true;
+  excludeSet[_RP_END_NAME]   = true;
+  _RP_SLOT_PICKS.forEach(function(p, idx2){ if(idx2 !== k-1 && p && p.name) excludeSet[p.name] = true; });
+  var cands = _rpFindCandidates(checkpoint, { limit:5, minStaleDays:14, exclude: excludeSet });
+  if(cands[i]) _RP_SLOT_PICKS[k-1] = cands[i];
+  _rpRenderSlots();
+}
+window._rpPickSlotCandidate = _rpPickSlotCandidate;
+
+function _rpRemoveSlot(k){
+  if(k < 1 || k > _RP_N) return;
+  _RP_SLOT_PICKS.splice(k-1, 1);
+  _RP_N = _RP_SLOT_PICKS.length;
+  var input = document.getElementById('rp-n-input');
+  if(input) input.value = _RP_N;
+  if(_RP_N < 1){ _rpCancelSmart(); return; }
+  _rpRenderSlots();
+}
+window._rpRemoveSlot = _rpRemoveSlot;
+
+function _rpChangeN(v){
+  var n = Math.max(1, Math.min(8, parseInt(v, 10) || 1));
+  if(n === _RP_N) return;
+  // Keep existing picks where possible; pad / truncate to new size.
+  if(n > _RP_N){
+    while(_RP_SLOT_PICKS.length < n) _RP_SLOT_PICKS.push(null);
+  } else {
+    _RP_SLOT_PICKS = _RP_SLOT_PICKS.slice(0, n);
+  }
+  _RP_N = n;
+  // Force the slots to recompute defaults for the new positions
+  _RP_SLOT_PICKS = _RP_SLOT_PICKS.map(function(){ return null; });
+  _rpRenderSlots();
+}
+window._rpChangeN = _rpChangeN;
+
+function _rpCancelSmart(){
+  _RP_PICK_MODE  = null;
+  _RP_START_NAME = null;
+  _RP_END_NAME   = null;
+  _RP_SLOT_PICKS = [];
+  if(_RP_HIGHLIGHTS) _RP_HIGHLIGHTS.clearLayers();
+  if(_DV_ROUTELINE){ _DV_MAP.removeLayer(_DV_ROUTELINE); _DV_ROUTELINE = null; }
+  var panel = document.getElementById('rp-smart-panel');
+  if(panel){ panel.style.display = 'none'; panel.innerHTML = ''; }
+  _rpUpdateStatus();
+}
+window._rpCancelSmart = _rpCancelSmart;
+
+// Draw a polyline on the map connecting Start → picks → End.
+function _rpDrawRouteLine(){
+  if(!_DV_MAP) return;
+  if(_DV_ROUTELINE){ _DV_MAP.removeLayer(_DV_ROUTELINE); _DV_ROUTELINE = null; }
+  var startCoord = _rpResolveCoord(_RP_START_NAME);
+  var endCoord   = _rpResolveCoord(_RP_END_NAME);
+  if(!startCoord || !endCoord) return;
+  var pts = [[startCoord.lat, startCoord.lng]];
+  _RP_SLOT_PICKS.forEach(function(p){
+    if(p && p.coord) pts.push([p.coord.lat, p.coord.lng]);
+  });
+  pts.push([endCoord.lat, endCoord.lng]);
+  _DV_ROUTELINE = L.polyline(pts, { color:'#7030A0', weight:3, opacity:0.75, dashArray:'8,5' }).addTo(_DV_MAP);
+}
+
+// Finalize → show the confirmation pane with leg-by-leg distances.
+// Live driving times go through Map v2 in a future step; for now we show
+// straight-line miles with a "approximate" note so the feature is usable
+// even without API keys.
+function _rpFinalizeSmart(){
+  var picks = _RP_SLOT_PICKS.filter(function(p){ return p && p.name; });
+  if(picks.length === 0){
+    if(typeof showToast === 'function') showToast('Pick at least one stop first.');
+    return;
+  }
+  var startCoord = _rpResolveCoord(_RP_START_NAME);
+  var endCoord   = _rpResolveCoord(_RP_END_NAME);
+  if(!startCoord || !endCoord) return;
+  // Build the leg list with straight-line miles.
+  var legs = [];
+  var prev = { name: _RP_START_NAME, coord: startCoord };
+  picks.forEach(function(p){
+    legs.push({ from: prev, to: { name: p.name, coord: p.coord, days: p.days, bizType: p.bizType }, dist: _rpHaversineMiles(prev.coord, p.coord) });
+    prev = { name: p.name, coord: p.coord };
+  });
+  legs.push({ from: prev, to: { name: _RP_END_NAME, coord: endCoord }, dist: _rpHaversineMiles(prev.coord, endCoord) });
+  var totalDist = legs.reduce(function(s, l){ return s + l.dist; }, 0);
+  var avgMph = 28;   // metro-area rough average
+  var totalMinutes = Math.round(totalDist / avgMph * 60);
+  // Build the confirmation HTML
+  var rowsHtml = legs.map(function(l, i){
+    var rec = (l.to.days != null) ? recencyBucket(l.to.days) : (l.to.name === _RP_END_NAME ? null : recencyBucket(null));
+    var recChip = rec ? '<span style="display:inline-flex;align-items:center;gap:3px;font-size:9px;color:#374151;background:#fff;border:1px solid var(--border);border-radius:8px;padding:1px 6px;margin-left:6px"><span style="display:inline-block;width:7px;height:7px;background:' + rec.color + ';border-radius:50%"></span>' + rec.short + '</span>' : '';
+    return '<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px dashed var(--border);font-size:12px">'
+      +   '<div style="font-size:10px;color:var(--muted);min-width:40px">' + (i === legs.length-1 ? 'Final' : 'Leg ' + (i+1)) + '</div>'
+      +   '<div style="flex:1;min-width:0">' + String(l.from.name).replace(/</g,'&lt;') + ' → <b>' + String(l.to.name).replace(/</g,'&lt;') + '</b>' + recChip + '</div>'
+      +   '<div style="font-family:DM Mono,monospace;font-size:11px;color:#1F3864;min-width:90px;text-align:right">' + l.dist.toFixed(1) + ' mi · ~' + Math.round(l.dist / avgMph * 60) + ' min</div>'
+      + '</div>';
+  }).join('');
+  var panel = document.getElementById('rp-smart-panel');
+  if(!panel) return;
+  panel.innerHTML = ''
+    + '<div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:10px">📋 Review your route</div>'
+    + '<div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px 14px;margin-bottom:10px">'
+    +   rowsHtml
+    +   '<div style="display:flex;justify-content:space-between;padding-top:10px;margin-top:6px;border-top:1px solid var(--border);font-size:13px;font-weight:700;color:#1F3864"><div>Total</div><div style="font-family:DM Mono,monospace">' + totalDist.toFixed(1) + ' mi · ~' + totalMinutes + ' min</div></div>'
+    + '</div>'
+    + '<div style="font-size:10px;color:var(--muted);font-style:italic;margin-bottom:10px">⚠ Times are estimates (straight-line @ ~28 mph metro average). Live driving times will use real routing in a future step.</div>'
+    + '<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">'
+    +   '<button onclick="_rpBuildSmartPanel()" style="background:#fff;border:1px solid var(--border);color:#1F3864;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">← Edit</button>'
+    +   '<button onclick="_rpLockInRoute()" style="background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">✓ Lock in route &amp; add visits to schedule</button>'
+    + '</div>';
+}
+window._rpFinalizeSmart = _rpFinalizeSmart;
+
+// Lock-in: add each picked visit to today's schedule, in order.
+function _rpLockInRoute(){
+  var picks = _RP_SLOT_PICKS.filter(function(p){ return p && p.name; });
+  if(picks.length === 0) return;
+  var di = (typeof S !== 'undefined' && S && typeof S.currentDay === 'number') ? S.currentDay : null;
+  if(di == null){
+    if(typeof showToast === 'function') showToast('Open a day in the schedule first, then lock in a route.');
+    return;
+  }
+  var day = S.days[di];
+  if(!day){
+    if(typeof showToast === 'function') showToast('Day not found.');
+    return;
+  }
+  if(!Array.isArray(day.rows)) day.rows = [];
+  picks.forEach(function(p){
+    var area = '';
+    // Resolve city from the original record
+    var bt = p.bizType || (typeof getBizTypeForName === 'function' ? getBizTypeForName(p.name) : 'clinic');
+    if(bt === 'mva' && typeof MVA_ATTORNEYS !== 'undefined'){
+      var m = MVA_ATTORNEYS.find(function(x){ return x.firm === p.name; });
+      if(m) area = m.city || '';
+    } else if(bt === 'outreach' && typeof OUTREACH !== 'undefined'){
+      var o = OUTREACH.find(function(x){ return x.name === p.name; });
+      if(o) area = o.city || '';
+    } else if(typeof CLINIC_BANK !== 'undefined'){
+      var c = CLINIC_BANK.find(function(x){ return x.n === p.name; });
+      if(c) area = c.c || '';
+    }
+    day.rows.push({
+      clinic: p.name,
+      doctor: '',
+      spec: '',
+      team: '',
+      city: area || (day.focus || ''),
+      last: '',
+      status: 'Pending',
+      rd: '',
+      member: '',
+      memberConfirmed: false,
+      relationship: '', relNotes: '', leadNotes: '',
+      rowConfirmed: false,
+      rescheduledFrom: null, isRescheduled: false,
+      isMosque: false, isManual: false, editing: false,
+      bizType: bt,
+      addedBy: (typeof CURRENT_USER !== 'undefined' && CURRENT_USER) ? CURRENT_USER.name : '',
+      addedFromRoutePlanner: true
+    });
+  });
+  if(typeof _saveS === 'function') _saveS();
+  if(typeof refresh === 'function') refresh(di);
+  if(typeof showToast === 'function') showToast('✓ Added ' + picks.length + ' stops to today\'s schedule');
+  _rpCancelSmart();
+}
+window._rpLockInRoute = _rpLockInRoute;
 
 // Called from openDay() to refresh the map with this day's visits.
 function renderDayMap(di){
@@ -16202,6 +16831,9 @@ function renderDayMap(di){
     return;
   }
   if(!_DV_MARKERS) return;
+  // Render the bulk business-pin layer (recency-colored). Cheap (~50 ms).
+  // Re-renders here too so the colors stay current with the latest visits.
+  try { renderAllBusinessPins(); } catch(e){ console.warn('renderAllBusinessPins failed:', e); }
   _DV_MARKERS.clearLayers();
   _DV_RECS.clearLayers();
   if(_DV_ROUTELINE){ _DV_MAP.removeLayer(_DV_ROUTELINE); _DV_ROUTELINE = null; }
@@ -16231,10 +16863,21 @@ function renderDayMap(di){
     _DV_MARKERS.addLayer(marker);
     pts.push([lat, lng]);
   });
-  // Also drop a pin for each WCG facility for context
+  // Also drop a pin for each WCG facility for context — pin popup gets
+  // Set as Start / Set as End buttons too so a route can begin/end at a
+  // facility just like any other pin.
   Object.keys(ROUTE_COORDS).forEach(function(k){
     var c = ROUTE_COORDS[k];
     if(c.type !== 'facility') return;
+    var safeLabel = String(c.label).replace(/</g,'&lt;').replace(/'/g,"\\'");
+    var popupHtml = '<div style="font-family:DM Sans,sans-serif;font-size:12px;min-width:170px">'
+      +   '<div style="font-weight:700;color:#7030A0;font-size:13px;margin-bottom:2px">🏥 ' + safeLabel + '</div>'
+      +   '<div style="font-size:10px;color:#64748b;margin-bottom:6px">WCG facility</div>'
+      +   '<div style="display:flex;gap:5px;margin-top:6px">'
+      +     '<button onclick="_rpPickFromMap(\'' + safeLabel + '\',\'start\')" style="flex:1;background:#1F3864;color:#fff;border:none;border-radius:5px;padding:5px 8px;font-size:10px;font-weight:700;cursor:pointer">Set as Start</button>'
+      +     '<button onclick="_rpPickFromMap(\'' + safeLabel + '\',\'end\')"   style="flex:1;background:#7030A0;color:#fff;border:none;border-radius:5px;padding:5px 8px;font-size:10px;font-weight:700;cursor:pointer">Set as End</button>'
+      +   '</div>'
+      + '</div>';
     var m = L.marker([c.lat, c.lng], {
       title: c.label,
       icon: L.divIcon({
@@ -16242,7 +16885,7 @@ function renderDayMap(di){
         html: '<div style="width:18px;height:18px;background:#7030A0;border:3px solid #fff;border-radius:50%;box-shadow:0 2px 6px rgba(112,48,160,.5)"></div>',
         iconSize: [18, 18], iconAnchor: [9, 9]
       })
-    }).bindPopup('<b>🏥 ' + c.label + '</b><br><i>WCG facility</i>');
+    }).bindPopup(popupHtml);
     _DV_MARKERS.addLayer(m);
     pts.push([c.lat, c.lng]);
   });
