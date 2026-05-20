@@ -1058,16 +1058,23 @@ body.member-view.member-mobile .member-hamburger-btn{display:flex}
    button — bump the title to the right so they don't collide. */
 body.member-view.member-mobile .header{padding-left:60px !important}
 
-/* ── DESKTOP MEMBER VIEW: Azure-style permanent left sidebar ──────────
-   When a member is signed in AND the viewport is wider than 768px, the
-   side drawer becomes a permanent always-visible sidebar (no slide-in
-   animation, no backdrop, no hamburger). The top-nav (.main-nav) is
-   hidden — the sidebar replaces it entirely. The rest of the page is
-   pushed to the right with margin-left so it doesn't sit under the
-   sidebar. */
+/* ── DESKTOP SIDEBAR: Azure-style permanent left sidebar ──────────
+   Per user 2026-05-20: previously only members got the desktop sidebar
+   (body.member-view). Admin had only the top nav and reported the
+   feedback that the layout felt different per role. Now the sidebar
+   shows for EVERY desktop role (admin / member / readonly) — front-desk
+   is intentionally excluded because they only see the Referrals tab.
+   The gate is body.has-sidebar (set by applyMemberViewClass at runtime).
+
+   Also fixes: previously the margin-left offset was only on #landing,
+   #day-view, #reports-view — every OTHER tab (members-view, bank-view,
+   finances-view, referrals-view, feed-view, leads-page-view) had its
+   content rendering UNDER the sidebar. A teammate reported the sidebar
+   was "in the way" on those tabs. Now ALL view containers get the
+   240px offset. ─────────────────────────────────────────────────── */
 @media (min-width: 769px){
   /* Permanent sidebar — anchored left edge, full height */
-  body.member-view .member-drawer{
+  body.has-sidebar .member-drawer{
     left:0 !important;
     top:0;
     width:240px;
@@ -1077,32 +1084,49 @@ body.member-view.member-mobile .header{padding-left:60px !important}
     z-index:80;
   }
   /* No backdrop on desktop — clicking outside doesn't close it (it never closes) */
-  body.member-view .member-drawer-backdrop{display:none !important}
+  body.has-sidebar .member-drawer-backdrop{display:none !important}
   /* Hamburger button hidden — sidebar is always there */
-  body.member-view .member-hamburger-btn{display:none !important}
+  body.has-sidebar .member-hamburger-btn{display:none !important}
   /* Bottom-nav hidden — sidebar replaces it */
-  body.member-view .member-bottom-nav{display:none !important}
-  /* Hide the existing top-nav (.main-nav) for members on desktop — the
-     sidebar now owns navigation. */
-  body.member-view .main-nav{display:none !important}
-  /* Shift the entire landing content right so it doesn't overlap with the
-     sidebar. Header + every view-content gets the same offset. */
-  body.member-view #landing,
-  body.member-view #day-view,
-  body.member-view #reports-view{
-    margin-left:240px;
+  body.has-sidebar .member-bottom-nav{display:none !important}
+  /* Hide the existing top-nav (.main-nav) — the sidebar now owns navigation
+     for all roles that get a sidebar (admin + member + readonly). */
+  body.has-sidebar .main-nav{display:none !important}
+  /* Shift EVERY top-level view container right so its content doesn't
+     sit under the sidebar. New tabs added in the future MUST be listed
+     here too, otherwise their content will render under the sidebar.
+     !important is required because most of these views have an inline
+     `margin:0 auto` style for max-width centering — without !important
+     the inline rule wins and our offset is silently ignored. */
+  body.has-sidebar #landing,
+  body.has-sidebar #day-view,
+  body.has-sidebar #reports-view,
+  body.has-sidebar #members-view,
+  body.has-sidebar #bank-view,
+  body.has-sidebar #finances-view,
+  body.has-sidebar #referrals-view,
+  body.has-sidebar #feed-view,
+  body.has-sidebar #leads-page-view{
+    margin-left:240px !important;
+    /* Keep horizontal centering of the remaining space — auto on the
+       right edge so wide screens center the content rather than left-
+       jamming it against the sidebar. */
+    margin-right:auto !important;
   }
   /* The marquee tagline strip + announcement bar also need the offset
      because they're position:sticky inside #landing */
-  body.member-view .marquee-bar,
-  body.member-view .marquee-bar-tagline{margin-left:0 !important}
+  body.has-sidebar .marquee-bar,
+  body.has-sidebar .marquee-bar-tagline{margin-left:0 !important}
   /* Compact the drawer header on desktop (less wasted vertical space) */
-  body.member-view .member-drawer-header{padding:14px 16px 12px}
-  body.member-view .member-drawer-header .md-user{font-size:13px}
+  body.has-sidebar .member-drawer-header{padding:14px 16px 12px}
+  body.has-sidebar .member-drawer-header .md-user{font-size:13px}
   /* Sidebar nav items: slightly tighter on desktop */
-  body.member-view .md-nav-item{padding:11px 16px;font-size:12px}
-  body.member-view .md-nav-item .md-ico{font-size:16px;width:20px}
-  body.member-view .md-section-label{padding:14px 16px 4px;font-size:9px}
+  body.has-sidebar .md-nav-item{padding:11px 16px;font-size:12px}
+  body.has-sidebar .md-nav-item .md-ico{font-size:16px;width:20px}
+  body.has-sidebar .md-section-label{padding:14px 16px 4px;font-size:9px}
+  /* Header itself also shifts right so the user badge / clock don't
+     overlap the sidebar */
+  body.has-sidebar .header{padding-left:24px}
 }
 
 /* ── BOTTOM NAVIGATION (member-view + mobile) ─────────────────────────
@@ -7646,6 +7670,14 @@ function applyMemberViewClass(){
     b.classList.add('member-view');
   } else {
     b.classList.remove('member-view');
+  }
+  // ── has-sidebar: shows the Azure-style left sidebar for ALL desktop roles
+  // (admin / member / readonly). Front-desk is excluded because they only
+  // see the Referrals tab — a sidebar would be wasted space.
+  // Per user 2026-05-20: admin asked for the same sidebar layout members use.
+  b.classList.remove('has-sidebar');
+  if(!isPhone && CURRENT_USER && CURRENT_USER.role !== 'front_desk'){
+    b.classList.add('has-sidebar');
   }
   // Set a role-specific body class so CSS rules can hide/show elements per
   // role without re-checking CURRENT_USER everywhere. Cleared if logged out.
