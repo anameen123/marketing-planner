@@ -22245,8 +22245,14 @@ function switchTab(tab, opts){
     // gotoMemberProfile) so the profile view isn't wiped right after it's loaded.
     var keep = (opts && opts.keepMember) === true;
     var tree = document.getElementById('members-tree');
-    // Always land on the Tree Chart sub-tab when entering the Team tab.
-    if(typeof switchTeamTab === 'function') switchTeamTab('tree');
+    // Per user 2026-05-19: respect the LAST Team sub-tab the user visited
+    // (Tree or Stats). Tree remains the default for first-time entry. This
+    // means an admin who lives on Team Overview can navigate to Schedule /
+    // Referrals / Reports and back without being reset to Tree every time.
+    var targetSub = (typeof opts !== 'undefined' && opts && opts.teamSub)
+      ? opts.teamSub
+      : (window._teamLastSub || 'tree');
+    if(typeof switchTeamTab === 'function') switchTeamTab(targetSub);
     if(!keep){
       // Reset to the tree-chart landing
       currentMember = null;
@@ -22661,12 +22667,19 @@ function gotoPage(p){
 }
 
 // ── TEAM TAB SUB-NAV: Team Structure | Stats ─────────────────────────────
+// Per user 2026-05-19: remember the most recently visited Team sub-tab so
+// that returning to the Team top-tab (e.g. after browsing a different
+// section) restores the user to where they were — Stats users should NOT
+// be sent back to Tree on every entry.
+window._teamLastSub = window._teamLastSub || 'tree';
 function switchTeamTab(name){
   var treeBtn = document.getElementById('team-subtab-tree');
   var statBtn = document.getElementById('team-subtab-stats');
   var treeSub = document.getElementById('team-sub-tree');
   var statSub = document.getElementById('team-sub-stats');
   if(!treeBtn || !statBtn) return;
+  // Track which sub-tab is now active for next-time restore
+  window._teamLastSub = (name === 'stats') ? 'stats' : 'tree';
   function makeActive(btn){
     btn.style.background = 'var(--purple)';
     btn.style.color      = '#fff';
