@@ -13965,7 +13965,118 @@ var MEMBER_TEAM_TAG = 'On-ground Marketing';
 // First three are already used by the seeded members (matches MCOLORS).
 var MEMBER_COLOR_POOL = ['#0d9488','#b45309','#be185d','#0369a1','#65a30d','#7c2d12','#4338ca'];
 var MCOLORS={'Duaa':'#1e40af','Ms Sadia':'#166534','Dr Ahsan':'#5b21b6','Abrar Mamun':'#0d9488'};
+// CALL_HANDLERS — set of member names who get the "+1 Convert" button on
+// their dashboard card. Was previously referenced but never declared.
+// Duaa is seeded as a call handler since she handles incoming ER calls today.
+var CALL_HANDLERS = { 'Duaa': true };
+// CALL_CONVERSIONS — { memberName: [{ts, week, month, ...}, ...] }.
+// Tracks +1 Convert button clicks per call-handler member. Previously
+// referenced but never declared.
+var CALL_CONVERSIONS = {};
 var AREAS=['Frisco','Plano','McKinney','Carrollton','Allen','Other'];
+
+// ── WEEK HELPERS (define BEFORE first use) ────────────────────────────────
+// CRITICAL: these were previously referenced (renderCounters → getMonthly-
+// TeamTarget → getWeekKey, plus 4 other call sites) but never defined.
+// That made every call throw ReferenceError at runtime, which in turn
+// aborted the bootstrap before reaching the CLINIC_BANK declaration ~5K
+// lines below — the root cause of the "no clinics" panic on 2026-05-19/20.
+// Defining them here, ahead of all callers.
+//
+// Week convention used throughout the app: Monday is day 1, Sunday day 7.
+// "The week" of a date is the Mon–Sun window containing that date.
+function getCurrentWeekMonday(){
+  // Monday 00:00 of THIS week, in local time. Used by every weekly-target /
+  // weekly-completion calculation. Sunday rolls forward to the NEXT Monday
+  // — no, wait — we want Sunday to be part of THE WEEK THAT JUST ENDED, so
+  // Sunday should map to the Monday 6 days earlier. JS Date.getDay() returns
+  // 0 for Sunday, 1 for Monday, ..., 6 for Saturday. So days-to-subtract:
+  //   Mon (1) → 0,  Tue (2) → 1, ..., Sat (6) → 5, Sun (0) → 6
+  // Formula: ((day + 6) % 7).
+  var d = new Date();
+  var dow = d.getDay();
+  var back = (dow + 6) % 7;
+  var m = new Date(d.getFullYear(), d.getMonth(), d.getDate() - back);
+  m.setHours(0,0,0,0);
+  return m;
+}
+// Stable string key for the week containing the given date. Returns the
+// Monday's ISO date as 'YYYY-MM-DD'. Used as the map key in WEEKLY_TARGETS
+// and anywhere else we need to group data by week.
+function getWeekKey(date){
+  if(!(date instanceof Date) || isNaN(date.getTime())){
+    date = new Date();
+  }
+  var dow = date.getDay();
+  var back = (dow + 6) % 7;
+  var m = new Date(date.getFullYear(), date.getMonth(), date.getDate() - back);
+  m.setHours(0,0,0,0);
+  var y = m.getFullYear();
+  var mo = String(m.getMonth()+1).padStart(2, '0');
+  var dd = String(m.getDate()).padStart(2, '0');
+  return y + '-' + mo + '-' + dd;
+}
+window.getCurrentWeekMonday = getCurrentWeekMonday;
+window.getWeekKey = getWeekKey;
+
+// getWeekAssigned(name) — # of visits in the current Mon-Sun week that
+// are assigned (member set + confirmed) to `name`. Used by the weekly
+// target/progress logic. Counts ALL statuses (Pending, Postponed,
+// Completed, Canceled) since "assigned" reflects intent, not outcome.
+// Defined here, ahead of every caller — was previously undefined,
+// causing renderCounters to throw and abort bootstrap.
+function getWeekAssigned(name){
+  if(!name || typeof S === 'undefined' || !S || !S.days) return 0;
+  var mon = getCurrentWeekMonday();
+  var sun = new Date(mon); sun.setDate(mon.getDate()+6); sun.setHours(23,59,59,999);
+  var count = 0;
+  S.days.forEach(function(day){
+    if(!day || !day.date || !day.rows) return;
+    var d = new Date(day.date + 'T00:00:00');
+    if(d < mon || d > sun) return;
+    day.rows.forEach(function(r){
+      if(!r) return;
+      if(!r.memberConfirmed) return;
+      // Primary member match OR multi-member (outreach co-attendees)
+      if(r.member === name) count++;
+      else if(Array.isArray(r.coMembers) && r.coMembers.indexOf(name) >= 0) count++;
+    });
+  });
+  return count;
+}
+// getWeekCompleted(name) — same week window, but only counts visits whose
+// status is 'Completed'. Drives the weekly completion progress bar.
+function getWeekCompleted(name){
+  if(!name || typeof S === 'undefined' || !S || !S.days) return 0;
+  var mon = getCurrentWeekMonday();
+  var sun = new Date(mon); sun.setDate(mon.getDate()+6); sun.setHours(23,59,59,999);
+  var count = 0;
+  S.days.forEach(function(day){
+    if(!day || !day.date || !day.rows) return;
+    var d = new Date(day.date + 'T00:00:00');
+    if(d < mon || d > sun) return;
+    day.rows.forEach(function(r){
+      if(!r || r.status !== 'Completed') return;
+      if(!r.memberConfirmed) return;
+      if(r.member === name) count++;
+      else if(Array.isArray(r.coMembers) && r.coMembers.indexOf(name) >= 0) count++;
+    });
+  });
+  return count;
+}
+window.getWeekAssigned  = getWeekAssigned;
+window.getWeekCompleted = getWeekCompleted;
+
+// getWeeklyTarget(name) — the saved target for THIS week, or 0 if none.
+// Stored in WEEKLY_TARGETS[name][weekKey].target. Same callsites as the
+// helpers above; previously undefined, also crashing the renderCounters chain.
+function getWeeklyTarget(name){
+  if(!name || typeof WEEKLY_TARGETS === 'undefined' || !WEEKLY_TARGETS[name]) return 0;
+  var wk = getWeekKey(new Date());
+  var entry = WEEKLY_TARGETS[name][wk];
+  return (entry && typeof entry.target === 'number') ? entry.target : 0;
+}
+window.getWeeklyTarget = getWeeklyTarget;
 
 // ── HOISTED STATE VARIABLES (must be before init call) ──
 var WEEKLY_TARGETS={};
@@ -19809,9 +19920,28 @@ var LOGIN_QUOTES = [
   }
 })();
 
-renderCalGrid();renderCounters();renderEvents();renderAnnouncements();renderObservances();renderLandingPodcastReminder();
-// Render the dynamic org tree on page load so it's populated even before the user opens the Members tab
-if(typeof renderOrgTree === 'function') renderOrgTree();
+// ── CRITICAL: each render in its own try/catch ──────────────────────────
+// 2026-05-20: This single line previously took down the entire <script>
+// when any one of these renders threw at runtime. That meant CLINIC_BANK
+// (line ~24963, below this) never got defined, and the user saw "no
+// clinics" — the exact bug they reported. Wrapping each call individually
+// guarantees an error in one render can never block subsequent declarations
+// or the rest of bootstrap.
+(function _bootRenderSafely(){
+  var calls = [
+    ['renderCalGrid', renderCalGrid],
+    ['renderCounters', typeof renderCounters === 'function' ? renderCounters : null],
+    ['renderEvents', typeof renderEvents === 'function' ? renderEvents : null],
+    ['renderAnnouncements', typeof renderAnnouncements === 'function' ? renderAnnouncements : null],
+    ['renderObservances', typeof renderObservances === 'function' ? renderObservances : null],
+    ['renderLandingPodcastReminder', typeof renderLandingPodcastReminder === 'function' ? renderLandingPodcastReminder : null],
+    ['renderOrgTree', typeof renderOrgTree === 'function' ? renderOrgTree : null]
+  ];
+  calls.forEach(function(pair){
+    try { if(pair[1]) pair[1](); }
+    catch(e){ try { console.warn('[boot-render] '+pair[0]+' failed (continuing):', e); } catch(_){} }
+  });
+})();
 function refresh(di){
   if(S.currentDay===di){
     renderDayTable(di);
