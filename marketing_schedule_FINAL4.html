@@ -5755,6 +5755,39 @@ var DataLayer = (function(){
   // mode() — diagnostic; returns 'localStorage' or 'sharepoint'
   function mode(){ return config.enabled ? 'sharepoint' : 'localStorage'; }
 
+  // ── ONE-TIME LOCALSTORAGE MSAL SCRUB ──────────────────────────────────
+  // Migration from older builds where cacheLocation was 'localStorage'. We
+  // switched to sessionStorage so the user is signed out when the browser
+  // closes — but if their localStorage still has the OLD MSAL entries from
+  // a prior session, MSAL could still pick them up and silently auto-resume.
+  // Wipe anything that looks like an MSAL key out of localStorage on every
+  // page load (cheap; idempotent once it's done).
+  (function _scrubStaleMsalLocalStorage(){
+    try {
+      if(typeof localStorage === 'undefined') return;
+      var keysToKill = [];
+      for(var i = 0; i < localStorage.length; i++){
+        var k = localStorage.key(i);
+        if(!k) continue;
+        // MSAL.js v2 prefixes its keys with the clientId or with "msal.".
+        // We match the canonical "msal." prefix + the well-known auth-cache
+        // shapes ("login.windows.net", "{clientId}-login.windows.net-...").
+        if(k.indexOf('msal.') === 0
+           || k.indexOf('login.windows.net') !== -1
+           || k.indexOf('login.microsoftonline.com') !== -1
+           || k.indexOf('-login.windows.net-') !== -1
+           || k.indexOf('msal.account.keys') !== -1
+           || k.indexOf('msal.token.keys') !== -1){
+          keysToKill.push(k);
+        }
+      }
+      keysToKill.forEach(function(k){ try { localStorage.removeItem(k); } catch(_){} });
+      if(keysToKill.length){
+        try { console.info('[auth] scrubbed ' + keysToKill.length + ' stale MSAL keys from localStorage (migration to sessionStorage).'); } catch(_){}
+      }
+    } catch(e){ /* best-effort */ }
+  })();
+
   // ── PRIVATE — MSAL authentication ──────────────────────────────────────
   // Initializes MSAL.js once. The script tag in <head> loads the library;
   // we wait for window.msal to be defined (defer loading can lag a moment).
@@ -7443,6 +7476,28 @@ function doLogin(){
   _finishLogin();
 }
 
+// Emergency sign-out button — injected as a fixed-position element directly
+// into <body>, OUTSIDE the header, with the highest z-index in the app.
+// Per user 2026-05-19: if the regular Sign Out button (inside the user-badge)
+// is ever hidden by CSS, role restrictions, a sandbox banner overlap, an
+// overflow clip, or anything else, this button is the guaranteed escape.
+// Idempotent — only injects once per session.
+function _ensureEmergencySignOut(){
+  if(document.getElementById('emergency-signout-btn')) return;
+  if(!CURRENT_USER) return;   // only show when actually signed in
+  var btn = document.createElement('button');
+  btn.id = 'emergency-signout-btn';
+  btn.type = 'button';
+  btn.title = 'Sign out (emergency button — always visible)';
+  btn.onclick = function(){ try { doLogout(); } catch(e){ try { window.location.reload(); } catch(_){} } };
+  btn.innerHTML = '<span style="font-size:11px">🚪</span> Sign out';
+  btn.style.cssText = 'position:fixed;top:8px;right:12px;z-index:99999;background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:8px;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;box-shadow:0 4px 12px rgba(0,0,0,.25);display:flex;align-items:center;gap:5px;opacity:.85;transition:opacity .15s';
+  btn.onmouseover = function(){ btn.style.opacity = '1'; };
+  btn.onmouseout  = function(){ btn.style.opacity = '.85'; };
+  document.body.appendChild(btn);
+}
+window._ensureEmergencySignOut = _ensureEmergencySignOut;
+
 // Shared post-sign-in flow — runs identically for hardcoded + MS auth.
 function _finishLogin(){
   document.getElementById('login-screen').style.display='none';
@@ -7452,6 +7507,9 @@ function _finishLogin(){
   if(CURRENT_USER && CURRENT_USER.sandbox && typeof _enableSandboxMode === 'function'){
     _enableSandboxMode();
   }
+  // Inject the emergency Sign Out button — fixed position, always visible.
+  // Belt-and-braces in case the header's normal sign-out isn't reachable.
+  _ensureEmergencySignOut();
   applyMemberViewClass();
   renderUserBadge();
   applyRoleRestrictions();
@@ -7642,6 +7700,8 @@ function doLogout(){
   var p = document.getElementById('login-password'); if(p) p.value = '';
   var er = document.getElementById('login-error');   if(er) er.textContent = '';
   var ub = document.getElementById('user-badge-wrap'); if(ub) ub.innerHTML = '';
+  // Remove the emergency Sign Out button — it's only meaningful while signed in
+  var emSo = document.getElementById('emergency-signout-btn'); if(emSo) emSo.remove();
 
   // ── Microsoft cleanup in background (fire-and-forget) ─────────────────
   // Doesn't block the user. If it fails or shows a popup, fine — they're

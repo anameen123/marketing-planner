@@ -15,6 +15,22 @@
       "route": "/admin/*",
       "_comment": "Reserved for future admin-only paths if we split the HTML",
       "allowedRoles": ["admin"]
+    },
+    {
+      "route": "/marketing_schedule_FINAL4.html",
+      "_comment": "Never cache the main HTML — it's the single source of truth and changes on every deploy. Without this, browsers serve a stale copy and 'I changed the code but the user sees the old version' bugs happen. Static assets (CSS/JS/images) are unaffected.",
+      "headers": {
+        "Cache-Control": "no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0"
+      }
+    },
+    {
+      "route": "/",
+      "_comment": "Same no-cache for the root path (which navigationFallback rewrites to the HTML).",
+      "headers": {
+        "Cache-Control": "no-store, must-revalidate"
+      }
     }
   ],
   "navigationFallback": {
