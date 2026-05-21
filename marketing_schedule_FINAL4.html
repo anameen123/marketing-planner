@@ -5985,7 +5985,18 @@ var _confirmCancelCb = null;
 function showConfirm(opts){
   document.getElementById('confirm-icon').textContent = opts.icon || '?';
   document.getElementById('confirm-msg').textContent = opts.msg || 'Are you sure?';
-  document.getElementById('confirm-sub').textContent = opts.sub || '';
+  // ── HTML SUB SUPPORT (per user 2026-05-21) ──────────────────────────
+  // Some callers (showSyncStatus, etc.) build the sub message with rich
+  // HTML — strong tags, divs with styles, etc. They opt in with
+  // htmlSub: true so we render via innerHTML. Plain-text callers continue
+  // to use textContent (preserves '\n' line breaks via the modal's
+  // white-space: pre-line CSS, and avoids any XSS risk from user input).
+  var subEl = document.getElementById('confirm-sub');
+  if(opts.htmlSub){
+    subEl.innerHTML = opts.sub || '';
+  } else {
+    subEl.textContent = opts.sub || '';
+  }
   var btn = document.getElementById('confirm-yes-btn');
   btn.textContent = opts.yesLabel || 'Confirm';
   btn.style.background = opts.danger===false ? '#22c55e' : '#ef4444';
@@ -9132,6 +9143,7 @@ function showSyncStatus(){
       icon: '📊',
       msg: 'Sync status',
       sub: msg,
+      htmlSub: true,   // (per user 2026-05-21) render the rich body as HTML, not raw text
       yesLabel: isStuck ? 'Reconnect'
               : isSharePoint ? '⟳ Pull latest now'
               : 'OK',
