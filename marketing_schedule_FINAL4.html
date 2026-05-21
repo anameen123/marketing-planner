@@ -9058,7 +9058,7 @@ function confirmAndLogout(){
 }
 window.confirmAndLogout = confirmAndLogout;
 
-function doLogout(){
+function doLogout(skipBroadcast){
   // ── INSTANT local sign-out FIRST ──────────────────────────────────────
   // User sees the login screen within milliseconds. Microsoft / MSAL
   // cleanup happens AFTER in the background — even if it takes a second
@@ -9066,6 +9066,7 @@ function doLogout(){
   var wasMs = (CURRENT_USER && CURRENT_USER.authVia === 'entra-id');
   CURRENT_USER = null;
   document.body.classList.remove('member-view');
+  document.body.classList.remove('has-sidebar');
   var ls = document.getElementById('login-screen');
   if(ls){ ls.classList.add('visible'); ls.style.display = ''; }
   var u = document.getElementById('login-username'); if(u) u.value = '';
@@ -9074,6 +9075,23 @@ function doLogout(){
   var ub = document.getElementById('user-badge-wrap'); if(ub) ub.innerHTML = '';
   // Remove the emergency Sign Out button — it's only meaningful while signed in
   var emSo = document.getElementById('emergency-signout-btn'); if(emSo) emSo.remove();
+
+  // ── CROSS-TAB SIGN-OUT BROADCAST (per user 2026-05-21) ──────────────
+  // Tell every other tab in this browser to also sign out. Without this,
+  // tab A could be logged out while tab B kept showing the planner —
+  // a real security risk if someone walked up to the second tab.
+  // skipBroadcast=true is set when WE'RE the receiving tab so we don't
+  // bounce the message infinitely.
+  if(!skipBroadcast){
+    try {
+      if(typeof BroadcastChannel !== 'undefined'){
+        var ch = new BroadcastChannel('wcg_auth_v1');
+        ch.postMessage({ type: 'signed-out', at: Date.now() });
+        // Don't close the channel — the message needs time to flush.
+        // GC will reap it.
+      }
+    } catch(_){}
+  }
 
   // ── Microsoft cleanup in background (fire-and-forget) ─────────────────
   // Doesn't block the user. If it fails or shows a popup, fine — they're
@@ -9088,6 +9106,60 @@ function doLogout(){
   }
 }
 window.doLogout=doLogout;
+
+// ── CROSS-TAB SIGN-OUT LISTENER (per user 2026-05-21) ──────────────────
+// Every loaded tab subscribes once. If any other tab fires the
+// 'signed-out' message, this tab also clears its state. Skips broadcast
+// on the receiver side so we don't loop. Runs once at script load — set
+// up before any user interaction, so even a backgrounded tab that the
+// user hasn't touched for hours will react when a different tab signs out.
+(function _wireCrossTabSignOut(){
+  try {
+    if(typeof BroadcastChannel === 'undefined') return;
+    var ch = new BroadcastChannel('wcg_auth_v1');
+    ch.onmessage = function(ev){
+      var msg = ev && ev.data;
+      if(!msg || msg.type !== 'signed-out') return;
+      // Only react if we're currently signed in. Avoids cascading reloads
+      // if all tabs are already on the login screen.
+      if(typeof CURRENT_USER === 'undefined' || CURRENT_USER === null) return;
+      try { console.info('[auth] cross-tab sign-out received — logging out this tab'); } catch(_){}
+      try { doLogout(true); }   // skipBroadcast so we don't bounce
+      catch(e){ try { window.location.reload(); } catch(_){} }
+    };
+  } catch(e){ /* best-effort */ }
+})();
+
+// ── BELT-AND-BRACES: re-check MSAL on tab refocus (per user 2026-05-21) ──
+// BroadcastChannel covers tabs that are awake. If a tab was background-
+// throttled or the BroadcastChannel was unavailable, this catches the case
+// when the user comes back: ask MSAL "do we still have a cached account?"
+// If not (because another tab signed out and cleared localStorage), log
+// this tab out too. Costs nothing — silent token check is local-only.
+(function _wireRefocusAuthCheck(){
+  var checking = false;
+  async function check(){
+    if(checking) return;
+    if(!CURRENT_USER) return;
+    if(CURRENT_USER.authVia !== 'entra-id') return;  // hardcoded login isn't synced cross-tab
+    checking = true;
+    try {
+      var accounts = (DataLayer && DataLayer._getAccounts_external)
+        ? await DataLayer._getAccounts_external()
+        : [];
+      if(!accounts || !accounts.length){
+        try { console.info('[auth] MSAL cache empty after refocus — likely signed out from another tab'); } catch(_){}
+        try { doLogout(true); }
+        catch(e){ try { window.location.reload(); } catch(_){} }
+      }
+    } catch(_){}
+    finally { checking = false; }
+  }
+  document.addEventListener('visibilitychange', function(){
+    if(!document.hidden) check();
+  });
+  window.addEventListener('focus', check);
+})();
 
 // ── Auto-resume Microsoft session on page load ─────────────────────────
 // If the user previously signed in via Entra ID and the cached MSAL token
