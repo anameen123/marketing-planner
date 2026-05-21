@@ -6301,6 +6301,26 @@ var DataLayer = (function(){
   var _pollTimer = null;                  // interval ID for the live-sync poller
   var _lastPollISO = null;                // ISO timestamp of last successful poll
   var _msalInstance = null;               // MSAL.js instance (initialized once)
+  // ── SILENT-WRITE-FAILURE DETECTION (per user 2026-05-21) ─────────────────
+  // Counts consecutive 401/403 errors on the write path. Reset on any success.
+  // After 2 in a row, _showWritePermissionBanner pins a red banner so the
+  // user sees that their edits are NOT reaching the team's SharePoint.
+  var _consecutiveAuthFailures = 0;
+  var _lastWriteAuthErrorMsg = '';
+  function _showWritePermissionBanner(){
+    var b = document.getElementById('sync-write-perm-banner');
+    if(b) return;   // already showing
+    b = document.createElement('div');
+    b.id = 'sync-write-perm-banner';
+    b.style.cssText = 'position:relative;z-index:9997;background:#b91c1c;color:#fff;padding:11px 16px;text-align:center;font-family:DM Sans,sans-serif;font-size:13px;font-weight:700;letter-spacing:.02em;display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;box-shadow:0 2px 6px rgba(185,28,28,.35);line-height:1.5';
+    var who = (typeof CURRENT_USER !== 'undefined' && CURRENT_USER && CURRENT_USER.email) || 'your account';
+    b.innerHTML = ''
+      + '<span style="font-size:16px">⛔</span>'
+      + '<span><b>YOUR EDITS AREN\'T SAVING TO THE TEAM</b> · ' + who + ' doesn\'t have write permission on the SharePoint site. Admin needs to add you to the <i>Marketing team</i> M365 group on <code>wcgtx.sharepoint.com/sites/mkt</code>.</span>'
+      + '<button onclick="this.parentElement.remove()" style="background:rgba(255,255,255,.18);color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">Dismiss</button>';
+    if(document.body.firstChild) document.body.insertBefore(b, document.body.firstChild);
+    else document.body.appendChild(b);
+  }
 
   // ── PUBLIC API ──────────────────────────────────────────────────────────
   // load(key, fallback?) — read a JSON value by key. Returns parsed value,
@@ -6992,9 +7012,27 @@ var DataLayer = (function(){
         .catch(function(e){ return { k: k, ok: false, e: e }; });
     }));
     writeResults.forEach(function(r){
-      if(r.ok){ anySucceeded = true; }
+      if(r.ok){
+        anySucceeded = true;
+        _consecutiveAuthFailures = 0;   // reset on any success
+      }
       else {
         try { console.warn('[DataLayer] write failed for ' + r.k + ', re-queueing:', r.e); } catch(_){}
+        // ── DETECT SILENT PERMISSION FAILURES (per user 2026-05-21) ─────
+        // If the user is signed in via Entra ID but Graph keeps returning
+        // 401/403 on the write path, their account literally cannot save
+        // to the SharePoint site. This used to be invisible: reads worked
+        // (different scope), the sync badge stayed green, but their edits
+        // never reached the team. Now we count consecutive auth-class
+        // failures and surface a big red banner after 2 in a row.
+        var msg = (r.e && (r.e.message || String(r.e))) || '';
+        if(/\b401\b|\b403\b|Forbidden|Unauthorized|access.?denied/i.test(msg)){
+          _consecutiveAuthFailures++;
+          _lastWriteAuthErrorMsg = msg;
+          if(_consecutiveAuthFailures >= 2){
+            try { _showWritePermissionBanner(); } catch(_){}
+          }
+        }
         _writeQueue.push(latestByKey[r.k]);
       }
     });
