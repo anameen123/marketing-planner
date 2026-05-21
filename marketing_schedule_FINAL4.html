@@ -9357,6 +9357,17 @@ async function tryAutoResumeMsSession(){
   try {
     var accounts = await DataLayer._getAccounts_external();
     if(!accounts || !accounts.length) return false;
+    // ── MULTI-ACCOUNT GUARD (per user 2026-05-21 Abrar bug) ─────────────
+    // If multiple Microsoft accounts have ever signed in on this browser,
+    // we CANNOT just pick accounts[0] — that's a coin flip on whose
+    // session resumes. (Real-world hit: Duaa signed in on Abrar's phone
+    // once, then Abrar tried to use the planner and silently got resumed
+    // as "Duaa Khan", couldn't edit his own visits, couldn't self-assign.)
+    // When >1 cached, show the login screen so the user explicitly picks.
+    if(accounts.length > 1){
+      try { console.info('[Auth] auto-resume skipped — ' + accounts.length + ' cached accounts; user must pick'); } catch(_){}
+      return false;
+    }
     // Use the same flow as doMsLogin but skip the popup
     var email = (accounts[0].username || '').toLowerCase();
     var profile = _resolveMsUser(email);
