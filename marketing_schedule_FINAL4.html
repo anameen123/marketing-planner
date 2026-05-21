@@ -6519,6 +6519,18 @@ var DataLayer = (function(){
     if(!config.enabled){
       return { ok: true, mode: 'localStorage' };
     }
+    // ── SUPABASE FAST-PATH (per user 2026-05-21: "loading too slow") ──────
+    // When backend === 'supabase', the SharePoint bootstrap chain (MSAL →
+    // site ID → lists provisioning → initial fetch → polling) adds 3-8
+    // seconds to every sign-in for ZERO benefit — Supabase is already the
+    // primary store and Supabase auto-init runs in parallel on page load.
+    // Return immediately so login feels instant. SharePoint stays a backup
+    // mirror destination but doesn't gate the sign-in flow.
+    if(config.backend === 'supabase'){
+      _updateSyncBadge && _updateSyncBadge('ok');
+      try { console.info('[DataLayer] Supabase backend live — SharePoint bootstrap skipped (mirror runs separately).'); } catch(_){}
+      return { ok: true, mode: 'supabase' };
+    }
     // Retry transient failures (network hiccup, brief 5xx). Permanent
     // failures (auth misconfig, missing permission) fail fast on first try
     // since they wouldn't recover with retries anyway.
@@ -8778,12 +8790,13 @@ async function doMsLogin(){
     if(typeof showSyncBar === 'function') showSyncBar();
     var bootResult = await DataLayer.bootstrap();
     if(typeof hideSyncBar === 'function') hideSyncBar();
-    if(bootResult.ok && bootResult.mode === 'sharepoint'){
+    if(bootResult.ok && bootResult.mode === 'supabase'){
+      showToast('Welcome back · live sync on');
+    } else if(bootResult.ok && bootResult.mode === 'sharepoint'){
       showToast('Connected to SharePoint · live sync on');
     } else {
-      // Bootstrap failed — already logged inside DataLayer. Toast for visibility.
-      console.warn('[Auth] SharePoint bootstrap failed, continuing with localStorage');
-      showToast('Working offline — SharePoint sync unavailable');
+      console.warn('[Auth] backend bootstrap failed, continuing with localStorage');
+      showToast('Working offline — sync unavailable');
     }
     _finishLogin();
   } catch(e){
@@ -8885,10 +8898,12 @@ async function doCredentialsLogin(){
     if(typeof showSyncBar === 'function') showSyncBar();
     try {
       var r = await DataLayer.bootstrap();
-      if(r && r.ok && r.mode === 'sharepoint'){
+      if(r && r.ok && r.mode === 'supabase'){
+        showToast('Welcome back · live sync on');
+      } else if(r && r.ok && r.mode === 'sharepoint'){
         showToast('Connected to SharePoint · live sync on');
       } else {
-        showToast('Working offline — SharePoint sync unavailable');
+        showToast('Working offline — sync unavailable');
       }
     } catch(e){ console.warn('[Auth] credentials bootstrap failed:', e); }
     if(typeof hideSyncBar === 'function') hideSyncBar();
@@ -9395,7 +9410,7 @@ async function tryAutoResumeMsSession(){
     if(typeof showSyncBar === 'function') showSyncBar();
     try {
       var r = await DataLayer.bootstrap();
-      if(r && r.ok && r.mode === 'sharepoint'){
+      if(r && r.ok && (r.mode === 'sharepoint' || r.mode === 'supabase')){
         if(typeof showToast === 'function') showToast('Welcome back · live sync on');
       }
     } catch(e){ console.warn('[Auth] auto-resume bootstrap failed:', e); }
