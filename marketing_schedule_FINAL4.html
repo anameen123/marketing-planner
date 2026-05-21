@@ -9684,7 +9684,7 @@ function showSyncStatus(){
   }[pushState] || pushState;
   var pushAdminLine = '';
   if(CURRENT_USER && CURRENT_USER.role === 'admin'){
-    pushAdminLine = '<div style="margin-top:4px"><a href="#" onclick="showPushSettings();event.preventDefault();return false" style="color:#0f766e;text-decoration:underline;font-size:11px">⚙ Configure push endpoint…</a></div>';
+    pushAdminLine = '<div style="margin-top:4px"><a href="#" onclick="showPushSettings();event.preventDefault();return false" style="color:#0f766e;text-decoration:underline;font-size:11px">⚙ Configure push endpoint…</a> · <a href="#" onclick="showBackendSettings();event.preventDefault();return false" style="color:#3ecf8e;text-decoration:underline;font-size:11px;font-weight:700">🗄 Switch to Supabase (replace SharePoint)</a></div>';
   }
   var msg = ''
     + '<div style="display:flex;flex-direction:column;gap:10px;font-size:12px;line-height:1.5">'
