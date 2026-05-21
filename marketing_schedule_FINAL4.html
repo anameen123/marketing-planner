@@ -28,6 +28,13 @@
    Tint = light purple → burgundy diagonal gradient, lighter opacity so a lot more of
    the skyline shows through. Cards have their own white backgrounds, so they still
    pop out clearly against the colored backdrop. */
+/* Per user 2026-05-21 (Abrar's screen video): some element was overflowing
+   horizontally, creating a page-wide scrollbar that let users slide the
+   entire layout sideways. Locking overflow-x on html + body prevents any
+   stray-wide child from leaking out. Tables / cards that legitimately
+   need horizontal scroll already wrap their content in <div overflow-x:auto>
+   so they keep their internal scrolling. */
+html{overflow-x:hidden}
 body{
   font-family:'DM Sans',sans-serif;
   background:
@@ -37,8 +44,9 @@ body{
     var(--surface);
   color:var(--text);
   min-height:100vh;
+  overflow-x:hidden;   /* belt-and-braces: no sideways scroll on the page itself */
 }
-#landing{display:flex;flex-direction:column}
+#landing{display:flex;flex-direction:column;overflow-x:hidden;max-width:100vw}
 .header{background:var(--navy);color:#fff;padding:24px 36px;display:flex;align-items:center;justify-content:space-between}
 .header-title{font-size:24px;font-weight:700;letter-spacing:.01em}
 .header-sub{font-size:14px;opacity:.7;margin-top:4px}
@@ -1126,6 +1134,13 @@ body.member-view.member-mobile .header{padding-left:60px !important}
        with — and visually slides over the sidebar. */
     max-width:calc(100vw - 240px) !important;
     box-sizing:border-box !important;
+    /* Per user 2026-05-21 (Abrar's video): also clamp overflow at the
+       container level so any single oversized child (e.g. a wide table
+       that forgot its overflow-x:auto wrapper) can't pop the layout out
+       sideways. Internal tables that DO need horizontal scroll have their
+       own .tbl-wrap / inline overflow-x:auto wrappers — those still
+       work because this clamp is on the OUTER container, not them. */
+    overflow-x:hidden !important;
   }
   /* The marquee tagline strip + announcement bar also need the offset
      because they're position:sticky inside #landing */
