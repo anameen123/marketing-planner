@@ -10129,16 +10129,40 @@ function canEditVisitRow(row){
   if(row.addedBy && row.addedBy === me) return true;
   if(row.member === me) return true;
   if(Array.isArray(row.coMembers) && row.coMembers.indexOf(me) >= 0) return true;
-  // Per user 2026-05-21 (Abrar can't self-assign bug): any UNASSIGNED visit
-  // can be claimed by any member, regardless of who created it. Previously
-  // this only allowed claim if BOTH addedBy AND member were empty — but
-  // admin-created visits have addedBy='admin' even when unassigned, locking
-  // members out of self-claiming them. This change makes self-assign work
-  // the same for every member (Abrar, Ahsan, Duaa, Sadia) regardless of
-  // who created the visit.
-  if(!row.member) return true;
+  // Per user 2026-05-21 v2: STRICT ownership only. Members cannot edit
+  // other members' visits — that's an admin-only override. Self-assigning
+  // to an unassigned row is a SEPARATE capability gated by
+  // canSelfAssignToRow + filtered dropdowns; canEditVisitRow stays strict
+  // so once Abrar claims a row, only HE (or admin) can change its data.
+  // The earlier "any unassigned row = anyone can edit" was too permissive
+  // and let members assign each other.
   return false;
 }
+// Self-assign capability: a member can claim an UNASSIGNED row by setting
+// row.member to their own name. Once assigned, regular canEditVisitRow
+// kicks in for all subsequent edits. Admin can self-assign anything.
+function canSelfAssignToRow(row){
+  if(!row) return false;
+  if(isAdmin()) return true;
+  if(!CURRENT_USER) return false;
+  if(CURRENT_USER.role !== 'member') return false;
+  return !row.member;   // only unassigned rows
+}
+window.canSelfAssignToRow = canSelfAssignToRow;
+// Member-list filter for ASSIGNMENT dropdowns. Admin sees the full team.
+// Members see only themselves (so they can claim a row or unassign
+// themselves, but cannot assign to others). Used by the inline row
+// dropdown, the Add Visit modal, and the referral form's primary
+// member picker.
+function _assignmentMemberOptions(){
+  if(typeof isAdmin === 'function' && isAdmin()){
+    return (typeof MEMBERS !== 'undefined' && Array.isArray(MEMBERS)) ? MEMBERS.slice() : [];
+  }
+  if(!CURRENT_USER || CURRENT_USER.role !== 'member') return [];
+  var me = CURRENT_USER.name;
+  return (typeof MEMBERS !== 'undefined' && MEMBERS.indexOf(me) >= 0) ? [me] : [];
+}
+window._assignmentMemberOptions = _assignmentMemberOptions;
 function canDeleteVisitRow(row){
   if(!row) return false;
   if(isAdmin()) return true;
@@ -16453,8 +16477,31 @@ function setMemberWithConfirm(di, ri, val){
 window.setMemberWithConfirm = setMemberWithConfirm;
 
 function setMember(di,ri,val){
-  S.days[di].rows[ri].member=val;
-  S.days[di].rows[ri].memberConfirmed=false;
+  var row = S.days[di].rows[ri];
+  // Per user 2026-05-21 v2: defensive permission check (in case the UI
+  // dropdown is bypassed via dev tools). Non-admin members can ONLY set
+  // their own name as the member, and ONLY on rows they own or that are
+  // unassigned. Otherwise the change is rejected.
+  var isAdminUser = (typeof isAdmin === 'function') && isAdmin();
+  var me = CURRENT_USER && CURRENT_USER.name;
+  if(!isAdminUser){
+    // Can the user touch this row at all?
+    var canTouch = !row.member || row.member === me;
+    if(!canTouch){
+      if(typeof showToast === 'function') showToast('Only ' + (row.member || 'admin') + ' can change this assignment.');
+      refresh(di);
+      return;
+    }
+    // Can the user assign this value? Members can only assign themselves
+    // (or clear with empty string).
+    if(val && val !== me){
+      if(typeof showToast === 'function') showToast('You can only assign yourself.');
+      refresh(di);
+      return;
+    }
+  }
+  row.member=val;
+  row.memberConfirmed=false;
   refresh(di);
 }
 function confirmMember(di,ri){
@@ -16497,7 +16544,18 @@ function unassignMember(di,ri){
 }
 window.unassignMember = unassignMember;
 
-function editMember(di,ri){S.days[di].rows[ri].memberConfirmed=false;refresh(di);}
+function editMember(di,ri){
+  var row = S.days[di].rows[ri];
+  // Per user 2026-05-21 v2: only the row's owner or admin can unlock the
+  // member chip for editing. Without this, any member could click the ✎
+  // button on someone else's confirmed row and reopen the dropdown.
+  if(typeof canEditVisitRow === 'function' && !canEditVisitRow(row)){
+    if(typeof showToast === 'function') showToast('Only ' + (row.member || row.addedBy || 'admin') + ' can change this assignment.');
+    return;
+  }
+  row.memberConfirmed=false;
+  refresh(di);
+}
 function setRel(di,ri,val){
   var dayDate = S.days[di] && S.days[di].date;
   if(!canEditDate(dayDate)){
@@ -21054,10 +21112,20 @@ function rowHTML(row,di,ri){
   }
 
   // -- MEMBER CELL --
+  // Per user 2026-05-21 v2: members can ONLY self-assign or unassign
+  // themselves. Admin can assign anyone. Non-admin members see only
+  // their own name in the dropdown.
   var mk=row.member?mKey(row.member):'';
   var mCls='msel'+(mk?' m-'+mk:'');
+  var _assignOpts = (typeof _assignmentMemberOptions === 'function') ? _assignmentMemberOptions() : MEMBERS;
   var mOpts='<option value="">-- Assign --</option>';
-  MEMBERS.forEach(function(m){mOpts+='<option value="'+m+'"'+(m===row.member?' selected':'')+'>'+m+'</option>';});
+  _assignOpts.forEach(function(m){mOpts+='<option value="'+m+'"'+(m===row.member?' selected':'')+'>'+m+'</option>';});
+  // If the row is already assigned to someone else and we're not admin,
+  // include the current assignee as a disabled option so the user can see
+  // who has it — but they can't change it.
+  if(row.member && _assignOpts.indexOf(row.member) < 0){
+    mOpts += '<option value="'+row.member+'" selected disabled>'+row.member+' (locked)</option>';
+  }
   // Render co-member chips (outreach can have multiple attendees on the same row)
   // Each co-member chip is now click-to-profile via the .member-link delegation.
   var coMembersHtml = '';
@@ -21088,14 +21156,31 @@ function rowHTML(row,di,ri){
 
   // Once a member is confirmed on a row, their name chip should jump to their
   // profile when clicked. The .member-link class hooks the global delegate.
+  // Per user 2026-05-21 v2: the ✎ Edit button on a confirmed row is shown
+  // ONLY to admin or to the row's owner. Non-owners can't unlock the
+  // assignment to switch the member.
+  var _canEditMember = (typeof canEditVisitRow === 'function') ? canEditVisitRow(row) : true;
+  var _editBtnHtml = _canEditMember ? '<button class="edit-btn" onclick="editMember('+di+','+ri+')">&#9998;</button>' : '';
+  // Dropdown is shown to admin always; to members only if they can self-
+  // assign (unassigned row) or it's already their row. Otherwise we show
+  // a small "Assigned to X (locked)" label.
+  var _canChangeMember = (typeof isAdmin === 'function' && isAdmin())
+                       || (CURRENT_USER && row.member === CURRENT_USER.name)
+                       || (typeof canSelfAssignToRow === 'function' && canSelfAssignToRow(row));
   var memberCell=row.memberConfirmed
     ?'<div><div style="display:flex;align-items:center;gap:5px"><span class="chip m-conf-'+mKey(row.member)+' member-link" data-member="'+(row.member||'').replace(/"/g,'&quot;')+'" title="Open '+row.member+'\'s profile" style="cursor:pointer">'+row.member+'</span>'
-      +'<button class="edit-btn" onclick="editMember('+di+','+ri+')">&#9998;</button></div>'+coMembersHtml+joinBtnHtml+'</div>'
-    :'<div style="display:flex;flex-direction:column;gap:3px">'
-      +'<select class="'+mCls+'" onchange="setMember('+di+','+ri+',this.value)">'+mOpts+'</select>'
-      +(row.member?'<button class="confirm-btn" onclick="confirmMember('+di+','+ri+')">&#10003; Confirm</button>':'')
-      +coMembersHtml
-      +'</div>';
+      +_editBtnHtml+'</div>'+coMembersHtml+joinBtnHtml+'</div>'
+    :( _canChangeMember
+        ?'<div style="display:flex;flex-direction:column;gap:3px">'
+          +'<select class="'+mCls+'" onchange="setMember('+di+','+ri+',this.value)">'+mOpts+'</select>'
+          +(row.member?'<button class="confirm-btn" onclick="confirmMember('+di+','+ri+')">&#10003; Confirm</button>':'')
+          +coMembersHtml
+          +'</div>'
+        :'<div style="display:flex;flex-direction:column;gap:3px">'
+          +'<span class="chip m-conf-'+mKey(row.member||'')+'" style="font-size:11px;padding:3px 8px" title="Only '+(row.member||'')+' or admin can change this assignment.">&#128274; '+(row.member||'(unassigned)')+'</span>'
+          +coMembersHtml
+          +'</div>'
+       );
 
   // -- ASSIGNMENT LOCK --
   // All cells AFTER the Member column are locked until a member is confirmed.
@@ -25560,30 +25645,37 @@ function refreshMemberDropdowns(){
   //
   // Some dropdowns have extra options (suffixes) that must be preserved:
   // the Finances log filter has a "More than one (multi-member)" option.
+  // Per user 2026-05-21 v2: ASSIGNMENT dropdowns (av-member, modal-member-sel,
+  // lead-member) must filter to the current user for non-admin members so
+  // they can only assign themselves. FILTER dropdowns (cv-member, etc.) show
+  // all members so members can browse other people's stats.
+  var assignNames = (typeof _assignmentMemberOptions === 'function') ? _assignmentMemberOptions() : MEMBERS;
   var defs = [
-    {sel:'.member-picker select',     prefix:'<option value="">-- Choose a team member --</option>'},
-    {sel:'#modal-member-sel',         prefix:'<option value="">-- Unassigned --</option>'},
-    {sel:'#cv-member',                prefix:'<option value="">All Members</option>'},
-    {sel:'#canc-member',              prefix:'<option value="">All Members</option>'},
+    {sel:'.member-picker select',     prefix:'<option value="">-- Choose a team member --</option>',                                  list: MEMBERS},      // filter
+    {sel:'#modal-member-sel',         prefix:'<option value="">-- Unassigned --</option>',                                            list: assignNames},  // assignment
+    {sel:'#cv-member',                prefix:'<option value="">All Members</option>',                                                 list: MEMBERS},      // filter
+    {sel:'#canc-member',              prefix:'<option value="">All Members</option>',                                                 list: MEMBERS},      // filter
     {sel:'#fin-log-member-filter',    prefix:'<option value="">All Members</option>',
-                                       suffix:'<option disabled style="color:var(--muted)">────────────</option><option value="__multi__">👥 More than one (multi-member visits)</option>'},
-    {sel:'#rec-member-filter',        prefix:'<option value="">All Members</option>'},
-    {sel:'#feed-member-filter',       prefix:'<option value="">All Members</option>'},
-    {sel:'#leads-page-member',        prefix:'<option value="">All Members</option>'},
-    {sel:'#lead-member',              prefix:'<option value="">-- Pick member --</option>'},
-    {sel:'#av-member',                prefix:'<option value="">-- Leave unassigned (assign later from the schedule) --</option>'}
+                                       suffix:'<option disabled style="color:var(--muted)">────────────</option><option value="__multi__">👥 More than one (multi-member visits)</option>',
+                                                                                                                                       list: MEMBERS},      // filter
+    {sel:'#rec-member-filter',        prefix:'<option value="">All Members</option>',                                                 list: MEMBERS},      // filter
+    {sel:'#feed-member-filter',       prefix:'<option value="">All Members</option>',                                                 list: MEMBERS},      // filter
+    {sel:'#leads-page-member',        prefix:'<option value="">All Members</option>',                                                 list: MEMBERS},      // filter
+    {sel:'#lead-member',              prefix:'<option value="">-- Pick member --</option>',                                           list: assignNames},  // assignment
+    {sel:'#av-member',                prefix:'<option value="">-- Leave unassigned (assign later from the schedule) --</option>',     list: assignNames}   // assignment
   ];
   defs.forEach(function(def){
     // querySelectorAll so .member-picker matches every form on the page
     var els = document.querySelectorAll(def.sel);
+    var listForThisDef = def.list || MEMBERS;
     els.forEach(function(el){
       var current = el.value;
-      var memberOpts = MEMBERS.map(function(m){
+      var memberOpts = listForThisDef.map(function(m){
         return '<option value="' + m.replace(/"/g, '&quot;') + '">' + m + '</option>';
       }).join('');
       el.innerHTML = def.prefix + memberOpts + (def.suffix || '');
-      // Preserve the previously selected value if it's still valid
-      if(MEMBERS.indexOf(current) >= 0 || current === '' || current === '__multi__'){
+      // Preserve the previously selected value if it's still valid for THIS dropdown
+      if(listForThisDef.indexOf(current) >= 0 || current === '' || current === '__multi__'){
         el.value = current;
       }
     });
