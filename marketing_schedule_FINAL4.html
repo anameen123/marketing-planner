@@ -8237,20 +8237,22 @@ function _executeBusinessDelete(panel, names){
   if(typeof showToast === 'function') showToast('🗑 Deleted ' + names.length + ' ' + (names.length===1?'business':'businesses'));
 }
 
-// Referral-editor permission — only admin OR Ms Sadia (VP Marketing Lead)
-// can manually change patient-referral counts. Returns true if the current
-// user is authorized to bump these numbers.
+// Referral-editor permission — per user 2026-05-21: ALL members have
+// equal permissions. The previous Sadia-only branch was removed so that
+// Sadia, Ahsan, Abrar, and any dynamically-added member are treated
+// identically. Duaa is the only one with an extra capability (logging
+// call conversions via CALL_HANDLERS); aside from that, all members
+// have the same access. Patient-referral count edits stay admin-only.
 function isReferralEditor(){
   if(!CURRENT_USER) return false;
   if(CURRENT_USER.role === 'admin') return true;
-  if(CURRENT_USER.name === 'Ms Sadia') return true;
   return false;
 }
 window.isReferralEditor = isReferralEditor;
 
-// Adjust by a delta (positive or negative). Authorized: admin OR Ms Sadia.
+// Adjust by a delta (positive or negative). Authorized: admin only.
 function adjustReferralCount(name, delta){
-  if(!isReferralEditor()){ if(typeof showToast==='function') showToast('Only admin or Ms Sadia can change referral counts.'); return; }
+  if(!isReferralEditor()){ if(typeof showToast==='function') showToast('Only admin can change referral counts.'); return; }
   var type = (typeof getBizTypeForName === 'function') ? getBizTypeForName(name) : 'clinic';
   var rec = _ensureReferralRecord(name, type);
   rec.currentCount = Math.max(0, (rec.currentCount || 0) + delta);
@@ -8261,7 +8263,7 @@ function adjustReferralCount(name, delta){
   if(typeof renderFinances === 'function') renderFinances();
 }
 function setReferralCount(name, count){
-  if(!isReferralEditor()){ if(typeof showToast==='function') showToast('Only admin or Ms Sadia can change referral counts.'); return; }
+  if(!isReferralEditor()){ if(typeof showToast==='function') showToast('Only admin can change referral counts.'); return; }
   var n = parseInt(count, 10); if(isNaN(n) || n < 0) n = 0;
   var type = (typeof getBizTypeForName === 'function') ? getBizTypeForName(name) : 'clinic';
   var rec = _ensureReferralRecord(name, type);
