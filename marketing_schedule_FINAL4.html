@@ -7838,6 +7838,30 @@ function _hydrateSFromStorage(){
     if(!parsed || !Array.isArray(parsed.days)) return;
     if(typeof S === 'undefined' || !S) return;
     S.days = parsed.days.filter(function(d){ return d && d.date; });
+    // Per user 2026-05-21 (Abrar "Duaa Khan" dialog bug): normalize any row
+    // whose .member isn't in the current MEMBERS array. Stale values from
+    // old SharePoint syncs (e.g. 'Duaa Khan' when MEMBERS only has 'Duaa')
+    // break the dropdown match — the option isn't shown as selected, but
+    // the row's actual data still has the old name. When the user picks
+    // their own name, race conditions with Supabase realtime can restore
+    // the stale value mid-confirm. Solution: rewrite the stale value here
+    // so it can never break the UI again.
+    if(typeof MEMBERS !== 'undefined' && Array.isArray(MEMBERS)){
+      var fixed = 0;
+      S.days.forEach(function(d){
+        (d.rows || []).forEach(function(r){
+          if(r && r.member && MEMBERS.indexOf(r.member) < 0){
+            try { console.warn('[hydrate] dropping stale row.member "' + r.member + '" (not in MEMBERS)'); } catch(_){}
+            r.member = '';
+            r.memberConfirmed = false;
+            fixed++;
+          }
+        });
+      });
+      if(fixed > 0){
+        try { console.info('[hydrate] normalized ' + fixed + ' row(s) with unknown member names.'); } catch(_){}
+      }
+    }
   } catch(e){}
 }
 window._hydrateSFromStorage = _hydrateSFromStorage;
