@@ -1,0 +1,7 @@
+{
+  "rewrites": [
+    { "source": "/", "destination": "/marketing_schedule_FINAL4.html" }
+  ],
+  "cleanUrls": false,
+  "trailingSlash": false
+}
