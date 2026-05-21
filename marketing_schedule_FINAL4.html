@@ -6765,7 +6765,24 @@ var DataLayer = (function(){
     delete _etagByKey[key];
     delete _bodyByKey[key];
     try { console.info('[sync] write fired:', key, '(' + (valueStr||'').length + ' bytes)'); } catch(_){}
-    return _graphFetch('/drives/' + config.driveId + '/root:/' + path + ':/content', {
+    // ── FORCE-OVERWRITE (per user 2026-05-21 cross-tab test) ──────────────
+    // Without @microsoft.graph.conflictBehavior=replace, SharePoint Online's
+    // simple PUT /content endpoint enforces OPTIMISTIC CONCURRENCY: if any
+    // other client has written to this file since our last read, our PUT
+    // returns 409 "resourceModified — usually an eTag mismatch" and the
+    // write is rejected. We then re-queue and immediately fail again
+    // because we still have the same stale state — silent infinite retry.
+    //
+    // This is the actual reason Abrar's morning saves never reached admin:
+    // any time admin (or background tick fanout) touched a file, Abrar's
+    // next write hit a 409 and silently failed forever. The badge still
+    // showed "Live" because READS were fine.
+    //
+    // conflictBehavior=replace tells Graph "force overwrite, last writer
+    // wins." For our use case (single-tenant team app, no merge logic) this
+    // is the right semantics. If two members edit the schedule in the same
+    // ~1 second window, whoever flushes last wins. Both writes WILL land.
+    return _graphFetch('/drives/' + config.driveId + '/root:/' + path + ':/content?@microsoft.graph.conflictBehavior=replace', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: valueStr   // pass raw string body directly
