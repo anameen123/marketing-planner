@@ -7125,14 +7125,22 @@ var DataLayer = (function(){
         _supabasePollWatermark = new Date(Date.now() - 5*60*1000).toISOString();
       }
       var res = await _supabaseClient.from('wcg_kv')
-                                     .select('key,value,updated_at')
+                                     .select('key,value,updated_at,updated_by')
                                      .gt('updated_at', _supabasePollWatermark);
       if(res.error){ try { console.warn('[supabase] pullAll failed:', res.error); } catch(_){} return false; }
-      var changed = 0;
+      var changed = 0, skippedSameAccount = 0;
       var maxUpdated = _supabasePollWatermark;
+      var me = (CURRENT_USER && CURRENT_USER.username) || null;
       (res.data || []).forEach(function(row){
         try {
           if(row.updated_at && row.updated_at > maxUpdated) maxUpdated = row.updated_at;
+          // Per user 2026-05-21: skip rows changed by my own account.
+          // Multi-tab on the same user shouldn't auto-sync to itself;
+          // different accounts still get live updates.
+          if(me && row.updated_by && row.updated_by === me){
+            skippedSameAccount++;
+            return;
+          }
           var serialized = (typeof row.value === 'string') ? row.value : JSON.stringify(row.value);
           var existing = localStorage.getItem(row.key);
           if(existing !== serialized){
@@ -7552,9 +7560,10 @@ var DataLayer = (function(){
               }
               // INSERT/UPDATE: fetch fresh from Supabase (payload may be
               // truncated for large rows). Compare to localStorage; if
-              // different, update + emit change.
+              // different, update + emit change. Also pull updated_by so
+              // we can skip same-account multi-tab echoes.
               _supabaseClient.from('wcg_kv')
-                .select('value')
+                .select('value, updated_by')
                 .eq('key', row.key)
                 .maybeSingle()
                 .then(function(res){
@@ -7563,13 +7572,21 @@ var DataLayer = (function(){
                     return;
                   }
                   if(!res.data) return;
+                  // Per user 2026-05-21: when multiple tabs share the SAME
+                  // account, skip changes that came from "me" (any tab of
+                  // the same user). Different accounts still sync live.
+                  var me = (CURRENT_USER && CURRENT_USER.username) || null;
+                  if(me && res.data.updated_by && res.data.updated_by === me){
+                    try { console.info('[supabase] ↺ skipped same-account echo for ' + row.key); } catch(_){}
+                    return;
+                  }
                   var newSerialized = (typeof res.data.value === 'string')
                     ? res.data.value
                     : JSON.stringify(res.data.value);
                   var existing = localStorage.getItem(row.key);
-                  if(existing === newSerialized) return;   // own-write echo
+                  if(existing === newSerialized) return;   // already in sync
                   try { localStorage.setItem(row.key, newSerialized); } catch(_){}
-                  try { console.info('[supabase] ↻ refetched ' + row.key + ' (' + newSerialized.length + ' bytes)'); } catch(_){}
+                  try { console.info('[supabase] ↻ refetched ' + row.key + ' (' + newSerialized.length + ' bytes, by ' + res.data.updated_by + ')'); } catch(_){}
                   _emitChange(row.key);
                 });
             })
