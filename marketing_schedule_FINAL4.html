@@ -133,7 +133,19 @@ body{
 .day-header-sub{font-size:11px;opacity:.6;margin-top:2px}
 .day-content{padding:16px 20px;flex:1}
 .tbl-wrap{border-radius:12px;border:1px solid var(--border);overflow:hidden;background:var(--card);box-shadow:0 2px 12px rgba(31,56,100,.05)}
-table{width:100%;border-collapse:collapse;min-width:1200px}
+/* Per user 2026-05-21 (Abrar's slide-over-sidebar video): the global
+   min-width:1200px was forcing EVERY table to be wider than the
+   member-sidebar viewport (laptop 1366 - 240 sidebar = 1126 available).
+   That's what pushed pages sideways over the sidebar. Removed the
+   blanket min-width — tables that legitimately need to be wider
+   (e.g. the dashboard schedule grid, Status table) set their own
+   min-width inline AND wrap themselves in <div style="overflow-x:auto">.
+   Everything else now sizes to fit its container. */
+table{width:100%;border-collapse:collapse}
+/* The Schedule grid table specifically NEEDS the wide layout to show
+   all member columns. Scoped here by parent ID so it doesn't impact
+   other tables. */
+#schedule-view table{min-width:1200px}
 thead th{background:var(--navy);color:#fff;padding:9px 10px;font-size:10px;font-weight:600;text-align:left;white-space:nowrap;border-right:1px solid rgba(255,255,255,.1);letter-spacing:.04em;text-transform:uppercase}
 thead th:last-child{border-right:none}
 tbody tr{border-bottom:1px solid var(--border)}
