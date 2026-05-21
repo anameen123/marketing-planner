@@ -10069,8 +10069,14 @@ function canEditVisitRow(row){
   if(row.addedBy && row.addedBy === me) return true;
   if(row.member === me) return true;
   if(Array.isArray(row.coMembers) && row.coMembers.indexOf(me) >= 0) return true;
-  // Legacy rows with no addedBy and no assigned member: open to everyone.
-  if(!row.addedBy && !row.member) return true;
+  // Per user 2026-05-21 (Abrar can't self-assign bug): any UNASSIGNED visit
+  // can be claimed by any member, regardless of who created it. Previously
+  // this only allowed claim if BOTH addedBy AND member were empty — but
+  // admin-created visits have addedBy='admin' even when unassigned, locking
+  // members out of self-claiming them. This change makes self-assign work
+  // the same for every member (Abrar, Ahsan, Duaa, Sadia) regardless of
+  // who created the visit.
+  if(!row.member) return true;
   return false;
 }
 function canDeleteVisitRow(row){
