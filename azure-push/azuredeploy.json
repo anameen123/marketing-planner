@@ -20,7 +20,7 @@
     },
     "packageUrl": {
       "type": "string",
-      "defaultValue": "https://github.com/anameen123/marketing-planner/raw/main/azure-push/deploy.zip",
+      "defaultValue": "https://raw.githubusercontent.com/anameen123/marketing-planner/main/azure-push/deploy.zip",
       "metadata": { "description": "Public URL of the Function App deployment ZIP. Leave default to deploy from this repo." }
     }
   },

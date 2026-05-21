@@ -1386,6 +1386,13 @@ body.role-front_desk #referrals-view {
       <span id="sync-status-dot" style="width:8px;height:8px;border-radius:50%;background:#94a3b8;display:inline-block;transition:background .25s"></span>
       <span id="sync-status-label" style="color:#fff;opacity:.85">Local</span>
     </div>
+    <!-- 🟢 SYNC FRESHNESS PILL (per user 2026-05-20) — shows how long ago
+         the last successful sync happened. Updates every 2 sec so the user
+         has constant visible proof that the app is in touch with the team.
+         Click → opens the sync-status diagnostic. -->
+    <div id="hdr-recent-activity" style="display:none;align-items:center;gap:6px;font-size:10px;font-weight:600;padding:5px 9px;border-radius:9px;background:rgba(255,255,255,.08);color:#fff;cursor:pointer;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+         title="How long ago this tab last pulled from SharePoint. Green = fresh (< 10s). Yellow = stale (> 2 min — polling may have stalled). Click for details + force-sync."
+         onclick="showSyncStatus()"></div>
     <div id="user-badge-wrap"></div><div id="hdr-clock"></div></div>
   </div>
   <div class="main-nav">
@@ -7089,6 +7096,15 @@ var DataLayer = (function(){
         .build();
       _pushConn.on('data-changed', function(msg){
         try { console.info('[push] ← data-changed received:', msg); } catch(_){}
+        // Test-ping observer — round-trip diagnostic (Settings → Test push).
+        // Runs BEFORE the by-self check below so the sender's own echo resolves
+        // the timing measurement. If not a test ping, falls through normally.
+        try { if(typeof window._pushTestObserver === 'function') window._pushTestObserver(msg); } catch(_){}
+        // Test pings start with our reserved prefix — never trigger a SharePoint
+        // pull from these (they're not real data changes)
+        if(msg && msg.key && typeof msg.key === 'string' && msg.key.indexOf('push-test-') === 0){
+          return;
+        }
         // Skip if this push was triggered by our OWN write (avoid a redundant
         // poll right after we already wrote — _flushWrites self-verifies).
         try {
@@ -8964,6 +8980,7 @@ function showPushSettings(){
     +   '<input id="push-endpoint-input" type="url" placeholder="https://wcg-sync-fn-xxxxxx.azurewebsites.net" value="' + current.replace(/"/g, '&quot;') + '" style="width:100%;padding:10px 12px;border:1px solid #cbd5e1;border-radius:8px;font-size:13px;font-family:monospace;box-sizing:border-box" />'
     +   '<div style="display:flex;gap:10px;margin-top:16px;justify-content:flex-end">'
     +     '<button onclick="document.getElementById(\'push-settings-overlay\').remove()" style="background:#e2e8f0;color:#334155;border:none;padding:9px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">Cancel</button>'
+    +     (current ? '<button onclick="_testPushChannel()" style="background:#dbeafe;color:#1e3a8a;border:none;padding:9px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit" title="Round-trip a ping through Azure to confirm push is actually working">🔔 Test push</button>' : '')
     +     (current ? '<button onclick="_clearPushEndpoint()" style="background:#fee2e2;color:#991b1b;border:none;padding:9px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">Disable push</button>' : '')
     +     '<button onclick="_savePushEndpoint()" style="background:#0f766e;color:#fff;border:none;padding:9px 18px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">Save + connect</button>'
     +   '</div>'
@@ -9002,6 +9019,91 @@ async function _clearPushEndpoint(){
   showToast('Push disabled — polling-only mode');
 }
 window._clearPushEndpoint = _clearPushEndpoint;
+
+// ── PUSH ROUND-TRIP TEST (per user 2026-05-20 pre-deploy prep) ────────────
+// Sends a synthetic "ping" through the broadcast endpoint. If push is wired
+// correctly: client A POST → Function App → SignalR → all clients (including A)
+// receive a 'data-changed' message with our synthetic key. We listen for that
+// echo on OUR connection and time the round trip. If we don't see it within
+// 6 seconds → something in the chain is broken.
+//
+// This is the difference between "I pasted a URL and the badge turned green
+// (which only proves the WebSocket opened)" and "every link in the chain
+// works end-to-end". The badge being green can be misleading if the
+// broadcast Function is misconfigured but negotiate isn't.
+var _pushTestPending = null;
+async function _testPushChannel(){
+  if(!DataLayer || !DataLayer._config || !DataLayer._config.pushEndpoint){
+    showToast('No push endpoint set yet — paste a URL first');
+    return;
+  }
+  if(DataLayer.pushChannelState() !== 'connected'){
+    showToast('Push not connected. Wait a second + retry.');
+    return;
+  }
+  var ov = document.getElementById('push-settings-overlay');
+  if(ov) ov.remove();
+  var testId = 'push-test-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+  showToast('🔔 Sending test ping…');
+  var t0 = Date.now();
+  // Set up the listener BEFORE sending. The DataLayer's _initPushChannel
+  // already wired 'data-changed' to call _tickPollOnce, but we add a side
+  // observer for test messages here.
+  _pushTestPending = {
+    testId: testId,
+    sentAt: t0,
+    resolve: function(latencyMs){
+      _pushTestPending = null;
+      showToast('✓ Push round-trip OK · ' + latencyMs + 'ms (Azure → your tab)');
+    },
+    timeoutId: setTimeout(function(){
+      if(_pushTestPending && _pushTestPending.testId === testId){
+        _pushTestPending = null;
+        showToast('✗ Push test timed out (6s) — broadcast Function may be misconfigured. Check Azure logs.');
+      }
+    }, 6000)
+  };
+  // Send the ping
+  var base = DataLayer._config.pushEndpoint.replace(/\/+$/, '');
+  try {
+    var resp = await fetch(base + '/api/broadcast', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: testId, by: (CURRENT_USER && CURRENT_USER.username) || 'test' }),
+      cache: 'no-store'
+    });
+    if(!resp.ok){
+      var bodyText = '';
+      try { bodyText = await resp.text(); } catch(_){}
+      _pushTestPending && clearTimeout(_pushTestPending.timeoutId);
+      _pushTestPending = null;
+      showToast('✗ Broadcast endpoint returned HTTP ' + resp.status + (bodyText ? ' · ' + bodyText.slice(0,60) : ''));
+      return;
+    }
+    // From here we wait for the SignalR echo via the listener hooked
+    // in DataLayer (see _testPushObserver below) which will resolve us.
+  } catch(e){
+    if(_pushTestPending){
+      clearTimeout(_pushTestPending.timeoutId);
+      _pushTestPending = null;
+    }
+    showToast('✗ Broadcast POST failed: ' + (e.message || e));
+  }
+}
+window._testPushChannel = _testPushChannel;
+
+// Called by DataLayer's signalR 'data-changed' handler — checks if the
+// incoming message is the test ping we just sent, and if so resolves it.
+function _pushTestObserver(msg){
+  try {
+    if(_pushTestPending && msg && msg.key === _pushTestPending.testId){
+      var latency = Date.now() - _pushTestPending.sentAt;
+      clearTimeout(_pushTestPending.timeoutId);
+      _pushTestPending.resolve(latency);
+    }
+  } catch(_){}
+}
+window._pushTestObserver = _pushTestObserver;
 
 // Manual retry for SharePoint bootstrap. Called from the sync-status popup
 // "Reconnect" button when the user is signed in via Entra ID but bootstrap
@@ -33879,8 +33981,59 @@ function logActivity(type, member, clinic, detail, date){
     badge.textContent=count;
     badge.style.display='inline-block';
   }
+  // Refresh the header recent-activity pill
+  try { if(typeof renderRecentActivityPill === 'function') renderRecentActivityPill(); } catch(_){}
 }
 window.logActivity=logActivity;
+
+// ── HEADER "SYNC FRESHNESS" PILL (per user 2026-05-20 pre-deploy prep) ────
+// Renders a small inline indicator next to the sync badge showing how long
+// ago the last successful sync happened. "Synced 4s ago" / "1m ago" / etc.
+// Gives the user instant proof that the app is currently in touch with
+// SharePoint, even when nothing has visibly changed.
+//
+// Based on DataLayer._config.lastPollISO which updates on every successful
+// _pollOnce — no new sync writes. Works today via polling; when push gets
+// deployed, lastPollISO updates faster so the pill stays fresher.
+function renderRecentActivityPill(){
+  var el = document.getElementById('hdr-recent-activity');
+  if(!el) return;
+  if(!window.DataLayer || !DataLayer._config){ el.style.display = 'none'; return; }
+  if(DataLayer.mode && DataLayer.mode() !== 'sharepoint'){ el.style.display = 'none'; return; }
+  var iso = DataLayer._config.lastPollISO;
+  if(!iso){ el.style.display = 'none'; return; }
+  var ageMs = Date.now() - new Date(iso).getTime();
+  var ageStr;
+  if(ageMs < 5000) ageStr = 'just now';
+  else if(ageMs < 60000) ageStr = Math.round(ageMs/1000) + 's ago';
+  else if(ageMs < 3600000) ageStr = Math.round(ageMs/60000) + 'm ago';
+  else if(ageMs < 86400000) ageStr = Math.round(ageMs/3600000) + 'h ago';
+  else ageStr = Math.round(ageMs/86400000) + 'd ago';
+  // Fresh (< 10 sec) = green-tinted with pulsing dot; older = neutral.
+  // Stale (> 2 min while signed in) = yellow-tinted warning so the user
+  // knows polling has stalled (backgrounded tab, network blip).
+  var fresh = ageMs < 10000;
+  var stale = ageMs > 120000;
+  el.style.background = fresh ? 'rgba(34,197,94,.20)'
+                     : stale ? 'rgba(251,191,36,.20)'
+                     : 'rgba(255,255,255,.08)';
+  el.style.color = stale ? '#fef3c7' : '#fff';
+  el.style.display = 'flex';
+  var dot = fresh ? '<span style="width:6px;height:6px;border-radius:50%;background:#22c55e;animation:pulse 1.4s infinite"></span>'
+          : stale ? '<span style="width:6px;height:6px;border-radius:50%;background:#fbbf24"></span>'
+          : '';
+  el.innerHTML = dot + '<span>Synced ' + ageStr + '</span>';
+  // When push is connected, append a little ⚡ to show this is the push path
+  try {
+    if(DataLayer.pushChannelState && DataLayer.pushChannelState() === 'connected'){
+      el.innerHTML += '<span style="font-size:9px;opacity:.8;margin-left:2px">⚡</span>';
+    }
+  } catch(_){}
+}
+window.renderRecentActivityPill = renderRecentActivityPill;
+// Refresh the pill every 2 seconds so the "Synced Xs ago" counter feels live.
+// Cheap — pure DOM update, no network calls.
+setInterval(function(){ try { renderRecentActivityPill(); } catch(_){} }, 2000);
 
 // Purge any ACTIVITY_LOG entries older than 7 days. Per user 2026-05-20:
 // the activity feed should auto-clean weekly — anything that lingers past
