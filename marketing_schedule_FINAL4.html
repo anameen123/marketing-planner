@@ -8795,9 +8795,13 @@ function doLogin(){
 
 // Emergency sign-out button — injected as a fixed-position element directly
 // into <body>, OUTSIDE the header, with the highest z-index in the app.
-// Per user 2026-05-19: if the regular Sign Out button (inside the user-badge)
-// is ever hidden by CSS, role restrictions, a sandbox banner overlap, an
-// overflow clip, or anything else, this button is the guaranteed escape.
+// Originally added 2026-05-19 as a guaranteed escape if the regular header
+// Sign Out got hidden. Per user 2026-05-21 follow-up: members were
+// accidentally clicking it from the middle of the Day View on mobile —
+// the floating button was overlapping the Day header. Restricted to the
+// HOME tab only (idle landing page) where misclicks are unlikely. On all
+// other tabs, members can still sign out via the hamburger drawer's
+// Sign Out item (sidebar / mobile drawer) — that path is intentional.
 // Idempotent — only injects once per session.
 function _ensureEmergencySignOut(){
   if(document.getElementById('emergency-signout-btn')) return;
@@ -8805,15 +8809,34 @@ function _ensureEmergencySignOut(){
   var btn = document.createElement('button');
   btn.id = 'emergency-signout-btn';
   btn.type = 'button';
-  btn.title = 'Sign out (emergency button — always visible)';
+  btn.title = 'Sign out';
   btn.onclick = function(){ try { confirmAndLogout(); } catch(e){ try { window.location.reload(); } catch(_){} } };
   btn.innerHTML = '<span style="font-size:11px">🚪</span> Sign out';
-  btn.style.cssText = 'position:fixed;top:8px;right:12px;z-index:99999;background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:8px;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;box-shadow:0 4px 12px rgba(0,0,0,.25);display:flex;align-items:center;gap:5px;opacity:.85;transition:opacity .15s';
+  // display:none by default — _updateEmergencySignOutVisibility decides
+  // whether to show it based on the active tab.
+  btn.style.cssText = 'position:fixed;top:8px;right:12px;z-index:99999;background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:8px;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;box-shadow:0 4px 12px rgba(0,0,0,.25);display:none;align-items:center;gap:5px;opacity:.85;transition:opacity .15s';
   btn.onmouseover = function(){ btn.style.opacity = '1'; };
   btn.onmouseout  = function(){ btn.style.opacity = '.85'; };
   document.body.appendChild(btn);
+  // Set initial visibility based on whichever tab is currently active
+  _updateEmergencySignOutVisibility();
+}
+// Per user 2026-05-21: only show the floating Sign Out on the Home tab.
+// Called by switchTab and at bootstrap. On non-home tabs, members use the
+// drawer's Sign Out instead (one tap deeper but harder to misclick).
+function _updateEmergencySignOutVisibility(activeTab){
+  var btn = document.getElementById('emergency-signout-btn');
+  if(!btn) return;
+  // Derive active tab if not passed in — look at which #home-view button
+  // has the .active class, or fall back to the visible view's id.
+  if(typeof activeTab === 'undefined'){
+    var activeBtn = document.querySelector('.nav-tab.active');
+    activeTab = activeBtn ? (activeBtn.id || '').replace(/^tab-/, '') : 'home';
+  }
+  btn.style.display = (activeTab === 'home') ? 'flex' : 'none';
 }
 window._ensureEmergencySignOut = _ensureEmergencySignOut;
+window._updateEmergencySignOutVisibility = _updateEmergencySignOutVisibility;
 
 // Shared post-sign-in flow — runs identically for hardcoded + MS auth.
 function _finishLogin(){
@@ -25239,6 +25262,10 @@ function switchTab(tab, opts){
   if(CURRENT_USER && CURRENT_USER.role === 'front_desk' && tab !== 'referrals'){
     tab = 'referrals';
   }
+  // ── EMERGENCY SIGN-OUT VISIBILITY (per user 2026-05-21) ─────────────
+  // Floating Sign Out button only shows on the Home tab. Avoids the
+  // misclick problem the user reported on the Day View (mobile screenshot).
+  try { if(typeof _updateEmergencySignOutVisibility === 'function') _updateEmergencySignOutVisibility(tab); } catch(_){}
   // 2026-05-15: Status is now a sub-tab under Businesses, not top-level.
   // Any call to switchTab('leads-page') (from notifications, deep-links,
   // bookmarks) silently routes to Businesses → Status.
