@@ -926,13 +926,28 @@ body.member-view .btn-save{background:linear-gradient(135deg,#3b82f6,#1d4ed8);co
   .header-title{font-size:18px !important}
   .header-sub{font-size:11px !important}
   .header-right{font-size:12px}
-  /* Landing body: drop the right-rail (TEAM OVERVIEW) under the calendar */
-  .landing-body{grid-template-columns:1fr !important; padding:14px 12px !important; gap:14px !important}
+  /* Landing body: drop the right-rail (TEAM OVERVIEW) under the calendar.
+     Per user 2026-05-21 (Samsung screenshot showing "lanning" not "Planning"):
+     bump left padding to 60px so content clears the fixed-position
+     hamburger button (which is at left:12px, width:38px, total ~50px). */
+  .landing-body{grid-template-columns:1fr !important; padding:14px 12px 14px 60px !important; gap:14px !important; max-width:100vw !important; box-sizing:border-box !important}
   /* Calendar cells: bigger tap targets, no hover-only affordances */
   .cd{min-height:54px !important; font-size:13px !important; padding:6px !important}
   .cal-dow span{font-size:11px !important; padding:6px 0 !important}
-  .cal-month-nav{padding:12px 14px !important; font-size:14px !important}
+  /* Per user 2026-05-21 (Samsung screenshot — SAT column cut off):
+     the cal-month-nav has dropdowns ("All members" + "Any status") that
+     don't fit on a phone alongside "May 2026", pushing the whole
+     calendar wider than the viewport. Allow it to wrap so the dropdowns
+     drop below the month label on phones. */
+  .cal-month-nav{padding:12px 14px !important; font-size:14px !important; flex-wrap:wrap !important; gap:8px !important}
   .cal-month-nav span{font-size:14px !important}
+  /* The dropdowns in the calendar month nav — keep them inline but
+     allow them to wrap to a new line if they don't fit. */
+  .cal-month-nav select{font-size:11px !important; max-width:140px}
+  /* Calendar card itself: lock to viewport width minus the landing
+     padding (12px right + 60px left = 72px) so it can never extend
+     past the screen edge. */
+  .cal-card{max-width:calc(100vw - 72px) !important; box-sizing:border-box !important}
   /* Team overview stat cards stack to 2-up on phone */
   .team-summary-grid{grid-template-columns:repeat(2,1fr) !important; gap:12px !important}
   .ts-n{font-size:28px !important}
