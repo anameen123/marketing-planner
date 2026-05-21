@@ -7185,23 +7185,44 @@ var DataLayer = (function(){
         _consecutiveAuthFailures = 0;   // reset on any success
       }
       else {
-        try { console.warn('[DataLayer] write failed for ' + r.k + ', re-queueing:', r.e); } catch(_){}
+        var msg = (r.e && (r.e.message || String(r.e))) || '';
         // ── DETECT SILENT PERMISSION FAILURES (per user 2026-05-21) ─────
         // If the user is signed in via Entra ID but Graph keeps returning
         // 401/403 on the write path, their account literally cannot save
-        // to the SharePoint site. This used to be invisible: reads worked
-        // (different scope), the sync badge stayed green, but their edits
-        // never reached the team. Now we count consecutive auth-class
-        // failures and surface a big red banner after 2 in a row.
-        var msg = (r.e && (r.e.message || String(r.e))) || '';
+        // to the SharePoint site. Surface a banner after 2 in a row.
         if(/\b401\b|\b403\b|Forbidden|Unauthorized|access.?denied/i.test(msg)){
           _consecutiveAuthFailures++;
           _lastWriteAuthErrorMsg = msg;
           if(_consecutiveAuthFailures >= 2){
             try { _showWritePermissionBanner(); } catch(_){}
           }
+          // Auth failure — re-queue (admin might add permissions)
+          try { console.warn('[DataLayer] write failed (auth) for ' + r.k + ', re-queueing:', r.e); } catch(_){}
+          _writeQueue.push(latestByKey[r.k]);
         }
-        _writeQueue.push(latestByKey[r.k]);
+        // ── DROP-ON-CONFLICT (per user 2026-05-21 — ETag mismatch loop) ─
+        // 409 / 412 = optimistic-concurrency conflict (another client wrote
+        // the same file since we last read it). Microsoft Graph enforces
+        // this on SharePoint files and DOES NOT honor If-Match: * to bypass.
+        // Re-queuing makes it WORSE — we keep PUTting the same stale data,
+        // SharePoint keeps rejecting, queue grows forever.
+        //
+        // Better: DROP this failed write. Force a fresh poll so our local
+        // state catches up to the server. The user's NEXT save (or any
+        // future change) will write WITH the fresh ETag and land cleanly.
+        // Worst case: this individual write is lost — but the data it
+        // contained is already in our local memory + whoever's most-recent
+        // edit landed on the server overrides it anyway (last-writer-wins).
+        else if(/\b409\b|\b412\b|resourceModified|ETag does not match/i.test(msg)){
+          try { console.warn('[DataLayer] write dropped (concurrency conflict) for ' + r.k + ' — pulling fresh state. Original:', r.e); } catch(_){}
+          // Fire a fresh poll so we re-converge with server
+          try { _pollOnce(); } catch(_){}
+        }
+        // ── OTHER ERRORS (network, 500, etc.) — re-queue for retry ──────
+        else {
+          try { console.warn('[DataLayer] write failed for ' + r.k + ', re-queueing:', r.e); } catch(_){}
+          _writeQueue.push(latestByKey[r.k]);
+        }
       }
     });
     // ── TICK (per user 2026-05-20) ─────────────────────────────────────
