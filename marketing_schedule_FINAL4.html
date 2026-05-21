@@ -7585,9 +7585,21 @@ var DataLayer = (function(){
                     : JSON.stringify(res.data.value);
                   var existing = localStorage.getItem(row.key);
                   if(existing === newSerialized) return;   // already in sync
-                  try { localStorage.setItem(row.key, newSerialized); } catch(_){}
-                  try { console.info('[supabase] ↻ refetched ' + row.key + ' (' + newSerialized.length + ' bytes, by ' + res.data.updated_by + ')'); } catch(_){}
-                  _emitChange(row.key);
+                  // Per user 2026-05-21 "other one should wait a little bit":
+                  // Buffer cross-user updates by ~1.2 sec so the doer's UI
+                  // can settle before the observer's screen shifts. Makes
+                  // race conditions on rapid taps far less likely and feels
+                  // less jarring than an instant mutation.
+                  setTimeout(function(){
+                    // Re-check that the current localStorage hasn't already
+                    // moved on (another inbound change could have arrived
+                    // in the buffer window).
+                    var stillStale = localStorage.getItem(row.key) !== newSerialized;
+                    if(!stillStale) return;
+                    try { localStorage.setItem(row.key, newSerialized); } catch(_){}
+                    try { console.info('[supabase] ↻ applied ' + row.key + ' (' + newSerialized.length + ' bytes, by ' + res.data.updated_by + ')'); } catch(_){}
+                    _emitChange(row.key);
+                  }, 1200);
                 });
             })
         .subscribe(function(status){
