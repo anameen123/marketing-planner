@@ -124,7 +124,14 @@ body{
 .mc-n{font-size:26px;font-weight:700;font-family:'DM Mono',monospace}
 .mc-l{font-size:12px;color:var(--muted);margin-top:5px;text-transform:uppercase;letter-spacing:.05em}
 .nc{color:#166534}.np{color:#854d0e}.nk{color:#9f1239}.nl{color:#7030A0}
-#day-view{display:none;flex-direction:column;min-height:100vh}
+/* Per user 2026-05-21 (Samsung mobile): the Day View was clipping the
+   left edge of its content (Date column header rendered as "ATE" instead
+   of "DATE"). Locking #day-view to viewport width + overflow-x:hidden so
+   no descendant can push the view sideways. The internal .tbl-wrap still
+   has overflow-x:auto so wide tables scroll horizontally INSIDE their
+   wrapper — that path is preserved. */
+#day-view{display:none;flex-direction:column;min-height:100vh;max-width:100vw;overflow-x:hidden}
+.day-content{box-sizing:border-box;max-width:100vw}
 .day-header{background:var(--navy);color:#fff;padding:14px 24px;display:flex;align-items:center;gap:14px}
 .back-btn{background:rgba(255,255,255,.15);border:none;color:#fff;padding:7px 14px;border-radius:8px;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px}
 .back-btn:hover{background:rgba(255,255,255,.28)}
@@ -132,7 +139,12 @@ body{
 .day-header-date{font-size:16px;font-weight:700}
 .day-header-sub{font-size:11px;opacity:.6;margin-top:2px}
 .day-content{padding:16px 20px;flex:1}
-.tbl-wrap{border-radius:12px;border:1px solid var(--border);overflow:hidden;background:var(--card);box-shadow:0 2px 12px rgba(31,56,100,.05)}
+/* Per user 2026-05-21 (Samsung mobile): tbl-wrap had overflow:hidden,
+   which kills BOTH x and y scroll. Switched to overflow-x:auto so wide
+   tables can be swiped horizontally on mobile while the rest of the
+   page stays put. (Internal inline overflow-x:auto on specific wrappers
+   still works the same — this just makes the bare .tbl-wrap behave too.) */
+.tbl-wrap{border-radius:12px;border:1px solid var(--border);overflow-x:auto;overflow-y:visible;-webkit-overflow-scrolling:touch;background:var(--card);box-shadow:0 2px 12px rgba(31,56,100,.05)}
 /* Per user 2026-05-21 (Abrar's slide-over-sidebar video): the global
    min-width:1200px was forcing EVERY table to be wider than the
    member-sidebar viewport (laptop 1366 - 240 sidebar = 1126 available).
