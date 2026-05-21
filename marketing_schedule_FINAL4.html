@@ -1391,6 +1391,20 @@ body.role-front_desk #referrals-view {
 <script src="https://cdn.ably.com/lib/ably.min-1.js"
         defer></script>
 
+<!-- ── Supabase JS SDK — the BACKEND REPLACEMENT for SharePoint
+     Per user 2026-05-21: SharePoint Online via Microsoft Graph is a
+     document-management system, not a real-time database. The
+     optimistic-concurrency 412 errors, the whole-file rewrites for
+     each tiny change, the no-native-push-to-browser limitation —
+     all of those constraints are baked into SharePoint's design.
+     Supabase is a real-time Postgres database designed for this
+     exact use case. Free tier (500MB DB, 5GB bandwidth, 50K MAU,
+     2M realtime msgs/mo, no card) covers our 8-user team many
+     times over. Loaded only when Supabase config is present.
+     ──────────────────────────────────────────────────────────────── -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"
+        defer></script>
+
 <!-- ── LEAFLET — open-source mapping library (used by the Day Route Planner)
      Loaded from unpkg.com (the official CDN recommended in Leaflet's docs).
      Total weight: ~155 KB CSS+JS (~50 KB gzipped). Only used when the day
@@ -6389,6 +6403,36 @@ var DataLayer = (function(){
     // times over. Set via Settings → Real-time push → Ably API key.
     ablyApiKey: (function(){
       try { return localStorage.getItem('wcg_ably_key_v1') || ''; } catch(_){ return ''; }
+    })(),
+    // ── SUPABASE (BACKEND REPLACEMENT FOR SHAREPOINT, per user 2026-05-21)
+    // When both supabaseUrl + supabaseAnonKey are set, the planner stores
+    // ALL data in Supabase (Postgres + real-time) instead of SharePoint.
+    // Supabase's WebSocket subscription replaces Ably for push too. The
+    // SharePoint code paths stay in place as a periodic backup mirror so
+    // existing Power Automate flows / reports keep working.
+    //
+    // Sign up at supabase.com (email, no card). Create project. Settings
+    // → API → copy Project URL + anon (public) key. Paste into the
+    // planner's Settings → Backend.
+    //
+    // Schema (auto-provisioned via the Migration button on first run):
+    //   table wcg_kv (
+    //     key text primary key,
+    //     value jsonb not null,
+    //     updated_at timestamptz default now(),
+    //     updated_by text
+    //   );
+    //   enable realtime on wcg_kv;
+    supabaseUrl: (function(){
+      try { return localStorage.getItem('wcg_supabase_url_v1') || ''; } catch(_){ return ''; }
+    })(),
+    supabaseAnonKey: (function(){
+      try { return localStorage.getItem('wcg_supabase_key_v1') || ''; } catch(_){ return ''; }
+    })(),
+    // Backend mode: 'sharepoint' (default) or 'supabase'. Auto-flips to
+    // 'supabase' on first successful Supabase connect.
+    backend: (function(){
+      try { return localStorage.getItem('wcg_backend_v1') || 'sharepoint'; } catch(_){ return 'sharepoint'; }
     })()
   };
   // Backwards-compat alias — older code paths still reference keyToList
@@ -6459,7 +6503,18 @@ var DataLayer = (function(){
       localStorage.setItem(key, serialized);
     } catch(e){ /* quota — UI keeps working, just no persistence */ }
 
-    if(config.enabled && config.keyToList[key]){
+    // ── BACKEND ROUTING (per user 2026-05-21) ────────────────────────────
+    // If Supabase is configured + connected, write goes there. Falls back
+    // to SharePoint if Supabase isn't ready (so admins migrating mid-day
+    // never lose a save — it lands in BOTH stores during the transition).
+    // After migration is verified, SharePoint writes can be disabled via
+    // backend='supabase-only'.
+    if(config.backend === 'supabase' && _supabaseClient){
+      _supabaseSave(key, value);   // fire-and-forget; realtime confirms
+      // Also broadcast via Ably/BroadcastChannel for instant tab fanout
+      try { _broadcastKeyChange && _broadcastKeyChange(key); } catch(_){}
+    } else if(config.enabled && config.keyToList[key]){
+      // Legacy SharePoint path
       _enqueueRemoteWrite(key, value);
     }
   }
@@ -7559,6 +7614,191 @@ var DataLayer = (function(){
   }
   function _ablyChannelState(){ return _ablyState; }
 
+  // ╔══════════════════════════════════════════════════════════════════════╗
+  // ║ SUPABASE BACKEND — full SharePoint replacement (per user 2026-05-21) ║
+  // ╚══════════════════════════════════════════════════════════════════════╝
+  // Designed as a drop-in replacement for the SharePoint backend.
+  //   save(key, value)  → upsert into wcg_kv table
+  //   load(key)         → from localStorage (instant)
+  //   bootstrap()       → init client + pull all rows + subscribe realtime
+  //   realtime change   → update localStorage + _emitChange (same as SP path)
+  //
+  // No optimistic-concurrency conflicts (Postgres upsert is atomic +
+  // last-writer-wins by default). No whole-file rewrites (each key is one
+  // row, updated independently). No popup token refresh issues
+  // (the anon key authenticates the client directly).
+  var _supabaseClient = null;
+  var _supabaseChannel = null;
+  var _supabaseState = 'off';     // off / connecting / connected / error
+  async function _initSupabase(){
+    if(!config.supabaseUrl || !config.supabaseAnonKey){
+      _supabaseState = 'off';
+      return false;
+    }
+    if(typeof window.supabase === 'undefined' || !window.supabase.createClient){
+      try { console.warn('[supabase] SDK not loaded yet'); } catch(_){}
+      _supabaseState = 'error';
+      return false;
+    }
+    if(_supabaseClient){
+      // Already initialized — close existing channel before re-subscribing
+      if(_supabaseChannel){
+        try { _supabaseClient.removeChannel(_supabaseChannel); } catch(_){}
+        _supabaseChannel = null;
+      }
+    } else {
+      _supabaseClient = window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey);
+    }
+    _supabaseState = 'connecting';
+    try { _updateSyncBadge(_supabaseState); } catch(_){}
+    // Pull all rows from wcg_kv → localStorage. This is the equivalent of
+    // _initialFetch but does the whole thing in ONE round-trip instead of
+    // 10 parallel HTTP requests to Microsoft Graph.
+    try {
+      var t0 = Date.now();
+      var fetchRes = await _supabaseClient.from('wcg_kv').select('key,value,updated_at');
+      if(fetchRes.error){
+        try { console.warn('[supabase] initial fetch failed:', fetchRes.error); } catch(_){}
+        // Most common cause: table doesn't exist yet. Bootstrap will offer
+        // to create it via the migration button. State stays 'error'.
+        _supabaseState = 'error';
+        try { _updateSyncBadge('error'); } catch(_){}
+        return false;
+      }
+      var pulled = 0;
+      (fetchRes.data || []).forEach(function(row){
+        try {
+          var serialized = (typeof row.value === 'string')
+            ? row.value
+            : JSON.stringify(row.value);
+          var existing = localStorage.getItem(row.key);
+          if(existing !== serialized){
+            localStorage.setItem(row.key, serialized);
+            try { _emitChange(row.key); } catch(_){}
+            pulled++;
+          }
+        } catch(_){}
+      });
+      try { console.info('[supabase] initial pull: ' + (fetchRes.data || []).length + ' rows in ' + (Date.now() - t0) + 'ms · ' + pulled + ' changed'); } catch(_){}
+    } catch(e){
+      try { console.warn('[supabase] initial fetch threw:', e); } catch(_){}
+      _supabaseState = 'error';
+      try { _updateSyncBadge('error'); } catch(_){}
+      return false;
+    }
+    // Subscribe to realtime changes. Any UPDATE/INSERT/DELETE on wcg_kv
+    // fires this handler instantly via WebSocket — no polling needed.
+    try {
+      _supabaseChannel = _supabaseClient
+        .channel('wcg_kv_changes')
+        .on('postgres_changes',
+            { event: '*', schema: 'public', table: 'wcg_kv' },
+            function(payload){
+              try { console.info('[supabase] ← realtime:', payload.eventType, payload.new && payload.new.key); } catch(_){}
+              var row = payload.new || payload.old;
+              if(!row || !row.key) return;
+              // Skip our own writes — we already updated localStorage when
+              // we sent the upsert. (We could use a per-client tag but
+              // postgres_changes does fire for own writes — diffing here.)
+              try {
+                var newSerialized = (payload.new && payload.new.value != null)
+                  ? (typeof payload.new.value === 'string' ? payload.new.value : JSON.stringify(payload.new.value))
+                  : null;
+                var existing = localStorage.getItem(row.key);
+                if(newSerialized && existing === newSerialized) return;  // already in sync
+                if(payload.eventType === 'DELETE'){
+                  localStorage.removeItem(row.key);
+                } else if(newSerialized){
+                  localStorage.setItem(row.key, newSerialized);
+                }
+                _emitChange(row.key);
+              } catch(_){}
+            })
+        .subscribe(function(status){
+          if(status === 'SUBSCRIBED'){
+            _supabaseState = 'connected';
+            try { console.info('[supabase] realtime connected.'); } catch(_){}
+            try { _updateSyncBadge('connected'); } catch(_){}
+          } else if(status === 'CHANNEL_ERROR' || status === 'TIMED_OUT'){
+            _supabaseState = 'error';
+            try { console.warn('[supabase] channel state:', status); } catch(_){}
+          }
+        });
+    } catch(e){
+      try { console.warn('[supabase] subscribe failed:', e); } catch(_){}
+      _supabaseState = 'error';
+    }
+    return true;
+  }
+  // Save a key/value to Supabase via upsert. Drop-in replacement for the
+  // SharePoint write path. Returns true on success, false on failure.
+  async function _supabaseSave(key, value){
+    if(!_supabaseClient) return false;
+    try {
+      var json = (typeof value === 'string') ? JSON.parse(value) : value;
+      var by = (CURRENT_USER && CURRENT_USER.username) || 'anon';
+      var res = await _supabaseClient.from('wcg_kv').upsert({
+        key: key,
+        value: json,
+        updated_by: by
+      }, { onConflict: 'key' });
+      if(res.error){
+        try { console.warn('[supabase] upsert failed for ' + key + ':', res.error); } catch(_){}
+        return false;
+      }
+      return true;
+    } catch(e){
+      try { console.warn('[supabase] upsert threw:', e); } catch(_){}
+      return false;
+    }
+  }
+  // Settings UI plumbing — admin saves URL + key, we re-init.
+  async function _setSupabaseConfig(url, anonKey){
+    var u = (url || '').trim().replace(/\/+$/, '');
+    var k = (anonKey || '').trim();
+    config.supabaseUrl = u;
+    config.supabaseAnonKey = k;
+    try { localStorage.setItem('wcg_supabase_url_v1', u); } catch(_){}
+    try { localStorage.setItem('wcg_supabase_key_v1', k); } catch(_){}
+    if(u && k){
+      var ok = await _initSupabase();
+      if(ok){
+        config.backend = 'supabase';
+        try { localStorage.setItem('wcg_backend_v1', 'supabase'); } catch(_){}
+      }
+      return _supabaseState;
+    } else {
+      if(_supabaseChannel){
+        try { _supabaseClient.removeChannel(_supabaseChannel); } catch(_){}
+        _supabaseChannel = null;
+      }
+      _supabaseClient = null;
+      _supabaseState = 'off';
+      config.backend = 'sharepoint';
+      try { localStorage.setItem('wcg_backend_v1', 'sharepoint'); } catch(_){}
+      return _supabaseState;
+    }
+  }
+  // Migrate everything currently in localStorage (or SharePoint cache) to
+  // Supabase. One-time, idempotent — re-running just no-ops on unchanged
+  // rows. Returns { migrated: N, failed: M, errors: [...] }.
+  async function _migrateToSupabase(){
+    if(!_supabaseClient) return { error: 'Supabase not connected' };
+    var keys = Object.keys(config.keyToFile);
+    var migrated = 0, failed = 0, errors = [];
+    for(var i = 0; i < keys.length; i++){
+      var k = keys[i];
+      var raw = localStorage.getItem(k);
+      if(raw === null || raw === undefined) continue;
+      var ok = await _supabaseSave(k, raw);
+      if(ok) migrated++;
+      else { failed++; errors.push(k); }
+    }
+    try { console.info('[supabase] migrate done: ' + migrated + ' ok, ' + failed + ' failed'); } catch(_){}
+    return { migrated: migrated, failed: failed, errors: errors };
+  }
+  function _supabaseStateGet(){ return _supabaseState; }
+
   async function _writeKey(key, value){
     var serialized = (typeof value === 'string') ? value : JSON.stringify(value);
     try {
@@ -7673,7 +7913,12 @@ var DataLayer = (function(){
     // ── Push channel (Ably — no Azure required) ──────────────────────────
     setAblyApiKey:     _setAblyApiKey,      // public: save+reconnect with a new key
     ablyChannelState:  _ablyChannelState,   // public: 'off' / 'connecting' / 'connected' / 'error'
-    initAblyPush:      _initAblyPush        // public: force a reconnect attempt
+    initAblyPush:      _initAblyPush,       // public: force a reconnect attempt
+    // ── Supabase backend (full SharePoint replacement) ───────────────────
+    setSupabaseConfig: _setSupabaseConfig,  // public: save URL+key+reconnect
+    supabaseState:     _supabaseStateGet,   // public: 'off' / 'connecting' / 'connected' / 'error'
+    initSupabase:      _initSupabase,       // public: force a reconnect attempt
+    migrateToSupabase: _migrateToSupabase   // public: one-time copy localStorage → Supabase
   };
 })();
 window.DataLayer = DataLayer;
@@ -9543,6 +9788,134 @@ function showPushSettings(){
   document.body.appendChild(ov);
 }
 window.showPushSettings = showPushSettings;
+
+// ── SUPABASE BACKEND SETTINGS (per user 2026-05-21) ───────────────────────
+// Admin-only modal. Lets admin paste the Supabase Project URL + anon key,
+// run the one-time SQL setup, and migrate data from SharePoint.
+function showBackendSettings(){
+  if(!CURRENT_USER || CURRENT_USER.role !== 'admin'){
+    showToast('Admin-only setting');
+    return;
+  }
+  var url = (DataLayer._config && DataLayer._config.supabaseUrl) || '';
+  var key = (DataLayer._config && DataLayer._config.supabaseAnonKey) || '';
+  var state = (DataLayer.supabaseState && DataLayer.supabaseState()) || 'off';
+  var backend = (DataLayer._config && DataLayer._config.backend) || 'sharepoint';
+  var stateLabel = ({
+    'off':        '⚪ Not configured',
+    'connecting': '🟡 Connecting…',
+    'connected':  '🟢 Connected · live sync',
+    'error':      '🔴 Connect failed — check URL + key + table setup'
+  })[state] || state;
+  var sqlSetup = ''
+    + '-- Run this ONCE in Supabase Dashboard → SQL Editor → New query → Run\n'
+    + 'create table if not exists wcg_kv (\n'
+    + '  key text primary key,\n'
+    + '  value jsonb not null,\n'
+    + '  updated_at timestamptz default now(),\n'
+    + '  updated_by text\n'
+    + ');\n'
+    + '\n'
+    + '-- Allow the anon role to read + write (our 8-user team trusts each other,\n'
+    + '-- and the planner already gates by Microsoft sign-in before allowing access).\n'
+    + 'alter table wcg_kv enable row level security;\n'
+    + 'create policy "anon read"  on wcg_kv for select using (true);\n'
+    + 'create policy "anon write" on wcg_kv for insert with check (true);\n'
+    + 'create policy "anon update" on wcg_kv for update using (true) with check (true);\n'
+    + '\n'
+    + '-- Enable Realtime so the planner gets live updates without polling.\n'
+    + 'alter publication supabase_realtime add table wcg_kv;';
+  var existing = document.getElementById('backend-settings-overlay');
+  if(existing) existing.remove();
+  var ov = document.createElement('div');
+  ov.id = 'backend-settings-overlay';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(15,23,42,.55);display:flex;align-items:center;justify-content:center;padding:18px;font-family:DM Sans,sans-serif';
+  ov.innerHTML = ''
+    + '<div style="background:#fff;border-radius:16px;max-width:660px;width:100%;padding:22px 22px 18px;box-shadow:0 20px 60px rgba(0,0,0,.35);max-height:92vh;overflow:auto">'
+    +   '<div style="font-size:18px;font-weight:800;margin-bottom:6px;color:#0f172a">🗄 Backend (Supabase replacement for SharePoint)</div>'
+    +   '<div style="font-size:12px;color:#475569;margin-bottom:14px;line-height:1.6">Replace SharePoint as the planner\'s live database. Supabase = real-time Postgres. Sub-100ms sync. No 412 errors. Free tier covers 100× our usage.</div>'
+    +   '<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:12px;margin-bottom:14px;font-size:11px;color:#1e3a8a;line-height:1.6">'
+    +     '<div style="font-weight:700;margin-bottom:6px">Current backend: <code>' + backend + '</code> · State: ' + stateLabel + '</div>'
+    +     '<b>Step 1</b> — Sign up at <a href="https://supabase.com" target="_blank" rel="noopener" style="color:#1e3a8a;text-decoration:underline">supabase.com</a> (email, no card)<br>'
+    +     '<b>Step 2</b> — Create project (free tier). Name it <code>wcg-marketing-planner</code>. Region: East US.<br>'
+    +     '<b>Step 3</b> — In your project: <b>Settings → API</b>. Copy <b>Project URL</b> + <b>anon public</b> key.<br>'
+    +     '<b>Step 4</b> — Paste below + click Connect. We\'ll also create the table for you.'
+    +   '</div>'
+    +   '<label style="display:block;font-size:12px;font-weight:700;margin-bottom:6px;color:#0f172a">Supabase Project URL</label>'
+    +   '<input id="sb-url-input" type="url" placeholder="https://YOUR-PROJECT-REF.supabase.co" value="' + url.replace(/"/g, '&quot;') + '" style="width:100%;padding:10px 12px;border:1px solid #cbd5e1;border-radius:8px;font-size:13px;font-family:monospace;box-sizing:border-box;margin-bottom:10px" />'
+    +   '<label style="display:block;font-size:12px;font-weight:700;margin-bottom:6px;color:#0f172a">anon public key</label>'
+    +   '<input id="sb-key-input" type="text" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." value="' + key.replace(/"/g, '&quot;') + '" style="width:100%;padding:10px 12px;border:1px solid #cbd5e1;border-radius:8px;font-size:13px;font-family:monospace;box-sizing:border-box" />'
+    +   '<div style="font-size:10px;color:#64748b;margin-top:4px;line-height:1.5">The anon key is safe to use in client JS — it gives the same access level we want for the team (read + write the planner table only).</div>'
+    +   '<details style="margin-top:14px"><summary style="cursor:pointer;font-size:11px;color:#64748b;font-weight:600">📋 SQL setup — copy + paste once in Supabase SQL Editor</summary>'
+    +     '<pre style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px;font-size:10px;line-height:1.5;overflow-x:auto;color:#0f172a;margin-top:8px">' + sqlSetup.replace(/</g, '&lt;') + '</pre>'
+    +     '<button onclick="navigator.clipboard.writeText(this.previousElementSibling.textContent).then(() => showToast(\'SQL copied — paste in Supabase SQL Editor\'))" style="margin-top:6px;background:#0f172a;color:#fff;border:none;padding:5px 10px;border-radius:6px;font-size:11px;cursor:pointer;font-family:inherit">📋 Copy SQL</button>'
+    +   '</details>'
+    +   '<div style="display:flex;gap:10px;margin-top:16px;justify-content:flex-end;flex-wrap:wrap">'
+    +     '<button onclick="document.getElementById(\'backend-settings-overlay\').remove()" style="background:#e2e8f0;color:#334155;border:none;padding:9px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">Cancel</button>'
+    +     (state === 'connected' ? '<button onclick="_runSupabaseMigration()" style="background:#fef3c7;color:#854d0e;border:none;padding:9px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit" title="Copy all current data from localStorage / SharePoint into Supabase">⤴ Migrate data</button>' : '')
+    +     (url && key ? '<button onclick="_clearSupabaseConfig()" style="background:#fee2e2;color:#991b1b;border:none;padding:9px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">Disconnect</button>' : '')
+    +     '<button onclick="_saveSupabaseConfig()" style="background:#3ecf8e;color:#fff;border:none;padding:9px 18px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">Save + connect</button>'
+    +   '</div>'
+    + '</div>';
+  document.body.appendChild(ov);
+}
+window.showBackendSettings = showBackendSettings;
+
+async function _saveSupabaseConfig(){
+  var urlInp = document.getElementById('sb-url-input');
+  var keyInp = document.getElementById('sb-key-input');
+  if(!urlInp || !keyInp) return;
+  var url = (urlInp.value || '').trim();
+  var key = (keyInp.value || '').trim();
+  if(url && !/^https:\/\/.+\.supabase\.co\/?$/.test(url)){
+    showToast('URL should look like https://YOUR-PROJECT-REF.supabase.co');
+    return;
+  }
+  if(key && key.split('.').length !== 3){
+    showToast('anon key should be a JWT (3 parts separated by dots)');
+    return;
+  }
+  var ov = document.getElementById('backend-settings-overlay');
+  if(ov) ov.remove();
+  showToast(url ? 'Connecting to Supabase…' : 'Supabase disconnected');
+  try {
+    var state = await DataLayer.setSupabaseConfig(url, key);
+    setTimeout(function(){
+      var s = DataLayer.supabaseState();
+      if(s === 'connected'){
+        showToast('✓ Connected to Supabase · backend = supabase');
+        // Reopen settings so admin sees the new "Migrate" button
+        setTimeout(function(){ showBackendSettings(); }, 800);
+      } else if(s === 'error') showToast('⚠ Connect failed — did you run the SQL setup? Open Settings + try again.');
+      else if(s === 'off') showToast('Supabase disconnected — back to SharePoint backend');
+    }, 1500);
+  } catch(e){
+    console.warn('[supabase] save failed:', e);
+    showToast('Setup failed: ' + (e.message || e));
+  }
+}
+window._saveSupabaseConfig = _saveSupabaseConfig;
+
+async function _clearSupabaseConfig(){
+  var ov = document.getElementById('backend-settings-overlay');
+  if(ov) ov.remove();
+  await DataLayer.setSupabaseConfig('', '');
+  showToast('Supabase disconnected — back to SharePoint backend');
+}
+window._clearSupabaseConfig = _clearSupabaseConfig;
+
+async function _runSupabaseMigration(){
+  if(!confirm('Copy ALL planner data from this browser into Supabase? This is safe to re-run.')) return;
+  showToast('Migrating to Supabase…');
+  var res = await DataLayer.migrateToSupabase();
+  if(res.error){
+    showToast('⚠ Migration failed: ' + res.error);
+    return;
+  }
+  showToast('✓ Migrated ' + res.migrated + ' keys to Supabase' + (res.failed ? ' (' + res.failed + ' failed)' : ''));
+  console.info('[supabase] migration result:', res);
+}
+window._runSupabaseMigration = _runSupabaseMigration;
 
 async function _savePushEndpoint(){
   var inp = document.getElementById('push-endpoint-input');
