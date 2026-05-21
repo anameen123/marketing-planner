@@ -6383,16 +6383,35 @@ var DataLayer = (function(){
     //     updated_by text
     //   );
     //   enable realtime on wcg_kv;
+    // ── HARDCODED (per user 2026-05-21): the Supabase anon key is designed
+    // to be public when paired with RLS. Actual data access is gated by:
+    //   (1) Microsoft Entra ID sign-in (existing MSAL UI gate)
+    //   (2) Supabase Auth with the shared team account below
+    //   (3) RLS policies on wcg_kv that require auth.role()='authenticated'
+    // If someone scrapes this file, the anon key alone is useless without
+    // the team password AND the planner UI's Microsoft sign-in. Defense in
+    // depth, the way Supabase intends client apps to ship.
+    // localStorage overrides are still honored so the Settings UI keeps
+    // working for emergency reconfig.
     supabaseUrl: (function(){
-      try { return localStorage.getItem('wcg_supabase_url_v1') || ''; } catch(_){ return ''; }
+      try { var v = localStorage.getItem('wcg_supabase_url_v1'); if(v) return v; } catch(_){}
+      return 'https://saorcjcymxufcuskiwzu.supabase.co';
     })(),
     supabaseAnonKey: (function(){
-      try { return localStorage.getItem('wcg_supabase_key_v1') || ''; } catch(_){ return ''; }
+      try { var v = localStorage.getItem('wcg_supabase_key_v1'); if(v) return v; } catch(_){}
+      return 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNhb3JjamN5bXh1ZmN1c2tpd3p1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc1NzgyNzksImV4cCI6MjA5MzE1NDI3OX0.3w65E8sJHQObB6KXNRvF0CQ6yywlcX0Jt1Snlhc30lg';
     })(),
-    // Backend mode: 'sharepoint' (default) or 'supabase'. Auto-flips to
-    // 'supabase' on first successful Supabase connect.
+    // Shared team account that unlocks the RLS-protected wcg_kv table on
+    // bootstrap. signInWithPassword runs once per session inside
+    // _initSupabase; Supabase persists the session in localStorage and
+    // auto-refreshes the JWT.
+    supabaseAuthEmail:    'planner@wcg.team',
+    supabaseAuthPassword: 'Wcg!Planner#2026',
+    // Backend mode: 'sharepoint' or 'supabase'. Defaults to 'supabase' now
+    // (per user 2026-05-21 migration). The SharePoint code paths still
+    // exist for the periodic mirror / Power Automate reports backup.
     backend: (function(){
-      try { return localStorage.getItem('wcg_backend_v1') || 'sharepoint'; } catch(_){ return 'sharepoint'; }
+      try { return localStorage.getItem('wcg_backend_v1') || 'supabase'; } catch(_){ return 'supabase'; }
     })()
   };
   // Backwards-compat alias — older code paths still reference keyToList
@@ -7329,6 +7348,36 @@ var DataLayer = (function(){
     }
     _supabaseState = 'connecting';
     try { _updateSyncBadge(_supabaseState); } catch(_){}
+    // ── AUTH (per user 2026-05-21 security lockdown) ─────────────────────
+    // RLS on wcg_kv requires an authenticated JWT before any read/write
+    // succeeds. Sign in with the shared team account here so every
+    // subsequent .from('wcg_kv') carries a user JWT. Supabase persists the
+    // session in localStorage and auto-refreshes the token, so this only
+    // hits the auth endpoint when there's no live session.
+    try {
+      var sessRes  = await _supabaseClient.auth.getSession();
+      var existing = sessRes && sessRes.data && sessRes.data.session;
+      if(!existing){
+        var authRes = await _supabaseClient.auth.signInWithPassword({
+          email:    config.supabaseAuthEmail,
+          password: config.supabaseAuthPassword
+        });
+        if(authRes.error){
+          try { console.warn('[supabase] auth sign-in failed:', authRes.error); } catch(_){}
+          _supabaseState = 'error';
+          try { _updateSyncBadge('error'); } catch(_){}
+          return false;
+        }
+        try { console.info('[supabase] signed in as team user'); } catch(_){}
+      } else {
+        try { console.info('[supabase] reused existing session'); } catch(_){}
+      }
+    } catch(e){
+      try { console.warn('[supabase] auth threw:', e); } catch(_){}
+      _supabaseState = 'error';
+      try { _updateSyncBadge('error'); } catch(_){}
+      return false;
+    }
     // Pull all rows from wcg_kv → localStorage. This is the equivalent of
     // _initialFetch but does the whole thing in ONE round-trip instead of
     // 10 parallel HTTP requests to Microsoft Graph.
@@ -7594,6 +7643,32 @@ var DataLayer = (function(){
   };
 })();
 window.DataLayer = DataLayer;
+
+// ── AUTO-INIT SUPABASE on page load (per user 2026-05-21) ───────────────
+// Backend defaults to 'supabase' now. _initSupabase signs in with the
+// shared team account (RLS requires authenticated JWT), pulls all rows
+// from wcg_kv, and subscribes to Realtime. Runs in the background; doesn't
+// block the rest of script init or the MSAL sign-in flow. Waits up to ~5s
+// for the SDK CDN to finish loading before giving up.
+(function _autoInitSupabase(){
+  var tries = 0, max = 20;
+  function attempt(){
+    try {
+      if(typeof window.supabase === 'undefined' || !window.supabase.createClient){
+        if(++tries < max) return setTimeout(attempt, 250);
+        try { console.warn('[supabase] SDK never loaded — auto-init giving up'); } catch(_){}
+        return;
+      }
+      if(DataLayer && DataLayer._config && DataLayer._config.backend === 'supabase'
+         && DataLayer._config.supabaseUrl && DataLayer._config.supabaseAnonKey){
+        Promise.resolve(DataLayer.initSupabase()).catch(function(e){
+          try { console.warn('[supabase] auto-init failed:', e); } catch(_){}
+        });
+      }
+    } catch(e){ try { console.warn('[supabase] auto-init threw:', e); } catch(_){} }
+  }
+  attempt();
+})();
 
 // ── PERSISTENCE ─────────────────────────────────────────────────────────
 var _BR_LS_KEY = 'wcg_business_referrals_v1';
