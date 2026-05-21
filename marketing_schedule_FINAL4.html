@@ -6265,6 +6265,12 @@ var DataLayer = (function(){
       'wcg_display_names_v1':           'display-names.json',
       'wcg_reset_interval_v1':          'settings-reset-interval.json',
       'wcg_referral_log_v1':            'referral-log.json',
+      // ── DYNAMIC TEAM (per user 2026-05-21 critical bug fix) ────────
+      // Members added via the Add Member modal in the UI. Without this
+      // mapping, DataLayer.save would only persist to admin's localStorage
+      // and other devices/users would never see the new teammate. Adding
+      // it here makes runtime team additions sync cross-device.
+      'wcg_dynamic_team_v1':            'dynamic-team.json',
       // ── TICK FILE (per user 2026-05-20) ─────────────────────────────
       // Tiny single-line file touched after EVERY write. Clients poll
       // JUST this file every 1 second (cheap — one ~80-byte request with
@@ -6787,6 +6793,15 @@ var DataLayer = (function(){
         _loadShiftTotals();
         if(typeof renderReferralLog === 'function') renderReferralLog();
         if(typeof renderReferralCalendar === 'function') renderReferralCalendar();
+      } else if(key === 'wcg_dynamic_team_v1' && typeof window._loadDynamicTeam === 'function'){
+        // Per user 2026-05-21 critical bug fix: when SharePoint syncs a new
+        // dynamic-team.json (admin added a new hire from another device),
+        // re-hydrate USERS / EMAIL_USER_MAP / MEMBERS etc. so this client
+        // can see the new teammate without a full page reload.
+        window._loadDynamicTeam();
+        if(typeof renderOrgTree === 'function') renderOrgTree();
+        if(typeof refreshMemberDropdowns === 'function') refreshMemberDropdowns();
+        if(typeof renderCounters === 'function') renderCounters();
       }
     } catch(e){ /* don't crash UI on sync hiccup */ }
   }
@@ -25382,8 +25397,9 @@ function confirmAddMember(){
   // Without this, the in-memory USERS / EMAIL_USER_MAP / MEMBERS additions
   // below would be lost on the next refresh (the file's literal definitions
   // would reload them as if the new teammate never existed). DataLayer.save
-  // routes to localStorage today + SharePoint when the SP backend is on, so
-  // the new entry is visible to other signed-in users too.
+  // routes to localStorage AND SharePoint (the latter requires
+  // 'wcg_dynamic_team_v1' to be in config.keyToFile — confirmed 2026-05-21).
+  // Other users see new teammates within ~1-second sync window.
   _addDynamicTeamMember({
     slug: slug,
     name: name,
