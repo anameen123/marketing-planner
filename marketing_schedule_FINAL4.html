@@ -6312,6 +6312,14 @@ var DataLayer = (function(){
       // and other devices/users would never see the new teammate. Adding
       // it here makes runtime team additions sync cross-device.
       'wcg_dynamic_team_v1':            'dynamic-team.json',
+      // ── ABLY API KEY (per user 2026-05-21 cross-device push) ───────
+      // Stored in SharePoint so admin can configure push ONCE and every
+      // team member's device picks it up automatically on next sync.
+      // Without this mapping, admin would have had to paste the key
+      // into every teammate's browser individually. The key itself is
+      // safe to share team-wide (it only authorizes broadcasting on the
+      // wcgsync channel — no SharePoint access, no user data).
+      'wcg_ably_key_v1':                'ably-config.txt',
       // ── TICK FILE (per user 2026-05-20) ─────────────────────────────
       // Tiny single-line file touched after EVERY write. Clients poll
       // JUST this file every 1 second (cheap — one ~80-byte request with
@@ -6448,6 +6456,15 @@ var DataLayer = (function(){
         await _initialFetch();
         _startPolling();
         _updateSyncBadge && _updateSyncBadge('ok');
+        // ── REFRESH ABLY KEY FROM JUST-PULLED LOCALSTORAGE (per user 2026-05-21) ───
+        // _initialFetch wrote the SharePoint-stored Ably key into our
+        // localStorage. config.ablyApiKey was captured during DataLayer
+        // setup and is now stale. Re-read so the brand-new user's first
+        // bootstrap actually connects to push (no manual key paste needed).
+        try {
+          var freshKey = localStorage.getItem('wcg_ably_key_v1') || '';
+          if(freshKey) config.ablyApiKey = freshKey;
+        } catch(_){}
         // ── KICK OFF PUSH CHANNEL (per user 2026-05-20) ──────────────
         // Fire-and-forget — push is purely additive. Polling is already
         // running; push just makes it faster when configured.
@@ -6860,6 +6877,24 @@ var DataLayer = (function(){
         if(typeof renderOrgTree === 'function') renderOrgTree();
         if(typeof refreshMemberDropdowns === 'function') refreshMemberDropdowns();
         if(typeof renderCounters === 'function') renderCounters();
+      } else if(key === 'wcg_ably_key_v1'){
+        // ── ABLY KEY ARRIVED FROM SHAREPOINT (per user 2026-05-21) ───
+        // Admin configured the key on another device; we just pulled it.
+        // Apply to our config + start the push channel so we get live
+        // updates from teammates without any manual setup on this device.
+        try {
+          var raw = localStorage.getItem('wcg_ably_key_v1') || '';
+          if(raw && raw !== config.ablyApiKey){
+            config.ablyApiKey = raw;
+            try { console.info('[ably] key received via SharePoint sync — initializing push'); } catch(_){}
+            _initAblyPush();
+          } else if(!raw && config.ablyApiKey){
+            // Admin cleared the key — tear down push on this device
+            config.ablyApiKey = '';
+            if(_ablyRealtime){ try { _ablyRealtime.close(); } catch(_){} _ablyRealtime = null; _ablyChannel = null; }
+            _ablyState = 'off';
+          }
+        } catch(_){}
       }
     } catch(e){ /* don't crash UI on sync hiccup */ }
   }
@@ -7432,7 +7467,15 @@ var DataLayer = (function(){
   async function _setAblyApiKey(key){
     var clean = (key || '').trim();
     config.ablyApiKey = clean;
+    // ── DISTRIBUTE VIA SHAREPOINT (per user 2026-05-21) ──────────────
+    // Write through DataLayer so the key reaches BOTH this device's
+    // localStorage AND SharePoint. Other teammates' devices will pull
+    // ably-config.txt on their next sync and auto-init push without
+    // any manual step.
     try { localStorage.setItem('wcg_ably_key_v1', clean); } catch(_){}
+    if(config.enabled && config.keyToList && config.keyToList['wcg_ably_key_v1']){
+      _enqueueRemoteWrite('wcg_ably_key_v1', clean);
+    }
     if(clean){
       await _initAblyPush();
     } else {
