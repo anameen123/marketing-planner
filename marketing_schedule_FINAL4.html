@@ -8854,6 +8854,13 @@ function _finishLogin(){
   renderUserBadge();
   applyRoleRestrictions();
   if(typeof updateBankAdminControls==="function") updateBankAdminControls();
+  // ── REFRESH MEMBER DROPDOWNS (per user 2026-05-21) ─────────────────
+  // Replaces every dropdown's static <option> markup with the full
+  // MEMBERS array (including any dynamic adds + Abrar). Without this,
+  // dropdowns rendered only the originally-hardcoded names from the
+  // HTML markup, and any later-added member was invisible until they
+  // were typed into a free-text field somewhere.
+  if(typeof refreshMemberDropdowns === 'function') refreshMemberDropdowns();
   renderCalGrid(); renderCounters();
   // Front-desk role lands directly on Referrals — they don't see anything else.
   var landingTab = (CURRENT_USER && CURRENT_USER.role === 'front_desk') ? 'referrals' : 'home';
@@ -25509,24 +25516,45 @@ window.renderOrgTree = renderOrgTree;
 
 // Sync every member dropdown across the app (so a newly added member appears everywhere)
 function refreshMemberDropdowns(){
+  // Per user 2026-05-21: any new member added (via the Add Member modal,
+  // via dynamic-team SharePoint sync, or hardcoded in source) MUST appear
+  // in EVERY dropdown that lists members. Previously several dropdowns
+  // had static <option>s baked into the HTML — they showed Duaa/Sadia/Ahsan
+  // only and ignored MEMBERS array additions like Abrar Mamun. THIS is
+  // why Abrar didn't show up in some filters / pickers even though his
+  // identity was in the system. Fixed by listing all 10 dropdowns here
+  // and calling this function on bootstrap (see _finishLogin) so the
+  // initial render replaces static markup with the full MEMBERS list.
+  //
+  // Some dropdowns have extra options (suffixes) that must be preserved:
+  // the Finances log filter has a "More than one (multi-member)" option.
   var defs = [
-    {sel:'.member-picker select',  prefix:'<option value="">-- Choose a team member --</option>'},
-    {sel:'#modal-member-sel',       prefix:'<option value="">-- Unassigned --</option>'},
-    {sel:'#cv-member',              prefix:'<option value="">All Members</option>'},
-    {sel:'#leads-page-member',      prefix:'<option value="">All Members</option>'},
-    {sel:'#lead-member',            prefix:'<option value="">-- Pick member --</option>'},
-    // Add Visit modal — previously missing here, which is why the assign
-    // dropdown rendered with only its placeholder option.
-    {sel:'#av-member',              prefix:'<option value="">-- Leave unassigned (assign later from the schedule) --</option>'}
+    {sel:'.member-picker select',     prefix:'<option value="">-- Choose a team member --</option>'},
+    {sel:'#modal-member-sel',         prefix:'<option value="">-- Unassigned --</option>'},
+    {sel:'#cv-member',                prefix:'<option value="">All Members</option>'},
+    {sel:'#canc-member',              prefix:'<option value="">All Members</option>'},
+    {sel:'#fin-log-member-filter',    prefix:'<option value="">All Members</option>',
+                                       suffix:'<option disabled style="color:var(--muted)">────────────</option><option value="__multi__">👥 More than one (multi-member visits)</option>'},
+    {sel:'#rec-member-filter',        prefix:'<option value="">All Members</option>'},
+    {sel:'#feed-member-filter',       prefix:'<option value="">All Members</option>'},
+    {sel:'#leads-page-member',        prefix:'<option value="">All Members</option>'},
+    {sel:'#lead-member',              prefix:'<option value="">-- Pick member --</option>'},
+    {sel:'#av-member',                prefix:'<option value="">-- Leave unassigned (assign later from the schedule) --</option>'}
   ];
   defs.forEach(function(def){
-    var el = document.querySelector(def.sel);
-    if(!el) return;
-    var current = el.value;
-    el.innerHTML = def.prefix + MEMBERS.map(function(m){
-      return '<option value="'+m+'">'+m+'</option>';
-    }).join('');
-    if(MEMBERS.indexOf(current) >= 0) el.value = current;
+    // querySelectorAll so .member-picker matches every form on the page
+    var els = document.querySelectorAll(def.sel);
+    els.forEach(function(el){
+      var current = el.value;
+      var memberOpts = MEMBERS.map(function(m){
+        return '<option value="' + m.replace(/"/g, '&quot;') + '">' + m + '</option>';
+      }).join('');
+      el.innerHTML = def.prefix + memberOpts + (def.suffix || '');
+      // Preserve the previously selected value if it's still valid
+      if(MEMBERS.indexOf(current) >= 0 || current === '' || current === '__multi__'){
+        el.value = current;
+      }
+    });
   });
 }
 window.refreshMemberDropdowns = refreshMemberDropdowns;
