@@ -972,8 +972,10 @@ body.member-view .btn-save{background:linear-gradient(135deg,#3b82f6,#1d4ed8);co
   button{min-height:38px}
   /* Filters row in Spending Log / Outreach — wrap and full-width inputs */
   input[type="date"], input[type="text"], select{font-size:14px !important; padding:10px 12px !important}
-  /* Bottom of the body — leave room for the member bottom-nav (added below) */
-  body.member-view{padding-bottom:64px}
+  /* Bottom-nav removed (per user 2026-05-21) — no need to reserve
+     vertical space anymore. Tiny safe-area inset preserved for iPhones
+     so content doesn't touch the home indicator. */
+  body.member-view{padding-bottom:env(safe-area-inset-bottom, 12px)}
 }
 
 /* ── HAMBURGER + SIDE DRAWER (member-view + mobile) ────────────────────
@@ -1220,7 +1222,12 @@ body.member-view.member-mobile .header{padding-left:60px !important}
   justify-content:space-around;
   font-family:'DM Sans',sans-serif;
 }
-body.member-view.member-mobile .member-bottom-nav{display:flex}
+/* Per user 2026-05-21: bottom-nav removed on mobile — redundant with
+   the drawer. Drawer has every tab the bottom-nav had (+ sub-tabs).
+   Two competing nav patterns were confusing + ate ~70px of screen.
+   The display:none above stays as the default; this rule used to flip
+   it to flex for mobile members, now neutered. */
+body.member-view.member-mobile .member-bottom-nav{display:none}
 
 /* ── PHONE-LAYOUT ROLE-BASED HIDING ────────────────────────────────────────
    Per user request 2026-05-15: members use the app on their phones while
