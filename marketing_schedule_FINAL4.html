@@ -7096,10 +7096,84 @@ var DataLayer = (function(){
   // Public: force a sync right now (don't wait for the next 5-second poll).
   // Used by the "Pull latest now" button in the sync-status popup and by
   // any code that needs to be sure it's looking at the freshest server data.
+  // Per user 2026-05-21: when backend === 'supabase', this re-fetches every
+  // data key from Supabase directly (catches anything realtime missed —
+  // especially common on mobile devices that drop the WebSocket when the
+  // tab backgrounds).
   async function _pollNow(){
+    if(config.backend === 'supabase' && _supabaseClient){
+      try { return await _supabasePullAll(); }
+      catch(e){ try { console.warn('[supabase] pollNow failed:', e); } catch(_){} return false; }
+    }
     try { await _pollOnce(); return true; }
     catch(e){ return false; }
   }
+  // Pull every wcg_kv row from Supabase, diff against localStorage, update
+  // anything that's stale, and emit changes. Idempotent — safe to call on
+  // every tab focus, every visibility change, and every periodic tick.
+  async function _supabasePullAll(){
+    if(!_supabaseClient) return false;
+    try {
+      var t0 = Date.now();
+      var res = await _supabaseClient.from('wcg_kv').select('key,value');
+      if(res.error){ try { console.warn('[supabase] pullAll failed:', res.error); } catch(_){} return false; }
+      var changed = 0;
+      (res.data || []).forEach(function(row){
+        try {
+          var serialized = (typeof row.value === 'string') ? row.value : JSON.stringify(row.value);
+          var existing = localStorage.getItem(row.key);
+          if(existing !== serialized){
+            try { localStorage.setItem(row.key, serialized); } catch(_){}
+            try { _emitChange(row.key); } catch(_){}
+            changed++;
+          }
+        } catch(_){}
+      });
+      try { console.info('[supabase] pullAll: ' + (res.data || []).length + ' rows in ' + (Date.now()-t0) + 'ms · ' + changed + ' changed'); } catch(_){}
+      return true;
+    } catch(e){ try { console.warn('[supabase] pullAll threw:', e); } catch(_){} return false; }
+  }
+  // ── PERIODIC + FOCUS POLLING (per user 2026-05-21 "sync should be live") ─
+  // Mobile devices throttle/disconnect WebSockets when a tab is backgrounded
+  // or the device locks. Realtime alone isn't enough. We layer in:
+  //   (1) periodic Supabase pull every 20 seconds
+  //   (2) immediate pull on tab focus / visibilitychange (when tab returns
+  //       to foreground after backgrounding, screen wake, etc.)
+  //   (3) realtime channel auto-resubscribe if it errors out
+  var _supabasePollTimer = null;
+  function _startSupabasePolling(){
+    if(_supabasePollTimer) return;
+    _supabasePollTimer = setInterval(function(){
+      if(config.backend === 'supabase' && _supabaseClient){
+        _supabasePullAll();
+      }
+    }, 20000);   // 20 sec — cheap on Supabase free tier
+  }
+  function _stopSupabasePolling(){
+    if(_supabasePollTimer){ clearInterval(_supabasePollTimer); _supabasePollTimer = null; }
+  }
+  // Wire up focus + visibility listeners that force-pull from Supabase.
+  // These fire whenever the tab returns to foreground, the phone wakes,
+  // or the user switches back from another app.
+  (function _wireSupabaseFocusListeners(){
+    if(typeof document === 'undefined' || typeof window === 'undefined') return;
+    var lastPullAt = 0;
+    function triggerPull(reason){
+      if(config.backend !== 'supabase' || !_supabaseClient) return;
+      // De-dupe rapid-fire events (focus + visibilitychange fire back-to-back)
+      var now = Date.now();
+      if(now - lastPullAt < 1000) return;
+      lastPullAt = now;
+      try { console.info('[supabase] focus-pull (' + reason + ')'); } catch(_){}
+      _supabasePullAll();
+    }
+    document.addEventListener('visibilitychange', function(){
+      if(!document.hidden) triggerPull('visibilitychange');
+    });
+    window.addEventListener('focus',     function(){ triggerPull('focus'); });
+    window.addEventListener('online',    function(){ triggerPull('online'); });
+    window.addEventListener('pageshow',  function(e){ if(e.persisted) triggerPull('pageshow'); });
+  })();
 
   // ── Sync status badge — visible in the header. Reflects backend state.
   // States: 'local' (gray) · 'syncing' (yellow pulse) · 'ok' (green) · 'error' (red)
@@ -7487,9 +7561,19 @@ var DataLayer = (function(){
             _supabaseState = 'connected';
             try { console.info('[supabase] realtime connected.'); } catch(_){}
             try { _updateSyncBadge('connected'); } catch(_){}
-          } else if(status === 'CHANNEL_ERROR' || status === 'TIMED_OUT'){
+            // Start the 20-sec polling fallback once realtime is up.
+            try { _startSupabasePolling(); } catch(_){}
+          } else if(status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED'){
             _supabaseState = 'error';
-            try { console.warn('[supabase] channel state:', status); } catch(_){}
+            try { console.warn('[supabase] channel state:', status + ' — will auto-resubscribe in 5s'); } catch(_){}
+            // Per user 2026-05-21 "sync should be live": auto-resubscribe
+            // after a brief backoff so transient WebSocket drops self-heal.
+            setTimeout(function(){
+              if(_supabaseState !== 'connected'){
+                try { console.info('[supabase] reconnecting realtime…'); } catch(_){}
+                _initSupabase();
+              }
+            }, 5000);
           }
         });
     } catch(e){
