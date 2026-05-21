@@ -976,6 +976,11 @@ body.member-view .btn-save{background:linear-gradient(135deg,#3b82f6,#1d4ed8);co
      vertical space anymore. Tiny safe-area inset preserved for iPhones
      so content doesn't touch the home indicator. */
   body.member-view{padding-bottom:env(safe-area-inset-bottom, 12px)}
+  /* Per user 2026-05-21: on phones, Sign Out ONLY in the drawer (bottom-
+     left). Hide the header version so it's not duplicated + can't be
+     misclicked from a flow. The drawer's .md-signout-btn (in the drawer
+     footer) is the single source on mobile. */
+  .header-signout-btn{display:none !important}
 }
 
 /* ── HAMBURGER + SIDE DRAWER (member-view + mobile) ────────────────────
@@ -9900,7 +9905,11 @@ function renderUserBadge(){
     +renameBtn
     +viewAsBtn
     +'<button class="logout-btn" onclick="openChangePassword()" title="Change Password" style="margin-right:2px">&#128273;</button>'
-    +'<button class="logout-btn" onclick="confirmAndLogout()">Sign out</button>'
+    /* Per user 2026-05-21: on phones, the Sign Out button should ONLY
+       appear in the drawer (bottom-left). The .header-signout-btn class
+       carries a mobile-only display:none rule (see CSS below). On desktop
+       the header Sign Out stays. */
+    +'<button class="logout-btn header-signout-btn" onclick="confirmAndLogout()">Sign out</button>'
     +'</div>';
 }
 
