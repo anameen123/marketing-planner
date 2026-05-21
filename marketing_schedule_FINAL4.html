@@ -8890,9 +8890,15 @@ function _finishLogin(){
   if(CURRENT_USER && CURRENT_USER.sandbox && typeof _enableSandboxMode === 'function'){
     _enableSandboxMode();
   }
-  // Inject the emergency Sign Out button — fixed position, always visible.
-  // Belt-and-braces in case the header's normal sign-out isn't reachable.
-  _ensureEmergencySignOut();
+  // ── EMERGENCY SIGN-OUT REMOVED (per user 2026-05-21) ────────────────
+  // Was injecting a purple floating button at top-right as a fallback in
+  // case the header user-badge Sign Out got hidden. The header version
+  // is now reliable across all roles, so the floating button was just a
+  // redundant second button next to it. Removing the call entirely.
+  // Function _ensureEmergencySignOut is kept in case we ever need it back.
+  // Clean up any leftover button from a previous session:
+  var _leftoverEmSo = document.getElementById('emergency-signout-btn');
+  if(_leftoverEmSo) _leftoverEmSo.remove();
   applyMemberViewClass();
   renderUserBadge();
   applyRoleRestrictions();
