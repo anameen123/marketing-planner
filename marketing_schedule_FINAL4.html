@@ -17,6 +17,14 @@
 <link rel="apple-touch-icon" href="logo.jpeg">
 <link rel="icon" type="image/jpeg" href="logo.jpeg">
 <title>Marketing Planner</title>
+<!-- Preconnect hints (per user 2026-05-21 "sign-in too slow"): open the
+     TCP+TLS handshake to these third-parties as the page is parsing, so
+     by the time MSAL/Supabase actually need them the connection is ready.
+     On mobile 4G this saves ~0.5-2 sec on the first sign-in. -->
+<link rel="preconnect" href="https://login.microsoftonline.com" crossorigin>
+<link rel="preconnect" href="https://saorcjcymxufcuskiwzu.supabase.co" crossorigin>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="dns-prefetch" href="https://graph.microsoft.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root{
