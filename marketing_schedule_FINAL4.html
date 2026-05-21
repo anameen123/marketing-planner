@@ -23948,20 +23948,27 @@ var LOGIN_QUOTES = [
   });
 })();
 function refresh(di){
-  if(S.currentDay===di){
-    renderDayTable(di);
-    // Keep the day-map in sync when visits are added/changed/removed
-    if(typeof renderDayMap === 'function') renderDayMap(di);
-  }
-  renderCalGrid();
-  if(typeof renderBank === 'function') renderBank();
-  if(typeof renderAnnouncements==='function')renderAnnouncements();
-  renderCounters();
-  if(currentMember){renderKPICards(currentMember);renderMonthlyCompletion(currentMember);}
-  // Persist S.days to localStorage on every UI refresh. This catches every
-  // mutation that goes through the normal flow (addVisit, status changes,
-  // saveVisitSpending, confirmRow, etc.) without requiring per-call hooks.
-  // Throttled to 400ms so a burst of refreshes only writes once.
+  // Per user 2026-05-21: wrap every subcall in try/catch so one render
+  // throwing (e.g. an undefined helper like getMonthCompleted) can't
+  // prevent _saveS() at the end from running. Before this guard,
+  // Abrar's edits were sometimes "lost" because refresh() threw mid-
+  // way and the save call never executed.
+  try {
+    if(S.currentDay===di){
+      try { renderDayTable(di); } catch(e){ try { console.warn('[refresh] renderDayTable threw:', e); } catch(_){} }
+      try { if(typeof renderDayMap === 'function') renderDayMap(di); } catch(e){ try { console.warn('[refresh] renderDayMap threw:', e); } catch(_){} }
+    }
+    try { renderCalGrid(); } catch(e){ try { console.warn('[refresh] renderCalGrid threw:', e); } catch(_){} }
+    try { if(typeof renderBank === 'function') renderBank(); } catch(e){ try { console.warn('[refresh] renderBank threw:', e); } catch(_){} }
+    try { if(typeof renderAnnouncements==='function') renderAnnouncements(); } catch(e){ try { console.warn('[refresh] renderAnnouncements threw:', e); } catch(_){} }
+    try { renderCounters(); } catch(e){ try { console.warn('[refresh] renderCounters threw:', e); } catch(_){} }
+    if(currentMember){
+      try { renderKPICards(currentMember); } catch(e){ try { console.warn('[refresh] renderKPICards threw:', e); } catch(_){} }
+      try { renderMonthlyCompletion(currentMember); } catch(e){ try { console.warn('[refresh] renderMonthlyCompletion threw:', e); } catch(_){} }
+    }
+  } catch(e){ try { console.warn('[refresh] outer threw:', e); } catch(_){} }
+  // ALWAYS persist S.days, even if a render above threw. This is what
+  // makes the bug less catastrophic — data integrity > UI render.
   if(typeof _saveS === 'function') _saveS();
 }
 function renderDayTable(di){
@@ -24453,6 +24460,23 @@ function renderMonthlyVisits(name){
   if(typeof animateChartSvg === 'function') animateChartSvg(svg);
 }
 window.renderMonthlyVisits = renderMonthlyVisits;
+
+// Per user 2026-05-21: this helper was being called by renderMonthlyCompletion
+// and renderPerfCharts but never defined anywhere — every refresh() threw
+// ReferenceError, which meant the calendar never re-rendered after an edit
+// (and Abrar's writes appeared to vanish even though they hit Supabase).
+// Returns { rate, completed, assigned } for the given member + month.
+function getMonthCompleted(name, year, month){
+  if(typeof getMemberStatsForMonth !== 'function') return { rate:0, completed:0, assigned:0 };
+  var ms = getMemberStatsForMonth(year, month);
+  var s = (ms && ms[name]) ? ms[name] : null;
+  if(!s) return { rate:0, completed:0, assigned:0 };
+  var completed = s.comp || 0;
+  var assigned  = s.total || 0;
+  var rate = assigned > 0 ? Math.round((completed / assigned) * 100) : 0;
+  return { rate: rate, completed: completed, assigned: assigned };
+}
+window.getMonthCompleted = getMonthCompleted;
 
 function renderMonthlyCompletion(name){
   var wrap=document.getElementById('monthly-completion-wrap');
