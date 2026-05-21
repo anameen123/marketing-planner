@@ -6888,10 +6888,11 @@ var DataLayer = (function(){
       return;
     }
     var _t0 = Date.now();
-    _updateSyncBadge('syncing');
-    // Visible top-of-page progress bar for ANY active pull. Refcount-guarded
-    // so concurrent polls don't double-hide.
-    try { if(typeof showSyncBar === 'function') showSyncBar(); } catch(_){}
+    // Don't flicker the badge to 'syncing' on every ambient 1.5s tick — it
+    // makes the whole header twitch even when nothing changes. The badge
+    // only updates if an actual change is detected at the end (see below)
+    // or if the poll fails. Initial bootstrap + manual pulls still show
+    // the progress bar via their own showSyncBar calls.
     var anyFailed = false;
     var changedKeys = [];
     // ── PARALLEL READS (per user 2026-05-20 sync push) ───────────────────
@@ -6910,8 +6911,23 @@ var DataLayer = (function(){
     });
     _lastPollISO = new Date().toISOString();
     config.lastPollISO = _lastPollISO;
-    _updateSyncBadge(anyFailed ? 'error' : 'ok');
-    try { if(typeof hideSyncBar === 'function') hideSyncBar(); } catch(_){}
+    // Only update the badge if state actually changes — silent no-op polls
+    // (all-304 responses) should NOT flicker the UI every 1.5 seconds.
+    if(anyFailed){
+      _updateSyncBadge('error');
+    } else if(changedKeys.length > 0){
+      _updateSyncBadge('ok');
+      // Brief progress-bar flash ONLY when actual changes landed — gives
+      // the user feedback that "something new came in" without constant
+      // every-second flashing on empty 304-only polls.
+      try {
+        if(typeof showSyncBar === 'function'){
+          showSyncBar();
+          setTimeout(function(){ try { hideSyncBar(); } catch(_){} }, 500);
+        }
+      } catch(_){}
+    }
+    // (no badge update if nothing changed — preserve previous 'ok' state)
     try { console.info('[sync] poll done in', (Date.now()-_t0)+'ms', '· changed:', changedKeys.length ? changedKeys.join(',') : '(none)', '· failed:', anyFailed); } catch(_){}
   }
   // Public: force a sync right now (don't wait for the next 5-second poll).
