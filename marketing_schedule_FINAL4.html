@@ -7108,18 +7108,31 @@ var DataLayer = (function(){
     try { await _pollOnce(); return true; }
     catch(e){ return false; }
   }
-  // Pull every wcg_kv row from Supabase, diff against localStorage, update
-  // anything that's stale, and emit changes. Idempotent — safe to call on
-  // every tab focus, every visibility change, and every periodic tick.
+  // High-watermark for incremental polling. Tracks the most recent
+  // updated_at we've already pulled — subsequent polls only fetch rows
+  // newer than this. Initialized on first pull to "now minus 5 minutes"
+  // so we catch anything that just happened before the page loaded.
+  var _supabasePollWatermark = null;
+  // Pull rows newer than _supabasePollWatermark from Supabase, diff against
+  // localStorage, update anything stale, emit changes. Cheap because most
+  // calls return 0 rows. Only ~50-100 bytes of bandwidth on a quiet system.
   async function _supabasePullAll(){
     if(!_supabaseClient) return false;
     try {
       var t0 = Date.now();
-      var res = await _supabaseClient.from('wcg_kv').select('key,value');
+      if(!_supabasePollWatermark){
+        // First poll — fetch everything to seed the watermark
+        _supabasePollWatermark = new Date(Date.now() - 5*60*1000).toISOString();
+      }
+      var res = await _supabaseClient.from('wcg_kv')
+                                     .select('key,value,updated_at')
+                                     .gt('updated_at', _supabasePollWatermark);
       if(res.error){ try { console.warn('[supabase] pullAll failed:', res.error); } catch(_){} return false; }
       var changed = 0;
+      var maxUpdated = _supabasePollWatermark;
       (res.data || []).forEach(function(row){
         try {
+          if(row.updated_at && row.updated_at > maxUpdated) maxUpdated = row.updated_at;
           var serialized = (typeof row.value === 'string') ? row.value : JSON.stringify(row.value);
           var existing = localStorage.getItem(row.key);
           if(existing !== serialized){
@@ -7129,14 +7142,18 @@ var DataLayer = (function(){
           }
         } catch(_){}
       });
-      try { console.info('[supabase] pullAll: ' + (res.data || []).length + ' rows in ' + (Date.now()-t0) + 'ms · ' + changed + ' changed'); } catch(_){}
+      _supabasePollWatermark = maxUpdated;
+      if(changed > 0){
+        try { console.info('[supabase] pullΔ: ' + (res.data || []).length + ' rows · ' + changed + ' changed in ' + (Date.now()-t0) + 'ms'); } catch(_){}
+      }
       return true;
     } catch(e){ try { console.warn('[supabase] pullAll threw:', e); } catch(_){} return false; }
   }
   // ── PERIODIC + FOCUS POLLING (per user 2026-05-21 "sync should be live") ─
   // Mobile devices throttle/disconnect WebSockets when a tab is backgrounded
   // or the device locks. Realtime alone isn't enough. We layer in:
-  //   (1) periodic Supabase pull every 20 seconds
+  //   (1) incremental poll every 5 sec — cheap because >>updated_at watermark
+  //       filters out unchanged rows. Catches missed realtime events.
   //   (2) immediate pull on tab focus / visibilitychange (when tab returns
   //       to foreground after backgrounding, screen wake, etc.)
   //   (3) realtime channel auto-resubscribe if it errors out
@@ -7147,7 +7164,7 @@ var DataLayer = (function(){
       if(config.backend === 'supabase' && _supabaseClient){
         _supabasePullAll();
       }
-    }, 20000);   // 20 sec — cheap on Supabase free tier
+    }, 5000);   // 5 sec — incremental (mostly 0 rows) so bandwidth is tiny
   }
   function _stopSupabasePolling(){
     if(_supabasePollTimer){ clearInterval(_supabasePollTimer); _supabasePollTimer = null; }
@@ -7584,6 +7601,10 @@ var DataLayer = (function(){
   }
   // Save a key/value to Supabase via upsert. Drop-in replacement for the
   // SharePoint write path. Returns true on success, false on failure.
+  // Per user 2026-05-21: explicitly set updated_at on every upsert so the
+  // incremental poller can use it as a high-watermark. Postgres's
+  // `default now()` only fires on INSERT, not UPDATE — without this the
+  // incremental query would always return everything.
   async function _supabaseSave(key, value){
     if(!_supabaseClient) return false;
     try {
@@ -7592,7 +7613,8 @@ var DataLayer = (function(){
       var res = await _supabaseClient.from('wcg_kv').upsert({
         key: key,
         value: json,
-        updated_by: by
+        updated_by: by,
+        updated_at: new Date().toISOString()
       }, { onConflict: 'key' });
       if(res.error){
         try { console.warn('[supabase] upsert failed for ' + key + ':', res.error); } catch(_){}
