@@ -7435,6 +7435,15 @@ var DataLayer = (function(){
     }
     // Subscribe to realtime changes. Any UPDATE/INSERT/DELETE on wcg_kv
     // fires this handler instantly via WebSocket — no polling needed.
+    //
+    // ── PAYLOAD-INDEPENDENT FETCH (per user 2026-05-21: "Abrar's writes
+    //    don't appear on Mamun's tab") ─────────────────────────────────
+    // CRITICAL: Supabase Realtime free tier caps the payload at 64 KB.
+    // The schedule JSON is ~600 KB so payload.new.value gets dropped or
+    // truncated. We CANNOT trust payload.new.value for the actual data.
+    // Instead, on every realtime event, do a fresh SELECT to fetch the
+    // full row, then update localStorage. Costs one extra round-trip
+    // (~100ms) per change but is 100% correct regardless of value size.
     try {
       _supabaseChannel = _supabaseClient
         .channel('wcg_kv_changes')
@@ -7444,22 +7453,34 @@ var DataLayer = (function(){
               try { console.info('[supabase] ← realtime:', payload.eventType, payload.new && payload.new.key); } catch(_){}
               var row = payload.new || payload.old;
               if(!row || !row.key) return;
-              // Skip our own writes — we already updated localStorage when
-              // we sent the upsert. (We could use a per-client tag but
-              // postgres_changes does fire for own writes — diffing here.)
-              try {
-                var newSerialized = (payload.new && payload.new.value != null)
-                  ? (typeof payload.new.value === 'string' ? payload.new.value : JSON.stringify(payload.new.value))
-                  : null;
-                var existing = localStorage.getItem(row.key);
-                if(newSerialized && existing === newSerialized) return;  // already in sync
-                if(payload.eventType === 'DELETE'){
-                  localStorage.removeItem(row.key);
-                } else if(newSerialized){
-                  localStorage.setItem(row.key, newSerialized);
-                }
+              // DELETE: just remove the key locally and re-render.
+              if(payload.eventType === 'DELETE'){
+                try { localStorage.removeItem(row.key); } catch(_){}
                 _emitChange(row.key);
-              } catch(_){}
+                return;
+              }
+              // INSERT/UPDATE: fetch fresh from Supabase (payload may be
+              // truncated for large rows). Compare to localStorage; if
+              // different, update + emit change.
+              _supabaseClient.from('wcg_kv')
+                .select('value')
+                .eq('key', row.key)
+                .maybeSingle()
+                .then(function(res){
+                  if(res.error){
+                    try { console.warn('[supabase] realtime refetch failed for ' + row.key + ':', res.error.message); } catch(_){}
+                    return;
+                  }
+                  if(!res.data) return;
+                  var newSerialized = (typeof res.data.value === 'string')
+                    ? res.data.value
+                    : JSON.stringify(res.data.value);
+                  var existing = localStorage.getItem(row.key);
+                  if(existing === newSerialized) return;   // own-write echo
+                  try { localStorage.setItem(row.key, newSerialized); } catch(_){}
+                  try { console.info('[supabase] ↻ refetched ' + row.key + ' (' + newSerialized.length + ' bytes)'); } catch(_){}
+                  _emitChange(row.key);
+                });
             })
         .subscribe(function(status){
           if(status === 'SUBSCRIBED'){
