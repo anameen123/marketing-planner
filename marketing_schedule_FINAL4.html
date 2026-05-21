@@ -7931,28 +7931,42 @@ _loadPeriodBudgetEnabled();
 var _S_LS_KEY = 'wcg_schedule_v1';
 var _S_SAVE_THROTTLE_MS = 400;   // coalesce rapid mutations
 var _S_SAVE_TIMER = null;
+// Per user 2026-05-21 ("unlocked for one second then it locked"): track the
+// JSON we last uploaded so we can SKIP re-uploading data we just received
+// via realtime/poll. Without this, an inbound sync (realtime → _emitChange
+// → _hydrateSFromStorage → refresh → _saveS) re-uploads the data we just
+// downloaded. With two tabs racing, that creates a clobber loop where
+// each tab's stale save overwrites the other's confirmed change.
+var _S_LAST_SAVED_JSON = null;
 
 function _saveS(){
   // Throttled save — bursts of refresh() calls only hit storage once every
   // 400ms. Final state is always saved. Routes through DataLayer so the
-  // same call automatically syncs to SharePoint when that backend is on.
+  // same call automatically syncs to Supabase / SharePoint.
   if(_S_SAVE_TIMER) clearTimeout(_S_SAVE_TIMER);
   _S_SAVE_TIMER = setTimeout(function(){
-    if(typeof S !== 'undefined' && S && S.days){
-      DataLayer.save(_S_LS_KEY, { days: S.days, savedAt: new Date().toISOString() });
-    }
     _S_SAVE_TIMER = null;
+    if(typeof S === 'undefined' || !S || !S.days) return;
+    // Diff check — skip if S.days hasn't actually changed since last save.
+    // This eliminates the "echo upload" that follows every inbound sync.
+    var json = JSON.stringify(S.days);
+    if(json === _S_LAST_SAVED_JSON) return;
+    _S_LAST_SAVED_JSON = json;
+    DataLayer.save(_S_LS_KEY, { days: S.days, savedAt: new Date().toISOString() });
   }, _S_SAVE_THROTTLE_MS);
 }
 window._saveS = _saveS;
 
 // Synchronous flush — useful before unload to make sure the last edits
-// don't sit in the throttle buffer when the user closes the tab.
+// don't sit in the throttle buffer when the user closes the tab. Same
+// diff check as _saveS to avoid clobber.
 function _saveSImmediate(){
   if(_S_SAVE_TIMER){ clearTimeout(_S_SAVE_TIMER); _S_SAVE_TIMER = null; }
-  if(typeof S !== 'undefined' && S && S.days){
-    DataLayer.save(_S_LS_KEY, { days: S.days, savedAt: new Date().toISOString() });
-  }
+  if(typeof S === 'undefined' || !S || !S.days) return;
+  var json = JSON.stringify(S.days);
+  if(json === _S_LAST_SAVED_JSON) return;
+  _S_LAST_SAVED_JSON = json;
+  DataLayer.save(_S_LS_KEY, { days: S.days, savedAt: new Date().toISOString() });
 }
 window._saveSImmediate = _saveSImmediate;
 
@@ -7965,6 +7979,10 @@ function _hydrateSFromStorage(){
     if(!parsed || !Array.isArray(parsed.days)) return;
     if(typeof S === 'undefined' || !S) return;
     S.days = parsed.days.filter(function(d){ return d && d.date; });
+    // Per user 2026-05-21 clobber fix: seed the save-watermark so the
+    // refresh() that follows this hydrate doesn't re-upload what we
+    // just received from server.
+    try { _S_LAST_SAVED_JSON = JSON.stringify(S.days); } catch(_){}
     // Per user 2026-05-21 (Abrar "Duaa Khan" dialog bug): normalize any row
     // whose .member isn't in the current MEMBERS array. Stale values from
     // old SharePoint syncs (e.g. 'Duaa Khan' when MEMBERS only has 'Duaa')
