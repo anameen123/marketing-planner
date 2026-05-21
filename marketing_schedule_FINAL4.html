@@ -23953,6 +23953,15 @@ function refresh(di){
   // prevent _saveS() at the end from running. Before this guard,
   // Abrar's edits were sometimes "lost" because refresh() threw mid-
   // way and the save call never executed.
+  //
+  // Per user 2026-05-21 (Mamun "Abrar's writes don't appear" bug v3):
+  // _emitChange calls refresh() with no argument after a realtime sync.
+  // Without this fallback, S.currentDay !== undefined, so the day table
+  // never re-renders even though S.days was updated. Default di to the
+  // current day so realtime-driven refreshes actually paint to screen.
+  if(typeof di === 'undefined' || di === null){
+    di = (typeof S !== 'undefined' && S) ? S.currentDay : null;
+  }
   try {
     if(S.currentDay===di){
       try { renderDayTable(di); } catch(e){ try { console.warn('[refresh] renderDayTable threw:', e); } catch(_){} }
