@@ -6592,6 +6592,12 @@ var DataLayer = (function(){
   // Tries silent token acquisition first (uses cached refresh tokens);
   // falls back to popup if silent fails (first sign-in / expired session).
   async function _getToken(){
+    // Per user 2026-05-21 console-debug session: silent token failure
+    // was falling back to acquireTokenPopup, which the browser blocks
+    // because it's not triggered by user interaction. MSAL then retried
+    // every poll cycle → 90+ second hung polls + popup spam. Solution:
+    // silent only here. If silent fails, throw a clear error. The user
+    // can manually click Sign Out + Sign In to re-acquire a fresh token.
     var accounts = _msalInstance.getAllAccounts();
     var request = {
       scopes: ['Sites.ReadWrite.All', 'User.Read'],
@@ -6601,9 +6607,13 @@ var DataLayer = (function(){
       var result = await _msalInstance.acquireTokenSilent(request);
       return result.accessToken;
     } catch(e){
-      // Silent failed — interactive popup
-      var result = await _msalInstance.acquireTokenPopup(request);
-      return result.accessToken;
+      // Silent failed (token expired, refresh failed, etc.) — DON'T pop
+      // a window from a background poll. Throw a recognizable error so
+      // callers (and our diagnostic banner) can surface a "Please sign
+      // out and sign back in" message.
+      var err = new Error('Silent token acquire failed — user needs to re-sign-in. Original: ' + ((e && (e.errorCode || e.message)) || e));
+      err.isTokenExpired = true;
+      throw err;
     }
   }
 
@@ -6821,27 +6831,22 @@ var DataLayer = (function(){
     delete _etagByKey[key];
     delete _bodyByKey[key];
     try { console.info('[sync] write fired:', key, '(' + (valueStr||'').length + ' bytes)'); } catch(_){}
-    // ── FORCE-OVERWRITE (per user 2026-05-21 cross-tab test) ──────────────
-    // Without @microsoft.graph.conflictBehavior=replace, SharePoint Online's
-    // simple PUT /content endpoint enforces OPTIMISTIC CONCURRENCY: if any
-    // other client has written to this file since our last read, our PUT
-    // returns 409 "resourceModified — usually an eTag mismatch" and the
-    // write is rejected. We then re-queue and immediately fail again
-    // because we still have the same stale state — silent infinite retry.
+    // ── FORCE-OVERWRITE v2 (per user 2026-05-21 — fixed via If-Match: *) ──
+    // First fix attempted conflictBehavior=replace as a query param. Live
+    // console showed it WASN'T being honored — 409 "resourceModified"
+    // errors continued. Microsoft Graph applies conflictBehavior to
+    // FILENAME conflicts (replace vs rename vs fail), NOT to optimistic
+    // concurrency on existing file CONTENT.
     //
-    // This is the actual reason Abrar's morning saves never reached admin:
-    // any time admin (or background tick fanout) touched a file, Abrar's
-    // next write hit a 409 and silently failed forever. The badge still
-    // showed "Live" because READS were fine.
-    //
-    // conflictBehavior=replace tells Graph "force overwrite, last writer
-    // wins." For our use case (single-tenant team app, no merge logic) this
-    // is the right semantics. If two members edit the schedule in the same
-    // ~1 second window, whoever flushes last wins. Both writes WILL land.
+    // The correct override is the If-Match: * header. This tells SharePoint
+    // "match any current version of this file" → never raise 409.
     return _graphFetch('/drives/' + config.driveId + '/root:/' + path + ':/content?@microsoft.graph.conflictBehavior=replace', {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: valueStr   // pass raw string body directly
+      headers: {
+        'Content-Type': 'application/json',
+        'If-Match': '*'   // ← the real fix — bypass optimistic concurrency
+      },
+      body: valueStr
     });
   }
 
