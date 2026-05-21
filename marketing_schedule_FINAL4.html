@@ -1366,16 +1366,9 @@ body.role-front_desk #referrals-view {
 <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3/lib/msal-browser.min.js"
         defer></script>
 
-<!-- ── @microsoft/signalr — optional real-time push channel
-     Loaded only because the user MAY have configured an Azure Function push
-     endpoint (Settings → Real-time push). If they haven't, this script sits
-     dormant and costs nothing. If they have, the DataLayer's _initPushChannel
-     opens a WebSocket to Azure SignalR and gets instant "data changed"
-     pushes from teammates — no more polling lag when a tab is backgrounded.
-     See /azure-push/README.md for the server-side deploy steps.
-     ──────────────────────────────────────────────────────────────────── -->
-<script src="https://cdn.jsdelivr.net/npm/@microsoft/signalr@8/dist/browser/signalr.min.js"
-        defer></script>
+<!-- Per user 2026-05-21: Azure SignalR SDK removed. Supabase Realtime
+     handles push. No third-party push library loaded anymore. -->
+
 
 <!-- Per user 2026-05-21: Ably removed. Supabase Realtime (loaded below)
      handles push notifications natively now — no separate push channel
@@ -6369,16 +6362,8 @@ var DataLayer = (function(){
       'wcg_sync_tick_v1':               'sync-tick.json'
       // Per-user "which notifs I've read" keys stay in localStorage (per-user, not shared)
     },
-    // ── REAL-TIME PUSH (OPTIONAL — per user 2026-05-20) ───────────────────
-    // If set to an Azure Function App URL (e.g. 'https://wcg-sync-fn-xxxx.azurewebsites.net'),
-    // the client opens a WebSocket to Azure SignalR Service and gets instant
-    // "data changed" pushes from teammates — no waiting for the next poll.
-    // Polling continues to run as a safety net. Empty by default; user sets
-    // this via Settings → Real-time push after deploying /azure-push/. See
-    // /azure-push/README.md for one-click deploy instructions.
-    pushEndpoint: (function(){
-      try { return localStorage.getItem('wcg_push_endpoint_v1') || ''; } catch(_){ return ''; }
-    })(),
+    // Azure SignalR pushEndpoint removed (per user 2026-05-21).
+    // Supabase Realtime is the only push channel now.
     // ── SUPABASE (BACKEND REPLACEMENT FOR SHAREPOINT, per user 2026-05-21)
     // When both supabaseUrl + supabaseAnonKey are set, the planner stores
     // ALL data in Supabase (Postgres + real-time) instead of SharePoint.
@@ -6530,12 +6515,8 @@ var DataLayer = (function(){
         await _initialFetch();
         _startPolling();
         _updateSyncBadge && _updateSyncBadge('ok');
-        // Push channel kickoff removed (per user 2026-05-21).
-        // Supabase Realtime (initialized in _initSupabase from
-        // backend-settings code path) now handles push instead. Legacy
-        // Azure SignalR _initPushChannel kept dormant — only fires if
-        // config.pushEndpoint is set (no one has that configured).
-        try { _initPushChannel && _initPushChannel(); } catch(_){}    // Azure SignalR (legacy)
+        // Push handled by Supabase Realtime (see _initSupabase in
+        // backend settings flow). No third-party push provider needed.
         console.info('[DataLayer] SharePoint backend live · site=' + config.siteId + ' · driveId=' + config.driveId + (attempt > 1 ? ' (after ' + attempt + ' attempts)' : ''));
         return { ok: true, mode: 'sharepoint' };
       } catch(e){
@@ -7241,13 +7222,8 @@ var DataLayer = (function(){
     if(anySucceeded){
       _touchTickFile().catch(function(e){ try { console.warn('[sync] tick touch failed:', e); } catch(_){} });
       // Push fanout via Ably removed (per user 2026-05-21). Supabase
-      // upserts (in _supabaseSave) trigger the realtime channel auto-
-      // matically. Legacy Azure SignalR broadcast kept dormant.
-      try {
-        Object.keys(latestByKey).forEach(function(k){
-          if(_broadcastChange) _broadcastChange(k);   // Azure SignalR (legacy)
-        });
-      } catch(_){}
+      // Push fanout is implicit — Supabase upserts (in _supabaseSave)
+      // automatically trigger the realtime channel. No manual broadcast.
       // Self-verify: immediately after writing, also do a tick-poll on
       // OUR OWN side. If our localStorage is somehow out of date (e.g.
       // we wrote stale data and a teammate's newer data is in the
@@ -7312,128 +7288,6 @@ var DataLayer = (function(){
     try { _lastSeenTick = localStorage.getItem('wcg_sync_tick_v1') || null; } catch(_){}
     _tickTimer = setInterval(_tickPollOnce, 300);    // 300ms tick check (per user 2026-05-20 "live every day" — bottom of safe Graph throttle band)
   }
-
-  // ── REAL-TIME PUSH CHANNEL (OPTIONAL — per user 2026-05-20) ───────────────
-  // When config.pushEndpoint is set, opens a WebSocket to Azure SignalR
-  // Service via the negotiate endpoint on the user's Azure Function App.
-  // On any incoming "data-changed" message, fires _tickPollOnce immediately
-  // — so admin sees Duaa's morning change within ~100ms instead of waiting
-  // for the next ambient poll (or worse, until they manually return to the
-  // tab if the browser had throttled polling on a backgrounded tab).
-  //
-  // Gracefully no-ops if:
-  //   • pushEndpoint is empty (user hasn't deployed the Azure backend yet)
-  //   • @microsoft/signalr failed to load (CDN blip — polling still works)
-  //   • the connect fails (e.g. Azure resources deleted — polling still works)
-  //
-  // The push channel is PURELY a "wake up and poll" signal. No actual planner
-  // data flows through it — only the tiny "key X changed, by user Y" payload.
-  // The actual visit/clinic/referral data still lives in your SharePoint.
-  var _pushConn = null;          // signalR.HubConnection
-  var _pushState = 'off';        // 'off' / 'connecting' / 'connected' / 'error'
-  async function _initPushChannel(){
-    if(!config.pushEndpoint) { _pushState = 'off'; return; }
-    if(typeof window.signalR === 'undefined') {
-      try { console.warn('[push] @microsoft/signalr not loaded yet — push disabled this session'); } catch(_){}
-      _pushState = 'error'; return;
-    }
-    if(_pushConn) {
-      try { await _pushConn.stop(); } catch(_){}
-      _pushConn = null;
-    }
-    _pushState = 'connecting';
-    try { _updateSyncBadge(_pushState); } catch(_){}
-    var base = config.pushEndpoint.replace(/\/+$/, '');
-    var negotiateUrl = base + '/api/negotiate';
-    try {
-      _pushConn = new window.signalR.HubConnectionBuilder()
-        .withUrl(negotiateUrl)
-        .withAutomaticReconnect([0, 1000, 2000, 5000, 10000, 30000])
-        .configureLogging(window.signalR.LogLevel.Warning)
-        .build();
-      _pushConn.on('data-changed', function(msg){
-        try { console.info('[push] ← data-changed received:', msg); } catch(_){}
-        // Test-ping observer — round-trip diagnostic (Settings → Test push).
-        // Runs BEFORE the by-self check below so the sender's own echo resolves
-        // the timing measurement. If not a test ping, falls through normally.
-        try { if(typeof window._pushTestObserver === 'function') window._pushTestObserver(msg); } catch(_){}
-        // Test pings start with our reserved prefix — never trigger a SharePoint
-        // pull from these (they're not real data changes)
-        if(msg && msg.key && typeof msg.key === 'string' && msg.key.indexOf('push-test-') === 0){
-          return;
-        }
-        // Skip if this push was triggered by our OWN write (avoid a redundant
-        // poll right after we already wrote — _flushWrites self-verifies).
-        try {
-          var me = (CURRENT_USER && CURRENT_USER.username) || '';
-          if(msg && msg.by === me) return;
-        } catch(_){}
-        // Pull immediately — this is the whole point of the push channel.
-        try { _tickPollOnce && _tickPollOnce(); } catch(_){}
-      });
-      _pushConn.onreconnecting(function(err){
-        _pushState = 'connecting';
-        try { console.warn('[push] reconnecting…', err); } catch(_){}
-        try { _updateSyncBadge(_pushState); } catch(_){}
-      });
-      _pushConn.onreconnected(function(){
-        _pushState = 'connected';
-        try { console.info('[push] reconnected.'); } catch(_){}
-        try { _updateSyncBadge(_pushState); } catch(_){}
-        // After a reconnect, ALWAYS pull — we may have missed messages
-        try { _tickPollOnce && _tickPollOnce(); } catch(_){}
-      });
-      _pushConn.onclose(function(err){
-        _pushState = 'error';
-        try { console.warn('[push] connection closed:', err); } catch(_){}
-        try { _updateSyncBadge('ok'); } catch(_){}
-      });
-      await _pushConn.start();
-      _pushState = 'connected';
-      try { console.info('[push] connected to', negotiateUrl); } catch(_){}
-      try { _updateSyncBadge('connected'); } catch(_){}
-    } catch(e){
-      _pushState = 'error';
-      try { console.warn('[push] connect failed:', e); } catch(_){}
-      // Don't surface to the user — polling already works. Just log.
-    }
-  }
-  // Called by _touchTickFile after every successful SharePoint write — tells
-  // the Function App "I just changed key X, fan it out to the team."
-  // Fire-and-forget; failures here don't break anything (polling still works).
-  async function _broadcastChange(key){
-    if(!config.pushEndpoint) return;
-    var base = config.pushEndpoint.replace(/\/+$/, '');
-    var by = (CURRENT_USER && CURRENT_USER.username) || 'anon';
-    try {
-      await fetch(base + '/api/broadcast', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: key || 'unknown', by: by }),
-        cache: 'no-store',
-        // Don't block UI on the broadcast — short timeout
-        signal: (function(){ try { return AbortSignal.timeout ? AbortSignal.timeout(3000) : undefined; } catch(_){ return undefined; } })()
-      });
-    } catch(e){ try { console.warn('[push] broadcast failed (non-fatal):', e); } catch(_){} }
-  }
-  // Public — used by the Settings UI when the user pastes a new endpoint
-  async function _setPushEndpoint(url){
-    var clean = (url || '').trim().replace(/\/+$/, '');
-    config.pushEndpoint = clean;
-    try { localStorage.setItem('wcg_push_endpoint_v1', clean); } catch(_){}
-    if(clean){
-      await _initPushChannel();
-    } else {
-      // Disabling — close the existing connection
-      if(_pushConn){
-        try { await _pushConn.stop(); } catch(_){}
-        _pushConn = null;
-      }
-      _pushState = 'off';
-    }
-    return _pushState;
-  }
-  function _pushChannelState(){ return _pushState; }
 
   // Ably push channel removed (per user 2026-05-21). Supabase Realtime
   // (defined below) handles push natively now — see _initSupabase.
@@ -7730,13 +7584,8 @@ var DataLayer = (function(){
     _config: config,           // exposed for debugging only
     _writeQueue: _writeQueue,
     pollNow: _pollNow,         // public: force a sync without waiting for the 5s poll
-    // ── Push channel (optional — Azure SignalR backend) ──────────────────
-    setPushEndpoint:   _setPushEndpoint,    // public: save+reconnect with a new URL
-    pushChannelState:  _pushChannelState,   // public: 'off' / 'connecting' / 'connected' / 'error'
-    initPushChannel:   _initPushChannel,    // public: force a reconnect attempt
-    // Ably push removed (per user 2026-05-21) — Supabase Realtime
-    // handles push natively. ablyChannelState / setAblyApiKey /
-    // initAblyPush removed from the public surface.
+    // Azure SignalR + Ably push removed (per user 2026-05-21).
+    // Supabase Realtime handles push natively now — see _initSupabase.
     // ── Supabase backend (full SharePoint replacement) ───────────────────
     setSupabaseConfig: _setSupabaseConfig,  // public: save URL+key+reconnect
     supabaseState:     _supabaseStateGet,   // public: 'off' / 'connecting' / 'connected' / 'error'
@@ -9496,14 +9345,14 @@ function showSyncStatus(){
                  clean.replace(/[<>]/g, '') +
                '</div>';
   }
-  // Real-time push channel status — shows if the Azure SignalR backend is wired
-  var pushState = (DataLayer.pushChannelState && DataLayer.pushChannelState()) || 'off';
-  var pushEndpoint = (DataLayer._config && DataLayer._config.pushEndpoint) || '';
+  // Real-time push channel status — reflects Supabase Realtime state
+  // (Azure SignalR and Ably both removed per user 2026-05-21).
+  var pushState = (DataLayer.supabaseState && DataLayer.supabaseState()) || 'off';
   var pushLabel = {
-    'off':        '⚪ Not configured (polling-only)',
-    'connecting': '🟡 Connecting…',
-    'connected':  '🟢 Live · instant push',
-    'error':      '🔴 Push error — falling back to polling'
+    'off':        '⚪ Not configured (using SharePoint backend)',
+    'connecting': '🟡 Connecting to Supabase…',
+    'connected':  '🟢 Live · Supabase Realtime',
+    'error':      '🔴 Supabase error — check Backend settings'
   }[pushState] || pushState;
   var pushAdminLine = '';
   if(CURRENT_USER && CURRENT_USER.role === 'admin'){
