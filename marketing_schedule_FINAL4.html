@@ -7561,7 +7561,48 @@ var DataLayer = (function(){
 
   async function _writeKey(key, value){
     var serialized = (typeof value === 'string') ? value : JSON.stringify(value);
-    await _writeFile(key, serialized);
+    try {
+      await _writeFile(key, serialized);
+    } catch(e){
+      // ── RETRY AFTER REFRESH (per user 2026-05-21 — phone deletes lost) ──
+      // SharePoint enforces optimistic concurrency on its document
+      // library files. After the first successful PUT, the server's
+      // session-state for this file/token advances; subsequent PUTs
+      // without a fresh GET get 412 'ETag does not match'.
+      //
+      // The previous "drop on conflict" approach silently lost the
+      // user's write. Real UX bug. Now: on 412/409, do a silent GET
+      // to refresh the server's view of OUR session, then retry the
+      // PUT with the SAME local data. The GET is done via _graphFetchRaw
+      // directly so it does NOT propagate server content to local
+      // state (which would revert the user's local edits).
+      var msg = (e && e.message) || '';
+      if(/\b412\b|\b409\b|resourceModified|ETag does not match/i.test(msg)){
+        try { console.warn('[DataLayer] write conflict on ' + key + ' — refreshing session + retrying'); } catch(_){}
+        try {
+          var path = _filePathFor(key);
+          if(path){
+            // Silent refresh: GET only, no localStorage write, no _emitChange
+            var token = await _getToken();
+            var url = 'https://graph.microsoft.com/v1.0/drives/' + config.driveId + '/root:/' + path + ':/content';
+            await fetch(url, {
+              method: 'GET',
+              headers: { 'Authorization': 'Bearer ' + token, 'Accept': 'application/json' },
+              cache: 'no-store'
+            });
+            // Clear our cached ETag so the retry PUT doesn't send a stale If-Match
+            delete _etagByKey[key];
+            delete _bodyByKey[key];
+          }
+        } catch(refreshErr){ try { console.warn('[DataLayer] session refresh failed:', refreshErr); } catch(_){} }
+        // Retry the PUT — last-writer-wins semantics. If THIS also fails,
+        // we let _flushWrites handle it (drop or re-queue depending on
+        // the error class).
+        await _writeFile(key, serialized);
+      } else {
+        throw e;   // not a concurrency error — propagate
+      }
+    }
   }
 
   // ── External helpers — used by AuthLayer to share one MSAL session ─────
