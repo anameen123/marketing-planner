@@ -9172,19 +9172,23 @@ function doLogout(skipBroadcast){
   var emSo = document.getElementById('emergency-signout-btn'); if(emSo) emSo.remove();
 
   // ── CROSS-TAB SIGN-OUT BROADCAST (per user 2026-05-21) ──────────────
-  // Tell every other tab in this browser to also sign out. Without this,
-  // tab A could be logged out while tab B kept showing the planner —
-  // a real security risk if someone walked up to the second tab.
-  // skipBroadcast=true is set when WE'RE the receiving tab so we don't
-  // bounce the message infinitely.
+  // Tell every other tab in this browser to also sign out.
+  // BELT-AND-BRACES via TWO mechanisms because BroadcastChannel can fail
+  // silently in some configs (cross-tab-group, certain mobile browsers,
+  // GC of the channel reference). localStorage 'storage' events are the
+  // bedrock of cross-tab sync in browsers — they fire reliably in EVERY
+  // other same-origin tab no matter what.
   if(!skipBroadcast){
+    // 1) BroadcastChannel (fast path)
     try {
       if(typeof BroadcastChannel !== 'undefined'){
         var ch = new BroadcastChannel('wcg_auth_v1');
         ch.postMessage({ type: 'signed-out', at: Date.now() });
-        // Don't close the channel — the message needs time to flush.
-        // GC will reap it.
       }
+    } catch(_){}
+    // 2) localStorage storage event (bulletproof fallback)
+    try {
+      localStorage.setItem('wcg_signed_out_at', String(Date.now()));
     } catch(_){}
   }
 
@@ -9209,19 +9213,34 @@ window.doLogout=doLogout;
 // up before any user interaction, so even a backgrounded tab that the
 // user hasn't touched for hours will react when a different tab signs out.
 (function _wireCrossTabSignOut(){
+  // Triggered by either BroadcastChannel or localStorage 'storage' event.
+  // Whichever fires first wins; the second is a no-op because CURRENT_USER
+  // is already null.
+  function handleSignedOut(source){
+    if(typeof CURRENT_USER === 'undefined' || CURRENT_USER === null) return;
+    try { console.info('[auth] cross-tab sign-out received via ' + source + ' — logging out this tab'); } catch(_){}
+    try { doLogout(true); }   // skipBroadcast so we don't bounce
+    catch(e){ try { window.location.reload(); } catch(_){} }
+  }
+  // 1) BroadcastChannel — fast path. Stored on window so the channel
+  //    isn't garbage-collected (which was likely killing it in some
+  //    browsers per the 2026-05-21 cross-tab sign-out test failure).
   try {
-    if(typeof BroadcastChannel === 'undefined') return;
-    var ch = new BroadcastChannel('wcg_auth_v1');
-    ch.onmessage = function(ev){
-      var msg = ev && ev.data;
-      if(!msg || msg.type !== 'signed-out') return;
-      // Only react if we're currently signed in. Avoids cascading reloads
-      // if all tabs are already on the login screen.
-      if(typeof CURRENT_USER === 'undefined' || CURRENT_USER === null) return;
-      try { console.info('[auth] cross-tab sign-out received — logging out this tab'); } catch(_){}
-      try { doLogout(true); }   // skipBroadcast so we don't bounce
-      catch(e){ try { window.location.reload(); } catch(_){} }
-    };
+    if(typeof BroadcastChannel !== 'undefined'){
+      window._authBcChan = new BroadcastChannel('wcg_auth_v1');
+      window._authBcChan.onmessage = function(ev){
+        var msg = ev && ev.data;
+        if(msg && msg.type === 'signed-out') handleSignedOut('BroadcastChannel');
+      };
+    }
+  } catch(e){ /* best-effort */ }
+  // 2) localStorage 'storage' event — bedrock fallback. Fires in EVERY
+  //    other same-origin tab when ANY localStorage key changes there.
+  //    More reliable than BroadcastChannel across mobile + tab groups.
+  try {
+    window.addEventListener('storage', function(ev){
+      if(ev && ev.key === 'wcg_signed_out_at') handleSignedOut('storage event');
+    });
   } catch(e){ /* best-effort */ }
 })();
 
