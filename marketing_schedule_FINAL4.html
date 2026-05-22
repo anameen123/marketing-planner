@@ -32,10 +32,11 @@
   --text:#1a2233;--muted:#6b7a99;
 }
 *{box-sizing:border-box;margin:0;padding:0}
-/* Body background = Texas-themed (Dallas skyline), fixed (doesn't scroll).
-   Tint = light purple → burgundy diagonal gradient, lighter opacity so a lot more of
-   the skyline shows through. Cards have their own white backgrounds, so they still
-   pop out clearly against the colored backdrop. */
+/* Per user 2026-05-22: removed the Austin/Dallas skyline photo background —
+   too 'travel postcard' for a professional planner. Replaced with a clean
+   premium gradient (navy → deep purple → subtle highlight) + faint dot
+   pattern overlay for texture. Stays calm and lets cards pop. Cards have
+   their own white backgrounds so they remain crisp against the backdrop. */
 /* Per user 2026-05-21 (Abrar's screen video): some element was overflowing
    horizontally, creating a page-wide scrollbar that let users slide the
    entire layout sideways. Locking overflow-x on html + body prevents any
@@ -46,9 +47,12 @@ html{overflow-x:hidden}
 body{
   font-family:'DM Sans',sans-serif;
   background:
-    /* Light purple → burgundy gradient — ~55-65% opacity, ~40% photo bleed-through */
-    linear-gradient(135deg, rgba(196,181,253,.55) 0%, rgba(167,139,250,.55) 35%, rgba(155,35,53,.65) 100%),
-    url('https://images.unsplash.com/photo-1531218150217-54595bc2b934?auto=format&fit=crop&w=1920&q=80') center top/cover no-repeat fixed,
+    /* Soft radial highlight from upper-left for subtle depth */
+    radial-gradient(circle at 18% 0%, rgba(255,255,255,.08) 0%, transparent 50%),
+    /* Faint diagonal tonal sheen */
+    linear-gradient(135deg, rgba(255,255,255,.04) 0%, transparent 40%),
+    /* Premium navy → deep purple gradient — calm, professional */
+    linear-gradient(180deg, #1F3864 0%, #2a2d6e 45%, #3d2961 100%),
     var(--surface);
   color:var(--text);
   min-height:100vh;
@@ -37509,11 +37513,11 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
 <div class="member-drawer-backdrop" id="member-drawer-backdrop" onclick="toggleMemberDrawer(false)"></div>
 <aside class="member-drawer" id="member-drawer" aria-label="Member menu">
   <div class="member-drawer-header">
-    <!-- Per user 2026-05-21: drawer had no close button — only the backdrop
-         tap or the offscreen hamburger could dismiss it on Samsung phones.
-         Adding an explicit X in the top-right of the drawer itself. -->
-    <button type="button" id="md-close-btn" onclick="toggleMemberDrawer(false)" aria-label="Close menu" style="position:absolute;top:10px;right:10px;background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.25);border-radius:50%;width:30px;height:30px;font-size:18px;font-weight:700;line-height:1;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;padding:0">×</button>
-    <div class="md-user" id="md-user-name" style="padding-right:36px">Member</div>
+    <!-- Per user 2026-05-22: X close button removed (wasn't working as expected
+         on the desktop sidebar — drawer dismiss is done via backdrop tap on
+         mobile, and on desktop the sidebar is always shown so no close is
+         needed). -->
+    <div class="md-user" id="md-user-name">Member</div>
     <div class="md-role">Marketing Team</div>
   </div>
   <div class="member-drawer-body">
