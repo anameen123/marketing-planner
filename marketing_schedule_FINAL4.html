@@ -25480,6 +25480,14 @@ function renderCalGrid(){
       });
     }
     var hasV = matchCount > 0;
+    // Total visits on this day across ALL members (not just the filtered set).
+    // Used to decide if the day should look "occupied" in the grid even when
+    // the current member filter hides them all (per user 2026-05-22 — Abrar
+    // couldn't access days because the member filter made them non-clickable).
+    var totalVisitsRaw = 0;
+    if(di !== undefined && S.days[di] && Array.isArray(S.days[di].rows)){
+      totalVisitsRaw = S.days[di].rows.length;
+    }
     var isT=t.getFullYear()===y&&t.getMonth()===m&&t.getDate()===d;
     var isW=((fd2+d-1)%7===0)||((fd2+d-1)%7===6);
     var cls='cd'+(hasV?' has-visits':'')+(isT?' today':'')+(isW?' wknd':'');
@@ -25506,10 +25514,20 @@ function renderCalGrid(){
     var badge = hasV
       ? '<div class="visit-count-badge" title="'+badgeTip+'" style="'+badgeStyle+'">'+matchCount+'</div>'
       : '';
-    // Click handler — pass through to openDay even if filtered out, but only
-    // when there are visits to drill into.
-    var oc = (di !== undefined && hasV) ? 'onclick="openDay('+di+')"' : '';
-    html+='<div class="'+cls+'" '+oc+'>'+d+dot+badge+'</div>';
+    // Click handler — every day in S.days is clickable so members can ALWAYS
+    // open a day to add a new visit (per user 2026-05-22 — Abrar couldn't
+    // access days because the member filter hid the click affordance from
+    // days where he had no existing visits). The filter affects ONLY the
+    // count badge + visual "has-visits" highlight, NEVER clickability.
+    var oc = (di !== undefined) ? 'onclick="openDay('+di+')"' : '';
+    // Show a faint badge for "this day actually has visits but they're hidden
+    // by your current filter" — so the user knows to clear the filter if
+    // they want to see other members' work on that day.
+    if(!hasV && totalVisitsRaw > 0){
+      badge = '<div class="visit-count-badge" title="' + totalVisitsRaw + ' visit' + (totalVisitsRaw===1?'':'s') + ' on this day, hidden by current filter" style="background:rgba(148,163,184,.4);color:#fff;border:1px dashed rgba(255,255,255,.5)">' + totalVisitsRaw + '</div>';
+    }
+    var cursorStyle = (di !== undefined) ? 'cursor:pointer' : '';
+    html+='<div class="'+cls+'" '+oc+(cursorStyle?' style="'+cursorStyle+'"':'')+'>'+d+dot+badge+'</div>';
   }
   document.getElementById('cal-grid').innerHTML=html;
 
