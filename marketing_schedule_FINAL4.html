@@ -12557,6 +12557,10 @@ window._confirmDeleteReferral = _confirmDeleteReferral;
 function openReferralForm(editId){
   var modal = document.getElementById('referral-form-modal');
   if(!modal) return;
+  // Per user 2026-05-22: reset the survey-mode toggle to 'have' on every open
+  // so the form starts in the normal full-record state. When editing an
+  // existing record, also 'have' (anonymous entries don't open this dialog).
+  if(typeof _rlResetMode === 'function') _rlResetMode();
   // Populate member dropdown
   var mSel = document.getElementById('rl-member');
   if(mSel){
@@ -12915,7 +12919,94 @@ function _rlAppendMemberChip(memberName){
 }
 window._rlAppendMemberChip = _rlAppendMemberChip;
 
+// Per user 2026-05-22: save an "anonymous patient" — front desk got a patient
+// but couldn't extract the referral source. Persists a lightweight record
+// to REFERRAL_LOG with isAnonymous=true so daily/shift totals stay accurate.
+// Does NOT credit a member or source. Filtered out of per-source rankings.
+function _saveAnonymousPatient(){
+  var today = new Date();
+  var iso = today.toISOString();
+  var datePart = (document.getElementById('rl-date').value || iso.slice(0,10));
+  var timePart = (document.getElementById('rl-time').value || iso.slice(11,16));
+  var entry = {
+    id: 'rl_anon_' + Date.now() + '_' + Math.random().toString(36).substr(2,5),
+    isAnonymous: true,
+    entryDate: datePart,
+    entryTime: timePart,
+    ts: iso,
+    addedBy: (CURRENT_USER && CURRENT_USER.name) || '',
+    addedAt: iso,
+    // Source / attribution blank — by design.
+    sourceChannel: '',
+    sourceBusiness: '',
+    memberName: '',
+    memberNames: [],
+    destinationFacility: '',
+    chiefComplaint: '',
+    age: '', gender: '',
+    paymentType: '',
+    insuranceName: '',
+    patientNumber: ''
+  };
+  if(typeof REFERRAL_LOG !== 'undefined' && Array.isArray(REFERRAL_LOG)){
+    REFERRAL_LOG.push(entry);
+    if(typeof _saveReferralLog === 'function') _saveReferralLog();
+    if(typeof showToast === 'function') showToast('+1 patient logged (no survey info)');
+    if(typeof closeReferralForm === 'function') closeReferralForm();
+    if(typeof renderReferralLog === 'function') renderReferralLog();
+  } else {
+    if(typeof showToast === 'function') showToast('Could not log — REFERRAL_LOG not ready');
+  }
+}
+window._saveAnonymousPatient = _saveAnonymousPatient;
+
+// Per user 2026-05-22: toggle the "have survey" / "no survey" mode.
+// 'have' → form is fully active, normal record gets saved.
+// 'skip' → form body dims + locks, submit just increments shift counter.
+function _rlModeChanged(mode){
+  var body = document.getElementById('rl-form-body');
+  var have = document.getElementById('rl-mode-have');
+  var skip = document.getElementById('rl-mode-skip');
+  var hint = document.getElementById('rl-mode-hint');
+  if(!body || !have || !skip) return;
+  if(mode === 'skip'){
+    body.style.opacity = '0.4';
+    body.style.pointerEvents = 'none';
+    body.style.filter = 'grayscale(.4)';
+    have.style.borderColor = 'var(--border)';
+    have.style.color = 'var(--muted)';
+    skip.style.borderColor = '#3b82f6';
+    skip.style.color = '#1e40af';
+    if(hint) hint.textContent = 'Just counts toward shift / total patient counters. No member or source attribution recorded.';
+  } else {
+    body.style.opacity = '';
+    body.style.pointerEvents = '';
+    body.style.filter = '';
+    have.style.borderColor = '#3b82f6';
+    have.style.color = '#1e40af';
+    skip.style.borderColor = 'var(--border)';
+    skip.style.color = 'var(--muted)';
+    if(hint) hint.textContent = 'Full record with referral source. Counts toward member & source stats.';
+  }
+}
+window._rlModeChanged = _rlModeChanged;
+// Reset to 'have' on every open
+function _rlResetMode(){
+  var haveR = document.querySelector('input[name="rl-mode"][value="have"]');
+  if(haveR){ haveR.checked = true; _rlModeChanged('have'); }
+}
+window._rlResetMode = _rlResetMode;
+
 function submitReferralForm(){
+  // Per user 2026-05-22: handle the 'no survey' mode separately —
+  // skip all form validation, persist a lightweight 'anonymous'
+  // record that contributes to shift totals only.
+  var modeR = document.querySelector('input[name="rl-mode"]:checked');
+  var mode = modeR ? modeR.value : 'have';
+  if(mode === 'skip'){
+    _saveAnonymousPatient();
+    return;
+  }
   var errEl = document.getElementById('rl-form-err');
   function showErr(msg){
     if(errEl){ errEl.textContent = msg; errEl.style.display = 'block'; }
@@ -35600,7 +35691,7 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
     </div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       <button onclick="openShiftTotalForm()" style="background:#fff;color:#1F3864;border:1px solid #1F3864;border-radius:8px;padding:9px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;display:inline-flex;align-items:center;gap:6px" title="Log the total patients you saw this shift (for reconciliation)">📊 Log shift total</button>
-      <button onclick="openReferralForm()" style="background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;display:inline-flex;align-items:center;gap:6px">➕ New referral entry</button>
+      <button onclick="openReferralForm()" style="background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;display:inline-flex;align-items:center;gap:6px">➕ Log a Patient</button>
     </div>
   </div>
 
@@ -35882,11 +35973,38 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
 <div id="referral-form-modal" class="modal-ov" style="display:none;z-index:9800">
   <div class="modal-box" style="width:620px;max-width:96vw;max-height:92vh;display:flex;flex-direction:column">
     <div class="modal-top" style="flex-shrink:0;background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff">
-      <span id="rl-form-title">➕ New referral entry</span>
+      <span id="rl-form-title">➕ Log a Patient</span>
       <button onclick="closeReferralForm()" style="background:rgba(255,255,255,.18);color:#fff;border:none">&#215;</button>
     </div>
     <div class="modal-body" style="overflow-y:auto;flex:1;min-height:0;padding:18px 22px">
       <input type="hidden" id="rl-edit-id" value="">
+
+      <!-- ── SURVEY MODE TOGGLE (per user 2026-05-22) ──────────────────
+           Front-desk often gets patients but can't extract survey info.
+           This toggle lets them choose:
+             • 'Have info' = full form, full record (existing flow)
+             • 'No survey' = form dims + locks, submit just counts the patient
+                so daily/shift totals stay accurate even without attribution.
+      -->
+      <div id="rl-mode-toggle" style="background:#f0f7ff;border:1px solid #93c5fd;border-radius:10px;padding:12px 14px;margin-bottom:16px">
+        <div style="font-size:10px;font-weight:800;color:#1e40af;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Patient survey</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <label id="rl-mode-have" class="rl-mode-opt" data-mode="have"
+                 style="flex:1;min-width:160px;display:flex;align-items:center;gap:8px;background:#fff;border:2px solid #3b82f6;border-radius:8px;padding:10px 12px;cursor:pointer;font-size:12px;font-weight:700;color:#1e40af;transition:all .15s">
+            <input type="radio" name="rl-mode" value="have" checked onchange="_rlModeChanged('have')" style="accent-color:#1e40af">
+            <span>✅ We have the survey info</span>
+          </label>
+          <label id="rl-mode-skip" class="rl-mode-opt" data-mode="skip"
+                 style="flex:1;min-width:160px;display:flex;align-items:center;gap:8px;background:#fff;border:2px solid var(--border);border-radius:8px;padding:10px 12px;cursor:pointer;font-size:12px;font-weight:700;color:var(--muted);transition:all .15s">
+            <input type="radio" name="rl-mode" value="skip" onchange="_rlModeChanged('skip')" style="accent-color:#1e40af">
+            <span>⚪ No survey / source unknown</span>
+          </label>
+        </div>
+        <div id="rl-mode-hint" style="font-size:10px;color:#1e40af;margin-top:6px;font-style:italic">Full record with referral source. Counts toward member &amp; source stats.</div>
+      </div>
+
+      <!-- Wrapper around the rest of the form — gets dimmed + locked when mode='skip' -->
+      <div id="rl-form-body">
 
       <!-- ── SECTION 1: Patient identity ─────────────────────────────── -->
       <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">👤 Patient details</div>
@@ -36045,6 +36163,7 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
       </div>
 
       <div id="rl-form-err" style="display:none;background:#fee2e2;border:1px solid #fecaca;color:#991b1b;border-radius:8px;padding:9px 12px;font-size:11px;margin-top:8px"></div>
+      </div><!-- /rl-form-body wrapper -->
     </div>
     <div class="modal-foot" style="flex-shrink:0;background:#fff;padding:12px 22px;border-top:1px solid var(--border);display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap">
       <button onclick="closeReferralForm()" style="background:#e5e7eb;color:#374151;border:none;border-radius:8px;padding:9px 18px;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif">Cancel</button>
