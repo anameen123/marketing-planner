@@ -4246,6 +4246,126 @@ window.openLeadStatusModal=openLeadStatusModal;
 window.closeLeadStatusModal=closeLeadStatusModal;
 window.saveLeadStatus=saveLeadStatus;
 
+// ── OUTREACH ENGAGEMENT (per user 2026-05-22) ────────────────────────────────
+// Outreach events don't have a lead status (no L1/L2/L3 — they're public
+// events, not businesses). Instead members log engagement metrics:
+//   • totalContacts — how many people they talked to
+//   • phones        — how many gave a phone number
+//   • emails        — how many gave an email
+//   • consent       — confirmation that those people agreed to follow-up
+// Stored on the row as row.outreachContacts = {total, phones, emails, consent, notes}.
+// Also mirrored into row.relationship = 'Engaged' so the existing "outcome
+// saved" gate (which checks row.relationship) passes when the row is
+// confirmed.
+var _OEM_DI = null, _OEM_RI = null;
+function openOutreachEngagementModal(name, member, di, ri){
+  var row = (S.days && S.days[di] && S.days[di].rows && S.days[di].rows[ri]) || null;
+  if(!row) return;
+  // Permission: only the assigned member or admin can log engagement
+  if(typeof canEditVisitRow === 'function' && !canEditVisitRow(row)){
+    if(typeof showToast === 'function') showToast('Only ' + (row.member || 'the assigned member') + ' or admin can log engagement.');
+    return;
+  }
+  _OEM_DI = di; _OEM_RI = ri;
+  // Prefill with any existing data
+  var ex = row.outreachContacts || {};
+  var nameEl = document.getElementById('oem-event-name');
+  if(nameEl) nameEl.textContent = name || row.clinic || 'Outreach event';
+  var dateEl = document.getElementById('oem-event-date');
+  if(dateEl){
+    try {
+      var d = new Date((S.days[di].date)+'T00:00:00');
+      dateEl.textContent = '🏘 ' + d.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'}) + (member ? ' · ' + member : '');
+    } catch(_){ dateEl.textContent = S.days[di].date; }
+  }
+  (document.getElementById('oem-total')   || {}).value = ex.total   || 0;
+  (document.getElementById('oem-phones')  || {}).value = ex.phones  || 0;
+  (document.getElementById('oem-emails')  || {}).value = ex.emails  || 0;
+  (document.getElementById('oem-consent') || {}).checked = !!ex.consent;
+  (document.getElementById('oem-notes')   || {}).value = (ex.notes != null ? ex.notes : (row.leadNotes || ''));
+  _oemValidate();
+  var modal = document.getElementById('outreach-engagement-modal');
+  if(modal) modal.style.display = 'flex';
+}
+window.openOutreachEngagementModal = openOutreachEngagementModal;
+
+function closeOutreachEngagementModal(){
+  var modal = document.getElementById('outreach-engagement-modal');
+  if(modal) modal.style.display = 'none';
+  _OEM_DI = null; _OEM_RI = null;
+}
+window.closeOutreachEngagementModal = closeOutreachEngagementModal;
+
+// Live validation: phones + emails individually can't exceed total people.
+// (A person could give both — that's fine — but neither subcount can exceed
+// the headcount they were drawn from.)
+function _oemValidate(){
+  var total  = parseInt((document.getElementById('oem-total')  || {}).value || '0', 10) || 0;
+  var phones = parseInt((document.getElementById('oem-phones') || {}).value || '0', 10) || 0;
+  var emails = parseInt((document.getElementById('oem-emails') || {}).value || '0', 10) || 0;
+  var msgEl = document.getElementById('oem-validation-msg');
+  var problems = [];
+  if(phones > total) problems.push('Phone count ('+phones+') can\'t exceed people talked to ('+total+').');
+  if(emails > total) problems.push('Email count ('+emails+') can\'t exceed people talked to ('+total+').');
+  if(problems.length){
+    if(msgEl){ msgEl.style.display = 'block'; msgEl.textContent = problems.join(' '); }
+  } else if(msgEl){
+    msgEl.style.display = 'none';
+    msgEl.textContent = '';
+  }
+}
+window._oemValidate = _oemValidate;
+
+function saveOutreachEngagement(){
+  if(_OEM_DI == null || _OEM_RI == null) return;
+  var row = S.days[_OEM_DI] && S.days[_OEM_DI].rows && S.days[_OEM_DI].rows[_OEM_RI];
+  if(!row){ closeOutreachEngagementModal(); return; }
+  var total   = Math.max(0, parseInt((document.getElementById('oem-total')   || {}).value || '0', 10) || 0);
+  var phones  = Math.max(0, parseInt((document.getElementById('oem-phones')  || {}).value || '0', 10) || 0);
+  var emails  = Math.max(0, parseInt((document.getElementById('oem-emails')  || {}).value || '0', 10) || 0);
+  var consent = !!(document.getElementById('oem-consent') && document.getElementById('oem-consent').checked);
+  var notes   = ((document.getElementById('oem-notes') || {}).value || '').trim();
+  // Validate
+  if(phones > total || emails > total){
+    if(typeof showToast === 'function') showToast('Phone / email count can\'t exceed total people talked to.');
+    return;
+  }
+  if((phones > 0 || emails > 0) && !consent){
+    if(typeof showToast === 'function') showToast('You collected contact info — please confirm consent before saving.');
+    return;
+  }
+  // Save
+  row.outreachContacts = {
+    total: total, phones: phones, emails: emails,
+    consent: consent, notes: notes,
+    savedBy: (CURRENT_USER && CURRENT_USER.name) || '',
+    savedAt: new Date().toISOString()
+  };
+  // Mirror into row.relationship so the existing "outcome saved" gate that
+  // controls the row Confirm button passes for outreach too.
+  row.relationship = 'Engaged';
+  if(notes) row.leadNotes = notes;
+  if(typeof _saveS === 'function') _saveS();
+  if(typeof refresh === 'function') refresh(_OEM_DI);
+  if(typeof showToast === 'function') showToast('Engagement saved · ' + total + ' people · ' + phones + ' phones · ' + emails + ' emails');
+  closeOutreachEngagementModal();
+}
+window.saveOutreachEngagement = saveOutreachEngagement;
+
+// Helper used by the visit-row renderer — returns the engagement badge HTML
+// (or empty string if no engagement saved yet).
+function _outreachEngagementBadgeHTML(row){
+  var ex = row && row.outreachContacts;
+  if(!ex) return '';
+  var parts = [];
+  parts.push('<span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;background:#ede9fe;color:#5b21b6;border:1px solid #c4b5fd;border-radius:4px;padding:1px 6px;font-weight:700">👥 ' + (ex.total || 0) + '</span>');
+  if((ex.phones || 0) > 0) parts.push('<span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;background:#dbeafe;color:#1e40af;border:1px solid #93c5fd;border-radius:4px;padding:1px 6px;font-weight:700" title="Gave phone">📞 ' + ex.phones + '</span>');
+  if((ex.emails || 0) > 0) parts.push('<span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;background:#fef3c7;color:#92400e;border:1px solid #fcd34d;border-radius:4px;padding:1px 6px;font-weight:700" title="Gave email">✉ ' + ex.emails + '</span>');
+  if(ex.consent) parts.push('<span style="font-size:9px;color:#166534" title="Consent confirmed for follow-up contact">✓</span>');
+  return parts.join(' ');
+}
+window._outreachEngagementBadgeHTML = _outreachEngagementBadgeHTML;
+
 
 // ── COMMUNITY OUTREACH DATA ───────────────────────────────────────────────────
 var OUTREACH = [
@@ -17623,6 +17743,22 @@ function _evRenderSpendingSummary(row){
 function _evRenderLeadSummary(row){
   var box = document.getElementById('ev-lead-summary');
   if(!box) return;
+  // Outreach branch — show engagement metrics, not lead status (per user
+  // 2026-05-22 — outreach events aren't businesses; we collect contacts).
+  var _isOutreach = false;
+  if(row && row.clinic && typeof OUTREACH !== 'undefined' && OUTREACH){
+    _isOutreach = OUTREACH.some(function(o){ return o && o.name === row.clinic; });
+  }
+  if(_isOutreach){
+    var ex = (row && row.outreachContacts) || null;
+    var label = ex
+      ? '🏘 ' + (ex.total||0) + ' people · 📞 ' + (ex.phones||0) + ' · ✉ ' + (ex.emails||0) + (ex.consent ? ' · ✓ consent' : '')
+      : '⚠ No engagement logged yet';
+    var btnLbl = ex ? 'Change' : 'Log engagement';
+    var btn = '<button onclick="_evOpenLeadStatusFromEdit()" style="background:#7030A0;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer;font-family:DM Sans,sans-serif">' + btnLbl + '</button>';
+    box.innerHTML = '<span>' + label + '</span>' + btn;
+    return;
+  }
   var lead = (row && row.clinic && typeof getClinicLead === 'function') ? getClinicLead(row.clinic) : null;
   var hasOutcome = !!(row && row.relationship);
   var label = hasOutcome
@@ -17655,6 +17791,15 @@ function _evOpenLeadStatusFromEdit(){
   if(_evDi == null || _evRi == null) return;
   var row = S.days[_evDi] && S.days[_evDi].rows[_evRi];
   if(!row) return;
+  // Outreach → engagement modal; everything else → lead-status modal.
+  var _isOutreach = false;
+  if(row.clinic && typeof OUTREACH !== 'undefined' && OUTREACH){
+    _isOutreach = OUTREACH.some(function(o){ return o && o.name === row.clinic; });
+  }
+  if(_isOutreach && typeof openOutreachEngagementModal === 'function'){
+    openOutreachEngagementModal(row.clinic, row.member, _evDi, _evRi);
+    return;
+  }
   if(typeof openLeadStatusModal === 'function'){
     openLeadStatusModal(row.clinic, row.member, _evDi, _evRi);
   } else if(typeof showToast === 'function'){
@@ -23264,8 +23409,40 @@ function rowHTML(row,di,ri){
   //   3) Outcome saved + row NOT confirmed → badge + Edit button (still editable)
   //   4) Outcome saved + row CONFIRMED     → badge only + "🔒 Confirmed — undo row to edit"
   var leadsCell;
+  // Detect outreach so we route to the engagement modal instead of the
+  // lead-status modal (per user 2026-05-22 — outreach events are not
+  // businesses, so L1/L2/L3 doesn't apply; we collect contacts instead).
+  var _rowIsOutreach = false;
+  if(row.clinic && typeof OUTREACH !== 'undefined' && OUTREACH){
+    _rowIsOutreach = OUTREACH.some(function(o){ return o && o.name === row.clinic; });
+  }
   if(!isComp){
     leadsCell = '<span class="lead-locked">&#128274; Only when Completed</span>';
+  } else if(_rowIsOutreach){
+    // ── OUTREACH BRANCH ────────────────────────────────────────────────
+    // Show the engagement badge if data exists; otherwise the Log Engagement
+    // button. No lead status, no L1/L2/L3.
+    var _safeOutName = (row.clinic||'').replace(/'/g,"\\'").replace(/"/g,'&quot;');
+    var _safeOutMember = (row.member||'').replace(/'/g,"\\'");
+    var _engagementSet = !!(row.outreachContacts && (row.outreachContacts.total != null));
+    if(!_engagementSet){
+      if(canEditDate(day.date)){
+        leadsCell = '<button onclick="openOutreachEngagementModal(\''+_safeOutName+'\', \''+_safeOutMember+'\', '+di+', '+ri+')" '
+          +'style="background:#7030A0;color:#fff;border:none;border-radius:5px;padding:4px 9px;font-size:10px;font-weight:600;cursor:pointer;font-family:DM Sans,sans-serif;white-space:nowrap" '
+          +'title="Log how many people you talked to and how many gave contact info">🏘 Log engagement</button>';
+      } else {
+        leadsCell = '<span style="font-size:9px;color:var(--muted);font-style:italic">&#128274; locked</span>';
+      }
+    } else {
+      var _badge = _outreachEngagementBadgeHTML(row);
+      var _editAffordance = '';
+      if(row.rowConfirmed){
+        _editAffordance = '<span style="font-size:9px;color:#16a34a;font-style:italic" title="Row confirmed — open ✎ Edit to change.">&#128274;</span>';
+      } else if(canEditDate(day.date)){
+        _editAffordance = '<button onclick="openOutreachEngagementModal(\''+_safeOutName+'\', \''+_safeOutMember+'\', '+di+', '+ri+')" style="background:none;border:1px solid var(--border);border-radius:4px;padding:1px 6px;font-size:9px;color:var(--muted);cursor:pointer;font-family:inherit" title="Edit engagement">&#9998;</button>';
+      }
+      leadsCell = '<div style="display:inline-flex;align-items:center;gap:4px;flex-wrap:wrap">' + _badge + _editAffordance + '</div>';
+    }
   } else {
     var lead = (typeof getClinicLead === 'function' && row.clinic) ? getClinicLead(row.clinic) : {status:'not_visited',level:0};
     var safeName = (row.clinic||'').replace(/'/g,"\\'").replace(/"/g,'&quot;');
@@ -39538,6 +39715,62 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
     <div class="modal-foot">
       <button class="btn-cancel" onclick="closeLeadStatusModal()">Cancel</button>
       <button class="btn-save" onclick="saveLeadStatus()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── OUTREACH ENGAGEMENT MODAL (per user 2026-05-22) ─────────────────────
+     Outreach events are NOT businesses — there's no lead status to set
+     (L1/L2/L3 doesn't apply to a public event). Instead we track three
+     numbers + a consent confirmation:
+       • How many people did you talk to / collect info from?
+       • Of those, how many gave a phone number?
+       • Of those, how many gave an email?
+       • Consent confirmed that those people agreed to be contacted.
+     Notes go into the existing row.leadNotes field so they still show
+     in the calendar's "Notes" column. ─────────────────────────────────── -->
+<div id="outreach-engagement-modal" style="display:none" class="modal-ov" tabindex="-1">
+  <div class="modal-box" style="width:480px;max-width:95vw">
+    <div class="modal-top" style="background:linear-gradient(135deg,#7030A0,#5b21b6);color:#fff">🏘 Outreach Engagement <button onclick="closeOutreachEngagementModal()" style="background:rgba(255,255,255,.18);color:#fff;border:none">&#215;</button></div>
+    <div class="modal-body" style="padding:18px 22px">
+      <div id="oem-event-name" style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:4px"></div>
+      <div id="oem-event-date" style="font-size:11px;color:var(--muted);margin-bottom:14px"></div>
+
+      <div style="background:#fff7ed;border:1px solid #fed7aa;border-left:3px solid #f59e0b;border-radius:8px;padding:9px 12px;margin-bottom:14px;font-size:11.5px;color:#7c2d12;line-height:1.45">
+        This isn't a clinic — outreach events are <strong>people-collection</strong>. Tell us how many people you connected with, and how many shared their contact info for follow-up.
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr;gap:10px;margin-bottom:10px">
+        <div>
+          <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">👥 People you talked to <span style="color:var(--muted);font-weight:400">(total)</span></label>
+          <input type="number" id="oem-total" min="0" value="0" oninput="_oemValidate()" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div>
+            <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">📞 Gave phone number</label>
+            <input type="number" id="oem-phones" min="0" value="0" oninput="_oemValidate()" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box">
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">✉ Gave email address</label>
+            <input type="number" id="oem-emails" min="0" value="0" oninput="_oemValidate()" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box">
+          </div>
+        </div>
+        <div id="oem-validation-msg" style="display:none;font-size:11px;color:#dc2626;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:6px 9px"></div>
+      </div>
+
+      <label style="display:flex;align-items:flex-start;gap:8px;padding:10px 12px;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;cursor:pointer;font-size:12px;color:#14532d;line-height:1.4;margin-bottom:10px">
+        <input type="checkbox" id="oem-consent" style="margin-top:2px;cursor:pointer">
+        <span><strong>Consent confirmed</strong> — the people who shared their info agreed to be contacted later (calls, emails, or notifications). I won't contact anyone who didn't agree.</span>
+      </label>
+
+      <div>
+        <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Notes <span style="color:var(--muted);font-weight:400">(optional)</span></label>
+        <textarea id="oem-notes" rows="2" placeholder="How did it go? Anything worth remembering?" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:12px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box;resize:vertical"></textarea>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-cancel" onclick="closeOutreachEngagementModal()">Cancel</button>
+      <button class="btn-save" onclick="saveOutreachEngagement()">Save engagement</button>
     </div>
   </div>
 </div>
