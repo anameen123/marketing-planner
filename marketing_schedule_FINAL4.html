@@ -11256,6 +11256,23 @@ function _renderClinicContactPanel(name){
   var contactLabel = (ref.type === 'mva') ? 'Attorney'
                    : (ref.type === 'outreach') ? 'Contact'
                    : 'Physician';
+  // Per user 2026-05-22: Area (city) is part of business identity and
+  // generally immutable. Admin gets a rare-case override that triggers
+  // a strong confirmation ("only for cases when the business has moved").
+  // For non-admin (and for the regular row helper), we render City as
+  // plain text with NO ✎ pencil.
+  var citySafeName = String(name).replace(/'/g,"\\'").replace(/"/g,'&quot;');
+  var citySafeVal  = (city || '').replace(/</g,'&lt;');
+  var cityDisp = city ? citySafeVal : '<span style="color:var(--muted);font-style:italic">— not recorded —</span>';
+  var cityEditBtn = canEdit
+    ? '<button onclick="_promptAreaMoveOverride(\'' + citySafeName + '\')" '
+      + 'title="ADMIN ONLY: change area — use only when the business has physically moved to a new city." '
+      + 'style="background:#fef2f2;border:1px solid #fca5a5;border-radius:5px;padding:2px 8px;font-size:10px;cursor:pointer;color:#991b1b;margin-left:6px">⚠ Move</button>'
+    : '';
+  var cityRowHtml = '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 0;border-bottom:1px dashed var(--border)">'
+                  +   '<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;min-width:90px;flex-shrink:0">Area</div>'
+                  +   '<div style="flex:1;font-size:12px;color:var(--text);text-align:right;word-break:break-all">' + cityDisp + cityEditBtn + '</div>'
+                  + '</div>';
   panel.innerHTML = ''
     + '<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 16px">'
     +   '<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">📞 Contact info</div>'
@@ -11265,9 +11282,98 @@ function _renderClinicContactPanel(name){
     +   row('Fax',       fax,       'fax',   null)
     +   row('Website',   website,   'website', 'url')
     +   row('Address',   address,   'address', null)
-    +   row('City',      city,      null, null)
+    +   cityRowHtml
     + '</div>';
 }
+// Strong confirmation for the rare case when admin needs to change a
+// business's area (city). Per user 2026-05-22: 'area is part of the
+// identification of the clinics, MVAs, and outreach. Cannot be changed
+// even by admin except by administration order, like changing status,
+// when the business moves location.' This is the override path.
+function _promptAreaMoveOverride(businessName){
+  if(typeof isAdmin !== 'function' || !isAdmin()){
+    if(typeof showToast === 'function') showToast('Admin only.');
+    return;
+  }
+  if(!businessName){ return; }
+  var ref = (typeof _getBusinessRecord === 'function') ? _getBusinessRecord(businessName) : null;
+  if(!ref){
+    if(typeof showToast === 'function') showToast('Business not found.');
+    return;
+  }
+  var currentCity = (ref.type === 'mva') ? (ref.record.city || '') : (ref.record.c || ref.record.city || '');
+  // First gate — explain the rule and ask if the business actually moved.
+  if(typeof showConfirm !== 'function'){
+    if(typeof showToast === 'function') showToast('Confirmation modal unavailable.');
+    return;
+  }
+  showConfirm({
+    icon: '⚠',
+    msg: 'Move business to a new area?',
+    sub: 'Area is part of the business identity and is normally immutable.\n\n'
+       + 'Use this ONLY when "' + businessName + '" has physically moved to a different city.\n\n'
+       + 'Current area: <strong>' + (currentCity || '(not set)') + '</strong>\n\n'
+       + 'Past visits at the old area stay intact — they were correct at the time.',
+    yesLabel: 'Yes, the business moved',
+    danger: true,
+    onConfirm: function(){
+      // Second step — prompt for the new area.
+      var promptMsg = 'Enter the NEW area / city for "' + businessName + '":';
+      var newCity = (typeof prompt === 'function') ? prompt(promptMsg, currentCity) : null;
+      if(newCity === null) return;          // admin cancelled
+      newCity = (newCity || '').trim();
+      if(!newCity){
+        if(typeof showToast === 'function') showToast('Area cannot be empty.');
+        return;
+      }
+      if(newCity.toLowerCase() === (currentCity || '').toLowerCase()){
+        if(typeof showToast === 'function') showToast('That is the same area — no change.');
+        return;
+      }
+      // Final confirmation — show the proposed change.
+      showConfirm({
+        icon: '?',
+        msg: 'Confirm area change',
+        sub: '"' + businessName + '"\n\nOld area: ' + (currentCity || '(not set)') + '\nNew area: ' + newCity + '\n\nThis is logged in the activity feed.',
+        yesLabel: 'Confirm move',
+        danger: true,
+        onConfirm: function(){
+          // Apply the change to the actual record.
+          if(ref.type === 'mva'){
+            ref.record.city = newCity;
+          } else {
+            ref.record.c = newCity;
+            if(typeof ref.record.city !== 'undefined') ref.record.city = newCity;
+          }
+          // Persist (CLINIC_BANK / MVA_ATTORNEYS / OUTREACH are auto-synced via DataLayer)
+          try {
+            if(ref.type === 'clinic' && typeof _CL_LS_KEY !== 'undefined' && typeof DataLayer !== 'undefined' && DataLayer.save){
+              DataLayer.save(_CL_LS_KEY, CLINIC_LEADS);    // no-op for bank, kept for safety
+            }
+          } catch(e){}
+          // Trigger renderBank to refresh the card display
+          if(typeof renderBank === 'function') renderBank();
+          if(typeof renderMVABank === 'function') renderMVABank();
+          if(typeof renderOutreach === 'function') renderOutreach();
+          if(typeof _renderClinicContactPanel === 'function') _renderClinicContactPanel(businessName);
+          if(typeof showToast === 'function') showToast('Area changed to ' + newCity);
+          // Log to admin notifications if available
+          try {
+            if(typeof addAdminNotification === 'function'){
+              addAdminNotification({
+                ts: new Date().toISOString(),
+                by: (CURRENT_USER && CURRENT_USER.name) || 'admin',
+                kind: 'area_move',
+                summary: 'Moved "' + businessName + '" from ' + currentCity + ' → ' + newCity
+              });
+            }
+          } catch(_){}
+        }
+      });
+    }
+  });
+}
+window._promptAreaMoveOverride = _promptAreaMoveOverride;
 window._renderClinicContactPanel = _renderClinicContactPanel;
 
 // Tiny prompt-based inline editor. Asks for the new value, validates a
@@ -24369,11 +24475,29 @@ function renderDayTable(di){
   var _dt_dayDate = day.date;
   var _dt_isPastLocked = isDateInPast(_dt_dayDate) && !(typeof isAdmin==='function' && isAdmin());
 
+  // Per user 2026-05-22: hide empty placeholder rows from the day view.
+  // A row is "empty" if it has no clinic AND no member AND isn't currently
+  // being edited / isn't a manual in-progress row. The seed schedule
+  // pre-creates 6 empty slots per day; users only see them once they
+  // actually fill them. Real rows (assigned to a member or with a clinic)
+  // always render. Indices in day.rows stay stable so existing callbacks
+  // (setMember(di, ri, ...) etc.) still work — we just SKIP rendering the
+  // empties, we don't remove them from S.days.
+  function _isVisibleRow(r){
+    if(!r) return false;
+    if(r.isManual || r.editing) return true;
+    if(r.clinic) return true;
+    if(r.member) return true;
+    return false;
+  }
+  var visibleCount = day.rows.filter(_isVisibleRow).length;
   var subEl = document.getElementById('dv-sub');
-  if(subEl) subEl.textContent = day.rows.length + ' visits · ' + (day.focus || 'no focus area') + ' focus area';
+  if(subEl) subEl.textContent = visibleCount + ' visit' + (visibleCount === 1 ? '' : 's') + ' · ' + (day.focus || 'no focus area') + ' focus area';
   var html='';
   day.rows.forEach(function(_,ri){
-    try { html += rowHTML(day.rows[ri], di, ri); }
+    var row = day.rows[ri];
+    if(!_isVisibleRow(row)) return;
+    try { html += rowHTML(row, di, ri); }
     catch(rowErr){ try { console.warn('[renderDayTable] row render failed at ri='+ri, rowErr); } catch(_){} }
   });
   html+='<tr class="add-visit-row"><td colspan="10"><button class="add-visit-btn" onclick="addVisit('+di+')">&#43; Add Visit</button></td></tr>';
