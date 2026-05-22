@@ -1663,10 +1663,16 @@ body.role-front_desk #referrals-view {
       </div><div class="cal-card">
         <div class="cal-month-nav">
           <span id="cal-month-label">May 2026</span>
-          <div style="display:flex;gap:6px;align-items:center">
-            <!-- Member filter (per user 2026-05-19) — pick a member to show
-                 only days containing visits assigned to / completed by /
-                 canceled by them. Populated at runtime by renderCalGrid. -->
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
+            <!-- Business-type chips (per user 2026-05-22) — toggle which
+                 business types contribute to the day's visit-count badge.
+                 Default = all on. Tap a chip to mute that type. -->
+            <button id="cal-bizchip-clinic"   type="button" onclick="toggleCalBizType('clinic')"   title="Show / hide CLINIC visits on the calendar" style="background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.35);color:#fff;border-radius:14px;padding:3px 9px;font-size:10px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;letter-spacing:.02em">🏥 Clinics</button>
+            <button id="cal-bizchip-mva"      type="button" onclick="toggleCalBizType('mva')"      title="Show / hide MVA-attorney visits" style="background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.35);color:#fff;border-radius:14px;padding:3px 9px;font-size:10px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;letter-spacing:.02em">⚖ MVAs</button>
+            <button id="cal-bizchip-outreach" type="button" onclick="toggleCalBizType('outreach')" title="Show / hide community-outreach visits" style="background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.35);color:#fff;border-radius:14px;padding:3px 9px;font-size:10px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;letter-spacing:.02em">🏘 Outreach</button>
+            <span style="opacity:.35;color:#fff">·</span>
+            <!-- Member filter — pick a member to show only days containing
+                 visits assigned to / completed by / canceled by them. -->
             <select id="cal-member-filter" onchange="setCalMemberFilter(this.value)"
                     title="Filter the calendar to one member's visits"
                     style="background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.25);color:#fff;border-radius:6px;padding:5px 8px;font-size:11px;font-family:'DM Sans',sans-serif;cursor:pointer;outline:none">
@@ -1681,6 +1687,13 @@ body.role-front_desk #referrals-view {
               <option value="Postponed">Postponed</option>
               <option value="Canceled">Canceled</option>
             </select>
+            <span style="opacity:.35;color:#fff">·</span>
+            <!-- Quick-jump buttons (per user 2026-05-22) — "easier to track"
+                 per his request. Tap Today to scroll to the current day cell;
+                 Week jumps the calendar header to today's week if we're
+                 looking at a different month. -->
+            <button onclick="jumpCalToday()"  title="Scroll to today's cell" style="background:rgba(34,197,94,.25);border:1px solid rgba(34,197,94,.55);color:#fff;border-radius:6px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif">Today</button>
+            <button onclick="jumpCalThisWeek()" title="Show the current calendar week" style="background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.25);color:#fff;border-radius:6px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif">This week</button>
             <button onclick="navMonth(-1)">&#8249;</button>
             <button onclick="navMonth(1)">&#8250;</button>
           </div>
@@ -2613,6 +2626,15 @@ body.role-front_desk #referrals-view {
           <input type="date" id="fin-log-date-to" onchange="renderFinancesLog()" title="To date (optional — leave empty for a single day)" placeholder="optional" style="border:1px solid var(--border);border-radius:6px;padding:3px 6px;font-size:11px;font-family:'DM Sans',sans-serif;background:#fff;outline:none">
           <button onclick="_finClearDateFilter()" title="Clear day filter" style="background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;padding:2px 4px;font-family:'DM Sans',sans-serif">✕</button>
         </div>
+        <!-- Search + sort + CSV (per user 2026-05-22 — "easier to track"). -->
+        <input id="fin-log-search" type="text" placeholder="🔍 Search business…" oninput="renderFinancesLog()" autocomplete="off" style="border:1px solid var(--border);border-radius:8px;padding:7px 12px;font-size:12px;font-family:'DM Sans',sans-serif;background:#fff;outline:none;width:170px">
+        <select id="fin-log-sort" onchange="renderFinancesLog()" title="Sort spending entries" style="border:1px solid var(--border);border-radius:8px;padding:7px 12px;font-size:12px;font-family:'DM Sans',sans-serif;background:#fff;outline:none">
+          <option value="newest">↓ Newest first</option>
+          <option value="oldest">↑ Oldest first</option>
+          <option value="amount-hi">💰 Amount: high → low</option>
+          <option value="amount-lo">💰 Amount: low → high</option>
+        </select>
+        <button onclick="exportFinancesLogCSV()" title="Export the rows currently visible (with all active filters applied) to a CSV file" style="background:#1F3864;color:#fff;border:none;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;display:inline-flex;align-items:center;gap:5px">📥 Export CSV</button>
       </div>
       <div id="fin-log-summary" style="font-size:11px;color:var(--muted)"></div>
     </div>
@@ -25296,6 +25318,92 @@ function setCalStatusFilter(st){
 window.setCalMemberFilter = setCalMemberFilter;
 window.setCalStatusFilter = setCalStatusFilter;
 
+// ── BUSINESS-TYPE CHIP FILTER (per user 2026-05-22) ─────────────────────────
+// Each chip toggles whether visits of that biz-type contribute to the day's
+// count badge. All three default-on. Tapping a chip mutes that biz-type;
+// tapping it again re-includes it. State persists in localStorage so a
+// member who only tracks clinics doesn't have to re-mute MVA + outreach
+// on every page reload.
+var _CAL_BIZ_TYPES = (function(){
+  try {
+    var raw = localStorage.getItem('calBizTypes');
+    if(raw){ var p = JSON.parse(raw); if(p && typeof p === 'object') return p; }
+  } catch(_){}
+  return { clinic: true, mva: true, outreach: true };
+})();
+function toggleCalBizType(t){
+  if(!t) return;
+  _CAL_BIZ_TYPES[t] = !_CAL_BIZ_TYPES[t];
+  try { localStorage.setItem('calBizTypes', JSON.stringify(_CAL_BIZ_TYPES)); } catch(_){}
+  _refreshCalBizChips();
+  renderCalGrid();
+}
+window.toggleCalBizType = toggleCalBizType;
+function _refreshCalBizChips(){
+  ['clinic','mva','outreach'].forEach(function(t){
+    var el = document.getElementById('cal-bizchip-'+t);
+    if(!el) return;
+    var on = !!_CAL_BIZ_TYPES[t];
+    el.style.background = on ? 'rgba(255,255,255,.18)' : 'rgba(255,255,255,.05)';
+    el.style.color      = on ? '#fff' : 'rgba(255,255,255,.4)';
+    el.style.textDecoration = on ? '' : 'line-through';
+    el.style.opacity    = on ? '1' : '.55';
+  });
+}
+window._refreshCalBizChips = _refreshCalBizChips;
+
+// ── QUICK-JUMP BUTTONS (per user 2026-05-22) ────────────────────────────────
+// "Today" — make the calendar show the current month + scroll-pulse today's
+// cell so the user sees where they are at a glance. "This week" — same but
+// gives a brief outline highlight to the week-of-today across the grid.
+function jumpCalToday(){
+  var now = new Date();
+  S.cal.y = now.getFullYear();
+  S.cal.m = now.getMonth();
+  renderCalGrid();
+  // Scroll + pulse today's cell after the grid repaints
+  setTimeout(function(){
+    var cells = document.querySelectorAll('#cal-grid .cd.today');
+    if(cells && cells[0]){
+      try { cells[0].scrollIntoView({behavior:'smooth', block:'center'}); } catch(_){}
+      cells[0].style.transition = 'box-shadow .4s';
+      cells[0].style.boxShadow = '0 0 0 4px rgba(34,197,94,.55)';
+      setTimeout(function(){ cells[0].style.boxShadow = ''; }, 1800);
+    }
+  }, 60);
+}
+window.jumpCalToday = jumpCalToday;
+function jumpCalThisWeek(){
+  var now = new Date();
+  S.cal.y = now.getFullYear();
+  S.cal.m = now.getMonth();
+  renderCalGrid();
+  setTimeout(function(){
+    var todayCell = document.querySelector('#cal-grid .cd.today');
+    if(!todayCell) return;
+    // Find the parent grid + compute which week-row this cell belongs to.
+    // Outline all cells whose index is within the same week (7-cell band).
+    var grid = todayCell.parentNode;
+    if(!grid) return;
+    var cells = Array.prototype.slice.call(grid.querySelectorAll('.cd'));
+    var todayIdx = cells.indexOf(todayCell);
+    if(todayIdx < 0) return;
+    var weekStart = todayIdx - (todayIdx % 7);
+    var weekEnd   = weekStart + 6;
+    for(var i = weekStart; i <= weekEnd && i < cells.length; i++){
+      cells[i].style.transition = 'box-shadow .4s';
+      cells[i].style.boxShadow  = 'inset 0 0 0 2px rgba(34,197,94,.55)';
+    }
+    try { todayCell.scrollIntoView({behavior:'smooth', block:'center'}); } catch(_){}
+    setTimeout(function(){
+      for(var j = weekStart; j <= weekEnd && j < cells.length; j++){
+        cells[j].style.boxShadow = '';
+      }
+    }, 2400);
+  }, 60);
+}
+window.jumpCalThisWeek = jumpCalThisWeek;
+
 // Does this visit row match the active calendar filter?
 function _calRowMatchesFilter(row){
   if(!row) return false;
@@ -25307,6 +25415,11 @@ function _calRowMatchesFilter(row){
   }
   if(_CAL_STATUS_FILTER){
     if((row.status || 'Pending') !== _CAL_STATUS_FILTER) return false;
+  }
+  // Business-type chip filter (per user 2026-05-22)
+  if(typeof getBizTypeForName === 'function' && row.clinic){
+    var bt = getBizTypeForName(row.clinic) || 'clinic';
+    if(_CAL_BIZ_TYPES && _CAL_BIZ_TYPES[bt] === false) return false;
   }
   return true;
 }
@@ -25332,6 +25445,8 @@ function renderCalGrid(){
   }
   var stSel = document.getElementById('cal-status-filter');
   if(stSel) stSel.value = _CAL_STATUS_FILTER || '';
+  // Sync chip visuals to current state (handles page-load + persisted prefs)
+  if(typeof _refreshCalBizChips === 'function') _refreshCalBizChips();
   // ── FILTER BANNER (top of the calendar card) ────────────────────────
   var banner = document.getElementById('cal-filter-banner');
   if(banner){
@@ -25351,11 +25466,17 @@ function renderCalGrid(){
   for(var d=1;d<=last;d++){
     var iso=y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
     var di=dateMap[iso];
-    // Compute the filtered visit count for this day
-    var matchCount = 0;
+    // Compute the filtered visit count for this day, broken down by status
+    // so the badge can be tinted by completion progress (per user 2026-05-22
+    // "easier to track" request).
+    var matchCount = 0, doneCount = 0, cancelCount = 0;
     if(di !== undefined && S.days[di] && Array.isArray(S.days[di].rows)){
       S.days[di].rows.forEach(function(r){
-        if(_calRowMatchesFilter(r)) matchCount++;
+        if(!_calRowMatchesFilter(r)) return;
+        matchCount++;
+        var st = r.status || 'Pending';
+        if(st === 'Completed') doneCount++;
+        else if(st === 'Canceled') cancelCount++;
       });
     }
     var hasV = matchCount > 0;
@@ -25363,7 +25484,28 @@ function renderCalGrid(){
     var isW=((fd2+d-1)%7===0)||((fd2+d-1)%7===6);
     var cls='cd'+(hasV?' has-visits':'')+(isT?' today':'')+(isW?' wknd':'');
     var dot=hasV?(mosqueSet[iso]?'<div class="cd-dot" style="background:#059669"></div>':'<div class="cd-dot"></div>'):'';
-    var badge=hasV?'<div class="visit-count-badge">'+matchCount+'</div>':'';
+    // Badge color reflects completion progress:
+    //   all completed     → green
+    //   all canceled      → red
+    //   partial completed → amber
+    //   none completed    → default (current purple/dark badge)
+    var badgeStyle = '';
+    var badgeTip = matchCount + ' visit' + (matchCount===1?'':'s');
+    if(hasV){
+      if(cancelCount === matchCount){
+        badgeStyle = 'background:#dc2626;color:#fff';
+        badgeTip += ' · all canceled';
+      } else if(doneCount === matchCount){
+        badgeStyle = 'background:#16a34a;color:#fff';
+        badgeTip += ' · all completed';
+      } else if(doneCount > 0){
+        badgeStyle = 'background:#f59e0b;color:#fff';
+        badgeTip += ' · ' + doneCount + ' completed';
+      }
+    }
+    var badge = hasV
+      ? '<div class="visit-count-badge" title="'+badgeTip+'" style="'+badgeStyle+'">'+matchCount+'</div>'
+      : '';
     // Click handler — pass through to openDay even if filtered out, but only
     // when there are visits to drill into.
     var oc = (di !== undefined && hasV) ? 'onclick="openDay('+di+')"' : '';
@@ -27622,6 +27764,69 @@ function spendingLogNavMonth(dir){
 }
 window.spendingLogNavMonth = spendingLogNavMonth;
 
+// CSV export of the CURRENTLY-VISIBLE spending-log rows (per user 2026-05-22).
+// Honors every active filter (member, type, date range, search, sort) so a
+// team lead can grab "Duaa, MVA only, May 1-15" in one click. One row per
+// spending item — gives Excel a flat shape for pivot tables.
+function exportFinancesLogCSV(){
+  var rows = window._FIN_LOG_VISIBLE_ROWS || [];
+  if(!rows.length){
+    if(typeof showToast === 'function') showToast('Nothing to export — adjust your filters.');
+    return;
+  }
+  var header = ['Date','Day','Business','Type','Member','Co-Members','Item','Qty','Unit Price','Item Total','Visit Total','Over Limit','Override Reason','Notes'];
+  var lines = [header];
+  rows.forEach(function(r){
+    var day = r.date;
+    var dn = '';
+    try { dn = new Date(day+'T00:00:00').toLocaleDateString('en-US',{weekday:'long'}); } catch(_){}
+    var biz = r.row.clinic || '';
+    var bt  = r.businessType || 'clinic';
+    var mem = r.row.member || '';
+    var co  = Array.isArray(r.row.coMembers) ? r.row.coMembers.join('; ') : '';
+    var total = (r.row.spending && r.row.spending.total) || 0;
+    var over  = (r.row.spending && r.row.spending.overLimit) ? 'YES' : '';
+    var orr   = (r.row.spending && r.row.spending.overrideReason) || '';
+    var notes = r.row.leadNotes || '';
+    var items = (r.row.spending && Array.isArray(r.row.spending.items)) ? r.row.spending.items : [];
+    if(items.length){
+      items.forEach(function(it, idx){
+        lines.push([
+          day, dn, biz, bt, mem, co,
+          it.label || it.name || '',
+          it.qty || 1,
+          (typeof it.price === 'number') ? it.price.toFixed(2) : '',
+          (typeof it.total === 'number') ? it.total.toFixed(2) : ((it.qty||1) * (it.price||0)).toFixed(2),
+          (idx === 0) ? total.toFixed(2) : '',
+          (idx === 0) ? over : '',
+          (idx === 0) ? orr : '',
+          (idx === 0) ? notes : ''
+        ]);
+      });
+    } else {
+      // Zero-spending visits — single row showing the $0 entry
+      lines.push([day, dn, biz, bt, mem, co, '$0 visit (no items)', '', '', '0.00', '0.00', '', '', notes]);
+    }
+  });
+  var csv = lines.map(function(row){
+    return row.map(function(v){
+      var s = String(v == null ? '' : v);
+      return /[",\n]/.test(s) ? '"' + s.replace(/"/g,'""') + '"' : s;
+    }).join(',');
+  }).join('\n');
+  var blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  var slug = _spendingLogMonthLabel().toLowerCase().replace(/[^a-z0-9]+/g,'-');
+  a.download = 'spending-log-' + slug + '-' + new Date().toISOString().slice(0,10) + '.csv';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(function(){ URL.revokeObjectURL(url); a.remove(); }, 1000);
+  if(typeof showToast === 'function') showToast('Exported ' + rows.length + ' entries (' + (lines.length-1) + ' line items).');
+}
+window.exportFinancesLogCSV = exportFinancesLogCSV;
+
 function renderFinancesLog(){
   var body    = document.getElementById('fin-log-body');
   var summary = document.getElementById('fin-log-summary');
@@ -27699,10 +27904,31 @@ function renderFinancesLog(){
     var d = new Date(r.date+'T00:00:00');
     return d.getFullYear() === SPENDING_LOG_MONTH.year && d.getMonth() === SPENDING_LOG_MONTH.month;
   });
-  rows.sort(function(a,b){ return b.date.localeCompare(a.date); });
+  // ── BUSINESS-NAME SEARCH (per user 2026-05-22 "easier to track") ──────
+  var searchEl = document.getElementById('fin-log-search');
+  var searchQ  = searchEl ? (searchEl.value || '').toLowerCase().trim() : '';
+  if(searchQ){
+    rows = rows.filter(function(r){
+      return (r.row.clinic || '').toLowerCase().indexOf(searchQ) >= 0;
+    });
+  }
+  // ── SORT — newest / oldest / amount high-low / amount low-high ────────
+  var sortEl  = document.getElementById('fin-log-sort');
+  var sortBy  = sortEl ? sortEl.value : 'newest';
+  if(sortBy === 'oldest'){
+    rows.sort(function(a,b){ return a.date.localeCompare(b.date); });
+  } else if(sortBy === 'amount-hi'){
+    rows.sort(function(a,b){ return (b.row.spending.total||0) - (a.row.spending.total||0); });
+  } else if(sortBy === 'amount-lo'){
+    rows.sort(function(a,b){ return (a.row.spending.total||0) - (b.row.spending.total||0); });
+  } else {
+    rows.sort(function(a,b){ return b.date.localeCompare(a.date); });
+  }
+  // Cache the currently-visible rows for the CSV export button
+  window._FIN_LOG_VISIBLE_ROWS = rows;
 
   var monthTotal = rows.reduce(function(s,r){ return s + (r.row.spending.total||0); }, 0);
-  if(summary) summary.textContent = rows.length + ' entries · $' + monthTotal.toFixed(2) + ' for ' + _spendingLogMonthLabel();
+  if(summary) summary.textContent = rows.length + ' entries · $' + monthTotal.toFixed(2) + ' for ' + _spendingLogMonthLabel() + (searchQ ? ' · search: "'+searchQ+'"' : '');
 
   function esc(v){ return (v==null?'':String(v)).replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
   var typeIcon  = { clinic:'🏥', mva:'⚖', outreach:'🏘' };
