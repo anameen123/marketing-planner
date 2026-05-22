@@ -2784,7 +2784,18 @@ body.role-front_desk #referrals-view {
           <span title="Never visited" style="display:inline-flex;align-items:center;gap:4px;font-size:10px;color:#475569"><span style="display:inline-block;width:10px;height:10px;background:#9ca3af;border-radius:50%;border:1px solid #fff;box-shadow:0 0 0 1px #9ca3af"></span>never</span>
         </div>
         <!-- Smart Plan button removed per user 2026-05-21 — Route Planner v3 will replace it. -->
-        <span id="rp-pick-status" style="font-size:10px;color:var(--muted);font-style:italic"></span>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span id="rp-pick-status" style="font-size:10px;color:var(--muted);font-style:italic"></span>
+          <!-- ↔ Expand toggle (per user 2026-05-22). Grows the map from 320px
+               to ~70vh so the whole route is readable on a phone or laptop;
+               click again to collapse. Pure CSS swap — no map re-init. -->
+          <button id="dv-map-expand-btn" type="button" onclick="toggleDayMapExpanded()"
+                  title="Expand the map to full height — easier to see the route"
+                  style="background:#1F3864;border:none;color:#fff;border-radius:6px;padding:5px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;display:inline-flex;align-items:center;gap:5px;line-height:1.1">
+            <span id="dv-map-expand-icon">↔</span>
+            <span id="dv-map-expand-label">Expand</span>
+          </button>
+        </div>
       </div>
       <div style="background:#fffbeb;border-top:1px solid #fcd34d;padding:5px 18px;font-size:10px;color:#92400e;font-style:italic;text-align:center">💡 At wide zoom: <b>clinic city counts</b> (e.g. "Frisco · 84"). Zoom in (scroll wheel) past city level to see <b>individual clinic pins</b>. MVAs + outreach with real addresses stay individual at all zooms.</div>
       <div id="dv-map" style="height:320px;background:#e2e8f0"></div>
@@ -20673,6 +20684,64 @@ function _rpLockInRoute(){
 window._rpLockInRoute = _rpLockInRoute;
 
 // Called from openDay() to refresh the map with this day's visits.
+// ── ETA HELPERS (per user 2026-05-22, no API key needed) ───────────────────
+// We don't pull Google Maps or any paid routing service. ETA is a local
+// estimate from the haversine straight-line distance × 1.4 (urban road
+// detour factor) ÷ 30 mph (DFW urban average). Fast, no network round trip,
+// no key, no billing. Good enough for visit-route planning; if we ever
+// want lane-level accuracy we can swap in OSRM's free public server
+// (router.project-osrm.org) without changing this code's call sites.
+function _haversineMiles(a, b){
+  if(!a || !b) return 0;
+  var R = 3958.8; // Earth radius in miles
+  var toRad = function(d){ return d * Math.PI / 180; };
+  var dLat = toRad(b[0] - a[0]);
+  var dLng = toRad(b[1] - a[1]);
+  var la1  = toRad(a[0]); var la2 = toRad(b[0]);
+  var h = Math.sin(dLat/2)*Math.sin(dLat/2)
+        + Math.cos(la1)*Math.cos(la2)*Math.sin(dLng/2)*Math.sin(dLng/2);
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+function _estimateDriveMin(miles){
+  // urban detour factor × average speed → minutes
+  var ROAD_FACTOR = 1.4;
+  var URBAN_MPH   = 30;
+  return Math.max(1, Math.round((miles * ROAD_FACTOR / URBAN_MPH) * 60));
+}
+function _formatDriveTime(min){
+  if(min < 60) return min + ' min';
+  var h = Math.floor(min / 60);
+  var m = min % 60;
+  return h + 'h ' + (m ? m + 'm' : '');
+}
+
+// ── EXPAND / COLLAPSE THE DAY MAP ──────────────────────────────────────────
+// Per user 2026-05-22: a one-click toggle that grows the map from its
+// compact 320px height to ~70vh so the full route is readable. Click again
+// to collapse. We invalidate the Leaflet size after the swap so the tiles
+// re-render to fit the new container.
+var _DV_MAP_EXPANDED = false;
+function toggleDayMapExpanded(){
+  _DV_MAP_EXPANDED = !_DV_MAP_EXPANDED;
+  var mapEl = document.getElementById('dv-map');
+  var iconEl = document.getElementById('dv-map-expand-icon');
+  var labelEl = document.getElementById('dv-map-expand-label');
+  if(mapEl){
+    mapEl.style.height = _DV_MAP_EXPANDED ? '70vh' : '320px';
+    mapEl.style.transition = 'height .25s ease';
+  }
+  if(iconEl)  iconEl.textContent  = _DV_MAP_EXPANDED ? '↕' : '↔';
+  if(labelEl) labelEl.textContent = _DV_MAP_EXPANDED ? 'Collapse' : 'Expand';
+  // Re-render the map at the new container size + re-fit bounds.
+  setTimeout(function(){
+    try { _DV_MAP && _DV_MAP.invalidateSize(); } catch(_){}
+    if(typeof _DV_LAST_DI === 'number' && _DV_LAST_DI != null){
+      try { renderDayMap(_DV_LAST_DI); } catch(_){}
+    }
+  }, 280);
+}
+window.toggleDayMapExpanded = toggleDayMapExpanded;
+
 function renderDayMap(di){
   _DV_LAST_DI = di;
   // Try to init; if Leaflet isn't loaded yet, retry shortly.
@@ -20740,7 +20809,10 @@ function renderDayMap(di){
     routeLine.push([lat, lng]);
   });
   // Per user 2026-05-22: draw a blue polyline through the day's visits in
-  // order, so the route is visible as a connected path on the map.
+  // order, with per-segment ETA labels (distance + drive-time estimate)
+  // and a route summary card below the map. No API key — local haversine
+  // estimate (see _haversineMiles / _estimateDriveMin above).
+  var totalMiles = 0, totalMin = 0;
   if(routeLine.length >= 2 && typeof L !== 'undefined' && L.polyline){
     try {
       _DV_ROUTELINE = L.polyline(routeLine, {
@@ -20752,8 +20824,60 @@ function renderDayMap(di){
         lineCap: 'round'
       });
       _DV_MARKERS.addLayer(_DV_ROUTELINE);
+      // ── ETA labels on each segment ────────────────────────────────────
+      for(var s = 0; s < routeLine.length - 1; s++){
+        var a = routeLine[s], b = routeLine[s + 1];
+        var miles = _haversineMiles(a, b);
+        var mins  = _estimateDriveMin(miles);
+        totalMiles += miles;
+        totalMin   += mins;
+        // Midpoint of the segment for the label position
+        var midLat = (a[0] + b[0]) / 2;
+        var midLng = (a[1] + b[1]) / 2;
+        // Tiny pill-shaped divIcon — readable but doesn't fight the pins
+        var labelHtml =
+          '<div style="background:#fff;border:1px solid #3b82f6;color:#1e40af;'
+          + 'font-family:DM Sans,sans-serif;font-size:10px;font-weight:700;'
+          + 'padding:2px 7px;border-radius:10px;white-space:nowrap;'
+          + 'box-shadow:0 1px 4px rgba(59,130,246,.25);line-height:1.2">'
+          + '⏱ ' + mins + ' min · ' + miles.toFixed(1) + ' mi'
+          + '</div>';
+        try {
+          var lbl = L.marker([midLat, midLng], {
+            interactive: false,
+            keyboard: false,
+            icon: L.divIcon({
+              className: 'route-eta-label',
+              html: labelHtml,
+              iconSize: [110, 18],
+              iconAnchor: [55, 9]
+            })
+          });
+          _DV_MARKERS.addLayer(lbl);
+        } catch(_){}
+      }
     } catch(e){ try { console.warn('[map] polyline failed:', e); } catch(_){} }
   }
+  // ── Route summary card (bottom of the map panel) ────────────────────
+  try {
+    var sumEl = document.getElementById('dv-route-summary');
+    if(sumEl){
+      if(routeLine.length >= 2){
+        var visits = routeLine.length;
+        sumEl.style.display = 'block';
+        sumEl.innerHTML =
+          '<div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:18px;font-size:12px">'
+          + '<div style="display:flex;align-items:center;gap:6px"><span style="color:#64748b;font-size:10px;text-transform:uppercase;letter-spacing:.06em;font-weight:700">Stops</span><span style="font-weight:800;color:#0f172a;font-size:14px">' + visits + '</span></div>'
+          + '<div style="display:flex;align-items:center;gap:6px"><span style="color:#64748b;font-size:10px;text-transform:uppercase;letter-spacing:.06em;font-weight:700">Distance</span><span style="font-weight:800;color:#0f172a;font-size:14px">' + totalMiles.toFixed(1) + ' mi</span></div>'
+          + '<div style="display:flex;align-items:center;gap:6px"><span style="color:#64748b;font-size:10px;text-transform:uppercase;letter-spacing:.06em;font-weight:700">Drive time</span><span style="font-weight:800;color:#1e40af;font-size:14px">' + _formatDriveTime(totalMin) + '</span></div>'
+          + '<div style="font-size:10px;color:#64748b;font-style:italic;flex-basis:100%;text-align:center;margin-top:2px">Local estimate — straight-line × 1.4 urban factor ÷ 30 mph. No external service.</div>'
+          + '</div>';
+      } else {
+        sumEl.style.display = 'none';
+        sumEl.innerHTML = '';
+      }
+    }
+  } catch(_){}
   // Also drop a pin for each WCG facility for context — pin popup gets
   // Set as Start / Set as End buttons too so a route can begin/end at a
   // facility just like any other pin.
