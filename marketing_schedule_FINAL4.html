@@ -20183,14 +20183,53 @@ function _rpBuildSmartPanel(){
     +     '<span style="color:var(--muted);font-style:italic">total ~' + totalDist.toFixed(1) + ' mi straight-line</span>'
     +   '</div>'
     + '</div>'
-    + '<div style="font-size:10px;color:var(--muted);font-style:italic;margin-bottom:10px">Start and End are NOT counted in the number above — only the stops in between. Each slot below shows clinics + MVAs near the path that haven\'t been visited in 14+ days. Outreach events can be picked manually if needed.</div>'
+    // Recency-color legend strip + "Include red" toggle (per user 2026-05-22).
+    // The slot dropdowns prepend a colored dot to each option so the user can
+    // tell at a glance which recency band each candidate belongs to. Slots
+    // are level-INDEPENDENT — pick from any level, skip levels, pick multiple
+    // from the same level. Red (0-6d) is OFF by default; turning it on adds
+    // 0-6d candidates with a confirm prompt before they get assigned.
+    + '<div style="background:#f8fafc;border:1px solid var(--border);border-radius:10px;padding:8px 12px;margin-bottom:10px;display:flex;align-items:center;flex-wrap:wrap;gap:10px;font-size:10px;color:var(--muted)">'
+    +   '<span style="font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text);font-size:10px">Recency:</span>'
+    +   '<span style="display:inline-flex;align-items:center;gap:3px">🔴<span>0–6d</span></span>'
+    +   '<span style="display:inline-flex;align-items:center;gap:3px">🟠<span>7–13d</span></span>'
+    +   '<span style="display:inline-flex;align-items:center;gap:3px">🟡<span>14–20d</span></span>'
+    +   '<span style="display:inline-flex;align-items:center;gap:3px">🟢<span>21d+ ripe</span></span>'
+    +   '<span style="display:inline-flex;align-items:center;gap:3px">⚪<span>never</span></span>'
+    +   '<span style="opacity:.35">·</span>'
+    +   '<label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;color:#7c2d12;font-weight:600">'
+    +     '<input type="checkbox" id="rp-include-red" ' + (_RP_INCLUDE_RED ? 'checked' : '') + ' onchange="_rpToggleIncludeRed(this.checked)" style="cursor:pointer">'
+    +     '<span>Include 🔴 recently-visited (needs confirm)</span>'
+    +   '</label>'
+    + '</div>'
+    + '<div style="font-size:10px;color:var(--muted);font-style:italic;margin-bottom:10px">Slots are independent — skip a level, pick multiple from the same level, mix and match. Default shows 🟠 / 🟡 / 🟢 / ⚪ (7d+); tick the box above to include 🔴 (0-6d, confirm required).</div>'
     + '<div id="rp-slots"></div>'
+    + '<div id="rp-bonus-red" style="display:none;margin-top:14px"></div>'
     + '<div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;justify-content:flex-end">'
     +   '<button onclick="_rpCancelSmart()" style="background:#e5e7eb;color:#374151;border:none;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">Cancel</button>'
     +   '<button onclick="_rpFinalizeSmart()" id="rp-finalize-btn" style="background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">Review route →</button>'
     + '</div>';
   _rpRenderSlots();
+  _rpRenderBonusRed();
 }
+
+// Global recency toggle (per user 2026-05-22) — false by default. When the
+// user turns it ON, red (0-6d) candidates show up in slot dropdowns AND in
+// the "Bonus stops" section at the bottom of the smart panel. Picking any
+// red candidate triggers a confirm prompt (it's recently visited, so the
+// user usually doesn't want to revisit it yet).
+var _RP_INCLUDE_RED = false;
+function _rpToggleIncludeRed(on){
+  _RP_INCLUDE_RED = !!on;
+  // Clear all auto-picks so the slot picker re-evaluates with the new filter.
+  // Manual picks survive — they're explicit user choices.
+  _RP_SLOT_PICKS = _RP_SLOT_PICKS.map(function(p){
+    return (p && p.manualPick) ? p : null;
+  });
+  _rpRenderSlots();
+  _rpRenderBonusRed();
+}
+window._rpToggleIncludeRed = _rpToggleIncludeRed;
 
 // Recompute candidates + redraw the slot picker UI.
 function _rpRenderSlots(){
@@ -20220,18 +20259,30 @@ function _rpRenderSlots(){
     var cands;
     if(mode === 'outreach'){
       cands = _rpFindCandidates(checkpoint, {
-        limit: 5, minStaleDays: 0, exclude: slotExclude,
+        limit: 8, minStaleDays: 0, exclude: slotExclude,
         onlyTypes: ['outreach']
       });
     } else {
-      cands = _rpFindCandidates(checkpoint, { limit:5, minStaleDays:14, exclude: slotExclude });
+      // Per user 2026-05-22: slots are recency-INDEPENDENT. Default surface
+      // is 7d+ (orange + yellow + green + never). When the include-red
+      // toggle is ON, drop to 0 so red (0-6d) candidates also show up.
+      // Slightly higher limit (8) so the user has more level-mixing options.
+      var minStale = _RP_INCLUDE_RED ? 0 : 7;
+      cands = _rpFindCandidates(checkpoint, { limit:8, minStaleDays:minStale, exclude: slotExclude });
     }
-    // If no pick yet, default to the top candidate (or null if mode produced none)
-    if(!pick && cands.length){ _RP_SLOT_PICKS[k-1] = cands[0]; pick = cands[0]; excludeSet[pick.name] = true; }
+    // If no pick yet, default to the FIRST non-red candidate (or null if
+    // mode produced none). Never auto-pick red — red requires confirm.
+    if(!pick && cands.length){
+      var firstSafe = cands.find(function(c){ return c.days == null || c.days > 6; }) || null;
+      if(firstSafe){ _RP_SLOT_PICKS[k-1] = firstSafe; pick = firstSafe; excludeSet[firstSafe.name] = true; }
+    }
     html += _rpRenderSlotRow(k, pick, cands);
   }
   slotsEl.innerHTML = html;
   _rpDrawRouteLine();
+  // Refresh the bonus-red panel whenever slots change (slots may have just
+  // consumed some red candidates that no longer belong in bonuses).
+  if(typeof _rpRenderBonusRed === 'function') _rpRenderBonusRed();
 }
 
 // Per-slot UI state — which candidate-source mode is active and whether
@@ -20249,6 +20300,12 @@ function _rpRenderSlotRow(k, pick, cands){
   // Build the dropdown options — each option now shows:
   //   name  ·  type  ·  recency (e.g. "never" or "37d")  ·  lead status  ·  X.X mi
   // Sorted at the source so the longest-since-visited candidate is at top.
+  // Map recency bucket key → emoji dot (per user 2026-05-22 — visible color
+  // code in every dropdown option since HTML colors don't work in <option>).
+  var RECENCY_DOT = {
+    fresh:  '🔴', warm:  '🟠', yellow: '🟡',
+    ripe:   '🟢', never: '⚪'
+  };
   var dropdownOpts = cands.length === 0
     ? '<option value="">No candidates found within 12 mi — try fewer visits or use manual search below</option>'
     : cands.map(function(c, i){
@@ -20256,7 +20313,9 @@ function _rpRenderSlotRow(k, pick, cands){
         var picked = (pick && pick.name === c.name) ? ' selected' : '';
         var typeLbl = c.bizType === 'mva' ? 'MVA' : c.bizType === 'outreach' ? 'Outreach' : 'Clinic';
         var staleLbl = (c.days == null) ? 'never visited' : (c.days + 'd ago');
-        var lbl = c.name + '  ·  ' + typeLbl
+        var rec = recencyBucket(c.days);
+        var dot = RECENCY_DOT[rec.key] || '';
+        var lbl = dot + ' ' + c.name + '  ·  ' + typeLbl
                 + '  ·  ' + staleLbl
                 + '  ·  ' + leadShort
                 + '  ·  ' + c.dist.toFixed(1) + ' mi';
@@ -20425,7 +20484,9 @@ window._rpToggleSlotMode = _rpToggleSlotMode;
 function _rpPickSlotCandidate(k, idx){
   var i = parseInt(idx, 10);
   if(isNaN(i)) return;
-  // Rebuild the candidate list with the current state to pick the right one
+  // Rebuild the candidate list with the current state to pick the right one.
+  // Match the same options the slot picker used (mode + include-red) so the
+  // index lines up.
   var startCoord = _rpResolveCoord(_RP_START_NAME);
   var endCoord   = _rpResolveCoord(_RP_END_NAME);
   if(!startCoord || !endCoord) return;
@@ -20435,11 +20496,184 @@ function _rpPickSlotCandidate(k, idx){
   excludeSet[_RP_START_NAME] = true;
   excludeSet[_RP_END_NAME]   = true;
   _RP_SLOT_PICKS.forEach(function(p, idx2){ if(idx2 !== k-1 && p && p.name) excludeSet[p.name] = true; });
-  var cands = _rpFindCandidates(checkpoint, { limit:5, minStaleDays:14, exclude: excludeSet });
-  if(cands[i]) _RP_SLOT_PICKS[k-1] = cands[i];
+  var mode = _RP_SLOT_MODE[k] || 'auto';
+  var cands;
+  if(mode === 'outreach'){
+    cands = _rpFindCandidates(checkpoint, { limit:8, minStaleDays:0, exclude: excludeSet, onlyTypes:['outreach'] });
+  } else {
+    var minStale = _RP_INCLUDE_RED ? 0 : 7;
+    cands = _rpFindCandidates(checkpoint, { limit:8, minStaleDays:minStale, exclude: excludeSet });
+  }
+  var picked = cands[i];
+  if(!picked) return;
+  // Red-pick confirm gate (per user 2026-05-22). Days 0-6 = red = recently
+  // visited. Ask the user before assigning — they usually don't want to
+  // revisit so soon. If they cancel, snap the dropdown back to the prior pick.
+  var isRed = (picked.days != null && picked.days <= 6);
+  if(isRed && typeof showConfirm === 'function'){
+    var prevPick = _RP_SLOT_PICKS[k-1] || null;
+    showConfirm({
+      icon: '🔴',
+      msg: 'Add a recently-visited stop?',
+      sub: picked.name + ' was visited ' + picked.days + ' day' + (picked.days===1?'':'s') + ' ago. '
+         + 'These usually don\'t need another visit yet — pick only if you have a reason (follow-up, decision-maker meeting, etc.).',
+      yesLabel: 'Yes, add anyway',
+      danger: true,
+      onConfirm: function(){
+        _RP_SLOT_PICKS[k-1] = picked;
+        _rpRenderSlots();
+      },
+      onCancel: function(){
+        // Revert the dropdown to whatever was picked before
+        _RP_SLOT_PICKS[k-1] = prevPick;
+        _rpRenderSlots();
+      }
+    });
+    return;
+  }
+  _RP_SLOT_PICKS[k-1] = picked;
   _rpRenderSlots();
 }
 window._rpPickSlotCandidate = _rpPickSlotCandidate;
+
+// ── BONUS STOPS — RED PINS WITH CONFIRM (per user 2026-05-22) ───────────────
+// After the main slots are filled, surface a "bonus stops" section listing
+// red-pin (0-6d) candidates along the same corridor. Each row has a single
+// "+ Add (confirm)" button — picking one runs the same red-confirm prompt
+// and appends the business as an extra stop. Hidden when the user hasn't
+// enabled the include-red toggle, or when no red candidates remain.
+function _rpRenderBonusRed(){
+  var box = document.getElementById('rp-bonus-red');
+  if(!box) return;
+  // Only show when red is allowed AND we have at least one slot picked
+  // (so the user is past the initial setup phase).
+  if(!_RP_INCLUDE_RED || !_RP_SLOT_PICKS.some(function(p){ return p && p.name; })){
+    box.style.display = 'none'; box.innerHTML = '';
+    return;
+  }
+  var startCoord = _rpResolveCoord(_RP_START_NAME);
+  var endCoord   = _rpResolveCoord(_RP_END_NAME);
+  if(!startCoord || !endCoord){ box.style.display = 'none'; return; }
+  // Build a checkpoint at the midpoint of the route (approximate corridor
+  // centroid) and collect red candidates that aren't already in slots.
+  var excludeSet = {};
+  excludeSet[_RP_START_NAME] = true;
+  excludeSet[_RP_END_NAME]   = true;
+  _RP_SLOT_PICKS.forEach(function(p){ if(p && p.name) excludeSet[p.name] = true; });
+  // Search 3 checkpoints along the route + dedupe so the list reflects the
+  // whole corridor, not just the midpoint.
+  var allRed = [];
+  var seen = {};
+  [0.25, 0.5, 0.75].forEach(function(t){
+    var cp = _rpInterp(startCoord, endCoord, t);
+    var cands = _rpFindCandidates(cp, { limit: 10, minStaleDays: 0, exclude: excludeSet });
+    cands.forEach(function(c){
+      if(c.days != null && c.days <= 6 && !seen[c.name]){
+        seen[c.name] = true;
+        allRed.push(c);
+      }
+    });
+  });
+  if(!allRed.length){
+    box.style.display = 'none'; box.innerHTML = '';
+    return;
+  }
+  // Sort: closest first (red = recently visited, so nearness is the deciding factor)
+  allRed.sort(function(a,b){ return a.dist - b.dist; });
+  allRed = allRed.slice(0, 6);
+  // Resolve city by looking up the business in CLINIC_BANK / MVA / OUTREACH
+  // (the candidate object from _rpFindCandidates doesn't carry the city).
+  function _cityFor(name){
+    if(!name) return '';
+    var bank = (typeof CLINIC_BANK !== 'undefined') ? CLINIC_BANK : [];
+    var hit = bank.find(function(c){ return c && c.n === name; });
+    if(hit) return hit.c || '';
+    var mvas = (typeof MVA_ATTORNEYS !== 'undefined') ? MVA_ATTORNEYS : [];
+    var mhit = mvas.find(function(m){ return m && m.firm === name; });
+    if(mhit) return mhit.city || '';
+    var outs = (typeof OUTREACH !== 'undefined') ? OUTREACH : [];
+    var ohit = outs.find(function(o){ return o && o.name === name; });
+    if(ohit) return ohit.city || '';
+    return '';
+  }
+  var rows = allRed.map(function(c, i){
+    var typeLbl = c.bizType === 'mva' ? 'MVA' : c.bizType === 'outreach' ? 'Outreach' : 'Clinic';
+    var safeName = String(c.name).replace(/'/g,"\\'").replace(/"/g,'&quot;');
+    var city = _cityFor(c.name) || '';
+    return '<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:#fff;border-radius:8px;margin-bottom:5px;border-left:3px solid #ef4444">'
+      + '<span style="font-size:13px">🔴</span>'
+      + '<div style="flex:1;min-width:0">'
+      +   '<div style="font-size:12px;font-weight:700;color:var(--text)">' + c.name.replace(/</g,'&lt;') + '</div>'
+      +   '<div style="font-size:10px;color:var(--muted);margin-top:1px">'
+      +     typeLbl + (city ? ' · ' + city : '') + ' · ' + c.days + 'd ago · ' + c.dist.toFixed(1) + ' mi from route'
+      +   '</div>'
+      + '</div>'
+      + '<button onclick="_rpAddBonusRed(\'' + safeName + '\')" '
+      +   'style="background:#dc2626;color:#fff;border:none;border-radius:6px;padding:5px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;flex-shrink:0">+ Add (confirm)</button>'
+      + '</div>';
+  }).join('');
+  box.style.display = 'block';
+  box.innerHTML = ''
+    + '<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:11px 13px">'
+    +   '<div style="display:flex;align-items:center;gap:7px;margin-bottom:8px">'
+    +     '<span style="font-size:14px">🔴</span>'
+    +     '<span style="font-size:12px;font-weight:700;color:#7c2d12">Bonus stops — recently visited (needs confirm)</span>'
+    +   '</div>'
+    +   '<div style="font-size:10px;color:#9a3412;font-style:italic;margin-bottom:8px">These are within the corridor but were visited in the last 6 days. Tap <b>+ Add (confirm)</b> only if you have a reason to return so soon.</div>'
+    +   rows
+    + '</div>';
+}
+window._rpRenderBonusRed = _rpRenderBonusRed;
+
+function _rpAddBonusRed(name){
+  if(!name) return;
+  // Find the business in the bank so we can build the full pick record
+  var coord = (typeof getCoordForBusiness === 'function') ? getCoordForBusiness(name) : null;
+  if(!coord){ if(typeof showToast === 'function') showToast('Could not resolve coordinates for ' + name); return; }
+  var days = (typeof daysSinceLastVisit === 'function') ? daysSinceLastVisit(name) : null;
+  var lead = (typeof getClinicLead === 'function') ? getClinicLead(name) : null;
+  var bizType = (typeof getBizTypeForName === 'function') ? getBizTypeForName(name) : 'clinic';
+  var dist = 0;
+  try {
+    var startCoord = _rpResolveCoord(_RP_START_NAME);
+    var endCoord   = _rpResolveCoord(_RP_END_NAME);
+    if(startCoord && endCoord){
+      var mid = _rpInterp(startCoord, endCoord, 0.5);
+      dist = _rpHaversineMiles(coord, mid);
+    }
+  } catch(_){}
+  var newPick = {
+    name: name, bizType: bizType, coord: coord, days: days, dist: dist,
+    leadStatus: lead ? lead.status : 'not_visited',
+    leadLevel:  lead ? (lead.level || 0) : 0,
+    manualPick: true,
+    bonusRed:   true
+  };
+  if(typeof showConfirm === 'function'){
+    showConfirm({
+      icon: '🔴',
+      msg: 'Add this recently-visited stop as a bonus?',
+      sub: name + ' was visited ' + (days==null?'(unknown)':days+'d') + ' ago. '
+         + 'This will be appended as a new stop at the end of the route. Use only if you have a specific follow-up reason.',
+      yesLabel: 'Yes, append',
+      danger: true,
+      onConfirm: function(){
+        // Append a new slot for the bonus pick
+        _RP_N++;
+        _RP_SLOT_PICKS.push(newPick);
+        var input = document.getElementById('rp-n-input');
+        if(input) input.value = _RP_N;
+        _rpRenderSlots();
+        if(typeof showToast === 'function') showToast('Bonus stop added at slot ' + _RP_N + '.');
+      }
+    });
+  } else {
+    _RP_N++;
+    _RP_SLOT_PICKS.push(newPick);
+    _rpRenderSlots();
+  }
+}
+window._rpAddBonusRed = _rpAddBonusRed;
 
 function _rpRemoveSlot(k){
   if(k < 1 || k > _RP_N) return;
