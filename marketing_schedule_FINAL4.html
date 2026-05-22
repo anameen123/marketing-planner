@@ -22699,31 +22699,43 @@ function confirmAddVisit(){
     // Override flag was set — fall through to allow the duplicate
   }
   if(dupCheck && type === 'outreach'){
-    // Outreach exception — offer to join the existing row as a co-attendee
+    // Per user 2026-05-22 (revised approach): for community outreach, DON'T
+    // merge the new member into the existing row as a co-attendee. Instead
+    // create a SEPARATE visit row for them — same event, same day, but their
+    // own row. Both members track their own completion + spending + lead
+    // outcome independently. Cross-member visibility happens via the day-view
+    // "👥 Show all on this day" toggle + the existing sync layer, not via
+    // shared row state.
     var addingMember = member || (CURRENT_USER && CURRENT_USER.name) || '';
     if(!addingMember){
-      showToast('"'+name+'" is already scheduled for that date. Select a member to join as a co-attendee.');
+      showToast('"'+name+'" is already scheduled for that date by another member. Select your own name to add a separate row for yourself.');
       return;
     }
-    if(rowHasMember(dupCheck.row, addingMember)){
-      showToast(addingMember+' is already attending this outreach event.');
+    // Block only the EXACT same-member duplicate (a member can't have the
+    // same outreach event twice in their own day — that's a true duplicate).
+    var existingSameMember = dupCheck.row && (
+      dupCheck.row.member === addingMember ||
+      (Array.isArray(dupCheck.row.coMembers) && dupCheck.row.coMembers.indexOf(addingMember) >= 0)
+    );
+    if(existingSameMember){
+      showToast(addingMember+' already has this outreach event on this day.');
       return;
     }
     var primaryName = dupCheck.row.member || '(unassigned)';
     showConfirm({
       icon: '🏘',
-      msg: 'Join this community outreach event?',
+      msg: 'Add a separate row for this outreach event?',
       sub: '"'+name+'" was already added on this day by '+primaryName+'.\n\n'
-         + 'As community outreach, multiple members can attend together.\n'
-         + addingMember+' will be added to the same visit row, and the visit will count on both members\' counters.',
-      yesLabel: 'Add '+addingMember+' as co-attendee',
+         + 'Community outreach events can have multiple members attending. We\'ll create a SEPARATE row for '+addingMember+' (not merged with '+primaryName+'\'s row), so each of you tracks your own completion + spending + lead outcome.\n\n'
+         + 'You\'ll still see '+primaryName+'\'s row on this day via the "👥 Show all on this day" toggle in the day header.',
+      yesLabel: 'Yes, create my own row',
       danger: false,
       onConfirm: function(){
-        addCoMemberToRow(dupCheck.row, addingMember);
-        closeAddVisit();
-        if(typeof refresh === 'function') refresh(di);
-        if(typeof renderCounters === 'function') renderCounters();
-        showToast('Added '+addingMember+' as co-attendee on the existing outreach visit.');
+        // Bypass the dupCheck branch on re-entry and fall through to the
+        // normal "create a new visit row" path. The override flag is the
+        // same one used for clinic/MVA "yes, add for me too" confirmations.
+        window._addVisitOverrideDupe = true;
+        try { confirmAddVisit(); } finally { window._addVisitOverrideDupe = false; }
       }
     });
     return;
