@@ -20391,17 +20391,24 @@ function renderDayMap(di){
   if(_DV_ROUTELINE){ _DV_MAP.removeLayer(_DV_ROUTELINE); _DV_ROUTELINE = null; }
   var day = S.days[di];
   if(!day || !day.rows) return;
-  var pts = [];
+  var pts = [];                  // bounds fit-to
+  var routeLine = [];            // ordered [lat,lng] pairs for the polyline
   var seenCities = {};
   // Per user 2026-05-22: each day's visits get a sequential number
   // (1, 2, 3, ...) shown on the pin so members can see the order of stops.
-  // Number is based on visit-with-clinic order in S.days[di].rows.
+  // First visit gets a 'Start' tag and the last gets an 'End' tag. A blue
+  // polyline connects them in order so the day's route is visible at a glance.
+  var totalVisits = day.rows.filter(function(r){
+    return r && r.clinic && getCoordForBusiness(r.clinic);
+  }).length;
   var visitOrdinal = 0;
   day.rows.forEach(function(row, idx){
     if(!row.clinic) return;
     var coord = getCoordForBusiness(row.clinic);
     if(!coord) return;
     visitOrdinal++;
+    var isFirst = (visitOrdinal === 1);
+    var isLast  = (visitOrdinal === totalVisits && totalVisits > 1);
     // Add a tiny offset for duplicate-city pins so they don't stack invisibly
     var dupKey = coord.lat.toFixed(3) + ',' + coord.lng.toFixed(3);
     var stack = seenCities[dupKey] || 0;
@@ -20414,19 +20421,41 @@ function renderDayMap(di){
                                               : '#1F3864';
     // Use a numbered divIcon so the visit order is visible at a glance.
     var ordinalLabel = String(visitOrdinal);
+    // Start/End badge above the pin
+    var tagHtml = '';
+    if(isFirst) tagHtml = '<div style="position:absolute;top:-18px;left:50%;transform:translateX(-50%);background:#16a34a;color:#fff;font-size:9px;font-weight:800;padding:2px 6px;border-radius:4px;font-family:DM Sans,sans-serif;white-space:nowrap;letter-spacing:.04em">START</div>';
+    if(isLast)  tagHtml = '<div style="position:absolute;top:-18px;left:50%;transform:translateX(-50%);background:#dc2626;color:#fff;font-size:9px;font-weight:800;padding:2px 6px;border-radius:4px;font-family:DM Sans,sans-serif;white-space:nowrap;letter-spacing:.04em">END</div>';
     var marker = L.marker([lat, lng], {
       icon: L.divIcon({
         className: 'visit-ordinal-pin',
-        html: '<div style="width:26px;height:26px;background:' + color + ';color:#fff;border:2.5px solid #fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;font-family:DM Sans,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.3)">' + ordinalLabel + '</div>',
-        iconSize: [26, 26],
-        iconAnchor: [13, 13]
+        html: '<div style="position:relative;width:28px;height:28px">' + tagHtml + '<div style="width:28px;height:28px;background:' + color + ';color:#fff;border:2.5px solid #fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;font-family:DM Sans,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.3)">' + ordinalLabel + '</div></div>',
+        iconSize: [28, 28],
+        iconAnchor: [14, 14]
       })
     }).bindPopup('<b>#' + ordinalLabel + ' · ' + (row.clinic || '').replace(/</g,'&lt;') + '</b><br>'
                 + (row.status || 'Pending')
-                + (row.member ? '<br>👤 ' + row.member : ''));
+                + (row.member ? '<br>👤 ' + row.member : '')
+                + (isFirst ? '<br><em style="color:#16a34a">— Start of route —</em>' : '')
+                + (isLast  ? '<br><em style="color:#dc2626">— End of route —</em>' : ''));
     _DV_MARKERS.addLayer(marker);
     pts.push([lat, lng]);
+    routeLine.push([lat, lng]);
   });
+  // Per user 2026-05-22: draw a blue polyline through the day's visits in
+  // order, so the route is visible as a connected path on the map.
+  if(routeLine.length >= 2 && typeof L !== 'undefined' && L.polyline){
+    try {
+      _DV_ROUTELINE = L.polyline(routeLine, {
+        color: '#3b82f6',
+        weight: 4,
+        opacity: 0.85,
+        dashArray: '8, 6',
+        lineJoin: 'round',
+        lineCap: 'round'
+      });
+      _DV_MARKERS.addLayer(_DV_ROUTELINE);
+    } catch(e){ try { console.warn('[map] polyline failed:', e); } catch(_){} }
+  }
   // Also drop a pin for each WCG facility for context — pin popup gets
   // Set as Start / Set as End buttons too so a route can begin/end at a
   // facility just like any other pin.
