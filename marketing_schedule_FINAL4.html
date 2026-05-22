@@ -26589,6 +26589,9 @@ function loadMemberProfile(name){
     }
   }
   currentMember=name;memberPage=1;
+  // Per user 2026-05-22: reset month-nav to current month when opening a
+  // new member's profile (no stale offsets carrying over).
+  if(typeof _KPI_MONTH_OFFSET !== 'undefined') _KPI_MONTH_OFFSET = 0;
   var mc=MCOLORS[name]||'#1F3864';
   var initials=name.split(' ').map(function(w){return w[0];}).join('').toUpperCase().slice(0,2);
   document.getElementById('profile-avatar').style.background=mc;
@@ -29124,17 +29127,66 @@ function kpiCard(label,actual,target,unit,subtext,isRate){
     +'</div>';
 }
 
+// Per user 2026-05-22: monthly spending total for a member.
+// Sums row.spending.total across all Completed visits assigned + confirmed
+// to that member in the given year/month. Spending data is live — every
+// edit / cancel / confirm flows through here on the next refresh().
+function getMemberSpendingForMonth(name, year, month){
+  if(typeof S === 'undefined' || !S.days) return 0;
+  var total = 0;
+  S.days.forEach(function(day){
+    if(!day || !day.date) return;
+    var dt = new Date(day.date + 'T00:00:00');
+    if(isNaN(dt.getTime())) return;
+    if(dt.getFullYear() !== year || dt.getMonth() !== month) return;
+    (day.rows || []).forEach(function(r){
+      if(!r || !r.memberConfirmed) return;
+      if(r.member !== name) return;
+      if(r.status !== 'Completed') return;
+      if(!r.spending || typeof r.spending.total !== 'number') return;
+      total += r.spending.total;
+    });
+  });
+  return total;
+}
+window.getMemberSpendingForMonth = getMemberSpendingForMonth;
+
+// Per user 2026-05-22: month offset for the KPI cards on the Members page.
+// 0 = current month, -1 = last month, -2 = two months ago, etc. Members
+// click ← / → arrows on the period label to navigate. NEVER positive (no
+// future browsing). Persists per page-view, resets when switching members.
+var _KPI_MONTH_OFFSET = 0;
+function _kpiShiftMonth(delta){
+  var next = _KPI_MONTH_OFFSET + delta;
+  if(next > 0) next = 0;       // can't go to the future
+  _KPI_MONTH_OFFSET = next;
+  if(typeof currentMember !== 'undefined' && currentMember){
+    renderKPICards(currentMember);
+  }
+}
+window._kpiShiftMonth = _kpiShiftMonth;
+
 function renderKPICards(name){
   // All-time stats for profile header
   var ms=getMemberStats();var s=ms[name]||{comp:0,post:0,canc:0,pend:0,leads:0,total:0};
-  // This month stats for KPI rates
-  var now=new Date();
-  var msMonth=getMemberStatsForMonth(now.getFullYear(),now.getMonth());
+  // Month offset = how many months back from current we're showing.
+  var nowReal = new Date();
+  var viewY = nowReal.getFullYear();
+  var viewM = nowReal.getMonth() + _KPI_MONTH_OFFSET;
+  while(viewM < 0){ viewM += 12; viewY -= 1; }
+  while(viewM > 11){ viewM -= 12; viewY += 1; }
+  var msMonth=getMemberStatsForMonth(viewY, viewM);
   var sm=msMonth[name]||{comp:0,post:0,canc:0,pend:0,leads:0,total:0};
   var weekData=getWeeklyCompletions(name);
   var areaData=getAreaCoverage(name);
   // Completion rate = monthly
   var compRate=sm.total>0?Math.round((sm.comp/sm.total)*100):0;
+  // Per user 2026-05-22: live monthly spending for this member.
+  var monthSpending = (typeof getMemberSpendingForMonth === 'function')
+    ? getMemberSpendingForMonth(name, viewY, viewM)
+    : 0;
+  // Backwards compat for the rest of the body which still uses 'now'.
+  var now = nowReal;
 
   var cards='';
   // 1. Visits Completed — ALL-TIME for this member, clickable to filter Completed Visits sub-tab
@@ -29206,8 +29258,33 @@ function renderKPICards(name){
     +'</div>';
 
 
+  // 5. Live monthly spending (per user 2026-05-22). Sum of row.spending.total
+  // across this member's Completed visits in the selected month. Updates
+  // live as visits get marked Completed / edited / canceled.
+  var spendFormatted = '$' + monthSpending.toFixed(2);
+  var monthsBack = -_KPI_MONTH_OFFSET;
+  var spendLabel = monthsBack === 0 ? 'This month'
+                 : monthsBack === 1 ? 'Last month'
+                 : monthsBack + ' months ago';
+  cards+='<div class="kpi-card" title="' + name + '’s spending across Completed visits in the selected month.">'
+    +'<div class="kpi-card-top"><div class="kpi-label">💰 Spending</div>'
+    +'<span class="kpi-badge badge-grey" style="font-weight:700">' + spendLabel.toUpperCase() + '</span></div>'
+    +'<div class="kpi-nums"><div class="kpi-actual" style="color:#16a34a">' + spendFormatted + '</div></div>'
+    +'<div class="kpi-sub">' + sm.comp + ' completed visit' + (sm.comp !== 1 ? 's' : '') + ' &middot; updates live</div>'
+    +'</div>';
+
   document.getElementById('kpi-cards').innerHTML=cards;
-  document.getElementById('kpi-period-label').textContent='May 1–15, 2026';
+  // Per user 2026-05-22: month-navigator next to the period label.
+  // Arrows let members scroll back month-by-month. Right arrow disabled
+  // when at the current month (no future browsing).
+  var MN_LIST = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  var periodTxt = MN_LIST[viewM] + ' ' + viewY;
+  var isCurrentMonth = (_KPI_MONTH_OFFSET === 0);
+  var leftBtn  = '<button onclick="_kpiShiftMonth(-1)" title="Previous month" style="background:#fff;border:1px solid var(--border);border-radius:5px;width:22px;height:22px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;color:var(--purple);padding:0;display:inline-flex;align-items:center;justify-content:center;line-height:1">‹</button>';
+  var rightBtn = '<button onclick="_kpiShiftMonth(1)" title="Next month" ' + (isCurrentMonth?'disabled':'') + ' style="background:#fff;border:1px solid var(--border);border-radius:5px;width:22px;height:22px;font-size:11px;font-weight:700;cursor:' + (isCurrentMonth?'not-allowed':'pointer') + ';font-family:inherit;color:' + (isCurrentMonth?'#cbd5e1':'var(--purple)') + ';padding:0;display:inline-flex;align-items:center;justify-content:center;line-height:1;opacity:' + (isCurrentMonth?'.5':'1') + '">›</button>';
+  var todayBtn = isCurrentMonth ? '' : ' <button onclick="_KPI_MONTH_OFFSET=0;renderKPICards(\'' + safeName + '\')" style="background:none;border:1px solid var(--purple);color:var(--purple);border-radius:5px;padding:1px 8px;font-size:9px;font-weight:700;cursor:pointer;font-family:inherit;margin-left:4px">↺ Today</button>';
+  document.getElementById('kpi-period-label').innerHTML =
+    leftBtn + ' <span style="margin:0 6px;font-weight:600;color:var(--text)">' + periodTxt + '</span> ' + rightBtn + todayBtn;
   document.getElementById('kpi-cards-wrap').style.display='block';
 }
 
