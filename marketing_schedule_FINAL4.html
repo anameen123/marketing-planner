@@ -17007,6 +17007,13 @@ function confirmEditVisit(){
     return;
   }
   if(newStatus === 'Completed'){
+    // Per user 2026-05-22 audit: can't mark Completed before the visit date.
+    // Data-integrity rule — applies to admin too (matches setSt behavior).
+    var dayDate = S.days[di] && S.days[di].date;
+    if(dayDate && typeof canMarkCompleted === 'function' && !canMarkCompleted(dayDate)){
+      showErr('Cannot mark this visit Completed before its date (' + dayDate + ').');
+      return;
+    }
     // Spending must be recorded
     var s = row.spending;
     var spendingOk = !!(s && (s.zeroSpending === true || typeof s.total === 'number' || (s.items && s.items.length)));
@@ -21131,6 +21138,9 @@ function closePopup(){S.popup=null;var el=document.getElementById('rpop');if(el)
 function navPop(dir){S.popM+=dir;if(S.popM<0){S.popM=11;S.popY--;}if(S.popM>11){S.popM=0;S.popY++;}renderPopup();}
 function pickRD(d){
   var di=S.popup.di,ri=S.popup.ri;
+  // Per user 2026-05-22 audit: gate reschedule by ownership + date.
+  // Before this, members could reschedule another member's visit.
+  if(typeof _rowGuard === 'function' && !_rowGuard(di, ri)) return;
   var dt=new Date(S.popY,S.popM,d);
   var mo=String(dt.getMonth()+1).padStart(2,'0'),dy=String(dt.getDate()).padStart(2,'0'),y=dt.getFullYear();
   var str=mo+'/'+dy+'/'+y;
@@ -23096,6 +23106,9 @@ function _doDeleteVisit(di,ri){
 function confirmRow(di,ri){
   var row=S.days[di].rows[ri];
   if(!row) return;
+  // Per user 2026-05-22 audit: gate confirmation by ownership + date.
+  // Before this, members could finalize another member's row.
+  if(typeof _rowGuard === 'function' && !_rowGuard(di, ri)) return;
   // ── PREREQUISITE 1: if status is Completed, the lead outcome must be saved first ──
   // For non-outreach clinics. Outreach is excluded from the lead system.
   if(row.status === 'Completed' && row.clinic){
