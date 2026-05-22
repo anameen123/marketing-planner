@@ -5735,31 +5735,73 @@ function saveNewClinic(){
   var address = ((document.getElementById('clinic-add-address') || {}).value || '').trim();
   if(website && !/^https?:\/\//i.test(website)) website = 'https://' + website;
   if(!name||!city){ showToast('Clinic name and city are required.'); return; }
-  // Block exact-match name duplicates across clinic + MVA + outreach
-  if(_guardDuplicateBusiness(name)) return;
-  // Block composite-key duplicates: same city + same physician = same clinic
-  // even if the name typed is different. Catches "Smith Family Practice"
-  // vs "Dr Smith Clinic" both at Frisco with the same doctor.
+  // Per user 2026-05-22: smart dedupe.
+  //  • Same name + same city + same doctor  → block (true duplicate)
+  //  • Same name + same city + diff doctor  → WARN + confirm (separate card OK)
+  //  • Same name + different city           → allowed (different branch)
+  //  • Different name + same city + same doctor → block (catches typo variants like "Smith Family Practice" vs "Dr Smith Clinic")
+  var nameLC = name.toLowerCase().trim();
+  var cityLC = (city || '').toLowerCase().trim();
+  var docLC  = (doctor || '').toLowerCase().trim();
+  var nameCityMatch = null;
+  for(var _i = 0; _i < CLINIC_BANK.length; _i++){
+    var _c = CLINIC_BANK[_i];
+    if((_c.n || '').toLowerCase().trim() === nameLC && (_c.c || '').toLowerCase().trim() === cityLC){
+      nameCityMatch = _c;
+      break;
+    }
+  }
+  if(nameCityMatch){
+    var existingDocLC = (nameCityMatch.d || '').toLowerCase().trim();
+    if(existingDocLC === docLC || (!docLC && !existingDocLC)){
+      // True duplicate
+      showConfirm({
+        icon:'!', msg:'Already in the bank',
+        sub:'"'+nameCityMatch.n+'" already exists in '+city+(nameCityMatch.d&&nameCityMatch.d!=='TBD'?' with '+nameCityMatch.d:'')+'. Open it to edit instead of creating a duplicate.',
+        yesLabel:'Open existing card',
+        onConfirm:function(){ try{closeAddClinic();}catch(e){} if(typeof jumpToBusinessCard==='function') jumpToBusinessCard(nameCityMatch.n); }
+      });
+      return;
+    } else {
+      // Same name + city, different doctor — warn and confirm
+      var existingDoc = nameCityMatch.d || '(no physician on file)';
+      var newDoc = doctor || '(no physician)';
+      showConfirm({
+        icon:'?', msg:'Different physician at same clinic',
+        sub:'"'+name+'" already exists in '+city+' with <strong>'+existingDoc+'</strong>.\n\nYou\'re adding a separate card for <strong>'+newDoc+'</strong>. Same clinic, different physician = different card.\n\nConfirm to create the new card.',
+        yesLabel:'Yes, add separate card', danger:false,
+        onConfirm:function(){ _saveClinicRecord(name, doctor, spec, city, notes, phone, fax, website, address); }
+      });
+      return;
+    }
+  }
+  // Composite check: same city + same physician with a different name (catches typo variants)
   if(_guardDuplicateByLocationAndContact('clinic', city, doctor)) return;
-  var filledBy = AC_FILLED_BY || 'manual';
-  showConfirm({icon:'?',msg:'Add "'+name+'"?',sub:'New clinic in '+city + (filledBy === 'gemini' ? ' · 🤖 Gemini-assisted' : ''),yesLabel:'Add',danger:false,onConfirm:function(){
-    CLINIC_BANK.push({n:name,d:doctor||'TBD',s:spec||'',c:city,t:'',notes:notes,
-      phone:   phone,
-      fax:     fax,
-      website: website,
-      address: address,
-      filledBy: filledBy,                  // v2.4 audit trail: 'manual' | 'gemini'
-      addedBy: (CURRENT_USER && CURRENT_USER.name) || '',
-      addedAt: new Date().toISOString()
-    });
-    closeAddClinic();
-    // Update count label
-    var lbl=document.getElementById('bank-count-label');
-    if(lbl) lbl.textContent=CLINIC_BANK.length+' clinics — browse, search, and add to any date';
-    renderBank();
-    showToast('Clinic added: '+name + (filledBy === 'gemini' ? ' (Gemini-assisted)' : ''));
+  // No conflict — save normally
+  showConfirm({icon:'?',msg:'Add "'+name+'"?',sub:'New clinic in '+city + (AC_FILLED_BY === 'gemini' ? ' · 🤖 Gemini-assisted' : ''),yesLabel:'Add',danger:false,onConfirm:function(){
+    _saveClinicRecord(name, doctor, spec, city, notes, phone, fax, website, address);
   }});
 }
+// Helper extracted from saveNewClinic so both the normal-save and
+// different-physician confirm paths use the same persist logic.
+function _saveClinicRecord(name, doctor, spec, city, notes, phone, fax, website, address){
+  var filledBy = AC_FILLED_BY || 'manual';
+  CLINIC_BANK.push({n:name,d:doctor||'TBD',s:spec||'',c:city,t:'',notes:notes,
+    phone:   phone,
+    fax:     fax,
+    website: website,
+    address: address,
+    filledBy: filledBy,
+    addedBy: (CURRENT_USER && CURRENT_USER.name) || '',
+    addedAt: new Date().toISOString()
+  });
+  try { closeAddClinic(); } catch(e){}
+  var lbl=document.getElementById('bank-count-label');
+  if(lbl) lbl.textContent=CLINIC_BANK.length+' clinics — browse, search, and add to any date';
+  if(typeof renderBank === 'function') renderBank();
+  if(typeof showToast === 'function') showToast('Clinic added: '+name + (filledBy === 'gemini' ? ' (Gemini-assisted)' : ''));
+}
+window._saveClinicRecord = _saveClinicRecord;
 window.openAddClinic=openAddClinic;
 window.closeAddClinic=closeAddClinic;
 window.saveNewClinic=saveNewClinic;
