@@ -1454,7 +1454,14 @@ body.role-front_desk #referrals-view {
 </div>
 
 <div id="landing">
-  <div style="position:sticky;top:0;z-index:100"><div class="header">
+  <!-- Sticky header wrapper. z-index lifted from 100 → 5000 (per user 2026-05-22)
+       to fix the bell-dropdown clipping bug. position:sticky creates a new
+       stacking context, so dropdowns + popovers inside this wrapper stack
+       relative to OTHER elements on the page using this z-index (not their
+       own internal z). At 100 they sat below clinic cards and any page
+       element with a higher local z. 5000 puts them above all normal page
+       content while still sitting below modal overlays (which run 9500+). -->
+  <div style="position:sticky;top:0;z-index:5000"><div class="header">
     <!-- Logo + title — both clickable, return to dashboard (with discard-confirm if a modal is open) -->
     <div onclick="goHomeFromHeader()"
          title="Click to return to the Dashboard"
@@ -19892,6 +19899,25 @@ function _rpDefaultN(distMiles){
 // Start the Smart Plan workflow — switch the map to "pick mode" so the
 // next two pin clicks become Start and End.
 function rpStartSmartPlan(){
+  // ── PAST-DATE GUARD (per user 2026-05-22) ────────────────────────────
+  // Planning is by definition for today or future days — same rule as
+  // "you can't mark a visit Completed before its date." Refuse to start
+  // the planner on a past day with a clear toast.
+  try {
+    var di = (typeof _DV_LAST_DI === 'number') ? _DV_LAST_DI : null;
+    if(di != null && S.days && S.days[di]){
+      var dayDate = S.days[di].date;
+      var today = new Date(); today.setHours(0,0,0,0);
+      var visit = new Date(dayDate + 'T00:00:00');
+      if(visit < today){
+        var fmt = visit.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
+        if(typeof showToast === 'function'){
+          showToast('Can\'t plan a route in the past (' + fmt + '). Open today or a future day.');
+        }
+        return;
+      }
+    }
+  } catch(_){}
   _RP_PICK_MODE  = 'start';
   _RP_START_NAME = null;
   _RP_END_NAME   = null;
@@ -20846,6 +20872,24 @@ window.toggleDayMapExpanded = toggleDayMapExpanded;
 
 function renderDayMap(di){
   _DV_LAST_DI = di;
+  // Per user 2026-05-22: visually disable the "🧭 Plan a Route" button on
+  // past days. Planning is for today or future only. We still let the
+  // button be clickable (so users get the toast explaining why), just
+  // gray it out so they see at a glance it's not for past days.
+  try {
+    var planBtn = document.getElementById('dv-plan-route-btn');
+    if(planBtn && S.days && S.days[di]){
+      var dayDate = S.days[di].date;
+      var today = new Date(); today.setHours(0,0,0,0);
+      var visit = new Date(dayDate + 'T00:00:00');
+      var isPast = visit < today;
+      planBtn.style.opacity = isPast ? '.5' : '';
+      planBtn.style.filter  = isPast ? 'grayscale(.6)' : '';
+      planBtn.title = isPast
+        ? 'Planning is for today or future days only — this day is in the past.'
+        : 'Pick a Start and End pin on the map — get a corridor of clinics to visit between them, ranked by longest-since-visited.';
+    }
+  } catch(_){}
   // Try to init; if Leaflet isn't loaded yet, retry shortly.
   if(!_initDayMap()){
     setTimeout(function(){ renderDayMap(di); }, 600);
