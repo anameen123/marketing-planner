@@ -2783,12 +2783,18 @@ body.role-front_desk #referrals-view {
           <span title="Visited 21+ days ago — ripe for re-engagement" style="display:inline-flex;align-items:center;gap:4px;font-size:10px;color:#14532d;font-weight:700"><span style="display:inline-block;width:10px;height:10px;background:#16a34a;border-radius:50%;border:1px solid #fff;box-shadow:0 0 0 1px #16a34a"></span>21d+ (ripe)</span>
           <span title="Never visited" style="display:inline-flex;align-items:center;gap:4px;font-size:10px;color:#475569"><span style="display:inline-block;width:10px;height:10px;background:#9ca3af;border-radius:50%;border:1px solid #fff;box-shadow:0 0 0 1px #9ca3af"></span>never</span>
         </div>
-        <!-- Smart Plan button removed per user 2026-05-21 — Route Planner v3 will replace it. -->
-        <div style="display:flex;align-items:center;gap:8px">
+        <!-- 🧭 Plan a Route (v3) + ↔ Expand toggles. The v3 algorithm was fully
+             implemented earlier (rpStartSmartPlan + corridor candidate finder
+             with recency ranking + OSRM real-driving-distance) but never had
+             an entry-point button. Re-adding it here so the feature is
+             reachable. Per user 2026-05-22 frustration: "I do not see anything." -->
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
           <span id="rp-pick-status" style="font-size:10px;color:var(--muted);font-style:italic"></span>
-          <!-- ↔ Expand toggle (per user 2026-05-22). Grows the map from 320px
-               to ~70vh so the whole route is readable on a phone or laptop;
-               click again to collapse. Pure CSS swap — no map re-init. -->
+          <button id="dv-plan-route-btn" type="button" onclick="rpStartSmartPlan()"
+                  title="Pick a Start and End pin on the map — get a corridor of clinics to visit between them, ranked by longest-since-visited."
+                  style="background:linear-gradient(135deg,#7030A0,#9333ea);border:none;color:#fff;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;display:inline-flex;align-items:center;gap:5px;line-height:1.1;box-shadow:0 1px 3px rgba(112,48,160,.3)">
+            🧭 Plan a Route
+          </button>
           <button id="dv-map-expand-btn" type="button" onclick="toggleDayMapExpanded()"
                   title="Expand the map to full height — easier to see the route"
                   style="background:#1F3864;border:none;color:#fff;border-radius:6px;padding:5px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;display:inline-flex;align-items:center;gap:5px;line-height:1.1">
@@ -20400,25 +20406,121 @@ function _rpCancelSmart(){
   _RP_SLOT_PICKS = [];
   if(_RP_HIGHLIGHTS) _RP_HIGHLIGHTS.clearLayers();
   if(_DV_ROUTELINE){ _DV_MAP.removeLayer(_DV_ROUTELINE); _DV_ROUTELINE = null; }
+  // Per user 2026-05-22: also clear the planning-corridor polygon
+  if(typeof _rpClearCorridor === 'function') _rpClearCorridor();
   var panel = document.getElementById('rp-smart-panel');
   if(panel){ panel.style.display = 'none'; panel.innerHTML = ''; }
   _rpUpdateStatus();
 }
 window._rpCancelSmart = _rpCancelSmart;
 
-// Draw a polyline on the map connecting Start → picks → End.
+// ── CORRIDOR VISUALIZATION (per user 2026-05-22) ──────────────────────────
+// When Start + End are picked, draw a translucent rectangle representing the
+// planning corridor (±_RP_CORRIDOR_MILES on either side of the A→B line).
+// The route planner only recommends clinics whose pin falls inside this
+// corridor — drawing it makes the algorithm visible to the user instead of
+// being invisible math under the hood.
+var _DV_CORRIDOR = null;
+var _RP_CORRIDOR_MILES = 3;   // half-width; user said "limit detour" → keep tight
+
+// Convert (lat,lng) + a perpendicular offset in miles → a new (lat,lng).
+// Approximation: 1° latitude ≈ 69 mi; 1° longitude ≈ 69 × cos(lat) mi.
+// At DFW latitudes this is accurate to within ~0.1 mi over 5 mi spans.
+function _rpOffsetLatLng(lat, lng, bearingDeg, miles){
+  var R = 3958.8;
+  var br = bearingDeg * Math.PI / 180;
+  var lat1 = lat * Math.PI / 180;
+  var lng1 = lng * Math.PI / 180;
+  var d = miles / R;
+  var lat2 = Math.asin(Math.sin(lat1)*Math.cos(d) + Math.cos(lat1)*Math.sin(d)*Math.cos(br));
+  var lng2 = lng1 + Math.atan2(Math.sin(br)*Math.sin(d)*Math.cos(lat1),
+                               Math.cos(d) - Math.sin(lat1)*Math.sin(lat2));
+  return [lat2 * 180 / Math.PI, lng2 * 180 / Math.PI];
+}
+function _rpBearingDeg(a, b){
+  var y = Math.sin((b.lng - a.lng) * Math.PI/180) * Math.cos(b.lat * Math.PI/180);
+  var x = Math.cos(a.lat * Math.PI/180) * Math.sin(b.lat * Math.PI/180)
+        - Math.sin(a.lat * Math.PI/180) * Math.cos(b.lat * Math.PI/180)
+                                        * Math.cos((b.lng - a.lng) * Math.PI/180);
+  return ((Math.atan2(y, x) * 180 / Math.PI) + 360) % 360;
+}
+function _rpDrawCorridor(startCoord, endCoord){
+  if(!_DV_MAP || !startCoord || !endCoord) return;
+  if(_DV_CORRIDOR){ _DV_MAP.removeLayer(_DV_CORRIDOR); _DV_CORRIDOR = null; }
+  var bearing = _rpBearingDeg(startCoord, endCoord);
+  // Perpendiculars: bearing ±90° → left + right offsets
+  var sL = _rpOffsetLatLng(startCoord.lat, startCoord.lng, bearing - 90, _RP_CORRIDOR_MILES);
+  var sR = _rpOffsetLatLng(startCoord.lat, startCoord.lng, bearing + 90, _RP_CORRIDOR_MILES);
+  var eR = _rpOffsetLatLng(endCoord.lat,   endCoord.lng,   bearing + 90, _RP_CORRIDOR_MILES);
+  var eL = _rpOffsetLatLng(endCoord.lat,   endCoord.lng,   bearing - 90, _RP_CORRIDOR_MILES);
+  // Slight overshoot beyond start and end so the corridor visually contains
+  // the endpoints rather than ending exactly at them.
+  var pad = 1.0;
+  var sLp = _rpOffsetLatLng(sL[0], sL[1], bearing - 180, pad);
+  var sRp = _rpOffsetLatLng(sR[0], sR[1], bearing - 180, pad);
+  var eRp = _rpOffsetLatLng(eR[0], eR[1], bearing, pad);
+  var eLp = _rpOffsetLatLng(eL[0], eL[1], bearing, pad);
+  _DV_CORRIDOR = L.polygon([sLp, sRp, eRp, eLp], {
+    color:       '#7030A0',
+    weight:      1.5,
+    opacity:     0.6,
+    fillColor:   '#a78bfa',
+    fillOpacity: 0.10,
+    dashArray:   '4,4',
+    interactive: false
+  }).addTo(_DV_MAP);
+  // Add a small corridor label at the midpoint
+  var midLat = (startCoord.lat + endCoord.lat) / 2;
+  var midLng = (startCoord.lng + endCoord.lng) / 2;
+  var labelHtml = '<div style="background:#7030A0;color:#fff;font-family:DM Sans,sans-serif;font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px;letter-spacing:.04em;text-transform:uppercase;opacity:.85">Planning corridor · ±' + _RP_CORRIDOR_MILES + ' mi</div>';
+  try {
+    var lbl = L.marker([midLat, midLng], {
+      interactive: false,
+      keyboard: false,
+      icon: L.divIcon({
+        className: 'rp-corridor-label',
+        html: labelHtml,
+        iconSize: [160, 18],
+        iconAnchor: [80, 9]
+      })
+    });
+    // Stash on the polygon's layer so it gets removed together
+    _DV_CORRIDOR._label = lbl;
+    lbl.addTo(_DV_MAP);
+  } catch(_){}
+}
+function _rpClearCorridor(){
+  if(_DV_CORRIDOR){
+    try { if(_DV_CORRIDOR._label) _DV_MAP.removeLayer(_DV_CORRIDOR._label); } catch(_){}
+    _DV_MAP.removeLayer(_DV_CORRIDOR);
+    _DV_CORRIDOR = null;
+  }
+}
+
+// Draw a polyline on the map connecting Start → picks → End — and the
+// corridor rectangle around the A→B line so the user can see the planning
+// region as well as the chosen route.
 function _rpDrawRouteLine(){
   if(!_DV_MAP) return;
   if(_DV_ROUTELINE){ _DV_MAP.removeLayer(_DV_ROUTELINE); _DV_ROUTELINE = null; }
   var startCoord = _rpResolveCoord(_RP_START_NAME);
   var endCoord   = _rpResolveCoord(_RP_END_NAME);
-  if(!startCoord || !endCoord) return;
+  if(!startCoord || !endCoord){ _rpClearCorridor(); return; }
+  // Corridor first (sits under everything else)
+  _rpDrawCorridor(startCoord, endCoord);
+  // Then the route polyline through Start → picks → End
   var pts = [[startCoord.lat, startCoord.lng]];
   _RP_SLOT_PICKS.forEach(function(p){
     if(p && p.coord) pts.push([p.coord.lat, p.coord.lng]);
   });
   pts.push([endCoord.lat, endCoord.lng]);
-  _DV_ROUTELINE = L.polyline(pts, { color:'#7030A0', weight:3, opacity:0.75, dashArray:'8,5' }).addTo(_DV_MAP);
+  _DV_ROUTELINE = L.polyline(pts, { color:'#7030A0', weight:3, opacity:0.85, dashArray:'8,5' }).addTo(_DV_MAP);
+  // Fit map to the whole corridor + route so the user sees the full picture
+  try {
+    var bounds = L.latLngBounds(pts);
+    if(_DV_CORRIDOR) bounds.extend(_DV_CORRIDOR.getBounds());
+    _DV_MAP.fitBounds(bounds.pad(0.10), { maxZoom: 13 });
+  } catch(_){}
 }
 
 // Finalize → show the confirmation pane with leg-by-leg distances.
