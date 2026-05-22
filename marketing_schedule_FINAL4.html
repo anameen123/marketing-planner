@@ -1471,7 +1471,7 @@ body.role-front_desk #referrals-view {
     <div class="header-right" style="display:flex;align-items:center;gap:10px"><span id="sp-save-indicator" style="display:none;font-size:11px;font-weight:600;padding:3px 8px;background:rgba(255,255,255,.15);border-radius:6px;color:#fff"></span><!-- 📣 Announcement quick-button — AMBER accent so it's visually distinct from
          the blue activity bell next to it (per user 2026-05-22: the two icons
          used to look like "two ringing bells"). Opens the announcements list. -->
-<button id="hdr-announce-btn" type="button" onclick="openAnnouncementsList()" title="Announcements — what's new on the team" aria-label="Announcements" style="position:relative;background:rgba(251,191,36,.18);border:1px solid rgba(251,191,36,.45);color:#fff;width:36px;height:36px;border-radius:9px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;padding:0;font-family:inherit;transition:background .15s" onmouseover="this.style.background='rgba(251,191,36,.32)'" onmouseout="this.style.background='rgba(251,191,36,.18)'"><span style="font-size:17px;line-height:1">📣</span><span id="hdr-announce-count" style="display:none;position:absolute;top:-3px;right:-3px;background:#f59e0b;color:#fff;font-size:9px;font-weight:800;padding:1px 5px;border-radius:10px;line-height:1.3;min-width:14px;text-align:center;border:2px solid #162d54">0</span></button>
+<button id="hdr-announce-btn" type="button" onclick="openAnnouncementsList()" title="Announcements — what's new on the team" aria-label="Announcements" style="position:relative;background:rgba(251,191,36,.18);border:1px solid rgba(251,191,36,.45);color:#fff;width:36px;height:36px;border-radius:9px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;padding:0;font-family:inherit;transition:background .15s" onmouseover="this.style.background='rgba(251,191,36,.32)'" onmouseout="this.style.background='rgba(251,191,36,.18)'"><!-- Inline megaphone SVG (per user 2026-05-22 — the 📣 emoji renders as a bell on some platforms, so we use a vector icon that's identical everywhere). --><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#fbbf24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11v2a2 2 0 0 0 2 2h1l4 4V5L6 9H5a2 2 0 0 0-2 2z"/><path d="M14 7s2 1.5 2 5-2 5-2 5"/><path d="M18 4s3 2.5 3 8-3 8-3 8"/></svg><span id="hdr-announce-count" style="display:none;position:absolute;top:-3px;right:-3px;background:#f59e0b;color:#fff;font-size:9px;font-weight:800;padding:1px 5px;border-radius:10px;line-height:1.3;min-width:14px;text-align:center;border:2px solid #162d54">0</span></button>
     <!-- 🔔 ACTIVITY-BELL — BLUE accent so it reads as the "your activity" icon,
          clearly different from the amber announcement icon next to it.
          Admin → all admin-action entries.
@@ -35024,26 +35024,42 @@ function renderBankPage(filtered){
       specEl.style.cssText='font-size:10px;background:#f4f5f9;color:var(--muted);padding:3px 8px;border-radius:6px;display:inline-block';
       specEl.textContent=c.s;card.appendChild(specEl);
     }
-    // Lead status badge
+    // Lead status row (per user 2026-05-22 screenshot — duplicate UI fix).
+    // Previously rendered BOTH a status pill AND a separate dropdown on every
+    // card, even for non-admin users where the dropdown was just disabled.
+    // That made every card look like it had two indicators saying the same
+    // thing. Now we show ONE of the two:
+    //   • Admin + backfill mode ON  → the editable dropdown (no pill)
+    //   • Everyone else             → the read-only pill (no dropdown)
+    // The dropdown already shows the current value, so the pill is redundant
+    // when both are present.
     var lead=getClinicLead(c.n);
     var st=LEAD_STATUSES[lead.status]||LEAD_STATUSES['not_visited'];
     var stRow=document.createElement('div');
     stRow.style.cssText='display:flex;align-items:center;justify-content:space-between;gap:6px;margin-top:2px';
-    var stBadge=document.createElement('span');
-    stBadge.style.cssText='font-size:9px;font-weight:600;background:'+st.bg+';color:'+st.color+';padding:2px 6px;border-radius:4px';
-    stBadge.textContent=st.icon+' '+st.label;
-    if(lead.status==='established'&&lead.level){
-      var lv=ESTABLISHED_LEVELS[lead.level];
-      var lvBadge=document.createElement('span');
-      lvBadge.style.cssText='font-size:9px;font-weight:700;background:'+lv.color+';color:#fff;padding:1px 4px;border-radius:3px';
-      lvBadge.textContent=lv.label;
-      stRow.appendChild(stBadge);stRow.appendChild(lvBadge);
-    } else { stRow.appendChild(stBadge); }
-    // Inline lead control — direct edit on the card, no popover. Lets the
-    // marketing lead retroactively record an established relationship right
-    // here without opening a separate modal.
-    var stSel = (typeof buildInlineLeadControl === 'function') ? buildInlineLeadControl(c.n) : null;
-    if(stSel) stRow.appendChild(stSel);
+    var canEditLead = (typeof isAdmin === 'function' && isAdmin())
+                   && (typeof isLeadBackfillModeOn === 'function' && isLeadBackfillModeOn());
+    if(canEditLead){
+      // Admin + backfill ON → show only the editable dropdown
+      var stSel = (typeof buildInlineLeadControl === 'function') ? buildInlineLeadControl(c.n) : null;
+      if(stSel){
+        stSel.style.flex = '1';
+        stRow.appendChild(stSel);
+      }
+    } else {
+      // Everyone else → show only the status pill (read-only)
+      var stBadge=document.createElement('span');
+      stBadge.style.cssText='font-size:9px;font-weight:600;background:'+st.bg+';color:'+st.color+';padding:2px 6px;border-radius:4px';
+      stBadge.textContent=st.icon+' '+st.label;
+      stRow.appendChild(stBadge);
+      if(lead.status==='established'&&lead.level){
+        var lv=ESTABLISHED_LEVELS[lead.level];
+        var lvBadge=document.createElement('span');
+        lvBadge.style.cssText='font-size:9px;font-weight:700;background:'+lv.color+';color:#fff;padding:1px 4px;border-radius:3px';
+        lvBadge.textContent=lv.label;
+        stRow.appendChild(lvBadge);
+      }
+    }
     card.appendChild(stRow);
 
     // 📝 Next Visit Note (if any) — shown as a yellow sticky on the card
