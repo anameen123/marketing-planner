@@ -2914,45 +2914,56 @@ body.role-front_desk #referrals-view {
         <input type="hidden" id="rp-end" value="__same__">
         <div style="font-size:10px;color:var(--muted);margin-top:3px;font-style:italic">Leave the name blank for a round-trip back to Start. Or tap <b>📍 Map</b> to pick on the map.</div>
       </div>
+      <!-- Corridor width control (per user 2026-05-22 v4). The planner finds
+           candidates whose perpendicular distance from the Start→End line
+           is ≤ this number of miles (both sides — "negative or positive").
+           Auto-expand kicks in when a level is empty so the user always
+           sees something at every recency band that exists. -->
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
         <div>
-          <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Max clinics to include *</label>
-          <input type="number" id="rp-count" value="5" min="1" max="20" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box">
+          <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Corridor half-width <span style="color:var(--muted);font-weight:400">(±miles either side of route)</span></label>
+          <div style="display:flex;align-items:center;gap:5px">
+            <button type="button" onclick="_rpV4AdjustWidth(-1)" style="background:#e5e7eb;border:none;color:#374151;width:30px;height:36px;border-radius:6px;font-size:14px;font-weight:700;cursor:pointer">−</button>
+            <input type="number" id="rp-corridor" value="3" min="1" max="12" oninput="_rpV4OnWidthChange()" style="flex:1;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box;text-align:center">
+            <button type="button" onclick="_rpV4AdjustWidth(1)" style="background:#e5e7eb;border:none;color:#374151;width:30px;height:36px;border-radius:6px;font-size:14px;font-weight:700;cursor:pointer">+</button>
+          </div>
         </div>
         <div>
-          <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Max detour (miles)</label>
-          <input type="number" id="rp-detour" value="5" min="1" max="30" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box">
-          <!-- "Cap the detour" checkbox (per user 2026-05-19). Default checked.
-               When unchecked, the detour input is disabled and the planner
-               treats max detour as ∞ (no cap) — useful for "show me ALL
-               clinics along the way, no matter how far off the line". -->
-          <label style="display:flex;align-items:center;gap:6px;margin-top:6px;cursor:pointer;font-size:11px;color:var(--text)">
-            <input type="checkbox" id="rp-detour-cap" checked onchange="_rpToggleDetourCap()" style="cursor:pointer">
-            <span>Limit the detour to this many miles</span>
+          <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">If a level is empty…</label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--text);background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:9px 12px;height:36px;box-sizing:border-box">
+            <input type="checkbox" id="rp-auto-expand" checked onchange="_rpV4OnWidthChange()" style="cursor:pointer">
+            <span>Auto-expand corridor (up to 12 mi)</span>
           </label>
-          <div id="rp-detour-infinity-hint" style="display:none;font-size:10px;color:var(--muted);margin-top:4px;font-style:italic">∞ No detour cap — every business in range is eligible.</div>
         </div>
       </div>
       <div class="kpi-input-row" style="margin-bottom:10px">
         <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Filter by specialty (optional)</label>
-        <select id="rp-specialty" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box">
+        <select id="rp-specialty" onchange="_rpV4OnWidthChange()" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box">
           <option value="">All specialties</option>
         </select>
       </div>
       <div class="kpi-input-row" style="margin-bottom:6px">
         <label style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:var(--text);cursor:pointer">
-          <input type="checkbox" id="rp-skip-visited" checked> Skip clinics I already visited this period
+          <input type="checkbox" id="rp-skip-visited" checked onchange="_rpV4OnWidthChange()"> Skip clinics already visited this period
         </label>
       </div>
 
+      <!-- LEVEL-BASED PICKER (per user 2026-05-22 v4). Replaces the old
+           per-checkpoint slot picker. Each section is one recency band;
+           the user checks the candidates they want from any combination
+           of levels. Skip levels by checking none. Pick multiple from one
+           level by checking many. Auto-expand corridor refills empty levels. -->
       <div id="rp-results" style="display:none;margin-top:14px;border-top:1px solid var(--border);padding-top:12px"></div>
     </div>
     <div class="modal-foot" style="flex-shrink:0;background:#fff;padding:12px 22px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
       <div style="display:flex;align-items:center;gap:10px">
         <button onclick="closeRoutePlanner()" style="background:#e5e7eb;color:#374151;border:none;border-radius:8px;padding:9px 16px;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif">Cancel</button>
-        <button id="rp-coverage-btn" onclick="showCoverageSummary()" style="background:none;border:none;color:#64748b;font-size:11px;font-family:'DM Sans',sans-serif;cursor:pointer;text-decoration:underline;padding:0">📊 Coverage report</button>
+        <span id="rp-v4-selected-summary" style="font-size:11px;color:var(--muted);font-style:italic"></span>
       </div>
-      <button onclick="runRoutePlanner()" id="rp-run-btn" style="background:linear-gradient(135deg,#1F3864,#3b5fa3);color:#fff;border:none;border-radius:8px;padding:9px 22px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif">Find recommendations →</button>
+      <div style="display:flex;align-items:center;gap:8px">
+        <button onclick="runRoutePlannerV4()" id="rp-run-btn" style="background:#7030A0;color:#fff;border:none;border-radius:8px;padding:9px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif">🔍 Find candidates</button>
+        <button onclick="_rpV4GenerateRoute()" id="rp-v4-generate-btn" disabled style="background:#cbd5e1;color:#94a3b8;border:none;border-radius:8px;padding:9px 22px;font-size:12px;font-weight:700;cursor:not-allowed;font-family:'DM Sans',sans-serif">Generate route →</button>
+      </div>
     </div>
   </div>
 </div>
@@ -21711,18 +21722,20 @@ function _rpToggleDetourCap(){
 }
 window._rpToggleDetourCap = _rpToggleDetourCap;
 
-function runRoutePlanner(){
+// Legacy v3 entry-point retained for backward compat — redirects to v4.
+function runRoutePlanner(){ return runRoutePlannerV4(); }
+window.runRoutePlanner = runRoutePlanner;
+
+function _runRoutePlannerLegacy(){
   var startKey = document.getElementById('rp-start').value;
   var endKey   = document.getElementById('rp-end').value;
-  var count    = Math.max(1, parseInt(document.getElementById('rp-count').value, 10) || 5);
-  // Per user 2026-05-19: if the "Limit detour" checkbox is UNCHECKED,
-  // treat the cap as Infinity — every candidate in range is eligible.
+  var count    = Math.max(1, parseInt(((document.getElementById('rp-count')||{}).value)||5, 10));
   var detourCb = document.getElementById('rp-detour-cap');
   var detour;
   if(detourCb && !detourCb.checked){
     detour = Infinity;
   } else {
-    detour = Math.max(1, parseFloat(document.getElementById('rp-detour').value) || 5);
+    detour = Math.max(1, parseFloat(((document.getElementById('rp-detour')||{}).value)||5));
   }
   var specFilter = document.getElementById('rp-specialty').value || '';
   var skipVisited = !!document.getElementById('rp-skip-visited').checked;
@@ -21804,6 +21817,353 @@ function runRoutePlanner(){
   _drawPlannedRouteOnMap(A, B, picks);
 }
 window.runRoutePlanner = runRoutePlanner;
+
+// ════════════════════════════════════════════════════════════════════════════
+// ROUTE PLANNER v4 — PER-LEVEL CHECKLISTS WITH AUTO-EXPANDING CORRIDOR
+// ════════════════════════════════════════════════════════════════════════════
+// User design 2026-05-22:
+//   "We need a plan-a-route dialog where you ask them to fill and you give
+//    them a list of suggestions FOR EACH LEVEL. Start/End either select on
+//    map or fill the box with suggestions. The route should take them from
+//    one level to another — more than one in the same level is fine, skip a
+//    level completely is fine. If no clinics or MVAs in that width of the
+//    level the corridor should expand (negative or positive)."
+//
+// Translation:
+//   - After Start + End are set, show 5 sections (🟢 21d+ ripe, ⚪ never,
+//     🟡 14-20d, 🟠 7-13d, 🔴 0-6d hidden by default).
+//   - Each section lists EVERY candidate within the corridor at that
+//     recency level as a checkbox. User picks 0, 1, or many per level.
+//   - Skip a level entirely → don't check anything from it.
+//   - When a level is empty, auto-expand the corridor +1 mi per step
+//     (capped at 12 mi) until candidates appear OR cap is reached.
+//   - "Generate route" orders the checked candidates along the A→B line
+//     (by projection parameter t) and runs the existing OSRM review.
+
+var _RP_V4_CHECKED      = {};       // { businessName: true }
+var _RP_V4_LAST         = null;     // { fresh:[], warm:[], yellow:[], ripe:[], never:[], A:{lat,lng}, B:{lat,lng}, effectiveWidth }
+var _RP_V4_LEVEL_ORDER  = ['ripe','never','yellow','warm','fresh'];
+
+// Perpendicular distance from point P to the segment A→B, in miles.
+// Cosine-corrected longitude so the math is accurate at DFW latitudes.
+function _rpV4PerpMiles(P, A, B){
+  if(!P || !A || !B) return Infinity;
+  var midLat = (A.lat + B.lat) / 2 * Math.PI / 180;
+  var milesPerDegLat = 69;
+  var milesPerDegLng = 69 * Math.cos(midLat);
+  var px = (P.lng - A.lng) * milesPerDegLng;
+  var py = (P.lat - A.lat) * milesPerDegLat;
+  var bx = (B.lng - A.lng) * milesPerDegLng;
+  var by = (B.lat - A.lat) * milesPerDegLat;
+  var len2 = bx*bx + by*by;
+  if(len2 === 0){
+    // Start == End → corridor is a circle around A.
+    return Math.sqrt(px*px + py*py);
+  }
+  var t = (px*bx + py*by) / len2;
+  if(t < 0) t = 0;
+  if(t > 1) t = 1;
+  var cx = bx * t, cy = by * t;
+  var dx = px - cx, dy = py - cy;
+  return Math.sqrt(dx*dx + dy*dy);
+}
+
+// "Position along the route" — for sorting picked stops into route order.
+// Returns t ∈ [0,1] where 0 = at Start, 1 = at End.
+function _rpV4ProjectT(P, A, B){
+  if(!P || !A || !B) return 0;
+  var midLat = (A.lat + B.lat) / 2 * Math.PI / 180;
+  var milesPerDegLat = 69;
+  var milesPerDegLng = 69 * Math.cos(midLat);
+  var px = (P.lng - A.lng) * milesPerDegLng;
+  var py = (P.lat - A.lat) * milesPerDegLat;
+  var bx = (B.lng - A.lng) * milesPerDegLng;
+  var by = (B.lat - A.lat) * milesPerDegLat;
+  var len2 = bx*bx + by*by;
+  if(len2 === 0) return 0;
+  var t = (px*bx + py*by) / len2;
+  if(t < 0) t = 0;
+  if(t > 1) t = 1;
+  return t;
+}
+
+// Find ALL candidates whose perpendicular distance to A→B is ≤ halfWidth,
+// grouped by recency bucket. Respects spec filter + skip-already-visited.
+function _rpV4Collect(A, B, halfWidth, opts){
+  opts = opts || {};
+  var specFilter  = opts.specFilter || '';
+  var skipVisited = !!opts.skipVisited;
+  var includeRed  = !!opts.includeRed;
+  var byBucket = { fresh:[], warm:[], yellow:[], ripe:[], never:[] };
+  function consider(name, bizType, spec, city){
+    if(!name) return;
+    if(specFilter && spec !== specFilter) return;
+    var coord = (typeof getCoordForBusiness === 'function') ? getCoordForBusiness(name) : null;
+    if(!coord) return;
+    var perp = _rpV4PerpMiles(coord, A, B);
+    if(perp > halfWidth) return;
+    // Dead-end exclude (per project rule)
+    var lead = (typeof getClinicLead === 'function') ? getClinicLead(name) : null;
+    if(lead && lead.status === 'dead_end') return;
+    // Already visited this period (referrals counter > 0)
+    if(skipVisited && typeof BUSINESS_REFERRALS !== 'undefined'){
+      var ref = BUSINESS_REFERRALS[name];
+      if(ref && (ref.currentCount || 0) > 0) return;
+    }
+    var days = (typeof daysSinceLastVisit === 'function') ? daysSinceLastVisit(name) : null;
+    var rec  = (typeof recencyBucket === 'function') ? recencyBucket(days) : { key:'never' };
+    // Red filter — only include 0-6d when explicitly enabled
+    if(!includeRed && rec.key === 'fresh') return;
+    var t = _rpV4ProjectT(coord, A, B);
+    byBucket[rec.key].push({
+      name: name, bizType: bizType, city: city || '', spec: spec || '',
+      coord: coord, days: days, perp: perp, t: t,
+      leadStatus: lead ? lead.status : 'not_visited',
+      leadLevel:  lead ? (lead.level || 0) : 0
+    });
+  }
+  if(typeof CLINIC_BANK !== 'undefined'){
+    CLINIC_BANK.forEach(function(c){ if(c && c.n) consider(c.n, 'clinic', c.s || '', c.c || ''); });
+  }
+  if(typeof MVA_ATTORNEYS !== 'undefined'){
+    MVA_ATTORNEYS.forEach(function(m){ if(m && m.firm) consider(m.firm, 'mva', 'MVA', m.city || ''); });
+  }
+  // Sort each bucket by t (position along route) so the user can read them
+  // left-to-right along the corridor.
+  Object.keys(byBucket).forEach(function(k){
+    byBucket[k].sort(function(a,b){ return a.t - b.t; });
+  });
+  return byBucket;
+}
+
+// Entry point — called by the dialog's "🔍 Find candidates" button + when
+// any of the corridor / spec / skip-visited / auto-expand inputs change.
+function runRoutePlannerV4(){
+  // Resolve Start + End
+  var startKey = (document.getElementById('rp-start') || {}).value || '';
+  var endKey   = (document.getElementById('rp-end')   || {}).value || '';
+  var A = (typeof getRouteCoord === 'function') ? getRouteCoord(startKey) : null;
+  if(!A){
+    if(typeof showToast === 'function') showToast('Pick a Start point first.');
+    return;
+  }
+  var B;
+  if(endKey === '__same__' || !endKey){
+    B = A;
+  } else {
+    B = (typeof getRouteCoord === 'function') ? getRouteCoord(endKey) : null;
+  }
+  if(!B){
+    if(typeof showToast === 'function') showToast('Pick an End point (or leave blank for a round trip).');
+    return;
+  }
+  // Read inputs
+  var halfWidth = parseFloat((document.getElementById('rp-corridor') || {}).value) || 3;
+  if(halfWidth < 1)  halfWidth = 1;
+  if(halfWidth > 12) halfWidth = 12;
+  var autoExpand  = !!(document.getElementById('rp-auto-expand') && document.getElementById('rp-auto-expand').checked);
+  var specFilter  = (document.getElementById('rp-specialty')    || {}).value || '';
+  var skipVisited = !!(document.getElementById('rp-skip-visited') && document.getElementById('rp-skip-visited').checked);
+  var includeRed  = !!_RP_INCLUDE_RED;
+  // Initial collect at the user's chosen width
+  var buckets = _rpV4Collect(A, B, halfWidth, { specFilter:specFilter, skipVisited:skipVisited, includeRed:includeRed });
+  // Auto-expand: for each empty level (other than red unless includeRed),
+  // expand the corridor up to 12 mi looking for ANY candidate of that level.
+  // We track effective width per level so the UI can show "🟡 expanded to 5 mi".
+  var effectiveWidth = {};
+  Object.keys(buckets).forEach(function(k){ effectiveWidth[k] = halfWidth; });
+  if(autoExpand){
+    _RP_V4_LEVEL_ORDER.concat(includeRed ? ['fresh'] : []).forEach(function(k){
+      if(k === 'fresh' && !includeRed) return;
+      if(buckets[k].length > 0) return;
+      // Try expanding by +1 mi each step up to 12
+      for(var w = halfWidth + 1; w <= 12; w++){
+        var bigger = _rpV4Collect(A, B, w, { specFilter:specFilter, skipVisited:skipVisited, includeRed:includeRed });
+        if(bigger[k].length > 0){
+          buckets[k] = bigger[k];
+          effectiveWidth[k] = w;
+          break;
+        }
+      }
+    });
+  }
+  _RP_V4_LAST = { buckets:buckets, A:A, B:B, baseWidth: halfWidth, effectiveWidth: effectiveWidth };
+  _rpV4RenderResults();
+  _rpV4UpdateSelectedSummary();
+}
+window.runRoutePlannerV4 = runRoutePlannerV4;
+
+function _rpV4RenderResults(){
+  var box = document.getElementById('rp-results');
+  if(!box || !_RP_V4_LAST) return;
+  var buckets = _RP_V4_LAST.buckets;
+  var levels = [
+    { key:'ripe',   emoji:'🟢', color:'#16a34a', label:'21d+ — ripe for re-engagement' },
+    { key:'never',  emoji:'⚪', color:'#9ca3af', label:'Never visited' },
+    { key:'yellow', emoji:'🟡', color:'#eab308', label:'14–20d ago' },
+    { key:'warm',   emoji:'🟠', color:'#f97316', label:'7–13d ago' },
+    { key:'fresh',  emoji:'🔴', color:'#ef4444', label:'0–6d ago — recently visited' }
+  ];
+  if(!_RP_INCLUDE_RED){
+    levels = levels.filter(function(l){ return l.key !== 'fresh'; });
+  }
+  var html = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px"><div style="font-size:12px;font-weight:700;color:var(--text)">Pick the stops you want · skip any level · pick multiple from one level</div></div>';
+  html += levels.map(function(L){
+    var arr = buckets[L.key] || [];
+    var effW = _RP_V4_LAST.effectiveWidth[L.key];
+    var widthNote = (effW > _RP_V4_LAST.baseWidth)
+      ? '<span style="font-size:9px;background:#fef3c7;color:#92400e;border:1px solid #fcd34d;border-radius:8px;padding:1px 6px;margin-left:6px" title="No candidates at ±'+_RP_V4_LAST.baseWidth+' mi — auto-expanded the corridor for this level only.">expanded to ±'+effW+' mi</span>'
+      : '';
+    var emptyMsg = '';
+    if(arr.length === 0){
+      emptyMsg = '<div style="padding:8px 12px;font-size:11px;color:var(--muted);font-style:italic;background:#fafbfc;border-radius:6px">No candidates within '+(effW)+' mi of the route at this level.</div>';
+    }
+    var rows = arr.map(function(c){
+      var checked = _RP_V4_CHECKED[c.name] ? 'checked' : '';
+      var safeName = String(c.name).replace(/"/g,'&quot;').replace(/'/g,"\\'");
+      var typeLbl  = c.bizType === 'mva' ? 'MVA' : 'Clinic';
+      var staleLbl = (c.days == null) ? 'never visited' : (c.days + 'd ago');
+      return '<label style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:12px;background:#fff;border:1px solid #f1f5f9;margin-bottom:3px;transition:background .12s" onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'#fff\'">'
+        + '<input type="checkbox" '+checked+' onchange="_rpV4ToggleCheck(\''+safeName+'\', this.checked)" style="cursor:pointer;flex-shrink:0">'
+        + '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><strong>'+L.emoji+' '+c.name.replace(/</g,'&lt;')+'</strong> <span style="color:var(--muted);font-size:10px">· '+typeLbl+(c.city?' · '+c.city:'')+' · '+staleLbl+'</span></span>'
+        + '<span style="font-size:9px;color:#fff;background:'+L.color+';border-radius:8px;padding:1px 6px;font-weight:700;flex-shrink:0">±'+c.perp.toFixed(1)+' mi</span>'
+        + '</label>';
+    }).join('');
+    return '<div style="margin-bottom:14px">'
+      +   '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">'
+      +     '<span style="font-size:14px">'+L.emoji+'</span>'
+      +     '<span style="font-size:11px;font-weight:700;color:var(--text)">'+L.label+'</span>'
+      +     '<span style="font-size:10px;color:var(--muted)">'+arr.length+' found</span>'
+      +     widthNote
+      +   '</div>'
+      +   (rows || emptyMsg)
+      + '</div>';
+  }).join('');
+  box.style.display = 'block';
+  box.innerHTML = html;
+}
+window._rpV4RenderResults = _rpV4RenderResults;
+
+function _rpV4ToggleCheck(name, on){
+  if(!name) return;
+  if(on) _RP_V4_CHECKED[name] = true;
+  else delete _RP_V4_CHECKED[name];
+  _rpV4UpdateSelectedSummary();
+}
+window._rpV4ToggleCheck = _rpV4ToggleCheck;
+
+function _rpV4UpdateSelectedSummary(){
+  var summaryEl = document.getElementById('rp-v4-selected-summary');
+  var btn = document.getElementById('rp-v4-generate-btn');
+  var count = Object.keys(_RP_V4_CHECKED).length;
+  if(summaryEl){
+    summaryEl.textContent = count + ' stop' + (count===1?'':'s') + ' selected';
+  }
+  if(btn){
+    var enabled = count > 0;
+    btn.disabled = !enabled;
+    btn.style.background = enabled ? 'linear-gradient(135deg,#1F3864,#7030A0)' : '#cbd5e1';
+    btn.style.color      = enabled ? '#fff' : '#94a3b8';
+    btn.style.cursor     = enabled ? 'pointer' : 'not-allowed';
+  }
+}
+window._rpV4UpdateSelectedSummary = _rpV4UpdateSelectedSummary;
+
+function _rpV4AdjustWidth(delta){
+  var el = document.getElementById('rp-corridor');
+  if(!el) return;
+  var v = (parseFloat(el.value) || 3) + delta;
+  if(v < 1)  v = 1;
+  if(v > 12) v = 12;
+  el.value = v;
+  _rpV4OnWidthChange();
+}
+window._rpV4AdjustWidth = _rpV4AdjustWidth;
+
+// Any change to corridor / spec / skip-visited / auto-expand re-runs the
+// finder so results stay in sync. Debounced lightly to avoid flicker.
+var _rpV4Timer = null;
+function _rpV4OnWidthChange(){
+  if(_rpV4Timer) clearTimeout(_rpV4Timer);
+  _rpV4Timer = setTimeout(function(){
+    if(_RP_V4_LAST) runRoutePlannerV4();
+  }, 200);
+}
+window._rpV4OnWidthChange = _rpV4OnWidthChange;
+
+// Generate route — order checked candidates by position along A→B, build
+// the slot picks the existing finalize flow consumes, then run OSRM review.
+function _rpV4GenerateRoute(){
+  if(!_RP_V4_LAST){ if(typeof showToast === 'function') showToast('Click "🔍 Find candidates" first.'); return; }
+  var names = Object.keys(_RP_V4_CHECKED);
+  if(names.length === 0){ if(typeof showToast === 'function') showToast('Check at least one candidate.'); return; }
+  // Resolve full records by scanning every level's bucket
+  var lookup = {};
+  Object.keys(_RP_V4_LAST.buckets).forEach(function(k){
+    _RP_V4_LAST.buckets[k].forEach(function(c){ lookup[c.name] = c; });
+  });
+  var picks = names.map(function(n){ return lookup[n]; }).filter(Boolean);
+  if(picks.length === 0){ if(typeof showToast === 'function') showToast('Selected candidates not found in current corridor — adjust the width and try again.'); return; }
+  // Order along the route by projection t (Start → End)
+  picks.sort(function(a,b){ return a.t - b.t; });
+  // Resolve Start + End names for the existing finalize flow.
+  // The search input shows "🏥 NAME · CITY" (or "↩ Round trip — same as start").
+  // Strip the leading icon + the " · CITY" suffix to recover just the name.
+  var startName = (document.getElementById('rp-start-search') || {}).value || '';
+  var endName   = (document.getElementById('rp-end-search')   || {}).value || '';
+  function _stripIconCity(s){
+    if(!s) return '';
+    // Drop common leading icons (the autocomplete prefixes them) and split on " · "
+    return String(s).replace(/^[^A-Za-z0-9]+/, '').split(' · ')[0].trim();
+  }
+  startName = _stripIconCity(startName);
+  endName   = _stripIconCity(endName);
+  // Round-trip detection — if the end picker shows "Round trip" or is empty,
+  // mirror the Start name so OSRM treats it as a loop.
+  if(!endName || /round\s*trip/i.test(endName) || endKey === '__same__'){
+    endName = startName;
+  }
+  // Sanity — make sure both names actually resolve to coordinates
+  if(typeof _rpResolveCoord === 'function'){
+    if(!_rpResolveCoord(startName) || !_rpResolveCoord(endName)){
+      if(typeof showToast === 'function') showToast('Start or End point couldn\'t be resolved on the map. Re-pick from the suggestions.');
+      return;
+    }
+  }
+  // Set the existing planner state so _rpFinalizeSmart can do its thing
+  _RP_START_NAME = startName;
+  _RP_END_NAME   = endName;
+  _RP_N          = picks.length;
+  _RP_SLOT_PICKS = picks.map(function(p){
+    return {
+      name: p.name, bizType: p.bizType, coord: p.coord,
+      days: p.days, dist: p.perp,
+      leadStatus: p.leadStatus, leadLevel: p.leadLevel
+    };
+  });
+  // Close the dialog so the user sees the route on the map + review pane
+  if(typeof closeRoutePlanner === 'function') closeRoutePlanner();
+  // Refresh map highlights for Start + End
+  if(typeof _rpRefreshHighlights === 'function') _rpRefreshHighlights();
+  if(typeof _rpUpdateStatus === 'function') _rpUpdateStatus();
+  // Run the finalize → OSRM review pane the user already knows
+  if(typeof _rpFinalizeSmart === 'function') _rpFinalizeSmart();
+}
+window._rpV4GenerateRoute = _rpV4GenerateRoute;
+
+// Reset checked state when the dialog opens fresh
+(function _rpV4HookReset(){
+  var origOpen = window.openRoutePlanner;
+  if(typeof origOpen !== 'function') return;
+  window.openRoutePlanner = function(){
+    _RP_V4_CHECKED = {};
+    _RP_V4_LAST = null;
+    origOpen.apply(this, arguments);
+    var box = document.getElementById('rp-results');
+    if(box){ box.style.display = 'none'; box.innerHTML = ''; }
+    _rpV4UpdateSelectedSummary();
+  };
+})();
 
 // Render the planned route on the day map: start pin, end pin, recommendation
 // pins in order, and a dashed polyline through them.
