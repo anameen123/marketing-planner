@@ -11119,8 +11119,11 @@ window._getBusinessRecord = _getBusinessRecord;
 function updateBusinessContact(name, patch){
   var ref = _getBusinessRecord(name);
   if(!ref) return { error: 'Business not found in any bank' };
-  var canEdit = (typeof CURRENT_USER !== 'undefined') && CURRENT_USER && CURRENT_USER.role !== 'readonly';
-  if(!canEdit) return { error: 'Read-only role cannot edit contact info' };
+  // Per user 2026-05-22: business identity (phone/fax/website/address) is
+  // admin-only. Members aren't allowed to edit these even if they spot
+  // outdated info — they should report to admin instead.
+  var canEdit = (typeof isAdmin === 'function') && isAdmin();
+  if(!canEdit) return { error: 'Only admin can edit business contact info. Ask admin to update.' };
   ['phone','fax','website','address'].forEach(function(k){
     if(patch && patch[k] != null) ref.record[k] = String(patch[k]).trim();
   });
@@ -11169,7 +11172,9 @@ function _renderClinicContactPanel(name){
   var address = r.address || '';   if(address === 'TBD') address = '';
   var city    = (ref.type === 'mva') ? r.city : (r.c || r.city || '');
   var nearest = getNearestWcgFacility(city);
-  var canEdit = (typeof CURRENT_USER !== 'undefined') && CURRENT_USER && CURRENT_USER.role !== 'readonly';
+  // Per user 2026-05-22: hide the ✎ edit pencil for non-admins. Business
+  // identity fields are immutable for members; only admin can update them.
+  var canEdit = (typeof isAdmin === 'function') && isAdmin();
   var safeName = String(name).replace(/'/g,"\\'").replace(/"/g,'&quot;');
   // Helper to build one labeled field row with optional edit
   function row(label, value, fieldKey, isLink){
