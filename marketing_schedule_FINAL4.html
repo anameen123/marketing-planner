@@ -2720,14 +2720,12 @@ body.role-front_desk #referrals-view {
     <div id="day-route-panel" style="margin-top:18px;background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;box-shadow:0 2px 10px rgba(15,23,42,.05)">
       <div style="background:linear-gradient(135deg,#1F3864,#3b5fa3);color:#fff;padding:12px 18px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
         <div>
-          <div style="font-size:14px;font-weight:700">🗺️ Day Route Planner</div>
-          <div style="font-size:11px;opacity:.85;margin-top:2px">Map of today's visits · plan an efficient route with recommendations</div>
+          <div style="font-size:14px;font-weight:700">🗺️ Day Map</div>
+          <div style="font-size:11px;opacity:.85;margin-top:2px">Today's visits · tap any pin to view card or add a visit</div>
         </div>
-        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-          <button id="dv-plan-route-btn" onclick="openRoutePlanner()" style="background:#fff;color:#1F3864;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;display:flex;align-items:center;gap:6px"><span>🚗</span>Plan a route (v1)</button>
-          <button id="dv-plan-route-v2-btn" onclick="openRoutePlannerV2()" title="Real driving routes + AI advice — requires Map v2 keys" style="background:linear-gradient(135deg,#7030A0,#dc2626);color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;display:flex;align-items:center;gap:6px"><span>🤖</span>Plan with AI (v2)</button>
-          <button class="admin-only" onclick="openMapV2Settings()" title="Map v2 settings — paste Google Cloud + Gemini API keys" style="background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:8px;padding:7px 10px;font-size:12px;cursor:pointer;font-family:inherit">⚙️</button>
-        </div>
+        <!-- Route Planner v1 + v2 + Smart Plan removed per user 2026-05-21.
+             Route Planner v3 (corridor + recency + deroute budget) will live
+             here once the new algorithm is built. -->
       </div>
       <!-- ── BUSINESS LAYER + RECENCY LEGEND ──────────────────────────
            Filter chips toggle clinic / MVA / outreach pin visibility.
@@ -2747,10 +2745,8 @@ body.role-front_desk #referrals-view {
           <span title="Visited 21+ days ago — ripe for re-engagement" style="display:inline-flex;align-items:center;gap:4px;font-size:10px;color:#14532d;font-weight:700"><span style="display:inline-block;width:10px;height:10px;background:#16a34a;border-radius:50%;border:1px solid #fff;box-shadow:0 0 0 1px #16a34a"></span>21d+ (ripe)</span>
           <span title="Never visited" style="display:inline-flex;align-items:center;gap:4px;font-size:10px;color:#475569"><span style="display:inline-block;width:10px;height:10px;background:#9ca3af;border-radius:50%;border:1px solid #fff;box-shadow:0 0 0 1px #9ca3af"></span>never</span>
         </div>
-        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-          <button id="rp-smart-plan-btn" onclick="rpStartSmartPlan()" title="Click two pins on the map to set Start and End, then we'll recommend stale clinics in between." style="background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;border:none;border-radius:8px;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;display:inline-flex;align-items:center;gap:5px">✨ Smart Plan</button>
-          <span id="rp-pick-status" style="font-size:10px;color:var(--muted);font-style:italic"></span>
-        </div>
+        <!-- Smart Plan button removed per user 2026-05-21 — Route Planner v3 will replace it. -->
+        <span id="rp-pick-status" style="font-size:10px;color:var(--muted);font-style:italic"></span>
       </div>
       <div style="background:#fffbeb;border-top:1px solid #fcd34d;padding:5px 18px;font-size:10px;color:#92400e;font-style:italic;text-align:center">💡 At wide zoom: <b>clinic city counts</b> (e.g. "Frisco · 84"). Zoom in (scroll wheel) past city level to see <b>individual clinic pins</b>. MVAs + outreach with real addresses stay individual at all zooms.</div>
       <div id="dv-map" style="height:320px;background:#e2e8f0"></div>
