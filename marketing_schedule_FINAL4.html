@@ -21212,8 +21212,37 @@ function confirmAddVisit(){
   // For outreach, we offer to add the user as a co-attendee on the existing row.
   var dupCheck = findExistingVisitOnDay(di, name);
   if(dupCheck && type !== 'outreach'){
-    showToast('"'+name+'" is already on the schedule for that date. Pick a different date or facility.');
-    return;
+    // Per user 2026-05-22: if ANOTHER member already added this clinic
+    // today (live-sync conflict), show a confirmation instead of a hard
+    // block — the second member might genuinely intend to also visit it
+    // (e.g. team meeting, follow-up). Same-user duplicate stays a hard
+    // block (no value).
+    var meName = (CURRENT_USER && CURRENT_USER.name) || '';
+    var existingMember = (dupCheck.row && (dupCheck.row.member || dupCheck.row.addedBy)) || '';
+    if(meName && existingMember && existingMember !== meName){
+      showConfirm({
+        icon: '⚠',
+        msg: 'Already added by another member',
+        sub: '<strong>' + existingMember + '</strong> already added "' + name + '" for this date.\n\n'
+           + 'Add it anyway for <strong>' + meName + '</strong>? Two members will end up with the same clinic on the same day.\n\n'
+           + 'If you just want to join their visit, click Cancel here and ask them — for community outreach we let you co-attend; for clinics/MVAs each visit is solo.',
+        yesLabel: 'Yes, add for me too',
+        danger: true,
+        onConfirm: function(){
+          // Mark a hint that the dupe check has been overridden, then
+          // re-invoke confirmAddVisit. We use a closure flag so the
+          // re-entry skips this dupCheck branch.
+          window._addVisitOverrideDupe = true;
+          try { confirmAddVisit(); } finally { window._addVisitOverrideDupe = false; }
+        }
+      });
+      return;
+    }
+    if(!window._addVisitOverrideDupe){
+      showToast('"'+name+'" is already on the schedule for that date. Pick a different date or facility.');
+      return;
+    }
+    // Override flag was set — fall through to allow the duplicate
   }
   if(dupCheck && type === 'outreach'){
     // Outreach exception — offer to join the existing row as a co-attendee
