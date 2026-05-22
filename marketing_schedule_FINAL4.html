@@ -8499,6 +8499,30 @@ window.getAllTimeSpentForBusiness = getAllTimeSpentForBusiness;
 // patient calculation on the random + holiday Rankings tables.
 function getAllTimeVisitsForBusiness(name){
   if(!name || typeof S === 'undefined' || !S.days) return 0;
+  // ── OUTREACH DATE-DEDUPE (per user 2026-05-22) ────────────────────────
+  // An outreach event attended by N members on the same day is ONE visit
+  // for the event's counter (one event happened, even if multiple members
+  // were there). Each member still gets +1 on their PERSONAL counter
+  // (that's computed elsewhere by iterating S.days[].rows directly and
+  // matching r.member — that path stays untouched). Here we only count
+  // the BUSINESS-side total, so we dedupe by date.
+  var isOutreach = false;
+  if(typeof OUTREACH !== 'undefined' && OUTREACH){
+    isOutreach = OUTREACH.some(function(o){ return o && o.name === name; });
+  }
+  if(isOutreach){
+    var datesCompleted = {};
+    S.days.forEach(function(day){
+      (day.rows||[]).forEach(function(r){
+        if(r && r.clinic === name && r.status === 'Completed' && r.rowConfirmed){
+          datesCompleted[day.date] = true;   // one date = one visit, regardless of headcount
+        }
+      });
+    });
+    return Object.keys(datesCompleted).length;
+  }
+  // Clinics + MVAs: every confirmed-completed row is its own visit (no two
+  // members attend together on the same date by design — those are blocked).
   var n = 0;
   S.days.forEach(function(day){
     (day.rows||[]).forEach(function(r){
@@ -26941,6 +26965,65 @@ function getClinicVisits(clinicName){
       }
     });
   });
+  // ── OUTREACH DATE-DEDUPE (per user 2026-05-22) ────────────────────────
+  // Outreach events can have multiple separate rows on the same date — one
+  // per attending member. For the EVENT's history / counters, that's still
+  // ONE visit (one event, attended by N people), not N visits. Member-level
+  // counters (visitsPeriod, Weekly Target, etc.) iterate S.days directly so
+  // they still credit each member individually — only the event-side view
+  // dedupes. Merging logic:
+  //   - Keep one entry per date
+  //   - Combine all attending members into the .member field ("Duaa + Abrar")
+  //     and the .coMembers array (so existing renderers don't break)
+  //   - Sum spending across rows for that date
+  //   - Mark rowConfirmed = true only if ALL rows for the date are confirmed
+  //   - Status: prefer 'Completed' if ANY row is completed (the event happened
+  //     for at least one person), else use the most "advanced" status
+  var isOutreach = false;
+  if(typeof OUTREACH !== 'undefined' && OUTREACH){
+    isOutreach = OUTREACH.some(function(o){ return o && o.name === clinicName; });
+  }
+  if(isOutreach && visits.length > 1){
+    var byDate = {};
+    visits.forEach(function(v){
+      var key = v.date || '_';
+      if(!byDate[key]){
+        byDate[key] = v;
+        byDate[key]._mergedMembers = [v.member].concat(v.coMembers || []).filter(Boolean);
+        return;
+      }
+      var agg = byDate[key];
+      // Merge member lists (dedupe)
+      [v.member].concat(v.coMembers || []).forEach(function(m){
+        if(m && agg._mergedMembers.indexOf(m) < 0) agg._mergedMembers.push(m);
+      });
+      // Sum spending
+      agg.spendingTotal += (v.spendingTotal || 0);
+      // Concat spending items so the per-visit breakdown still shows everything
+      if(Array.isArray(v.spendingItems) && v.spendingItems.length){
+        agg.spendingItems = (agg.spendingItems || []).concat(v.spendingItems);
+      }
+      // Status precedence: Completed > Postponed > Canceled > Pending
+      var rank = { 'Completed':4, 'Postponed':3, 'Canceled':2, 'Pending':1 };
+      if((rank[v.status] || 0) > (rank[agg.status] || 0)) agg.status = v.status;
+      // Lead outcome — take any non-empty value
+      if(!agg.lead && v.lead) agg.lead = v.lead;
+      // rowConfirmed only if ALL rows for the date are confirmed
+      agg.rowConfirmed = agg.rowConfirmed && !!v.rowConfirmed;
+      // Lead notes — concatenate so info from all members is preserved
+      if(v.leadNotes && agg.leadNotes !== v.leadNotes){
+        agg.leadNotes = agg.leadNotes ? (agg.leadNotes + ' · ' + v.leadNotes) : v.leadNotes;
+      }
+    });
+    // Replace member chip with the joined list
+    visits = Object.keys(byDate).map(function(d){
+      var v = byDate[d];
+      v.member    = v._mergedMembers[0] || '';
+      v.coMembers = v._mergedMembers.slice(1);
+      delete v._mergedMembers;
+      return v;
+    });
+  }
   // Newest first (planned future visits then descending past visits)
   visits.sort(function(a,b){return b.date.localeCompare(a.date);});
   return visits;
