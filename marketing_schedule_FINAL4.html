@@ -2756,6 +2756,15 @@ body.role-front_desk #referrals-view {
       <div class="day-header-date" id="dv-date"></div>
       <div class="day-header-sub" id="dv-sub"></div>
     </div>
+    <!-- "Show all members on this day" toggle (per user 2026-05-22). When the
+         calendar's member filter is active (defaults to current user), the
+         day view shows ONLY that member's visits. This toggle lets the user
+         reveal everyone else's visits for THIS day only — needed because
+         community-outreach events often have multiple members attending. -->
+    <div id="dv-member-toggle-wrap" style="display:none;margin-left:auto;align-items:center;gap:8px;background:rgba(255,255,255,.18);padding:6px 11px;border-radius:8px">
+      <span id="dv-member-toggle-label" style="font-size:11px;color:#fff;font-weight:600">Showing: my visits</span>
+      <button type="button" id="dv-toggle-show-all" onclick="toggleDayViewShowAll()" style="background:rgba(255,255,255,.22);border:1px solid rgba(255,255,255,.4);color:#fff;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif">👥 Show all on this day</button>
+    </div>
   </div>
   <div class="day-content">
     <div class="tbl-wrap" style="overflow-x:auto">
@@ -5851,13 +5860,10 @@ function _acUpdateSaveButton(){
 }
 
 function saveNewClinic(){
-  // Per user 2026-05-22 audit: clinic creation is admin-only (business identity
-  // belongs to admin). Members add VISITS for existing clinics via Add Visit,
-  // they don't create bank entries.
-  if(typeof isAdmin === 'function' && !isAdmin()){
-    if(typeof showToast === 'function') showToast('Admin only — only admin can add clinics to the bank.');
-    return;
-  }
+  // Per user 2026-05-22 (clarified): members ARE allowed to add clinics, but
+  // they must provide all the data — admin can skip optional fields, members
+  // cannot. The dedupe rule below applies to everyone regardless.
+  var isAdminUser = (typeof isAdmin === 'function') && isAdmin();
   // Hard block: don't save if Gemini fields are still unverified
   if(AC_PENDING_VERIFY.size > 0){
     showToast('Verify ' + AC_PENDING_VERIFY.size + ' Gemini-filled field(s) before saving.');
@@ -5874,7 +5880,23 @@ function saveNewClinic(){
   var website = ((document.getElementById('clinic-add-website') || {}).value || '').trim();
   var address = ((document.getElementById('clinic-add-address') || {}).value || '').trim();
   if(website && !/^https?:\/\//i.test(website)) website = 'https://' + website;
+  // Name + City are required for EVERYONE
   if(!name||!city){ showToast('Clinic name and city are required.'); return; }
+  // ── REQUIRED FIELDS FOR MEMBERS (per user 2026-05-22) ────────────────────
+  // Admin can leave optional fields blank (TBD). Members must provide the
+  // physician name + a street address. "If they want to add a clinic, they
+  // need to provide all the data" — same rule we'll later apply to the
+  // visit-bank-card-add flow.
+  if(!isAdminUser){
+    var missing = [];
+    if(!doctor || doctor.toLowerCase() === 'tbd') missing.push('Physician name');
+    if(!address)                                  missing.push('Street address');
+    if(!phone)                                    missing.push('Phone number');
+    if(missing.length){
+      showToast('Please fill in: ' + missing.join(', ') + '. Members must provide complete info when adding a clinic — only admin can leave fields blank.');
+      return;
+    }
+  }
   // Per user 2026-05-22: smart dedupe.
   //  • Same name + same city + same doctor  → block (true duplicate)
   //  • Same name + same city + diff doctor  → WARN + confirm (separate card OK)
@@ -23410,6 +23432,10 @@ function openDay(di){
   if(_dvAlreadyOpen && S.currentDay === di){
     return;
   }
+  // Reset the day-view "show all on this day" toggle when opening a different
+  // day (per user 2026-05-22) — fresh day starts with the calendar filter
+  // applied, user can toggle on if they want to see teammates' visits.
+  if(S.currentDay !== di) _DAY_VIEW_SHOW_ALL = false;
   window.scrollTo(0,0);
   S.currentDay=di;
   var day=S.days[di];
@@ -25976,6 +26002,20 @@ function refresh(di){
   // makes the bug less catastrophic — data integrity > UI render.
   if(typeof _saveS === 'function') _saveS();
 }
+// Per-day-view toggle (per user 2026-05-22). When the calendar's member
+// filter is active (defaults to current user), the day view ALSO honors it
+// — so members see only their own visits by default. This toggle, when ON,
+// reveals every visit on THIS day regardless of filter, so the user can
+// see who else is going to the same outreach event etc.
+var _DAY_VIEW_SHOW_ALL = false;
+function toggleDayViewShowAll(){
+  _DAY_VIEW_SHOW_ALL = !_DAY_VIEW_SHOW_ALL;
+  if(typeof S !== 'undefined' && S.currentDay != null){
+    renderDayTable(S.currentDay);
+  }
+}
+window.toggleDayViewShowAll = toggleDayViewShowAll;
+
 function renderDayTable(di){
   // Hardened 2026-05-19: guard every external state read so a partially-
   // hydrated schedule doesn't blow up the whole day view. If something is
@@ -26000,13 +26040,62 @@ function renderDayTable(di){
   // always render. Indices in day.rows stay stable so existing callbacks
   // (setMember(di, ri, ...) etc.) still work — we just SKIP rendering the
   // empties, we don't remove them from S.days.
+  //
+  // ALSO 2026-05-22: respect the calendar's member filter unless the day
+  // view has been explicitly toggled to "Show all on this day." Outreach
+  // events with co-members surface to ANY of their members.
+  var _filterMember = (typeof _CAL_MEMBER_FILTER === 'string') ? _CAL_MEMBER_FILTER : '';
+  var _isAdminDV    = (typeof isAdmin === 'function') && isAdmin();
   function _isVisibleRow(r){
     if(!r) return false;
-    if(r.isManual || r.editing) return true;
-    if(r.clinic) return true;
-    if(r.member) return true;
-    return false;
+    var isReal = r.isManual || r.editing || r.clinic || r.member;
+    if(!isReal) return false;
+    // Member-filter respect (unless toggle is on, or no filter set, or admin)
+    if(_filterMember && !_DAY_VIEW_SHOW_ALL && !_isAdminDV){
+      var members = [];
+      if(typeof getRowMembers === 'function'){
+        members = getRowMembers(r) || [];
+      }
+      if(!members.length && r.member) members = [r.member];
+      if(members.indexOf(_filterMember) < 0) return false;
+    }
+    return true;
   }
+  // ── Header toggle visibility + label ───────────────────────────────────
+  // Show the toggle only when (a) a member filter is active, (b) we're not
+  // admin (admin sees everything anyway), and (c) the day has at least one
+  // visit hidden by the filter.
+  try {
+    var toggleWrap = document.getElementById('dv-member-toggle-wrap');
+    var labelEl    = document.getElementById('dv-member-toggle-label');
+    var toggleBtn  = document.getElementById('dv-toggle-show-all');
+    if(toggleWrap){
+      var hiddenCount = 0;
+      if(_filterMember && !_isAdminDV){
+        day.rows.forEach(function(r){
+          if(!r) return;
+          var isReal = r.isManual || r.editing || r.clinic || r.member;
+          if(!isReal) return;
+          var mems = [];
+          if(typeof getRowMembers === 'function') mems = getRowMembers(r) || [];
+          if(!mems.length && r.member) mems = [r.member];
+          if(mems.indexOf(_filterMember) < 0) hiddenCount++;
+        });
+      }
+      var showToggle = _filterMember && !_isAdminDV && (hiddenCount > 0 || _DAY_VIEW_SHOW_ALL);
+      toggleWrap.style.display = showToggle ? 'flex' : 'none';
+      if(labelEl){
+        labelEl.textContent = _DAY_VIEW_SHOW_ALL
+          ? 'Showing: everyone on this day'
+          : 'Showing: my visits (' + hiddenCount + ' hidden)';
+      }
+      if(toggleBtn){
+        toggleBtn.textContent = _DAY_VIEW_SHOW_ALL
+          ? '👤 Just my visits'
+          : '👥 Show all on this day';
+      }
+    }
+  } catch(_){}
   var visibleCount = day.rows.filter(_isVisibleRow).length;
   var subEl = document.getElementById('dv-sub');
   if(subEl) subEl.textContent = visibleCount + ' visit' + (visibleCount === 1 ? '' : 's') + ' · ' + (day.focus || 'no focus area') + ' focus area';
