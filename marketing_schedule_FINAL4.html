@@ -2408,7 +2408,8 @@ body.role-front_desk #referrals-view {
           <option value="established_l2">🟢 Established L2</option>
           <option value="established_l3">🟢 Established L3</option>
         </select>
-        <button id="bank-bulk-import-btn" onclick="openBulkContactImport()" title="Paste a CSV to fill phone / fax / website / address for many clinics at once" style="border:1px solid var(--border);background:#f0f9ff;color:#1F3864;border-radius:8px;padding:8px 12px;font-size:12px;font-weight:600;font-family:'DM Sans',sans-serif;cursor:pointer">📥 Bulk import contacts</button>
+        <!-- 📥 Bulk import (admin-only). Hidden by default; renderBankAdminOnlyControls() reveals it for admin. -->
+        <button id="bank-bulk-import-btn" onclick="openBulkContactImport()" title="Paste a CSV to fill phone / fax / website / address for many clinics at once" style="display:none;border:1px solid var(--border);background:#f0f9ff;color:#1F3864;border-radius:8px;padding:8px 12px;font-size:12px;font-weight:600;font-family:'DM Sans',sans-serif;cursor:pointer">📥 Bulk import contacts</button>
         <select id="bank-city" onchange="renderBank()" style="border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:12px;font-family:'DM Sans',sans-serif;background:#fff;outline:none">
           <option value="">All Areas</option>
           <option value="Frisco">Frisco (168)</option>
@@ -10294,6 +10295,32 @@ function applyReadonlyMode(){
     var hide=['add','del','confirm','set target','override','save edit','clear log','export','+ add','admin'];
     if(hide.some(function(h){return txt.indexOf(h)>=0;})){b.style.display='none';}
   });
+  // Audit fix 2026-05-22: ALSO inject a persistent stylesheet that re-applies
+  // disabled state to controls that get re-created by later renders. The
+  // body.role-readonly class is set on login (line ~9587); these rules stick
+  // for the whole session and don't get clobbered by renderBank, renderDayTable,
+  // etc. The previous one-shot pass leaked — re-renders re-enabled controls.
+  if(document.getElementById('readonly-persist-styles')) return;
+  var st = document.createElement('style');
+  st.id = 'readonly-persist-styles';
+  st.textContent =
+    'body.role-readonly select,'
+  + 'body.role-readonly textarea,'
+  + 'body.role-readonly input[type="number"],'
+  + 'body.role-readonly input[type="text"]:not(#login-username):not(#chpw-current):not(#chpw-new):not(#chpw-confirm),'
+  + 'body.role-readonly input[type="date"],'
+  + 'body.role-readonly input[type="checkbox"],'
+  + 'body.role-readonly input[type="radio"]{'
+  +   'pointer-events:none !important;'
+  +   'opacity:.7 !important;'
+  +   'cursor:not-allowed !important;'
+  + '}'
+  + 'body.role-readonly button:not(#login-btn):not(#chpw-btn):not(#emergency-signout):not(.btn-cancel):not([id^="msal-"]){'
+  +   'opacity:.55 !important;'
+  +   'cursor:not-allowed !important;'
+  +   'pointer-events:none !important;'
+  + '}';
+  document.head.appendChild(st);
 }
 window.applyReadonlyMode=applyReadonlyMode;
 window.applyRoleRestrictions=applyRoleRestrictions;
@@ -13608,13 +13635,19 @@ function renderAdminNotifications(){
   if(!CURRENT_USER){ wrap.style.display = 'none'; return; }
 
   // ── Role-based scoping ──────────────────────────────────────────────────
-  //   admin     → sees every admin-action entry
-  //   member    → only entries where the changed work was THEIR own
-  //                (n.originalAuthor === CURRENT_USER.name)
-  //   readonly  → never sees the bell (Manager has no work to be notified about)
+  //   admin       → sees every admin-action entry
+  //   member      → only entries where the changed work was THEIR own
+  //                  (n.originalAuthor === CURRENT_USER.name)
+  //   readonly    → never sees the bell (Manager has no work to be notified about)
+  //   front_desk  → never sees the bell — they only do referrals (audit fix 2026-05-22)
   var role = (CURRENT_USER.role || '').toLowerCase();
-  if(role === 'readonly'){ wrap.style.display = 'none'; return; }
+  if(role === 'readonly' || role === 'front_desk'){ wrap.style.display = 'none'; return; }
   wrap.style.display = 'block';
+  // Also hide the announcement button for front-desk (audit fix 2026-05-22)
+  try {
+    var annBtn = document.getElementById('hdr-announce-btn');
+    if(annBtn) annBtn.style.display = (role === 'front_desk') ? 'none' : '';
+  } catch(_){}
 
   var isAdminUser = (typeof isAdmin === 'function') ? isAdmin() : (role === 'admin');
   var myName = CURRENT_USER.name;
@@ -17305,7 +17338,16 @@ function confirmMember(di,ri){
 
 // Allow members to UNASSIGN themselves entirely from a visit
 function unassignMember(di,ri){
-  var row = S.days[di].rows[ri];
+  var row = S.days[di] && S.days[di].rows && S.days[di].rows[ri];
+  if(!row) return;
+  // Audit fix 2026-05-22: defensive ownership guard. The button is only
+  // rendered for the row's own member, but DevTools could call this with
+  // someone else's row. Block at the function level too.
+  if(typeof canEditVisitRow === 'function' && !canEditVisitRow(row)){
+    var owner = row.member || 'another member';
+    if(typeof showToast === 'function') showToast('Only ' + owner + ' or admin can unassign this visit.');
+    return;
+  }
   if(!canEditDate(S.days[di].date)){
     showToast('This visit is locked.');
     return;
@@ -19038,9 +19080,15 @@ var _BCI_STATE = { rows: [], matches: [] };
 function openBulkContactImport(){
   var m = document.getElementById('bulk-contact-modal');
   if(!m) return;
-  // Admin / member only
-  if(typeof CURRENT_USER !== 'undefined' && CURRENT_USER && CURRENT_USER.role === 'readonly'){
-    showToast('Read-only role cannot import contact info.');
+  // ADMIN ONLY (audit fix 2026-05-22). Bulk import overwrites phone, fax,
+  // website, and address for many clinics in one paste — that's business-
+  // identity territory which is reserved for admin (per the 2026-05-22
+  // immutability rule: "business identity is admin-only except by
+  // administration order"). Previously the gate only blocked readonly.
+  if(typeof isAdmin !== 'function' || !isAdmin()){
+    if(typeof showToast === 'function'){
+      showToast('Bulk import is admin-only — bulk overwrite of phone / fax / website / address is admin territory.');
+    }
     return;
   }
   _BCI_STATE = { rows: [], matches: [] };
@@ -23623,6 +23671,13 @@ function _setAnnStopChip(linked){
 }
 
 function saveNewAnnouncement(){
+  // ADMIN ONLY (audit fix 2026-05-22). The open-modal button is admin-gated
+  // but the save function itself wasn't — anyone with DevTools could call
+  // saveNewAnnouncement() and post to the team-wide feed. Hard gate here.
+  if(typeof isAdmin !== 'function' || !isAdmin()){
+    if(typeof showToast === 'function') showToast('Only admin can post announcements.');
+    return;
+  }
   var title    = (document.getElementById('ann-add-title').value||'').trim();
   var desc     = (document.getElementById('ann-add-desc').value||'').trim();
   var dateStr  = document.getElementById('ann-add-date').value;
@@ -35729,6 +35784,25 @@ function _promptEditClinicAddress(clinicName){
   input = input.trim();
   if(!input || input === current) return;
   _saveClinicAddressEdit(match.n, input);
+  // Audit fix 2026-05-22: log to the admin-action feed so anyone who has
+  // visited / owns leads on this clinic gets a bell notification that
+  // the address was edited. logAdminAction self-suppresses for self-edits.
+  if(typeof logAdminAction === 'function'){
+    try {
+      // Find the original author (whoever added the clinic record) so the
+      // notification lands in their bell as well as appearing in the
+      // admin's own admin-activity log.
+      var origAuthor = match.addedBy || '';
+      logAdminAction(
+        'Edited address',
+        match.n,
+        origAuthor,
+        'Address changed from "' + (current || '(none)') + '" → "' + input + '".',
+        current || '(none)',
+        input
+      );
+    } catch(_){}
+  }
   if(typeof showToast === 'function') showToast('Address updated for ' + match.n);
   if(typeof renderBank === 'function'){ try { renderBank(); } catch(_){} }
 }
@@ -36097,6 +36171,13 @@ function renderBank(){
   // Refresh the action buttons in the header — they swap depending on
   // whether delete mode is active for the clinic panel.
   _renderBankActionButtons();
+  // Show / hide admin-only bank controls (audit fix 2026-05-22). The bulk
+  // contact import button is hidden by default — only admin sees it.
+  var bulkBtn = document.getElementById('bank-bulk-import-btn');
+  if(bulkBtn){
+    var canBulk = (typeof isAdmin === 'function') && isAdmin();
+    bulkBtn.style.display = canBulk ? '' : 'none';
+  }
   renderBankPage(filtered);
 }
 
@@ -36408,9 +36489,12 @@ function confirmAddToSchedule(){
   var member = document.getElementById('modal-member-sel').value;
   if(!pickedDate){ showToast('Please select a date first'); return; }
 
-  // Block past dates for non-admin
+  // Block past dates for non-admin. (Audit fix 2026-05-22: previously this
+  // branch referenced `di` BEFORE it was declared below, which threw a
+  // ReferenceError for any member who picked a locked date — admin bypassed
+  // because canEditDate returns true for admin. Use pickedDate directly.)
   if(!canEditDate(pickedDate)){
-    showToast(lockReason(S.days[di] && S.days[di].date) || 'This visit is locked. Members can edit only yesterday/today/future, and weeks seal at Sunday 8 PM.');
+    showToast(lockReason(pickedDate) || 'This visit is locked. Members can edit only yesterday/today/future, and weeks seal at Sunday 8 PM.');
     return;
   }
 
