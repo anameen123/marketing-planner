@@ -1596,14 +1596,14 @@ body.role-front_desk #referrals-view {
       <div style="background:#fff;border:1px solid #dbeafe;border-radius:12px;padding:16px 18px;box-shadow:0 1px 6px rgba(30,64,175,.05)">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
           <div style="font-size:14px;font-weight:700;color:#1e293b">📢 Latest announcement</div>
-          <button onclick="openAllAnnouncements()" style="background:#eff6ff;color:#1d4ed8;border:none;border-radius:6px;padding:5px 10px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">All →</button>
+          <button onclick="openAnnouncementsList()" style="background:#eff6ff;color:#1d4ed8;border:none;border-radius:6px;padding:5px 10px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit">All →</button>
         </div>
         <div id="home-announcement" style="font-size:12px;color:#64748b;line-height:1.5">Loading…</div>
       </div>
     </div>
   </div>
 
-  <div class="landing-body" id="schedule-view">
+  <div class="landing-body" id="schedule-view" style="display:none">
     <div>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
         <div onclick="openBigCalendar()"
@@ -5711,6 +5711,13 @@ function _acUpdateSaveButton(){
 }
 
 function saveNewClinic(){
+  // Per user 2026-05-22 audit: clinic creation is admin-only (business identity
+  // belongs to admin). Members add VISITS for existing clinics via Add Visit,
+  // they don't create bank entries.
+  if(typeof isAdmin === 'function' && !isAdmin()){
+    if(typeof showToast === 'function') showToast('Admin only — only admin can add clinics to the bank.');
+    return;
+  }
   // Hard block: don't save if Gemini fields are still unverified
   if(AC_PENDING_VERIFY.size > 0){
     showToast('Verify ' + AC_PENDING_VERIFY.size + ' Gemini-filled field(s) before saving.');
@@ -6017,6 +6024,11 @@ function openAddMVA(){
 }
 function closeAddMVA(){document.getElementById('add-mva-modal').style.display='none';}
 function saveNewMVA(){
+  // Per user 2026-05-22 audit: MVA creation is admin-only.
+  if(typeof isAdmin === 'function' && !isAdmin()){
+    if(typeof showToast === 'function') showToast('Admin only — only admin can add MVA attorneys to the bank.');
+    return;
+  }
   var firm=(document.getElementById('mva-add-firm').value||'').trim();
   var city=document.getElementById('mva-add-city').value;
   var attorney = (document.getElementById('mva-add-attorney').value || '').trim();
@@ -9660,9 +9672,10 @@ function showSyncStatus(){
     'error':      '🔴 Supabase error — check Backend settings'
   }[pushState] || pushState;
   var pushAdminLine = '';
-  if(CURRENT_USER && CURRENT_USER.role === 'admin'){
-    pushAdminLine = '<div style="margin-top:4px"><a href="#" onclick="showBackendSettings();event.preventDefault();return false" style="color:#3ecf8e;text-decoration:underline;font-size:11px;font-weight:700">🗄 Backend / Supabase settings</a></div>';
-  }
+  // Per user 2026-05-22 audit: showBackendSettings() was referenced but
+  // never defined — dead admin link. Backend settings are managed via
+  // the Supabase dashboard directly (URL + anon key are hardcoded in source).
+  // If we ever need an in-app config UI again, wire it here.
   var msg = ''
     + '<div style="display:flex;flex-direction:column;gap:10px;font-size:12px;line-height:1.5">'
     +   '<div><strong>Mode:</strong> ' + (mode === 'sharepoint' ? '🔵 SharePoint (team sync)' : '🟢 localStorage (this browser only)') + '</div>'
@@ -16726,47 +16739,65 @@ function editMember(di,ri){
   row.memberConfirmed=false;
   refresh(di);
 }
-function setRel(di,ri,val){
+// Per user 2026-05-22 audit: row mutators below now ALL gate on
+// canEditDate + canEditVisitRow. Before this change, members could
+// edit other members' notes, relationship, fields, city, and toggle
+// other members' rows into edit mode. Admin overrides as usual via
+// canEditVisitRow returning true for isAdmin().
+function _rowGuard(di, ri, opts){
   var dayDate = S.days[di] && S.days[di].date;
-  if(!canEditDate(dayDate)){
-    showToast(lockReason(S.days[di] && S.days[di].date) || 'This visit is locked. Members can edit only yesterday/today/future, and weeks seal at Sunday 8 PM.');
-    refresh(di);
-    return;
+  var row     = S.days[di] && S.days[di].rows && S.days[di].rows[ri];
+  if(!row) return false;
+  if(opts && opts.dateLock !== false){
+    if(typeof canEditDate === 'function' && !canEditDate(dayDate)){
+      if(typeof showToast === 'function') showToast((typeof lockReason === 'function' && lockReason(dayDate)) || 'This visit is locked.');
+      if(typeof refresh === 'function') refresh(di);
+      return false;
+    }
   }
+  if(opts && opts.ownership !== false){
+    if(typeof canEditVisitRow === 'function' && !canEditVisitRow(row)){
+      if(typeof showToast === 'function') showToast('Only ' + (row.member || row.addedBy || 'admin') + ' can change this visit.');
+      if(typeof refresh === 'function') refresh(di);
+      return false;
+    }
+  }
+  return true;
+}
+function setRel(di,ri,val){
+  if(!_rowGuard(di,ri)) return;
   S.days[di].rows[ri].relationship=val;
   refresh(di);
 }
-function setNotes(di,ri,val){S.days[di].rows[ri].relNotes=val;}
-function setLeadNotes(di,ri,val){S.days[di].rows[ri].leadNotes=val;}
+function setNotes(di,ri,val){
+  if(!_rowGuard(di,ri)) return;
+  S.days[di].rows[ri].relNotes=val;
+}
+function setLeadNotes(di,ri,val){
+  if(!_rowGuard(di,ri)) return;
+  S.days[di].rows[ri].leadNotes=val;
+}
 function setField(di,ri,f,val){
-  var dayDate = S.days[di] && S.days[di].date;
-  if(!canEditDate(dayDate)){
-    showToast(lockReason(S.days[di] && S.days[di].date) || 'This visit is locked. Members can edit only yesterday/today/future, and weeks seal at Sunday 8 PM.');
-    refresh(di);
-    return;
-  }
+  if(!_rowGuard(di,ri)) return;
   S.days[di].rows[ri][f]=val;
 }
 function setCity(di,ri,val){
-  var dayDate = S.days[di] && S.days[di].date;
-  if(!canEditDate(dayDate)){
-    showToast(lockReason(dayDate) || 'This visit is locked.');
-    refresh(di);
-    return;
-  }
+  if(!_rowGuard(di,ri)) return;
   S.days[di].rows[ri].city=val;S.days[di].rows[ri].customCity='';refresh(di);
 }
 function pinCity(di,ri){
-  var dayDate = S.days[di] && S.days[di].date;
-  if(!canEditDate(dayDate)){
-    showToast(lockReason(dayDate) || 'This visit is locked.');
-    refresh(di);
-    return;
-  }
+  if(!_rowGuard(di,ri)) return;
   var v=(S.days[di].rows[ri].customCity||'').trim();if(v){S.days[di].rows[ri].city=v;S.days[di].rows[ri].customCity='';refresh(di);}
 }
-function startEdit(di,ri){S.days[di].rows[ri].editing=true;refresh(di);}
-function saveEdit(di,ri){S.days[di].rows[ri].editing=false;refresh(di);}
+function startEdit(di,ri){
+  if(!_rowGuard(di,ri)) return;
+  S.days[di].rows[ri].editing=true;refresh(di);
+}
+function saveEdit(di,ri){
+  if(!_rowGuard(di,ri)) return;
+  S.days[di].rows[ri].editing=false;refresh(di);
+}
+window._rowGuard = _rowGuard;
 
 // ════════════════════════════════════════════════════════════════════════
 // EDIT VISIT MODAL — per user request 2026-05-19
@@ -25930,6 +25961,11 @@ window.refreshMemberDropdowns = refreshMemberDropdowns;
 
 // ── ADD MEMBER MODAL ──────────────────────────────────────────────────────
 function openAddMemberModal(){
+  // Per user 2026-05-22 audit: admin-only modal.
+  if(typeof isAdmin === 'function' && !isAdmin()){
+    if(typeof showToast === 'function') showToast('Admin only — only admin can add team members.');
+    return;
+  }
   var nameEl = document.getElementById('am-name');
   var emailEl= document.getElementById('am-email');
   var posEl  = document.getElementById('am-position');
@@ -25951,6 +25987,13 @@ window.openAddMemberModal = openAddMemberModal;
 window.closeAddMemberModal = closeAddMemberModal;
 
 function confirmAddMember(){
+  // Per user 2026-05-22 audit: adding teammates is admin-only.
+  // Without this guard, anyone who can open the modal (or call the function
+  // from devtools) could mutate USERS / EMAIL_USER_MAP / MEMBERS.
+  if(typeof isAdmin === 'function' && !isAdmin()){
+    if(typeof showToast === 'function') showToast('Admin only — only admin can add team members.');
+    return;
+  }
   var name = (document.getElementById('am-name').value||'').trim();
   var email= (document.getElementById('am-email').value||'').trim().toLowerCase();
   var pos  = (document.getElementById('am-position').value||'').trim() || 'Marketing Agent';
