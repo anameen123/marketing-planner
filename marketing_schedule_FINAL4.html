@@ -19054,7 +19054,11 @@ function renderAllBusinessPins(){
     var popupHtml = '<div style="font-family:DM Sans,sans-serif;font-size:12px;min-width:180px">'
       +   '<div style="font-weight:700;color:#1F3864;font-size:13px;margin-bottom:4px">' + safeName + '</div>'
       +   '<div style="font-size:10px;color:#64748b;margin-bottom:6px">' + typeLabel + ' · ' + rec.label + '</div>'
-      +   '<div style="display:flex;gap:5px;margin-top:6px;flex-wrap:wrap">'
+      +   '<button onclick="_addVisitFromMapPin(\'' + escName + '\',\'' + bizType + '\')" '
+      +     'style="width:100%;background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;border:none;border-radius:5px;padding:7px 8px;font-size:11px;font-weight:700;cursor:pointer;margin-bottom:6px">'
+      +     '➕ Add visit today'
+      +   '</button>'
+      +   '<div style="display:flex;gap:5px;margin-top:2px;flex-wrap:wrap">'
       +     '<button onclick="_rpPickFromMap(\'' + escName + '\',\'start\')" style="flex:1;min-width:70px;background:#1F3864;color:#fff;border:none;border-radius:5px;padding:5px 8px;font-size:10px;font-weight:700;cursor:pointer">Set as Start</button>'
       +     '<button onclick="_rpPickFromMap(\'' + escName + '\',\'end\')"   style="flex:1;min-width:70px;background:#7030A0;color:#fff;border:none;border-radius:5px;padding:5px 8px;font-size:10px;font-weight:700;cursor:pointer">Set as End</button>'
       +   '</div>'
@@ -19097,6 +19101,38 @@ function renderAllBusinessPins(){
   }
 }
 window.renderAllBusinessPins = renderAllBusinessPins;
+
+// Per user 2026-05-21: clicking any business pin shows a "+ Add visit today"
+// button that opens the Add Visit modal pre-filled with the clinic's info.
+// This is independent of the route planner — just a fast way to add a visit
+// while browsing the map.
+function _addVisitFromMapPin(name, bizType){
+  if(!name) return;
+  // Close any open Leaflet popup first so the modal isn't half-hidden behind it
+  try { if(_DV_MAP && typeof _DV_MAP.closePopup === 'function') _DV_MAP.closePopup(); } catch(_){}
+  // Look up additional context (city, doctor, spec) if we have it in the bank
+  var city = '', doctor = '', spec = '';
+  try {
+    if(bizType === 'clinic' && typeof CLINIC_BANK !== 'undefined'){
+      var hit = CLINIC_BANK.find(function(c){ return c && c.n === name; });
+      if(hit){ city = hit.c || ''; doctor = hit.d || ''; spec = hit.s || ''; }
+    } else if(bizType === 'mva' && typeof MVA_ATTORNEYS !== 'undefined'){
+      var mva = MVA_ATTORNEYS.find(function(m){ return m && m.firm === name; });
+      if(mva){ city = mva.city || ''; doctor = mva.attorney || ''; spec = 'MVA Attorney'; }
+    } else if(bizType === 'outreach' && typeof OUTREACH !== 'undefined'){
+      var o = OUTREACH.find(function(x){ return x && x.name === name; });
+      if(o){ city = o.city || ''; doctor = o.contact || ''; spec = 'Community Outreach'; }
+    }
+  } catch(e){}
+  // Open the Add Visit modal pre-filled. openAddVisitFromCard handles the
+  // type lock + readonly name + date picker focus.
+  if(typeof openAddVisitFromCard === 'function'){
+    openAddVisitFromCard(name, doctor, spec, city, bizType);
+  } else if(typeof showToast === 'function'){
+    showToast('Add Visit flow not available.');
+  }
+}
+window._addVisitFromMapPin = _addVisitFromMapPin;
 
 // Group clinics by city, render one aggregate marker per city. Each marker:
 //   • Sized by the clinic count (logarithmic — 5 clinics ≈ 9px, 100 ≈ 22px)
