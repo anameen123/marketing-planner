@@ -5877,7 +5877,8 @@ function _saveClinicRecord(name, doctor, spec, city, notes, phone, fax, website,
       logMyAction('self-clinic', name,
         (doctor && doctor !== 'TBD' ? 'Dr. ' + doctor : 'Physician TBD')
           + (city ? ' · ' + city : '')
-          + (spec ? ' · ' + spec : ''));
+          + (spec ? ' · ' + spec : ''),
+        { bizName: name });
     }
   } catch(_){}
 }
@@ -13480,10 +13481,11 @@ window.logAdminAction = logAdminAction;
 // We piggyback on ADMIN_NOTIFICATIONS so the existing bell UI handles them.
 // The renderer detects kind === 'self-*' and tags them visually as "you did
 // this" so they don't get confused with admin-overrides.
-function logMyAction(kind, target, summary){
+function logMyAction(kind, target, summary, meta){
   if(!CURRENT_USER) return;
   var me = CURRENT_USER.name || '';
   if(!me) return;
+  meta = meta || {};
   var entry = {
     id:    'sn_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
     ts:    new Date().toISOString(),
@@ -13497,6 +13499,10 @@ function logMyAction(kind, target, summary){
     target:        target || '',
     originalAuthor: me,                // so it survives the member-filter in renderAdminNotifications
     summary:        summary || '',
+    // Optional navigation breadcrumbs (per user 2026-05-22): when a feed/bell
+    // entry is clicked, these tell the router exactly where to land.
+    visitDate:  meta.visitDate || '',   // ISO date (YYYY-MM-DD) for schedule entries
+    bizName:    meta.bizName   || '',   // canonical business name for clinic-card jumps
     before: null, after: null
   };
   if(!Array.isArray(ADMIN_NOTIFICATIONS)) ADMIN_NOTIFICATIONS = [];
@@ -13663,12 +13669,111 @@ function openAdminNotifTarget(id, businessName){
   // Close the bell dropdown so we don't obscure the destination card
   var dd = document.getElementById('admin-notif-dropdown');
   if(dd) dd.style.display = 'none';
-  // Jump to the business card
+  // Route through the unified helper so visit-related entries land on the
+  // schedule (and we never bypass switchTab's view-hiding pass — that was
+  // the cause of the "previous page bleeds through below the new page" bug
+  // the user reported 2026-05-22).
+  if(n && typeof _navigateToFeedEntry === 'function'){
+    _navigateToFeedEntry(n);
+    return;
+  }
   if(businessName && typeof jumpToBusinessCard === 'function'){
     jumpToBusinessCard(businessName);
   }
 }
 window.openAdminNotifTarget = openAdminNotifTarget;
+
+// ── UNIFIED NAVIGATOR FOR FEED + BELL ENTRIES (per user 2026-05-22) ───────
+// Single source of truth for "click on an activity entry → land where the
+// action happened." Used by both the bell dropdown and the Activity Feed
+// tab so the behavior is identical.
+//
+// Routing:
+//   self-clinic  → Businesses tab, scroll to the clinic card
+//   self-assign  → Schedule tab, open the day, scroll the visit row into view
+//   self-confirm → Schedule tab, open the day, scroll the visit row into view
+//   admin override on a visit → Schedule tab + day open (if we know the date)
+//   admin override on a business → Businesses tab, scroll to the card
+//
+// IMPORTANT — page-bleed defense: we ALWAYS go through switchTab() (or
+// closeDayView + showLanding first if a day-view is open), which hides
+// every other view's container before showing the new one. Bypassing
+// switchTab is what produced the "previous page below the new page" bug
+// the user explicitly flagged.
+function _navigateToFeedEntry(entry){
+  if(!entry) return;
+  var kind = entry.kind || '';
+  var target = entry.bizName || entry.target || entry.clinic || '';
+  var dateIso = entry.visitDate || '';
+  // Close the bell dropdown if it's open
+  var dd = document.getElementById('admin-notif-dropdown');
+  if(dd) dd.style.display = 'none';
+  // Mark the matching ADMIN_NOTIFICATION as read (if applicable)
+  if(entry.id && typeof markAdminNotifRead === 'function'){
+    try { markAdminNotifRead(entry.id); } catch(_){}
+  }
+  // If we're on the schedule's drilled-in day-view, leave it cleanly first
+  // so the calendar grid is the visible layer when we switch tabs.
+  try {
+    var dv = document.getElementById('day-view');
+    if(dv && dv.style.display === 'flex' && typeof showLanding === 'function'){
+      showLanding();
+    }
+  } catch(_){}
+  // Strip a trailing "on Wed, May 14" off the target if there is one — we
+  // want just the business name for jumpToBusinessCard.
+  function _stripDateSuffix(s){
+    if(!s) return '';
+    return String(s).replace(/\s+on\s+[A-Z][a-z]{2,8},?\s+[A-Z][a-z]{2,8}\s+\d{1,2}(,\s*\d{4})?$/, '').trim();
+  }
+  var bizName = _stripDateSuffix(target);
+  // ── Visit-related: route to Schedule + open the day ────────────────
+  var isVisitKind = (kind === 'self-assign' || kind === 'self-confirm'
+                  || entry.type === 'completed' || entry.type === 'canceled_or_undone'
+                  || entry.type === 'deleted');
+  if(isVisitKind && dateIso){
+    if(typeof switchTab === 'function') switchTab('schedule');
+    setTimeout(function(){
+      if(!Array.isArray(S.days)) return;
+      var di = -1;
+      for(var i=0;i<S.days.length;i++){ if(S.days[i].date === dateIso){ di = i; break; } }
+      if(di >= 0 && typeof openDay === 'function'){
+        openDay(di);
+        // Best-effort row highlight (pulse the row matching bizName)
+        if(bizName){
+          setTimeout(function(){
+            try {
+              var rows = document.querySelectorAll('#day-view tr');
+              for(var k=0;k<rows.length;k++){
+                if((rows[k].textContent || '').indexOf(bizName) >= 0){
+                  rows[k].classList.add('card-jump-pulse');
+                  rows[k].scrollIntoView({behavior:'smooth', block:'center'});
+                  setTimeout(function(){
+                    try { rows[k].classList.remove('card-jump-pulse'); } catch(_){}
+                  }, 1600);
+                  break;
+                }
+              }
+            } catch(_){}
+          }, 220);
+        }
+      }
+      try { if(typeof renderAdminNotifications === 'function') renderAdminNotifications(); } catch(_){}
+    }, 60);
+    return;
+  }
+  // ── Business / clinic-related: route to Businesses + scroll to card ──
+  if(bizName && typeof jumpToBusinessCard === 'function'){
+    jumpToBusinessCard(bizName);
+    try { if(typeof renderAdminNotifications === 'function') renderAdminNotifications(); } catch(_){}
+    return;
+  }
+  // ── Fallback: if we got nothing actionable, at least surface details ──
+  if(entry.id && typeof openAdminNotifDetail === 'function'){
+    openAdminNotifDetail(entry.id);
+  }
+}
+window._navigateToFeedEntry = _navigateToFeedEntry;
 
 function openAdminNotifDetail(id){
   var n = ADMIN_NOTIFICATIONS.find(function(x){ return x.id === id; });
@@ -17122,7 +17227,8 @@ function confirmMember(di,ri){
       if(typeof logMyAction === 'function' && me && row.member === me){
         logMyAction('self-assign',
           (row.clinic || 'a visit') + ' on ' + dateLabel,
-          'You assigned yourself to ' + (row.clinic || 'this visit') + ' on ' + dateLabel + '.');
+          'You assigned yourself to ' + (row.clinic || 'this visit') + ' on ' + dateLabel + '.',
+          { visitDate: (S.days[di] && S.days[di].date) || '', bizName: row.clinic || '' });
       }
     } catch(_){}
   }});
@@ -23716,7 +23822,8 @@ function _doConfirmRow(di, ri){
         (row.clinic || 'a visit') + ' on ' + dayLabel,
         'Status: ' + (row.status || 'Completed')
           + (row.relationship ? ' · Lead: ' + row.relationship : '')
-          + (row.spending && row.spending.total ? ' · $' + row.spending.total.toFixed(2) : ''));
+          + (row.spending && row.spending.total ? ' · $' + row.spending.total.toFixed(2) : ''),
+        { visitDate: day.date || '', bizName: row.clinic || '' });
     }
   } catch(_){}
 }
@@ -35720,8 +35827,15 @@ function renderFeed(){
     var ac=(ACTION_COLORS[e.type]||'#f3f4f6:#374151').split(':');
     var icon=ACTION_ICONS[e.type]||'•';
     var initials=e.member.split(' ').map(function(w){return w[0];}).join('').toUpperCase().slice(0,2);
-    return '<div style="background:var(--card);border-radius:10px;border:1px solid var(--border);padding:12px 16px;display:flex;align-items:center;gap:12px;box-shadow:0 1px 4px rgba(31,56,100,.04);margin-bottom:8px">'
-      +'<div class="member-link" data-member="'+(e.member||'').replace(/"/g,'&quot;')+'" title="Open '+(e.member||'')+'\'s profile" style="width:36px;height:36px;border-radius:9px;background:'+mc+';color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;cursor:pointer">'+initials+'</div>'
+    // Clickable: route through the unified navigator so every entry lands on
+    // the page where the action happened. Member-badge click is stopped so
+    // it still opens the profile, not the visit. (per user 2026-05-22)
+    var navAttr = ' onclick="_navigateActivityLogEntry(this)" '
+                + ' data-vd="' + ((e.visitDate||'').replace(/"/g,'&quot;')) + '"'
+                + ' data-cl="' + ((e.clinic   ||'').replace(/"/g,'&quot;')) + '"'
+                + ' data-tp="' + ((e.type     ||'').replace(/"/g,'&quot;')) + '"';
+    return '<div'+navAttr+' style="background:var(--card);border-radius:10px;border:1px solid var(--border);padding:12px 16px;display:flex;align-items:center;gap:12px;box-shadow:0 1px 4px rgba(31,56,100,.04);margin-bottom:8px;cursor:pointer;transition:background .15s, transform .15s" onmouseover="this.style.background=\'#f8fafc\';this.style.transform=\'translateX(2px)\'" onmouseout="this.style.background=\'var(--card)\';this.style.transform=\'\'">'
+      +'<div class="member-link" data-member="'+(e.member||'').replace(/"/g,'&quot;')+'" title="Open '+(e.member||'')+'\'s profile" onclick="event.stopPropagation()" style="width:36px;height:36px;border-radius:9px;background:'+mc+';color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;cursor:pointer">'+initials+'</div>'
       +'<div style="flex:1;min-width:0">'
       +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
       +memberLink(e.member,'font-size:12px')
@@ -35736,6 +35850,54 @@ function renderFeed(){
       +'</div>'
       +'</div>';
   }
+  // Click router for ACTIVITY_LOG-shaped rows — synthesizes a feed-entry
+  // and hands it to _navigateToFeedEntry so the page-bleed-safe routing
+  // logic stays in one place.
+  window._navigateActivityLogEntry = function(div){
+    if(!div || typeof _navigateToFeedEntry !== 'function') return;
+    var synth = {
+      visitDate: div.getAttribute('data-vd') || '',
+      bizName:   div.getAttribute('data-cl') || '',
+      type:      div.getAttribute('data-tp') || ''
+    };
+    _navigateToFeedEntry(synth);
+  };
+  // Render an ADMIN_NOTIFICATIONS-shaped entry (bell entry) into a feed card.
+  function renderBellEntry(n){
+    var isSelf = (n.kind || '').indexOf('self-') === 0;
+    var unread = (typeof isAdminNotifRead === 'function') && !isAdminNotifRead(n.id);
+    var accentBg     = isSelf ? '#eff6ff' : (unread ? '#fef2f2' : '#fff');
+    var accentBorder = isSelf ? '#2563eb' : (unread ? '#dc2626' : 'var(--border)');
+    var hoverBg      = isSelf ? '#dbeafe' : '#fde2e2';
+    var iconChip     = isSelf
+      ? '<span style="background:#dbeafe;color:#1e40af;font-size:10px;font-weight:700;padding:1px 8px;border-radius:10px">✓ ' + (n.kind === 'self-assign' ? 'Self-assigned' : n.kind === 'self-confirm' ? 'Confirmed' : 'Added clinic') + '</span>'
+      : '<span style="background:#fee2e2;color:#991b1b;font-size:10px;font-weight:700;padding:1px 8px;border-radius:10px">⚠ Admin change</span>';
+    var when = (typeof _formatAdminTs === 'function') ? _formatAdminTs(n.ts) : '';
+    var dataAttrs = ' data-bell-id="' + (n.id||'').replace(/"/g,'&quot;') + '"';
+    return '<div'+dataAttrs+' onclick="_navigateBellEntry(this)" '
+      + 'style="background:'+accentBg+';border-radius:10px;border:1px solid var(--border);border-left:3px solid '+accentBorder+';padding:11px 14px;display:flex;align-items:flex-start;gap:10px;margin-bottom:8px;cursor:pointer;transition:background .15s, transform .15s" '
+      + 'onmouseover="this.style.background=\''+hoverBg+'\';this.style.transform=\'translateX(2px)\'" '
+      + 'onmouseout="this.style.background=\''+accentBg+'\';this.style.transform=\'\'">'
+      + '<div style="flex:1;min-width:0">'
+      +   '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
+      +     iconChip
+      +     '<span style="font-size:12px;font-weight:700;color:var(--text)">'+(n.target||'').replace(/</g,'&lt;')+'</span>'
+      +   '</div>'
+      +   (n.summary ? '<div style="font-size:11px;color:var(--muted);margin-top:4px;line-height:1.4">'+String(n.summary).replace(/</g,'&lt;')+'</div>' : '')
+      +   '<div style="font-size:10px;color:var(--muted);margin-top:4px">'
+      +     (isSelf ? '' : 'by '+(n.adminName||'admin')+' · ')
+      +     when
+      +   '</div>'
+      + '</div>'
+      + '<div style="font-size:9px;color:#94a3b8;flex-shrink:0;align-self:center">↗</div>'
+      + '</div>';
+  }
+  window._navigateBellEntry = function(div){
+    var id = div && div.getAttribute('data-bell-id');
+    if(!id || !Array.isArray(ADMIN_NOTIFICATIONS)) return;
+    var n = ADMIN_NOTIFICATIONS.find(function(x){ return x.id === id; });
+    if(n && typeof _navigateToFeedEntry === 'function') _navigateToFeedEntry(n);
+  };
   function sectionHeader(title, count, accent){
     return '<div style="display:flex;align-items:center;justify-content:space-between;background:'+accent+';color:#fff;padding:10px 14px;border-radius:10px 10px 0 0;margin-top:18px;margin-bottom:8px">'
          +   '<div style="font-size:13px;font-weight:800;letter-spacing:.03em">'+title+'</div>'
@@ -35743,8 +35905,29 @@ function renderFeed(){
          + '</div>';
   }
 
+  // ── BELL ENTRIES SECTION (per user 2026-05-22) ───────────────────────
+  // Mirror everything the activity bell shows into the Activity Feed tab so
+  // members have a place to check "did I actually do that?" without hunting
+  // through the bell dropdown. Applies the same role-scoping the bell does.
+  var bellItems = [];
+  if(Array.isArray(ADMIN_NOTIFICATIONS) && CURRENT_USER){
+    var _role = (CURRENT_USER.role || '').toLowerCase();
+    var _isAdmin = (typeof isAdmin === 'function') ? isAdmin() : (_role === 'admin');
+    var _me = CURRENT_USER.name;
+    bellItems = ADMIN_NOTIFICATIONS
+      .filter(function(n){ return typeof _isAdminNotifVisible === 'function' ? _isAdminNotifVisible(n) : true; })
+      .filter(function(n){ return _isAdmin || n.originalAuthor === _me; })
+      // Allow the same member-filter the rest of the feed uses
+      .filter(function(n){ return !memberFilter || n.originalAuthor === memberFilter; });
+  }
+
   var html = '';
-  // Order: Administration first (more important / fewer entries), then Members
+  // Order: bell notifications first (the things they're most likely curious
+  // about), then admin actions, then member actions.
+  html += sectionHeader('🔔 Your notifications', bellItems.length, 'linear-gradient(135deg,#2563eb,#1e40af)');
+  html += bellItems.length
+    ? bellItems.map(renderBellEntry).join('')
+    : '<div style="background:#f8fafc;border:1px dashed var(--border);border-radius:10px;padding:14px;font-size:11px;color:var(--muted);font-style:italic;text-align:center">Nothing here yet. Self-actions and admin changes on your work will show up here so you can scroll back and check.</div>';
   html += sectionHeader('🛡 Administration Actions',  adminEntries.length,  'linear-gradient(135deg,#1F3864,#0f172a)');
   html += adminEntries.length
     ? adminEntries.map(renderEntry).join('')
@@ -35753,7 +35936,7 @@ function renderFeed(){
   html += memberEntries.length
     ? memberEntries.map(renderEntry).join('')
     : '<div style="background:#f8fafc;border:1px dashed var(--border);border-radius:10px;padding:14px;font-size:11px;color:var(--muted);font-style:italic;text-align:center">No member actions in the last 7 days.</div>';
-  html += '<div style="font-size:10px;color:var(--muted);font-style:italic;text-align:center;margin-top:14px">⏱ Entries older than 7 days are automatically deleted.</div>';
+  html += '<div style="font-size:10px;color:var(--muted);font-style:italic;text-align:center;margin-top:14px">⏱ Entries older than 7 days are automatically deleted. Click any row to jump to where it happened.</div>';
   list.innerHTML = html;
 }
 
