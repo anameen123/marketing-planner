@@ -2819,8 +2819,8 @@ body.role-front_desk #referrals-view {
              reachable. Per user 2026-05-22 frustration: "I do not see anything." -->
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
           <span id="rp-pick-status" style="font-size:10px;color:var(--muted);font-style:italic"></span>
-          <button id="dv-plan-route-btn" type="button" onclick="rpStartSmartPlan()"
-                  title="Pick a Start and End pin on the map — get a corridor of clinics to visit between them, ranked by longest-since-visited."
+          <button id="dv-plan-route-btn" type="button" onclick="openRoutePlannerDialog()"
+                  title="Open the route-planner dialog. Fill Start and End by typing (with recency-colored suggestions) or by clicking pins on the map."
                   style="background:linear-gradient(135deg,#7030A0,#9333ea);border:none;color:#fff;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;display:inline-flex;align-items:center;gap:5px;line-height:1.1;box-shadow:0 1px 3px rgba(112,48,160,.3)">
             🧭 Plan a Route
           </button>
@@ -2860,14 +2860,24 @@ body.role-front_desk #referrals-view {
         Tell us where you're starting and where you want to end. The app will recommend clinics from the bank that lie along the way, so you maximize visits with minimum driving.
       </div>
 
-      <!-- ── START ENDPOINT (per user 2026-05-19) ─────────────────────────
-           Area-first filter + free-text search with autocomplete. The user
-           picks an area to narrow the candidate pool, then types to find
-           the specific clinic / MVA / facility. The hidden #rp-start input
-           preserves the value (city key) that runRoutePlanner reads. -->
+      <!-- Recency-color legend (per user 2026-05-22). The suggestions list
+           below each input is now color-tagged by days-since-last-visit. -->
+      <div style="display:flex;flex-wrap:wrap;gap:8px;font-size:9px;color:var(--muted);margin-bottom:12px;padding:6px 10px;background:#f8fafc;border:1px solid var(--border);border-radius:8px">
+        <span style="font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text)">Color code:</span>
+        <span style="display:inline-flex;align-items:center;gap:3px"><span style="width:9px;height:9px;border-radius:50%;background:#ef4444"></span>0–6d</span>
+        <span style="display:inline-flex;align-items:center;gap:3px"><span style="width:9px;height:9px;border-radius:50%;background:#f97316"></span>7–13d</span>
+        <span style="display:inline-flex;align-items:center;gap:3px"><span style="width:9px;height:9px;border-radius:50%;background:#eab308"></span>14–20d</span>
+        <span style="display:inline-flex;align-items:center;gap:3px"><span style="width:9px;height:9px;border-radius:50%;background:#16a34a"></span>21d+ ripe</span>
+        <span style="display:inline-flex;align-items:center;gap:3px"><span style="width:9px;height:9px;border-radius:50%;background:#9ca3af"></span>never</span>
+      </div>
+
+      <!-- ── START ENDPOINT (per user 2026-05-22) ─────────────────────────
+           Two paths: type a name to get recency-colored suggestions, OR
+           click "📍 Pick on map" to switch the map into pick-mode and tap
+           any pin. -->
       <div class="kpi-input-row" style="margin-bottom:10px">
         <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Starting clinic / MVA / facility <span style="color:#ef4444">*</span></label>
-        <div style="display:grid;grid-template-columns:140px 1fr;gap:8px">
+        <div style="display:grid;grid-template-columns:120px 1fr auto;gap:6px">
           <select id="rp-start-area" onchange="_rpAreaChanged('start')" style="border:1px solid var(--border);border-radius:8px;padding:9px 10px;font-size:12px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box">
             <option value="">All areas</option>
           </select>
@@ -2879,14 +2889,15 @@ body.role-front_desk #referrals-view {
                    style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box">
             <div id="rp-start-suggest" style="display:none;position:absolute;left:0;right:0;top:100%;margin-top:2px;background:#fff;border:1px solid var(--border);border-radius:8px;max-height:260px;overflow-y:auto;z-index:10;box-shadow:0 8px 20px rgba(31,56,100,.12)"></div>
           </div>
+          <button type="button" onclick="rpPickFromMapMode('start')" title="Close this dialog and pick the Start by clicking a pin on the map" style="background:#7030A0;color:#fff;border:none;border-radius:8px;padding:9px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;white-space:nowrap">📍 Map</button>
         </div>
         <input type="hidden" id="rp-start">
-        <div style="font-size:10px;color:var(--muted);margin-top:3px;font-style:italic">Tip: pick an area first to narrow the suggestions; leave it "All areas" to search every business.</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:3px;font-style:italic">Type to search, or tap <b>📍 Map</b> to pick a pin on the map.</div>
       </div>
 
       <div class="kpi-input-row" style="margin-bottom:10px">
         <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Ending clinic / MVA / facility</label>
-        <div style="display:grid;grid-template-columns:140px 1fr;gap:8px">
+        <div style="display:grid;grid-template-columns:120px 1fr auto;gap:6px">
           <select id="rp-end-area" onchange="_rpAreaChanged('end')" style="border:1px solid var(--border);border-radius:8px;padding:9px 10px;font-size:12px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box">
             <option value="">All areas</option>
           </select>
@@ -2898,9 +2909,10 @@ body.role-front_desk #referrals-view {
                    style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box">
             <div id="rp-end-suggest" style="display:none;position:absolute;left:0;right:0;top:100%;margin-top:2px;background:#fff;border:1px solid var(--border);border-radius:8px;max-height:260px;overflow-y:auto;z-index:10;box-shadow:0 8px 20px rgba(31,56,100,.12)"></div>
           </div>
+          <button type="button" onclick="rpPickFromMapMode('end')" title="Close this dialog and pick the End by clicking a pin on the map" style="background:#1F3864;color:#fff;border:none;border-radius:8px;padding:9px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;white-space:nowrap">📍 Map</button>
         </div>
         <input type="hidden" id="rp-end" value="__same__">
-        <div style="font-size:10px;color:var(--muted);margin-top:3px;font-style:italic">Leave the name blank to round-trip back to your starting point.</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:3px;font-style:italic">Leave the name blank for a round-trip back to Start. Or tap <b>📍 Map</b> to pick on the map.</div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
         <div>
@@ -19954,6 +19966,15 @@ window.rpStartSmartPlan = rpStartSmartPlan;
 
 // Called from pin popups ("Set as Start" / "Set as End" buttons).
 function _rpPickFromMap(name, slot){
+  // Dialog-mode interception (per user 2026-05-22) — when the dialog's
+  // 📍 Map button is armed, ANY pin click (regardless of which popup
+  // button was tapped) fills the awaiting field and reopens the dialog.
+  if(typeof _rpDialogConsumePinClick === 'function' && _RP_DIALOG_AWAITING){
+    if(_rpDialogConsumePinClick(name)){
+      if(_DV_MAP) _DV_MAP.closePopup();
+      return;
+    }
+  }
   if(slot === 'start'){
     _RP_START_NAME = name;
     if(!_RP_PICK_MODE) _RP_PICK_MODE = 'end';   // next click should be end
@@ -21198,23 +21219,50 @@ function _rpSearchSuggest(which){
     if(area && p.city !== area) return false;
     if(!q) return true;
     return p.name.toLowerCase().indexOf(q) >= 0 || p.city.toLowerCase().indexOf(q) >= 0;
-  }).slice(0, 8);
+  });
+  // Sort by recency: longest-since-visited first (per user 2026-05-22 color code).
+  // Pull days-since-last-visit per name + tag each match with the recency bucket
+  // so we can color-stripe each row.
+  matches.forEach(function(p){
+    var d = (typeof daysSinceLastVisit === 'function') ? daysSinceLastVisit(p.name) : null;
+    p._days = d;
+    p._rec  = (typeof recencyBucket === 'function') ? recencyBucket(d) : { color:'#9ca3af', short:'?', key:'?' };
+  });
+  matches.sort(function(a,b){
+    // Green (21d+) / never first — those are ripest for re-engagement.
+    var rank = { ripe:0, never:0, yellow:1, warm:2, fresh:3 };
+    var ra = rank[a._rec.key] != null ? rank[a._rec.key] : 9;
+    var rb = rank[b._rec.key] != null ? rank[b._rec.key] : 9;
+    if(ra !== rb) return ra - rb;
+    return (a.name || '').localeCompare(b.name || '');
+  });
+  matches = matches.slice(0, 10);
   if(matches.length === 0){
     box.innerHTML = '<div style="padding:10px 14px;font-size:11px;color:var(--muted);font-style:italic">No matches'
       + (area ? ' in ' + area : '') + '. Try a different area or clear it.</div>';
     box.style.display = 'block';
     return;
   }
-  var typeColors = { facility:'#7030A0', clinic:'#3b82f6', mva:'#f59e0b' };
+  var typeChip = { facility:'WCG', clinic:'Clinic', mva:'MVA' };
   box.innerHTML = matches.map(function(p, i){
     var safeName = String(p.name).replace(/</g,'&lt;');
-    var color = typeColors[p.kind] || '#64748b';
+    var rec = p._rec || { color:'#9ca3af', short:'?', label:'unknown' };
+    var staleText = (p._days == null) ? 'never visited' : (p._days + 'd ago');
+    // Each row is a recency-tinted card: left border + colored dot + stale label.
     return '<div onmousedown="event.preventDefault();_rpPickEndpoint(\''+which+'\','+i+')" '
-      + 'style="padding:8px 12px;cursor:pointer;border-bottom:1px solid #f1f5f9;font-size:12px;display:flex;align-items:center;justify-content:space-between" '
+      + 'title="'+rec.label+'" '
+      + 'style="padding:8px 12px;cursor:pointer;border-bottom:1px solid #f1f5f9;border-left:4px solid '+rec.color+';font-size:12px;display:flex;align-items:center;justify-content:space-between;gap:8px" '
       + 'onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'#fff\'">'
-      + '<span><strong>'+p.icon+' '+safeName+'</strong><span style="color:var(--muted);font-size:10px;margin-left:6px">'+p.city+'</span></span>'
-      + '<span style="background:'+color+'22;color:'+color+';font-size:9px;font-weight:700;padding:1px 6px;border-radius:4px;border:1px solid '+color+'66">'
-      + (p.kind === 'facility' ? 'WCG' : p.kind === 'mva' ? 'MVA' : 'Clinic') + '</span>'
+      + '<span style="display:flex;align-items:center;gap:6px;flex:1;min-width:0">'
+      +   '<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:'+rec.color+';flex-shrink:0"></span>'
+      +   '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><strong>'+p.icon+' '+safeName+'</strong>'
+      +     '<span style="color:var(--muted);font-size:10px;margin-left:6px">'+p.city+'</span>'
+      +   '</span>'
+      + '</span>'
+      + '<span style="display:flex;align-items:center;gap:5px;flex-shrink:0">'
+      +   '<span style="font-size:9px;font-weight:700;color:#fff;background:'+rec.color+';padding:1px 6px;border-radius:8px;letter-spacing:.03em">'+staleText+'</span>'
+      +   '<span style="font-size:9px;font-weight:700;color:#64748b;background:#f1f5f9;padding:1px 5px;border-radius:4px">'+(typeChip[p.kind] || 'Other')+'</span>'
+      + '</span>'
       + '</div>';
   }).join('');
   // Stash the current match list so _rpPickEndpoint can read by index
@@ -21250,6 +21298,105 @@ function closeRoutePlanner(){
   document.getElementById('route-planner-modal').style.display = 'none';
 }
 window.closeRoutePlanner = closeRoutePlanner;
+
+// ── ROUTE PLANNER DIALOG WRAPPER (per user 2026-05-22) ─────────────────────
+// The map's 🧭 Plan a Route button now opens this dialog FIRST instead of
+// jumping straight into map-pick mode. The dialog gives the user two ways
+// to fill each endpoint: type with recency-colored autocomplete, or tap
+// 📍 Map to switch the underlying map into pick-mode for that field.
+function openRoutePlannerDialog(){
+  // Same past-date guard as the inline planner (per user 2026-05-22).
+  try {
+    var di = (typeof _DV_LAST_DI === 'number') ? _DV_LAST_DI : null;
+    if(di != null && S.days && S.days[di]){
+      var dayDate = S.days[di].date;
+      var today = new Date(); today.setHours(0,0,0,0);
+      var visit = new Date(dayDate + 'T00:00:00');
+      if(visit < today){
+        var fmt = visit.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
+        if(typeof showToast === 'function'){
+          showToast('Can\'t plan a route in the past (' + fmt + '). Open today or a future day.');
+        }
+        return;
+      }
+    }
+  } catch(_){}
+  if(typeof openRoutePlanner === 'function') openRoutePlanner();
+}
+window.openRoutePlannerDialog = openRoutePlannerDialog;
+
+// "📍 Map" button next to Start/End — closes the dialog and arms the map so
+// the next pin click sets that field. After the pick, the dialog re-opens
+// with the value populated so the user can continue (or pick the other one).
+var _RP_DIALOG_AWAITING = null;  // 'start' | 'end' | null
+function rpPickFromMapMode(which){
+  if(which !== 'start' && which !== 'end') return;
+  _RP_DIALOG_AWAITING = which;
+  // Snapshot the dialog's CURRENT typed values so they survive the round trip
+  try {
+    var startVal = (document.getElementById('rp-start') || {}).value || '';
+    var endVal   = (document.getElementById('rp-end')   || {}).value || '';
+    var startLbl = (document.getElementById('rp-start-search') || {}).value || '';
+    var endLbl   = (document.getElementById('rp-end-search')   || {}).value || '';
+    window._RP_DIALOG_SNAPSHOT = { startVal:startVal, endVal:endVal, startLbl:startLbl, endLbl:endLbl };
+  } catch(_){}
+  if(typeof closeRoutePlanner === 'function') closeRoutePlanner();
+  // Arm the day-map's pick-mode so the next pin click fills the awaiting slot.
+  // The existing _rpPickFromMap() path runs when a user hits "Set as Start"
+  // or "Set as End" from a pin popup. We extend it via _RP_DIALOG_AWAITING:
+  // when set, ANY pin click (handled by _rpDialogConsumePinClick) auto-fills
+  // the awaiting slot — no popup interaction required.
+  if(typeof showToast === 'function'){
+    showToast('👆 Click any pin on the map to set the ' + (which === 'start' ? 'START' : 'END') + ' point.');
+  }
+  // Visual cue on the rp-pick-status line
+  var st = document.getElementById('rp-pick-status');
+  if(st){
+    st.textContent = '👆 Click a pin to set ' + (which === 'start' ? 'START' : 'END') + ' (dialog will reopen)';
+    st.style.color = '#7030A0';
+    st.style.fontWeight = '700';
+  }
+}
+window.rpPickFromMapMode = rpPickFromMapMode;
+
+// When a map pin is clicked and _RP_DIALOG_AWAITING is set, this consumes
+// the click — fills the corresponding dialog field and reopens the dialog.
+function _rpDialogConsumePinClick(name){
+  if(!_RP_DIALOG_AWAITING || !name) return false;
+  var which = _RP_DIALOG_AWAITING;
+  _RP_DIALOG_AWAITING = null;
+  // Resolve the pool entry so we can fill the visible label + hidden value
+  var pool = window._RP_POOL || [];
+  var match = pool.find(function(p){ return p.name === name; });
+  // Restore the snapshot first so the OTHER field doesn't lose its value
+  try {
+    var snap = window._RP_DIALOG_SNAPSHOT || {};
+    if(snap.startVal) (document.getElementById('rp-start') || {}).value = snap.startVal;
+    if(snap.endVal)   (document.getElementById('rp-end')   || {}).value = snap.endVal;
+    if(snap.startLbl) (document.getElementById('rp-start-search') || {}).value = snap.startLbl;
+    if(snap.endLbl)   (document.getElementById('rp-end-search')   || {}).value = snap.endLbl;
+  } catch(_){}
+  // Now write the new pick into the awaiting field
+  var inp = document.getElementById('rp-'+which+'-search');
+  var hid = document.getElementById('rp-'+which);
+  if(match){
+    if(inp) inp.value = match.icon + ' ' + match.name + ' · ' + match.city;
+    if(hid) hid.value = match.value;
+  } else {
+    // Pin name isn't in the route-planner pool (orphan business — e.g. a
+    // clinic without a recognized city). Store the name anyway so the
+    // user has feedback that the click landed.
+    if(inp) inp.value = '📍 ' + name;
+    if(hid) hid.value = name;
+  }
+  // Reopen the dialog so the user can continue
+  setTimeout(function(){
+    var modal = document.getElementById('route-planner-modal');
+    if(modal) modal.style.display = 'flex';
+  }, 100);
+  return true;
+}
+window._rpDialogConsumePinClick = _rpDialogConsumePinClick;
 
 // Show the coverage summary inline (in the rp-results panel). Lists how many
 // clinics / MVAs are mappable, groups unresolved ones by their (unrecognized)
