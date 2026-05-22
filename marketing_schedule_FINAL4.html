@@ -23362,12 +23362,15 @@ function rowHTML(row,di,ri){
     var _canEditHere2 = (typeof canEditVisitRow === 'function') ? canEditVisitRow(row) : true;
     var _dateOpen2    = (typeof canEditDate === 'function') ? canEditDate(day.date) : true;
     var _showEditBtn  = _canEditHere2 && (_dateOpen2 || (typeof isAdmin === 'function' && isAdmin()));
+    // Per user 2026-05-22: removed the small "undo" link below ✓ Done.
+    // The ✎ Edit button opens the full strict-edit modal which can already
+    // revert any field — having a separate "undo" link was redundant and
+    // bypassed the confirm-every-section rule we just put in place.
     confirmCell = '<div style="display:flex;flex-direction:column;align-items:center;gap:3px">'
       +'<span style="background:#f0fdf4;color:#166534;border:1px solid #86efac;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px">&#10003; Done</span>'
       +(_showEditBtn
           ? '<button onclick="openEditVisit('+di+','+ri+')" style="background:var(--purple);color:#fff;border:none;border-radius:6px;padding:3px 10px;font-size:10px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;margin-top:1px" title="Edit this confirmed visit — opens the full edit dialog">&#9998; Edit</button>'
           : '')
-      +(canEditDate(day.date)?'<button onclick="unconfirmRow('+di+','+ri+')" style="font-size:9px;color:#adb5bd;background:none;border:none;cursor:pointer;font-family:DM Sans,sans-serif">undo</button>':'')
       +'</div>';
   } else if(st === 'Completed' && !rowOutcomeSet){
     // Status is Completed but the lead outcome hasn't been saved yet — block the row Confirm
