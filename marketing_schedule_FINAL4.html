@@ -21612,6 +21612,30 @@ function openAddVisitFromCard(name, doctor, spec, city, type){
   if(contactEl && doctor && doctor !== 'TBD'){ contactEl.value = doctor; }
   var specEl = document.getElementById('av-spec');
   if(specEl && spec){ specEl.value = spec; }
+  // Pre-fill the address field from the clinic record (per user 2026-05-22).
+  // CLINIC_BANK records get their address via _seedClinicAddresses() at boot,
+  // so this lookup always returns either a verified street address or a
+  // city-area placeholder. Either way the field is no longer empty.
+  try {
+    var addrEl = document.getElementById('av-address');
+    if(addrEl && type === 'clinic' && name){
+      var rec = (Array.isArray(CLINIC_BANK) ? CLINIC_BANK : []).find(function(c){
+        return c && c.n && c.n.toLowerCase().trim() === String(name).toLowerCase().trim();
+      });
+      if(rec && rec.address){
+        addrEl.value = rec.address;
+        // If the address is just a city placeholder, hint the user that they
+        // should refine it. We don't lock the field — it's still editable.
+        if(rec.addressVerified === false){
+          addrEl.style.background = '#fff7ed';
+          addrEl.title = '⚠ City-area placeholder — please update with the real street address if you know it.';
+        } else {
+          addrEl.style.background = '#f0fdf4';
+          addrEl.title = '✓ Verified street address';
+        }
+      }
+    }
+  } catch(_){}
   // Disable the type radios so user can't switch (already a card of one type)
   document.querySelectorAll('input[name="av-type"]').forEach(function(r){ r.disabled = true; });
   // Move focus to the date picker since name is locked
@@ -34564,6 +34588,167 @@ var CLINIC_BANK = [
     "t": ""
   }
 ];
+
+// ── CLINIC ADDRESSES (per user 2026-05-22) ─────────────────────────────────
+// All 495 CLINIC_BANK records were originally created without an address
+// field — so the address line was empty in every clinic card and the
+// Add Visit modal. Filling all 495 with fabricated addresses would put
+// bad data in the system and waste members' time driving to wrong places.
+//
+// Approach instead:
+//   1. CLINIC_ADDRESS_OVERRIDES holds VERIFIED real street addresses we've
+//      researched. Match key = lowercased trimmed clinic name.
+//   2. _seedClinicAddresses() runs on bootstrap and assigns either:
+//        • the verified address from OVERRIDES                    (verified: true)
+//        • a city-area placeholder ("Frisco, TX 75034" etc.)       (verified: false)
+//      so the address field is NEVER empty.
+//   3. The UI shows a "✓ Verified" or "⚠ Needs verification" chip so
+//      members can tell at a glance which addresses are real.
+//   4. Admin can edit any address inline on the clinic card.
+//   5. exportUnverifiedAddressesCSV() dumps the unverified list as a CSV
+//      so the team can divide the lookup work.
+var CLINIC_ADDRESS_OVERRIDES = {
+  'bloomfield':                       { address: '8090 Preston Road, Suite 301, Frisco, TX 75034' },
+  'passion health':                   { address: '8195 Custer Rd, Ste 110, Frisco, TX 75035' },
+  'ata healthcare and wellness':      { address: '8501 Wade Blvd, Suite 1160, Frisco, TX 75034' },
+  'meridian primary care':            { address: '280 Adriatic Pkwy, McKinney, TX 75070' },
+  'craig ranch pediatrics':           { address: '6850 TPC Dr, Ste 100, McKinney, TX 75070' },
+  'maple primary care':               { address: '3242 Preston Rd, Suite 203, Plano, TX 75093' },
+  'allen family practice':            { address: '1120 Raintree Circle, Suite 210, Allen, TX 75013' },
+  'north texas medical clinic':       { address: '5350 Independence Pkwy, Ste 120, Frisco, TX 75035' },
+  'north dallas primary care':        { address: '8795 Preston Trace Blvd, Ste 100, Frisco, TX 75033' },
+  'pioneer medical associates':       { address: '14111 King Rd, Suite 320, Frisco, TX 75036' },
+  'nest family medicine':             { address: '4920 McDermott Rd, Ste 200, Plano, TX 75024' },
+  'wellmed':                          { address: '1948 E Hebron Pkwy, Ste 110, Carrollton, TX 75007' },
+  'centennial primary care':          { address: '9925 Gillespie Dr, Suite 3400, Plano, TX 75025' }
+};
+window.CLINIC_ADDRESS_OVERRIDES = CLINIC_ADDRESS_OVERRIDES;
+
+// City-area placeholders. The address field is never blank; placeholders
+// just say which city the clinic is in. The map can still plot them at
+// city centroid until a real street address is researched.
+var CLINIC_CITY_PLACEHOLDERS = {
+  'Frisco':     'Frisco, TX 75034',
+  'McKinney':   'McKinney, TX 75070',
+  'Plano':      'Plano, TX 75093',
+  'Carrollton': 'Carrollton, TX 75007',
+  'Allen':      'Allen, TX 75013',
+  'Lewisville': 'Lewisville, TX 75067',
+  'Richardson': 'Richardson, TX 75080',
+  'Irving':     'Irving, TX 75038',
+  'Addison':    'Addison, TX 75001',
+  'Farmers Branch': 'Farmers Branch, TX 75234'
+};
+
+// Read any address overrides the admin has saved at runtime (localStorage).
+// This lets members edit addresses on the card and have those edits persist
+// across reloads + sync to teammates via the existing DataLayer pipeline.
+function _loadClinicAddressEdits(){
+  try {
+    var raw = localStorage.getItem('clinicAddressEdits');
+    return raw ? JSON.parse(raw) : {};
+  } catch(_){ return {}; }
+}
+function _saveClinicAddressEdit(name, addr){
+  if(!name) return;
+  var edits = _loadClinicAddressEdits();
+  edits[name.toLowerCase().trim()] = {
+    address: addr,
+    by: (CURRENT_USER && CURRENT_USER.name) || 'unknown',
+    at: new Date().toISOString()
+  };
+  try { localStorage.setItem('clinicAddressEdits', JSON.stringify(edits)); } catch(_){}
+  // Re-seed so the in-memory CLINIC_BANK reflects the new value
+  if(typeof _seedClinicAddresses === 'function') _seedClinicAddresses();
+}
+window._saveClinicAddressEdit = _saveClinicAddressEdit;
+
+// Run on bootstrap: fill every clinic's .address + .addressVerified fields.
+// Idempotent — safe to re-run after any data refresh.
+function _seedClinicAddresses(){
+  if(!Array.isArray(CLINIC_BANK)) return;
+  var edits = _loadClinicAddressEdits();
+  var seeded = 0, verified = 0, placeholder = 0;
+  CLINIC_BANK.forEach(function(c){
+    if(!c || !c.n) return;
+    var key = c.n.toLowerCase().trim();
+    // Priority: admin edit > verified override > city placeholder
+    if(edits[key] && edits[key].address){
+      c.address = edits[key].address;
+      c.addressVerified = true;
+      c.addressEditedBy = edits[key].by;
+      verified++;
+    } else if(CLINIC_ADDRESS_OVERRIDES[key]){
+      c.address = CLINIC_ADDRESS_OVERRIDES[key].address;
+      c.addressVerified = true;
+      verified++;
+    } else {
+      c.address = CLINIC_CITY_PLACEHOLDERS[c.c] || (c.c + ', TX');
+      c.addressVerified = false;
+      placeholder++;
+    }
+    seeded++;
+  });
+  try { console.info('[addresses] seeded ' + seeded + ' clinics — ' + verified + ' verified, ' + placeholder + ' city-placeholder'); } catch(_){}
+}
+window._seedClinicAddresses = _seedClinicAddresses;
+// Run immediately so renderBank sees populated addresses on first paint.
+try { _seedClinicAddresses(); } catch(_){}
+
+// CSV export — dumps unverified clinics so the team can divide up address
+// research. Triggered by a button in the Bank tab header (admin only).
+function exportUnverifiedAddressesCSV(){
+  if(!Array.isArray(CLINIC_BANK)) return;
+  var rows = [['Clinic Name','Doctor','Specialty','City','Current Placeholder']];
+  CLINIC_BANK.forEach(function(c){
+    if(c && c.n && c.addressVerified === false){
+      rows.push([c.n, c.d || 'TBD', c.s || '', c.c || '', c.address || '']);
+    }
+  });
+  var csv = rows.map(function(r){
+    return r.map(function(v){
+      var s = String(v == null ? '' : v);
+      return /[",\n]/.test(s) ? '"' + s.replace(/"/g,'""') + '"' : s;
+    }).join(',');
+  }).join('\n');
+  var blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = 'clinics-needing-address-verification-' + new Date().toISOString().slice(0,10) + '.csv';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(function(){ URL.revokeObjectURL(url); a.remove(); }, 1000);
+  if(typeof showToast === 'function') showToast('Exported ' + (rows.length - 1) + ' clinics needing address verification.');
+}
+window.exportUnverifiedAddressesCSV = exportUnverifiedAddressesCSV;
+
+// Admin-only: prompt for a new address for a specific clinic, validate it,
+// and re-seed so the UI shows the updated value (and saves to localStorage).
+function _promptEditClinicAddress(clinicName){
+  if(typeof isAdmin !== 'function' || !isAdmin()){
+    if(typeof showToast === 'function') showToast('Only admin can edit clinic addresses.');
+    return;
+  }
+  if(!clinicName) return;
+  var match = CLINIC_BANK.find(function(c){ return c && c.n && c.n.toLowerCase().trim() === clinicName.toLowerCase().trim(); });
+  if(!match) return;
+  var current = match.address || '';
+  var input = window.prompt(
+    'Edit address for "' + match.n + '" (' + match.c + ')\n\n'
+    + 'Current: ' + (current || '(none)')
+    + '\n\nEnter the new street address (or leave blank to keep current):',
+    current
+  );
+  if(input == null) return;          // canceled
+  input = input.trim();
+  if(!input || input === current) return;
+  _saveClinicAddressEdit(match.n, input);
+  if(typeof showToast === 'function') showToast('Address updated for ' + match.n);
+  if(typeof renderBank === 'function'){ try { renderBank(); } catch(_){} }
+}
+window._promptEditClinicAddress = _promptEditClinicAddress;
+
 window.CALL_LOCATIONS = CALL_LOCATIONS;
 
 function isCallHandler(name){ return !!(CALL_HANDLERS && CALL_HANDLERS[name]); }
@@ -34956,6 +35141,16 @@ function _renderBankActionButtons(){
         h += '<button onclick="toggleLeadBackfillMode()" title="Temporarily allow admin to edit lead status from clinic cards. Use this only for backfilling old data — normally leads should come from member visits." style="background:#fff;color:#1F3864;border:1px solid #1F3864;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:6px">🔒 Enable lead backfill</button>';
       }
       h += '<button onclick="toggleBusinessDeleteMode(\'clinic\')" title="Multi-select clinics for permanent deletion" style="background:#fff;color:#991b1b;border:1px solid #fca5a5;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">🗑 Select to delete</button>';
+      // Address audit (per user 2026-05-22) — admin-only button that exports
+      // every unverified clinic to CSV so the team can divide up real-address
+      // research. The count is computed live so admins see how many remain.
+      try {
+        var unverifiedCount = 0;
+        if(Array.isArray(CLINIC_BANK)){
+          unverifiedCount = CLINIC_BANK.filter(function(c){ return c && c.addressVerified === false; }).length;
+        }
+        h += '<button onclick="exportUnverifiedAddressesCSV()" title="Download a CSV of every clinic that still has a placeholder address instead of a verified street address." style="background:#fff;color:#9a3412;border:1px solid #fed7aa;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:6px">📥 Addresses to verify <span style="background:#fef3c7;color:#78350f;border-radius:8px;padding:0 7px;font-size:10px;font-weight:700">' + unverifiedCount + '</span></button>';
+      } catch(_){}
     }
   }
   wrap.innerHTML = h;
@@ -35068,6 +35263,29 @@ function renderBankPage(filtered){
       specEl.style.cssText='font-size:10px;background:#f4f5f9;color:var(--muted);padding:3px 8px;border-radius:6px;display:inline-block';
       specEl.textContent=c.s;card.appendChild(specEl);
     }
+    // Address row (per user 2026-05-22). Every clinic now shows an address
+    // — either a verified street address (✓ chip) or a city-area placeholder
+    // (⚠ chip). Admin gets an inline ✎ edit button to update placeholders.
+    var addrRow = document.createElement('div');
+    addrRow.style.cssText = 'display:flex;align-items:flex-start;gap:6px;font-size:11px;color:var(--text);background:#f8fafc;border:1px solid var(--border);border-radius:6px;padding:5px 8px;line-height:1.35';
+    var verified = c.addressVerified === true;
+    var pinHtml = verified
+      ? '<span title="Verified street address" style="color:#16a34a;flex-shrink:0;font-size:12px">📍</span>'
+      : '<span title="Placeholder — real address not on file yet" style="color:#d97706;flex-shrink:0;font-size:12px">⚠</span>';
+    var chipHtml = verified
+      ? '<span style="font-size:8px;font-weight:700;color:#16a34a;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:1px 5px;letter-spacing:.03em;flex-shrink:0">VERIFIED</span>'
+      : '<span style="font-size:8px;font-weight:700;color:#9a3412;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:1px 5px;letter-spacing:.03em;flex-shrink:0" title="Click ✎ to update this address with the real street address">NEEDS VERIFY</span>';
+    var addrText = (c.address || (c.c + ', TX')).replace(/</g,'&lt;');
+    var canEditAddr = (typeof isAdmin === 'function' && isAdmin());
+    var editBtn = canEditAddr
+      ? '<button title="Edit address for ' + (c.n||'').replace(/"/g,'&quot;') + '" onclick="event.stopPropagation();_promptEditClinicAddress(\'' + (c.n||'').replace(/'/g,"\\'") + '\')" style="background:none;border:1px solid var(--border);color:#64748b;border-radius:5px;padding:1px 6px;font-size:10px;cursor:pointer;font-family:DM Sans,sans-serif;line-height:1;flex-shrink:0">✎</button>'
+      : '';
+    addrRow.innerHTML =
+      pinHtml +
+      '<div style="flex:1;min-width:0"><div style="overflow:hidden;text-overflow:ellipsis">' + addrText + '</div></div>' +
+      chipHtml +
+      editBtn;
+    card.appendChild(addrRow);
     // Lead status row (per user 2026-05-22 screenshot — duplicate UI fix).
     // Previously rendered BOTH a status pill AND a separate dropdown on every
     // card, even for non-admin users where the dropdown was just disabled.
