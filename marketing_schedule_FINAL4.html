@@ -2834,6 +2834,11 @@ body.role-front_desk #referrals-view {
                   style="background:linear-gradient(135deg,#7030A0,#9333ea);border:none;color:#fff;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;display:inline-flex;align-items:center;gap:5px;line-height:1.1;box-shadow:0 1px 3px rgba(112,48,160,.3)">
             🧭 Plan a Route
           </button>
+          <!-- Admin-only Map v2 settings opener. Hidden by default; revealed
+               by JS in renderDayMap when isAdmin() returns true. Opens the
+               existing settings modal where the Google Maps + Gemini keys
+               + daily quota caps are configured. -->
+          <button id="dv-mapv2-settings-btn" type="button" onclick="openMapV2Settings()" title="Map v2 settings — paste Google Maps API key for real driving directions, traffic-aware ETA, and Gemini auto-fill" style="display:none;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);color:#fff;border-radius:6px;padding:5px 9px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">⚙ Map v2</button>
           <button id="dv-map-expand-btn" type="button" onclick="toggleDayMapExpanded()"
                   title="Expand the map to full height — easier to see the route"
                   style="background:#1F3864;border:none;color:#fff;border-radius:6px;padding:5px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;display:inline-flex;align-items:center;gap:5px;line-height:1.1">
@@ -21415,6 +21420,21 @@ function renderDayMap(di){
       planBtn.title = isPast
         ? 'Planning is for today or future days only — this day is in the past.'
         : 'Pick a Start and End pin on the map — get a corridor of clinics to visit between them, ranked by longest-since-visited.';
+    }
+    // Admin-only Map v2 settings button — visible only for admin so members
+    // can't see (or accidentally trash) the API-key config.
+    var mv2Btn = document.getElementById('dv-mapv2-settings-btn');
+    if(mv2Btn){
+      var canSeeKeys = (typeof isAdmin === 'function') && isAdmin();
+      mv2Btn.style.display = canSeeKeys ? 'inline-flex' : 'none';
+      // Indicate active state via a small dot if a key is configured
+      if(canSeeKeys){
+        var keyActive = (typeof hasMapsKey === 'function') && hasMapsKey();
+        mv2Btn.innerHTML = '⚙ Map v2' + (keyActive ? ' <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#22c55e;margin-left:3px"></span>' : '');
+        mv2Btn.title = keyActive
+          ? 'Map v2 active — Google driving directions + traffic-aware ETA. Click to manage keys + quota.'
+          : 'Map v2 settings — paste your Google Maps API key for real driving directions + traffic-aware ETA.';
+      }
     }
   } catch(_){}
   // Try to init; if Leaflet isn't loaded yet, retry shortly.
