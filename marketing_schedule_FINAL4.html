@@ -32,26 +32,26 @@
   --text:#1a2233;--muted:#6b7a99;
 }
 *{box-sizing:border-box;margin:0;padding:0}
-/* Per user 2026-05-22: background = stacked WAVES of brand colors.
-   Three SVG wave shapes layered from deepest (navy) → lightest (purple)
-   stacked at the bottom of the viewport on top of a navy → purple base
-   gradient. Creates a calm, modern "color levels" effect. Cards' white
-   backgrounds keep them crisp against the layered backdrop. */
-/* Per user 2026-05-21 (Abrar's screen video): some element was overflowing
-   horizontally, creating a page-wide scrollbar. Locking overflow-x prevents
-   stray-wide children from leaking out. */
+/* Per user 2026-05-22: background = WAVES of color levels across the full
+   viewport. Each "level" is a distinct color band with a curved wave-shaped
+   boundary above/below it. Combined effect = layered ocean-wave look in
+   brand colors. Cards' white backgrounds stay crisp against the layers. */
+/* Per user 2026-05-21 (Abrar's screen video): lock overflow-x to prevent
+   stray-wide children from creating a horizontal scrollbar. */
 html{overflow-x:hidden}
 body{
   font-family:'DM Sans',sans-serif;
   background:
-    /* Wave layer 3 (top — lightest purple, smallest height) */
-    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 320' preserveAspectRatio='none'><path fill='%237030A0' fill-opacity='0.85' d='M0,200 C240,280 480,140 720,180 C960,220 1200,260 1440,180 L1440,320 L0,320 Z'/></svg>") center bottom/100% 35vh no-repeat fixed,
-    /* Wave layer 2 (mid purple, medium height) */
-    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 320' preserveAspectRatio='none'><path fill='%234c2a8a' fill-opacity='0.92' d='M0,160 C320,260 720,80 1080,160 C1260,200 1380,240 1440,200 L1440,320 L0,320 Z'/></svg>") center bottom/100% 55vh no-repeat fixed,
-    /* Wave layer 1 (deepest indigo, tallest) */
-    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 320' preserveAspectRatio='none'><path fill='%232d2870' d='M0,120 C300,220 700,40 1440,140 L1440,320 L0,320 Z'/></svg>") center bottom/100% 80vh no-repeat fixed,
-    /* Base sky — navy at top fading toward the waves */
-    linear-gradient(180deg, #1F3864 0%, #1F3864 35%, #2a2d6e 100%) fixed,
+    /* Bottom wave (deepest purple-magenta) — sits at ~85vh */
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 200' preserveAspectRatio='none'><path fill='%23581e7a' d='M0,120 C240,40 480,180 720,100 C960,40 1200,160 1440,80 L1440,200 L0,200 Z'/></svg>") center 85% / 100% 30vh no-repeat fixed,
+    /* Mid wave (mid purple) — sits at ~65vh */
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 200' preserveAspectRatio='none'><path fill='%2348247a' d='M0,100 C300,180 700,40 1100,120 C1300,150 1380,80 1440,120 L1440,200 L0,200 Z'/></svg>") center 65% / 100% 30vh no-repeat fixed,
+    /* Upper wave (deep blue-purple) — sits at ~42vh */
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 200' preserveAspectRatio='none'><path fill='%23362874' d='M0,80 C320,140 720,30 1080,80 C1260,100 1380,140 1440,90 L1440,200 L0,200 Z'/></svg>") center 42% / 100% 28vh no-repeat fixed,
+    /* Top wave (slate-navy) — near top */
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 200' preserveAspectRatio='none'><path fill='%23253473' d='M0,80 C300,160 700,40 1440,100 L1440,200 L0,200 Z'/></svg>") center 20% / 100% 26vh no-repeat fixed,
+    /* Base color stops behind the waves */
+    linear-gradient(180deg, #1F3864 0%, #283278 50%, #5b21b6 100%) fixed,
     var(--surface);
   color:var(--text);
   min-height:100vh;
