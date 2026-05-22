@@ -20393,10 +20393,15 @@ function renderDayMap(di){
   if(!day || !day.rows) return;
   var pts = [];
   var seenCities = {};
+  // Per user 2026-05-22: each day's visits get a sequential number
+  // (1, 2, 3, ...) shown on the pin so members can see the order of stops.
+  // Number is based on visit-with-clinic order in S.days[di].rows.
+  var visitOrdinal = 0;
   day.rows.forEach(function(row, idx){
     if(!row.clinic) return;
     var coord = getCoordForBusiness(row.clinic);
     if(!coord) return;
+    visitOrdinal++;
     // Add a tiny offset for duplicate-city pins so they don't stack invisibly
     var dupKey = coord.lat.toFixed(3) + ',' + coord.lng.toFixed(3);
     var stack = seenCities[dupKey] || 0;
@@ -20407,9 +20412,16 @@ function renderDayMap(di){
               : (row.status === 'Canceled')  ? '#dc2626'
               : (row.status === 'Postponed') ? '#f59e0b'
                                               : '#1F3864';
-    var marker = L.circleMarker([lat, lng], {
-      radius: 9, color: '#fff', weight: 2, fillColor: color, fillOpacity: 0.95
-    }).bindPopup('<b>' + (row.clinic || '').replace(/</g,'&lt;') + '</b><br>'
+    // Use a numbered divIcon so the visit order is visible at a glance.
+    var ordinalLabel = String(visitOrdinal);
+    var marker = L.marker([lat, lng], {
+      icon: L.divIcon({
+        className: 'visit-ordinal-pin',
+        html: '<div style="width:26px;height:26px;background:' + color + ';color:#fff;border:2.5px solid #fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;font-family:DM Sans,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.3)">' + ordinalLabel + '</div>',
+        iconSize: [26, 26],
+        iconAnchor: [13, 13]
+      })
+    }).bindPopup('<b>#' + ordinalLabel + ' · ' + (row.clinic || '').replace(/</g,'&lt;') + '</b><br>'
                 + (row.status || 'Pending')
                 + (row.member ? '<br>👤 ' + row.member : ''));
     _DV_MARKERS.addLayer(marker);
@@ -21377,6 +21389,23 @@ function _performAddVisitPush(dateList, originalDi, name, type, area, contact, s
   }
   if(addedToBank) msg += ' — also created a card in '+typeLabel+' bank';
   showToast(msg);
+  // Per user 2026-05-22: zoom the day map to the new visit's location.
+  // If we just added a visit to the currently-displayed day, pan + zoom
+  // there. The pin will already be rendered by renderDayMap during the
+  // earlier refresh() call. Skip if we can't find coords or the map isn't
+  // ready (e.g. visit was added for a different day than what's open).
+  try {
+    if(!isRecurringFinal && pushed === 1 && typeof getCoordForBusiness === 'function'){
+      var addedIso = dateList[0];
+      var openDayIdx = (typeof S !== 'undefined' && S.days) ? S.days.findIndex(function(d){ return d.date === addedIso; }) : -1;
+      if(openDayIdx >= 0 && openDayIdx === (S && S.currentDay)){
+        var coord = getCoordForBusiness(name);
+        if(coord && typeof _DV_MAP !== 'undefined' && _DV_MAP && typeof _DV_MAP.setView === 'function'){
+          _DV_MAP.setView([coord.lat, coord.lng], 14, { animate: true });
+        }
+      }
+    }
+  } catch(e){ try { console.warn('[addVisit] zoom-to-pin failed:', e); } catch(_){} }
 }
 window._performAddVisitPush = _performAddVisitPush;
 
@@ -24569,7 +24598,24 @@ window.closeBigCalendar = closeBigCalendar;
 // day-cell badges + dot indicators show ONLY days that have visits
 // matching the filter. The day-table still shows everything once opened —
 // the filter is a calendar-level "where did I work?" lens.
-var _CAL_MEMBER_FILTER = '';   // '' = all members
+var _CAL_MEMBER_FILTER = '';   // '' = all members  (set to CURRENT_USER.name for members on first render — see _seedCalFilterDefault below)
+// Per user 2026-05-22: on first render, default the calendar filter to
+// the current member's own name (so they see only their own visits).
+// Admin keeps the 'All members' default. Members can manually clear or
+// switch to another member from the dropdown.
+var _CAL_FILTER_SEEDED = false;
+function _seedCalFilterDefault(){
+  if(_CAL_FILTER_SEEDED) return;
+  if(typeof CURRENT_USER === 'undefined' || !CURRENT_USER) return;
+  _CAL_FILTER_SEEDED = true;
+  // Admin: leave as 'all'. Members: default to their own name (if it's in MEMBERS).
+  if(CURRENT_USER.role === 'admin') return;
+  var me = CURRENT_USER.name;
+  if(typeof MEMBERS !== 'undefined' && MEMBERS.indexOf(me) >= 0){
+    _CAL_MEMBER_FILTER = me;
+  }
+}
+window._seedCalFilterDefault = _seedCalFilterDefault;
 var _CAL_STATUS_FILTER = '';   // '' = any status
 
 function setCalMemberFilter(name){
@@ -24599,6 +24645,10 @@ function _calRowMatchesFilter(row){
 }
 
 function renderCalGrid(){
+  // Per user 2026-05-22: on first render, seed the filter to the current
+  // member so they only see their own visits by default. Admin stays on
+  // 'All members'.
+  if(typeof _seedCalFilterDefault === 'function') _seedCalFilterDefault();
   var y=S.cal.y,m=S.cal.m;
   document.getElementById('cal-month-label').textContent=MN[m]+' '+y;
   var fd2=new Date(y,m,1).getDay(),last=new Date(y,m+1,0).getDate(),t=new Date();
@@ -24607,11 +24657,11 @@ function renderCalGrid(){
   // ── REFRESH FILTER DROPDOWN OPTIONS (cheap; idempotent) ─────────────
   var memSel = document.getElementById('cal-member-filter');
   if(memSel && typeof MEMBERS !== 'undefined'){
-    var current = memSel.value;
     memSel.innerHTML = '<option value="">👥 All members</option>'
       + MEMBERS.map(function(m){ return '<option value="'+m.replace(/"/g,'&quot;')+'">'+m+'</option>'; }).join('');
-    memSel.value = (MEMBERS.indexOf(current) >= 0) ? current : '';
-    _CAL_MEMBER_FILTER = memSel.value;
+    // Honor the in-memory _CAL_MEMBER_FILTER (set by _seedCalFilterDefault
+    // on first render for members, or by user interaction afterwards).
+    memSel.value = (MEMBERS.indexOf(_CAL_MEMBER_FILTER) >= 0) ? _CAL_MEMBER_FILTER : '';
   }
   var stSel = document.getElementById('cal-status-filter');
   if(stSel) stSel.value = _CAL_STATUS_FILTER || '';
