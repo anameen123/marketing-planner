@@ -21277,11 +21277,17 @@ function rowHTML(row,di,ri){
   } else {
     var doc=(row.doctor&&row.doctor!=='TBD')?row.doctor:'';
     var sub=[doc,row.spec,row.last?'Last: '+row.last:'First visit'].filter(Boolean).join(' · ');
-    // Make the clinic name a click-to-jump target — opens the matching
-    // card in Bank of Targets with a brief purple pulse highlight.
-    var safeNameAttr = (row.clinic || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    // Per user 2026-05-21: click the clinic/MVA/outreach name → open the
+    // card as an inline POPUP (openClinicHistory modal), NOT a navigation
+    // to the Bank of Targets tab. Same modal works for all three biz
+    // types — it just adapts based on the name/specialty.
+    function _esc(s){ return (s || '').replace(/'/g, "\\'").replace(/"/g, '&quot;'); }
+    var safeNameAttr   = _esc(row.clinic);
+    var safeCityAttr   = _esc(row.city);
+    var safeDoctorAttr = _esc(row.doctor);
+    var safeSpecAttr   = _esc(row.spec || row.bizType || '');
     clinicCell=badges
-      +'<div class="clinic-name jump-target" title="Click to view in Bank of Targets" onclick="event.stopPropagation();jumpToBusinessCard(\''+safeNameAttr+'\')">'+row.clinic+'</div>'
+      +'<div class="clinic-name jump-target" title="Click to view card" onclick="event.stopPropagation();openClinicHistory(\''+safeNameAttr+'\',\''+safeCityAttr+'\',\''+safeDoctorAttr+'\',\''+safeSpecAttr+'\')">'+row.clinic+'</div>'
       +'<div class="clinic-sub">'+sub+' <button class="edit-btn" onclick="startEdit('+di+','+ri+')">&#9998;</button></div>';
   }
 
