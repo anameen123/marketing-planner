@@ -636,36 +636,61 @@ textarea.rnotes:focus{border-color:var(--purple);outline:none}
 .ch-empty-icon{font-size:36px;margin-bottom:10px}
 
 /* ── LOGIN SCREEN ─────────────────────────────────────────────────────── */
-/* ── ANNOUNCEMENT BAR FLASH ANIMATIONS ───────────────────────────────────
-   Subtle pulse on the whole bar + brighter strobe on just the red badge,
-   so users notice new announcements without being annoying. */
-@keyframes annPulse{
-  0%, 100% { box-shadow: 0 0 0 0 rgba(220,38,38,0); }
-  50%      { box-shadow: 0 0 14px 2px rgba(220,38,38,.45); }
+/* ── ANNOUNCEMENT BAR (v2 — calm, professional) ───────────────────────────
+   Replaces the previous "emergency alert" styling (pulsing red glow + flashing
+   red badge + aggressive left-to-right text scroll) with a quiet, modern
+   pattern inspired by Stripe / Linear / Notion banners:
+     · Soft white surface with a thin accent stripe on the left
+     · Small uppercase "ANNOUNCEMENT" label in a muted slate tone
+     · A tiny live-dot that pulses GENTLY (no color flash)
+     · Static title — no horizontal scroll. When multiple announcements are
+       active, they cross-fade every ~7 seconds.
+     · Subtle "View all →" affordance on the right.
+   No box-shadow strobe, no badge flash, no marquee. */
+@keyframes annDotPulse{
+  0%, 100% { box-shadow: 0 0 0 0 rgba(37,99,235,.55); }
+  70%      { box-shadow: 0 0 0 6px rgba(37,99,235,0); }
 }
-@keyframes annBadgeFlash{
-  0%, 100% { background: linear-gradient(90deg,#dc2626 0%,#b91c1c 100%); }
-  50%      { background: linear-gradient(90deg,#fb7185 0%,#dc2626 100%); }
-}
-/* Scrolling announcement title:
-   The text enters from the LEFT edge of its container and slides slowly to
-   the RIGHT, exiting off the right side. Each cycle is ~16s; the JS interval
-   re-triggers the animation and advances to the next announcement when there
-   are several. The container has overflow:hidden so the text is clipped. */
-@keyframes annTextScrollRight{
-  0%   { transform: translateX(-100%); }   /* start fully off-screen on the left */
-  100% { transform: translateX(100vw); }    /* exit fully off-screen on the right */
+@keyframes annFadeIn{
+  from { opacity: 0; transform: translateY(2px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 .ann-bar-scroll{
   display: inline-block;
   white-space: nowrap;
-  font-size: 22px;
-  font-weight: 700;
-  letter-spacing: .01em;
-  text-shadow: 0 1px 2px rgba(0,0,0,.22);
-  will-change: transform;
-  animation: annTextScrollRight 16s linear forwards;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: .005em;
+  color: #0f172a;
+  animation: annFadeIn .35s ease-out;
 }
+.ann-bar-scroll .ann-meta{
+  color: #64748b;
+  font-weight: 500;
+  margin-left: 14px;
+  font-size: 12.5px;
+}
+.ann-live-dot{
+  display:inline-block; width:7px; height:7px; border-radius:50%;
+  background:#2563eb; animation: annDotPulse 2.2s ease-out infinite;
+  flex-shrink:0;
+}
+.ann-pill{
+  font-size:10px; font-weight:700; letter-spacing:.12em;
+  color:#1e3a8a; background:#dbeafe;
+  padding:3px 9px; border-radius:999px;
+  text-transform:uppercase; flex-shrink:0;
+}
+.ann-viewall{
+  font-size:11px; font-weight:600; color:#475569;
+  display:flex; align-items:center; gap:4px; flex-shrink:0;
+  transition: color .15s;
+}
+#ann-bar:hover .ann-viewall{ color:#1d4ed8; }
+#ann-bar:hover{ background:#f8fafc !important; }
 /* Bell shake — only animates while there's at least one unread admin notification */
 @keyframes bellShake{
   0%, 70%, 100% { transform: rotate(0deg); }
@@ -901,8 +926,9 @@ body.member-view #user-badge-wrap button{color:#1e3a8a}
 body.member-view nav button,
 body.member-view .top-nav button,
 body.member-view .landing-tabs button{color:#3b82f6}
-/* The marquee announcement bar — softer in the member palette */
-body.member-view .marquee-bar{background:linear-gradient(135deg,#3b82f6,#1e40af) !important}
+/* Marquee announcement bar (v2): same calm white treatment for member view —
+   the bar is identical across roles; only the motivational ticker keeps the
+   softer blue tagline gradient below it. */
 body.member-view .marquee-bar-tagline{background:linear-gradient(135deg,#60a5fa,#3b82f6) !important}
 /* Cards: pure white with a thin blue border + soft drop shadow */
 body.member-view .cal-card,
@@ -1513,23 +1539,26 @@ body.role-front_desk #referrals-view {
        from left to right across the screen in a large font. When one finishes
        scrolling out, the next one starts. Clicking anywhere on the bar opens
        the master list (Add + Remove with author/admin restriction). -->
+  <!-- ANNOUNCEMENT BAR v2 — calm/professional (Stripe/Linear/Notion style).
+       White surface, thin blue accent stripe on the left, soft uppercase pill,
+       tiny live-dot that pulses gently, static title (no marquee), subtle
+       "View all" affordance on the right. -->
   <div id="ann-bar"
        onclick="openAnnouncementsList()"
        title="Click to see all announcements · add · remove"
-       style="display:none;background:linear-gradient(90deg,#1F3864 0%, #7030A0 55%, #9b2335 100%);color:#fff;font-family:'DM Sans',sans-serif;border-top:1px solid rgba(255,255,255,.15);border-bottom:1px solid rgba(255,255,255,.15);min-height:56px;cursor:pointer;animation:annPulse 2.4s ease-in-out infinite">
-    <div style="display:flex;align-items:stretch;overflow:hidden;transition:filter .15s"
-         onmouseover="this.style.filter='brightness(1.06)'"
-         onmouseout="this.style.filter='brightness(1)'">
-      <!-- Red flashing badge — pinned to the left -->
-      <div style="background:linear-gradient(90deg,#dc2626 0%,#b91c1c 100%);color:#fff;padding:0 22px;font-size:12px;font-weight:800;letter-spacing:.16em;display:flex;align-items:center;gap:6px;flex-shrink:0;animation:annBadgeFlash 1.4s ease-in-out infinite">
-        <span style="font-size:16px">📢</span> ANNOUNCEMENT
+       style="display:none;background:#ffffff;color:#0f172a;font-family:'DM Sans',sans-serif;border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;border-left:3px solid #2563eb;min-height:44px;cursor:pointer;transition:background .15s">
+    <div style="display:flex;align-items:center;gap:14px;padding:8px 18px;overflow:hidden">
+      <!-- Soft uppercase pill + live dot -->
+      <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+        <span class="ann-live-dot" aria-hidden="true"></span>
+        <span class="ann-pill">Announcement</span>
       </div>
-      <!-- Scrolling viewport — the inner span animates left → right across this area -->
-      <div id="ann-bar-viewport" style="flex:1;overflow:hidden;display:flex;align-items:center;min-width:0;padding:0 4px">
+      <!-- Static title viewport — no marquee, just clean text with ellipsis -->
+      <div id="ann-bar-viewport" style="flex:1;display:flex;align-items:center;min-width:0">
         <span id="ann-bar-text" class="ann-bar-scroll">…</span>
       </div>
-      <!-- Small list affordance, far right -->
-      <div style="background:rgba(0,0,0,.18);color:#fff;padding:0 14px;font-size:10px;font-weight:600;display:flex;align-items:center;flex-shrink:0;letter-spacing:.04em">↗ list</div>
+      <!-- Subtle "View all" affordance -->
+      <div class="ann-viewall"><span>View all</span><span aria-hidden="true">→</span></div>
     </div>
   </div>
 
@@ -22425,15 +22454,15 @@ function renderAnnouncementBar(){
   if(!_annBarItems.length){
     if(_annBarRotateInterval){ clearInterval(_annBarRotateInterval); _annBarRotateInterval = null; }
     if(pager) pager.style.display = 'none';
-    // Empty state: no scroll animation, just static placeholder text
+    // Empty state: muted slate text on the white bar (v2 palette).
     textEl.classList.remove('ann-bar-scroll');
     textEl.style.transform = 'none';
-    textEl.style.fontSize = '15px';
+    textEl.style.fontSize = '13px';
     textEl.style.fontWeight = '500';
     textEl.style.fontStyle = 'italic';
-    textEl.style.color = 'rgba(255,255,255,.78)';
-    textEl.style.padding = '0 16px';
-    textEl.textContent = 'No announcements created — click ↗ list to add one.';
+    textEl.style.color = '#64748b';
+    textEl.style.padding = '0';
+    textEl.textContent = 'No active announcements — click View all to post one.';
     return;
   }
   // Reset any inline overrides from the empty-state branch
@@ -22444,30 +22473,30 @@ function renderAnnouncementBar(){
   textEl.style.color = '';
   textEl.style.padding = '';
   _annBarIdx = 0;
-  // Initial scroll — kick off the keyframe animation
+  // Initial paint — trigger the gentle fade-in animation
   textEl.classList.remove('ann-bar-scroll');
   void textEl.getBoundingClientRect();
   paintBar();
   textEl.classList.add('ann-bar-scroll');
 
-  // Pager not used in scrolling mode (one announcement at a time slides through)
+  // Pager not used (we cross-fade instead)
   if(pager) pager.style.display = 'none';
 
-  // Rotation cycle = the CSS scroll animation duration. The interval re-triggers
-  // the keyframe (and advances to the next announcement when there are several)
-  // every cycle, so a single announcement keeps scrolling and multiple ones take
-  // turns sliding across the bar.
+  // Rotation cycle — cross-fade to the next announcement every ~7 seconds.
+  // No marquee, no keyframe restart — just a smooth opacity transition.
   if(_annBarRotateInterval){ clearInterval(_annBarRotateInterval); _annBarRotateInterval = null; }
-  var SCROLL_CYCLE_MS = 16000; // matches .ann-bar-scroll CSS animation duration
+  if(_annBarItems.length <= 1) return; // nothing to rotate
+  var ROTATE_MS = 7000;
   _annBarRotateInterval = setInterval(function(){
-    if(_annBarItems.length > 1){
-      _annBarIdx = (_annBarIdx + 1) % _annBarItems.length;
-    }
-    paintBar();
-    textEl.classList.remove('ann-bar-scroll');
-    void textEl.getBoundingClientRect(); // restart the keyframe
-    textEl.classList.add('ann-bar-scroll');
-  }, SCROLL_CYCLE_MS);
+    _annBarIdx = (_annBarIdx + 1) % _annBarItems.length;
+    // Fade-out → swap text → fade-in
+    textEl.style.transition = 'opacity .35s ease';
+    textEl.style.opacity = '0';
+    setTimeout(function(){
+      paintBar();
+      textEl.style.opacity = '1';
+    }, 360);
+  }, ROTATE_MS);
 }
 window.renderAnnouncementBar = renderAnnouncementBar;
 
@@ -22481,9 +22510,10 @@ function paintBar(){
     var d = new Date(a.date+'T00:00:00');
     dateLabel = d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});
   }
-  // Title + date only (description lives in the master-list detail modal)
-  textEl.innerHTML = '<span style="color:#fff">'+a.title+'</span>'
-    + (dateLabel ? '<span style="color:rgba(255,255,255,.82);font-weight:500;margin-left:18px">📅 '+dateLabel+'</span>' : '');
+  // Title + date only (description lives in the master-list detail modal).
+  // v2 palette: slate-900 title + slate-500 meta — matches the new white bar.
+  textEl.innerHTML = '<span>'+a.title+'</span>'
+    + (dateLabel ? '<span class="ann-meta">'+dateLabel+'</span>' : '');
   if(curEl) curEl.textContent = (_annBarIdx + 1);
 }
 
