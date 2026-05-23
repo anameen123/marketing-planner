@@ -2019,6 +2019,7 @@ body.role-front_desk #referrals-view {
           <option value="6">Last 6 Months</option>
         </select>
       </div>
+      <div style="font-size:10px;color:var(--muted);margin-bottom:6px;font-style:italic">Completion rate (% of assigned visits marked Completed) per month · last point = <strong>live current month</strong>, updates as visits get confirmed.</div>
       <div style="background:#fafbfc;border-radius:8px;padding:10px;border:1px solid var(--border)">
         <svg id="perf-line-svg" width="100%" height="160" style="display:block;overflow:visible"></svg>
       </div>
@@ -2031,6 +2032,7 @@ body.role-front_desk #referrals-view {
           <option value="6">Last 6 Months</option>
         </select>
       </div>
+      <div style="font-size:10px;color:var(--muted);margin-bottom:6px;font-style:italic">Same data as the line chart, displayed as bars per month · last bar = <strong>live current month</strong>.</div>
       <div style="background:#fafbfc;border-radius:8px;padding:10px;border:1px solid var(--border)">
         <svg id="perf-bar-svg" width="100%" height="160" style="display:block;overflow:visible"></svg>
       </div>
@@ -27235,10 +27237,10 @@ function renderPerfCharts(){
   var grid=document.getElementById('perf-stats-grid');
   if(grid){
     grid.innerHTML=
-      '<div class="perf-stat"><div class="perf-stat-n" style="color:'+rc+'">'+rate+'%</div><div class="perf-stat-l">Completion Rate</div><div class="perf-stat-sub">'+monthLabel+'</div></div>'+
-      '<div class="perf-stat"><div class="perf-stat-n" style="color:#22c55e">'+curData.completed+'</div><div class="perf-stat-l">Completed</div><div class="perf-stat-sub">This month</div></div>'+
-      '<div class="perf-stat"><div class="perf-stat-n" style="color:#7030A0">'+monthTarget+'</div><div class="perf-stat-l">Target</div><div class="perf-stat-sub">Sum of weekly targets</div></div>'+
-      '<div class="perf-stat"><div class="perf-stat-n" style="color:#f59e0b">'+leads+'</div><div class="perf-stat-l">Leads</div><div class="perf-stat-sub">This month</div></div>';
+      '<div class="perf-stat"><div class="perf-stat-n" style="color:'+rc+'">'+rate+'%</div><div class="perf-stat-l">Completion Rate</div><div class="perf-stat-sub">'+monthLabel+' · live</div></div>'+
+      '<div class="perf-stat"><div class="perf-stat-n" style="color:#22c55e">'+curData.completed+'</div><div class="perf-stat-l">Completed</div><div class="perf-stat-sub">'+monthLabel+' · live</div></div>'+
+      '<div class="perf-stat"><div class="perf-stat-n" style="color:#7030A0">'+monthTarget+'</div><div class="perf-stat-l">Target</div><div class="perf-stat-sub">'+monthLabel+' · sum of weekly</div></div>'+
+      '<div class="perf-stat"><div class="perf-stat-n" style="color:#f59e0b">'+leads+'</div><div class="perf-stat-l">Leads</div><div class="perf-stat-sub">'+monthLabel+' · live</div></div>';
   }
 
   var lp=parseInt((document.getElementById('perf-line-period')||{value:3}).value);
@@ -27961,18 +27963,22 @@ function renderCounters(){
     +'<div class="ts-stat" onclick="gotoCompletedVisits(\'Completed\')" title="Click to view all completed visits" style="cursor:pointer;border-radius:8px;padding:4px 0;transition:background .12s" onmouseover="this.style.background=\'rgba(255,255,255,.08)\'" onmouseout="this.style.background=\'transparent\'">'
       +'<div class="ts-n" style="color:#86efac">'+teamCompleted+'</div>'
       +'<div class="ts-l">Completed <span style="font-size:8px;opacity:.5">&#8599;</span></div>'
+      +'<div style="font-size:8px;opacity:.55;font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-top:2px">This month</div>'
     +'</div>'
     +'<div class="ts-stat" onclick="gotoCompletedVisits(\'Canceled\')" title="Click to view all canceled visits" style="cursor:pointer;border-radius:8px;padding:4px 0;transition:background .12s" onmouseover="this.style.background=\'rgba(255,255,255,.08)\'" onmouseout="this.style.background=\'transparent\'">'
       +'<div class="ts-n" style="color:#fca5a5">'+teamCanceled+'</div>'
       +'<div class="ts-l">Canceled <span style="font-size:8px;opacity:.5">&#8599;</span></div>'
+      +'<div style="font-size:8px;opacity:.55;font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-top:2px">This month</div>'
     +'</div>'
     +'<div class="ts-stat" onclick="gotoStatusLeads()" title="Click to view all established leads" style="cursor:pointer;border-radius:8px;padding:4px 0;transition:background .12s" onmouseover="this.style.background=\'rgba(255,255,255,.08)\'" onmouseout="this.style.background=\'transparent\'">'
       +'<div class="ts-n" style="color:#c4b5fd">'+teamLeads+'</div>'
       +'<div class="ts-l">Leads <span style="font-size:8px;opacity:.5">&#8599;</span></div>'
+      +'<div style="font-size:8px;opacity:.55;font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-top:2px">All-time</div>'
     +'</div>'
     +'<div class="ts-stat" title="Team completion = '+teamCompleted+' completed &divide; '+teamMonthlyTarget+' targeted &times; 100">'
       +'<div class="ts-n" style="color:#fcd34d">'+teamCompletionPct+'%</div>'
       +'<div class="ts-l">Completion <span style="font-size:8px;opacity:.5">&#9432;</span></div>'
+      +'<div style="font-size:8px;opacity:.55;font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-top:2px">This month</div>'
     +'</div>'
     +'</div>'
     // ── Brief plain-English explainer for the Completion % ─────────────────
@@ -28670,18 +28676,19 @@ function loadMemberProfile(name){
     (teamTag ? '<div style="font-size:10px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-top:2px">'+teamTag+'</div>' : '');
 
   // Stats from getMemberStats — these are LIFETIME totals (every visit ever
-  // assigned to this member in S.days, with no date filter). In the compact
-  // profile layout the stats render as a horizontal row of 5 tiles on the
-  // right side of the card — no separate explainer banner; the "ALL-TIME"
-  // context is shown as a small label above the tiles inside the row.
+  // assigned to this member in S.days, with no date filter). Per user
+  // 2026-05-22: scope label must be VISIBLE on every counter, not just in
+  // tooltip. Each tile shows the same "ALL-TIME" sublabel so members on
+  // touch devices (no hover) can see the scope at a glance.
   var ms = getMemberStats();
   var s = ms[name] || {total:0,comp:0,post:0,canc:0,pend:0,leads:0};
+  var SCOPE_ALL = '<div class="ps-scope" style="font-size:8px;font-weight:700;color:rgba(255,255,255,.6);text-transform:uppercase;letter-spacing:.08em;margin-top:1px">ALL-TIME</div>';
   document.getElementById('profile-stats').innerHTML =
-      '<div class="ps" title="All-time total: every visit ever assigned to '+name+'"><div class="ps-n">'+s.total+'</div><div class="ps-l">Total</div></div>'+
-      '<div class="ps" title="All-time: visits marked Completed"><div class="ps-n" style="color:#86efac">'+s.comp+'</div><div class="ps-l">Completed</div></div>'+
-      '<div class="ps" title="All-time: visits marked Postponed (rescheduled)"><div class="ps-n" style="color:#fcd34d">'+s.post+'</div><div class="ps-l">Postponed</div></div>'+
-      '<div class="ps" title="All-time: visits marked Canceled"><div class="ps-n" style="color:#fca5a5">'+s.canc+'</div><div class="ps-l">Canceled</div></div>'+
-      '<div class="ps" title="All-time: completed visits where the lead became Established"><div class="ps-n" style="color:#c4b5fd">'+s.leads+'</div><div class="ps-l">Leads</div></div>';
+      '<div class="ps" title="All-time total: every visit ever assigned to '+name+'"><div class="ps-n">'+s.total+'</div><div class="ps-l">Total</div>'+SCOPE_ALL+'</div>'+
+      '<div class="ps" title="All-time: visits marked Completed"><div class="ps-n" style="color:#86efac">'+s.comp+'</div><div class="ps-l">Completed</div>'+SCOPE_ALL+'</div>'+
+      '<div class="ps" title="All-time: visits marked Postponed (rescheduled)"><div class="ps-n" style="color:#fcd34d">'+s.post+'</div><div class="ps-l">Postponed</div>'+SCOPE_ALL+'</div>'+
+      '<div class="ps" title="All-time: visits marked Canceled"><div class="ps-n" style="color:#fca5a5">'+s.canc+'</div><div class="ps-l">Canceled</div>'+SCOPE_ALL+'</div>'+
+      '<div class="ps" title="All-time: completed visits where the lead became Established"><div class="ps-n" style="color:#c4b5fd">'+s.leads+'</div><div class="ps-l">Leads</div>'+SCOPE_ALL+'</div>';
 
   document.getElementById('profile-card').style.display='block';
   document.getElementById('no-profile').style.display='none';
@@ -28734,7 +28741,7 @@ function renderHistory(){
   var page=visits.slice(start,start+PAGE_SIZE);
 
   document.getElementById('history-meta').textContent=
-    total+' total visits · Page '+memberPage+' of '+totalPages;
+    'ALL-TIME · '+total+' total visits · Page '+memberPage+' of '+totalPages;
 
   var rows='';
   if(page.length===0){
@@ -31890,18 +31897,26 @@ function renderRecords(){
       +'<div style="width:34px;height:34px;border-radius:8px;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff;font-size:13px">'+initials+'</div>'
       +'<div style="color:#fff;font-weight:600;font-size:13px">'+m+'</div>'
       +'</div>'
+      // Per user 2026-05-22: each stat needs a visible time-scope sublabel.
+      // These three numbers come from getRecordsSummary() which counts every
+      // completed visit / established lead / mosque visit in S.days — i.e.
+      // ALL-TIME, no date filter. Sublabel made explicit so members aren't
+      // guessing whether this is monthly or lifetime.
       +'<div style="display:grid;grid-template-columns:repeat(3,1fr);padding:12px">'
       +'<div style="text-align:center">'
       +'<div style="font-size:22px;font-weight:700;font-family:DM Mono,monospace;color:var(--navy)">'+s.visits+'</div>'
       +'<div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-top:2px">Visits</div>'
+      +'<div style="font-size:8px;color:var(--muted);font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-top:1px;opacity:.7">All-time</div>'
       +'</div>'
       +'<div style="text-align:center;border-left:1px solid var(--border);border-right:1px solid var(--border)">'
       +'<div style="font-size:22px;font-weight:700;font-family:DM Mono,monospace;color:#7030A0">'+s.leads+'</div>'
       +'<div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-top:2px">Leads</div>'
+      +'<div style="font-size:8px;color:var(--muted);font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-top:1px;opacity:.7">All-time</div>'
       +'</div>'
       +'<div style="text-align:center">'
       +'<div style="font-size:22px;font-weight:700;font-family:DM Mono,monospace;color:#059669">'+s.mosques+'</div>'
       +'<div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-top:2px">Jummah</div>'
+      +'<div style="font-size:8px;color:var(--muted);font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-top:1px;opacity:.7">All-time</div>'
       +'</div>'
       +'</div>'
       +'</div>';
