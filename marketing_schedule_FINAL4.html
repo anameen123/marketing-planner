@@ -2967,15 +2967,23 @@ body.role-front_desk #referrals-view {
         <div id="rp-random-picks-list" style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:8px;min-height:60px;font-size:11px"></div>
         <div style="font-size:10px;color:var(--muted);margin-top:4px;font-style:italic">After closing this dialog, double-click any pin on the map to add it. Reopen this dialog to see the list, or click <b>Optimize route</b> below.</div>
       </div>
-      <!-- Corridor width control (per user 2026-05-22 v4). The planner finds
-           candidates whose perpendicular distance from the Start→End line
-           is ≤ this number of miles (both sides — "negative or positive").
-           Auto-expand kicks in when a level is empty so the user always
-           sees something at every recency band that exists.
-           Wrapped in rp-corridor-controls so Random Pick mode can hide it. -->
-      <div id="rp-corridor-controls" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+      <!-- Corridor controls (per user 2026-05-22 v5 design).
+           - Number of route levels: user-supplied N. Total Start→End distance
+             is sliced into N equal depth chunks. Each chunk is one wizard
+             "Level" the user walks through sequentially.
+           - Corridor half-width: perpendicular miles each side of the
+             Start→End line. Auto-expands per level up to 12 mi if empty. -->
+      <div id="rp-corridor-controls" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px">
         <div>
-          <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Corridor half-width <span style="color:var(--muted);font-weight:400">(±miles either side of route)</span></label>
+          <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Number of route levels <span style="color:var(--muted);font-weight:400">(visits to plan)</span></label>
+          <div style="display:flex;align-items:center;gap:5px">
+            <button type="button" onclick="_rpV5AdjustN(-1)" style="background:#e5e7eb;border:none;color:#374151;width:30px;height:36px;border-radius:6px;font-size:14px;font-weight:700;cursor:pointer">−</button>
+            <input type="number" id="rp-level-count" value="5" min="1" max="12" style="flex:1;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box;text-align:center">
+            <button type="button" onclick="_rpV5AdjustN(1)" style="background:#e5e7eb;border:none;color:#374151;width:30px;height:36px;border-radius:6px;font-size:14px;font-weight:700;cursor:pointer">+</button>
+          </div>
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Corridor half-width <span style="color:var(--muted);font-weight:400">(±miles)</span></label>
           <div style="display:flex;align-items:center;gap:5px">
             <button type="button" onclick="_rpV4AdjustWidth(-1)" style="background:#e5e7eb;border:none;color:#374151;width:30px;height:36px;border-radius:6px;font-size:14px;font-weight:700;cursor:pointer">−</button>
             <input type="number" id="rp-corridor" value="3" min="1" max="12" oninput="_rpV4OnWidthChange()" style="flex:1;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box;text-align:center">
@@ -2983,10 +2991,10 @@ body.role-front_desk #referrals-view {
           </div>
         </div>
         <div>
-          <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">If a level is empty…</label>
-          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--text);background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:9px 12px;height:36px;box-sizing:border-box">
+          <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">If empty…</label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:11px;color:var(--text);background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:9px 10px;height:36px;box-sizing:border-box">
             <input type="checkbox" id="rp-auto-expand" checked onchange="_rpV4OnWidthChange()" style="cursor:pointer">
-            <span>Auto-expand corridor (up to 12 mi)</span>
+            <span>Auto-expand (12 mi)</span>
           </label>
         </div>
       </div>
@@ -22941,10 +22949,389 @@ function _rpGenerateClick(){
   if(_RP_MODE === 'random'){
     _rpRandomGenerateRoute();
   } else {
-    _rpV4GenerateRoute();
+    // Corridor v5 wizard — generate route from collected level picks
+    _rpV5GenerateRoute();
   }
 }
 window._rpGenerateClick = _rpGenerateClick;
+
+// ════════════════════════════════════════════════════════════════════════════
+// CORRIDOR v5 — DEPTH-SLICE WIZARD (per user 2026-05-22 final design)
+// ════════════════════════════════════════════════════════════════════════════
+// User wants the corridor planner to be a step-by-step wizard:
+//   1. User sets N = number of route levels (= visits to plan).
+//   2. Total Start→End distance is sliced into N equal depth chunks.
+//   3. Wizard shows Level 1 (clinics in first depth slice within corridor),
+//      user picks 0+. Click Next → Level 2. Etc through Level N.
+//   4. Width auto-expands per level (up to 12 mi) if empty.
+//   5. Each candidate row shows recency dot + days-stale + signed
+//      perpendicular distance with +/- side indicator (so user sees when
+//      picks zigzag across the line).
+//   6. After last level: final summary with cross-side deroute warning +
+//      Generate Route button.
+//   7. Skipping a level = pick 0 candidates, just hit Next.
+//   8. Multiple picks per level OK.
+
+var _RP_V5_STEP   = 1;        // current level being shown (1-indexed)
+var _RP_V5_N      = 5;        // total number of levels
+var _RP_V5_PICKS  = {};       // { levelK: [pickObj, ...] }
+var _RP_V5_LAST   = null;     // { A, B, totalMi, baseWidth, slices: [...] }
+
+function _rpV5AdjustN(delta){
+  var el = document.getElementById('rp-level-count');
+  if(!el) return;
+  var v = (parseInt(el.value, 10) || 5) + delta;
+  if(v < 1)  v = 1;
+  if(v > 12) v = 12;
+  el.value = v;
+}
+window._rpV5AdjustN = _rpV5AdjustN;
+
+// Signed perpendicular distance from point P to line A→B (miles).
+// Positive value = P is on the "left" side of the A→B direction (looking
+// from A toward B); negative = "right" side. Used to warn when picks span
+// both sides (perpendicular zigzag adds drive time).
+function _rpV5SignedPerp(P, A, B){
+  if(!P || !A || !B) return 0;
+  var midLat = (A.lat + B.lat) / 2 * Math.PI / 180;
+  var milesLat = 69, milesLng = 69 * Math.cos(midLat);
+  var bx = (B.lng - A.lng) * milesLng;
+  var by = (B.lat - A.lat) * milesLat;
+  var px = (P.lng - A.lng) * milesLng;
+  var py = (P.lat - A.lat) * milesLat;
+  var len = Math.sqrt(bx*bx + by*by);
+  if(len === 0) return 0;
+  // Cross product (B-A) × (P-A) divided by |B-A| = signed perp distance
+  return (bx * py - by * px) / len;
+}
+
+// Projection parameter t (0=at A, 1=at B). Same math as _rpV4ProjectT.
+function _rpV5ProjT(P, A, B){
+  if(!P || !A || !B) return 0;
+  var midLat = (A.lat + B.lat) / 2 * Math.PI / 180;
+  var milesLat = 69, milesLng = 69 * Math.cos(midLat);
+  var bx = (B.lng - A.lng) * milesLng;
+  var by = (B.lat - A.lat) * milesLat;
+  var px = (P.lng - A.lng) * milesLng;
+  var py = (P.lat - A.lat) * milesLat;
+  var len2 = bx*bx + by*by;
+  if(len2 === 0) return 0;
+  var t = (px*bx + py*by) / len2;
+  return t;
+}
+
+// Find candidates within depth-slice k (1-indexed) AND inside corridor.
+// Returns array of objects with recency color, days, signed perp, etc.
+function _rpV5FindForLevel(A, B, k, opts){
+  opts = opts || {};
+  var N = opts.N || _RP_V5_N;
+  var halfWidth = opts.halfWidth || 3;
+  var autoExpand = opts.autoExpand !== false;
+  var specFilter = opts.specFilter || '';
+  var skipVisited = !!opts.skipVisited;
+  // Depth-slice bounds along the Start→End line
+  var tLo = (k - 1) / N;
+  var tHi = k / N;
+  function collect(width){
+    var out = [];
+    function consider(name, bizType, spec){
+      if(!name) return;
+      if(specFilter && spec !== specFilter) return;
+      var coord = (typeof getCoordForBusiness === 'function') ? getCoordForBusiness(name) : null;
+      if(!coord) return;
+      var t = _rpV5ProjT(coord, A, B);
+      if(t < tLo || t > tHi) return;
+      var perp = _rpV5SignedPerp(coord, A, B);
+      if(Math.abs(perp) > width) return;
+      var lead = (typeof getClinicLead === 'function') ? getClinicLead(name) : null;
+      if(lead && lead.status === 'dead_end') return;
+      if(skipVisited && typeof BUSINESS_REFERRALS !== 'undefined'){
+        var ref = BUSINESS_REFERRALS[name];
+        if(ref && (ref.currentCount || 0) > 0) return;
+      }
+      var days = (typeof daysSinceLastVisit === 'function') ? daysSinceLastVisit(name) : null;
+      var rec = (typeof recencyBucket === 'function') ? recencyBucket(days) : { color:'#9ca3af', key:'never' };
+      out.push({
+        name: name, bizType: bizType, spec: spec || '',
+        coord: coord, days: days, rec: rec,
+        t: t, perp: perp, absPerp: Math.abs(perp)
+      });
+    }
+    if(typeof CLINIC_BANK !== 'undefined') CLINIC_BANK.forEach(function(c){ if(c && c.n) consider(c.n, 'clinic', c.s || ''); });
+    if(typeof MVA_ATTORNEYS !== 'undefined') MVA_ATTORNEYS.forEach(function(m){ if(m && m.firm) consider(m.firm, 'mva', 'MVA'); });
+    return out;
+  }
+  var cands = collect(halfWidth);
+  var effectiveWidth = halfWidth;
+  if(autoExpand && cands.length === 0){
+    for(var w = halfWidth + 1; w <= 12; w++){
+      var bigger = collect(w);
+      if(bigger.length > 0){ cands = bigger; effectiveWidth = w; break; }
+    }
+  }
+  // Sort: oldest-since-visited first (ripest), then closest to line
+  cands.sort(function(a,b){
+    var aD = (a.days == null) ? Infinity : a.days;
+    var bD = (b.days == null) ? Infinity : b.days;
+    if(aD !== bD) return bD - aD;   // stalest first
+    return a.absPerp - b.absPerp;
+  });
+  return { candidates: cands, effectiveWidth: effectiveWidth, tLo: tLo, tHi: tHi };
+}
+
+// Entry — called by "Find candidates" in corridor mode. Replaces v4.
+function _rpV5Start(){
+  // Resolve Start + End
+  var startKey = (document.getElementById('rp-start') || {}).value || '';
+  var endKey   = (document.getElementById('rp-end')   || {}).value || '';
+  var A = (typeof getRouteCoord === 'function') ? getRouteCoord(startKey) : null;
+  if(!A){ if(typeof showToast === 'function') showToast('Pick a Start point first.'); return; }
+  var B;
+  if(endKey === '__same__' || !endKey){ B = A; }
+  else { B = (typeof getRouteCoord === 'function') ? getRouteCoord(endKey) : null; }
+  if(!B){ if(typeof showToast === 'function') showToast('Pick an End point (or leave blank for round trip).'); return; }
+  // Read params
+  var N = parseInt((document.getElementById('rp-level-count') || {}).value, 10) || 5;
+  if(N < 1) N = 1; if(N > 12) N = 12;
+  var halfWidth = parseFloat((document.getElementById('rp-corridor') || {}).value) || 3;
+  var autoExpand = !!(document.getElementById('rp-auto-expand') && document.getElementById('rp-auto-expand').checked);
+  var specFilter = (document.getElementById('rp-specialty') || {}).value || '';
+  var skipVisited = !!(document.getElementById('rp-skip-visited') && document.getElementById('rp-skip-visited').checked);
+  // Reset wizard state
+  _RP_V5_N = N;
+  _RP_V5_STEP = 1;
+  _RP_V5_PICKS = {};
+  // Build all levels up front (cached so navigation is instant)
+  var totalMi = _rpHaversineMiles(A, B);
+  var slices = [];
+  for(var k = 1; k <= N; k++){
+    var lvl = _rpV5FindForLevel(A, B, k, {
+      N: N, halfWidth: halfWidth, autoExpand: autoExpand,
+      specFilter: specFilter, skipVisited: skipVisited
+    });
+    slices.push(lvl);
+    _RP_V5_PICKS['level' + k] = [];
+  }
+  _RP_V5_LAST = { A: A, B: B, totalMi: totalMi, baseWidth: halfWidth, slices: slices, N: N };
+  _rpV5ShowLevel(1);
+}
+window._rpV5Start = _rpV5Start;
+
+function _rpV5ShowLevel(k){
+  if(!_RP_V5_LAST) return;
+  _RP_V5_STEP = k;
+  var box = document.getElementById('rp-results');
+  if(!box) return;
+  var N = _RP_V5_N;
+  var slice = _RP_V5_LAST.slices[k - 1] || { candidates: [] };
+  var sliceStart = slice.tLo * _RP_V5_LAST.totalMi;
+  var sliceEnd   = slice.tHi * _RP_V5_LAST.totalMi;
+  var picks = _RP_V5_PICKS['level' + k] || [];
+  // Step progress bar
+  var dots = '';
+  for(var i = 1; i <= N; i++){
+    var isCurrent = (i === k);
+    var hasPicks = (_RP_V5_PICKS['level' + i] || []).length > 0;
+    var color = isCurrent ? '#7030A0' : (hasPicks ? '#16a34a' : '#cbd5e1');
+    dots += '<span style="display:inline-block;width:24px;height:8px;background:'+color+';border-radius:4px;'+(isCurrent?'box-shadow:0 0 0 2px rgba(112,48,160,.25);':'')+'"></span>';
+  }
+  // Header
+  var widthNote = (slice.effectiveWidth > _RP_V5_LAST.baseWidth)
+    ? ' · <span style="color:#9a3412;font-weight:600">expanded to ±'+slice.effectiveWidth+' mi (no candidates at ±'+_RP_V5_LAST.baseWidth+' mi)</span>'
+    : ' · within ±'+_RP_V5_LAST.baseWidth+' mi';
+  var html = '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px">'
+    + '<div style="font-size:14px;font-weight:700;color:var(--text)">📍 Level '+k+' of '+N+'</div>'
+    + '<div style="display:flex;gap:3px">'+dots+'</div>'
+    + '</div>'
+    + '<div style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:11px;color:var(--text);margin-bottom:10px;line-height:1.45">'
+    +   '<strong>This slice:</strong> miles '+sliceStart.toFixed(1)+' to '+sliceEnd.toFixed(1)+' from Start'+widthNote
+    +   ' · <span style="color:var(--muted)">'+slice.candidates.length+' candidate'+(slice.candidates.length===1?'':'s')+' found · sorted longest-not-visited first</span>'
+    + '</div>';
+  // Candidate list
+  if(slice.candidates.length === 0){
+    html += '<div style="padding:14px;background:#fafbfc;border:1px dashed var(--border);border-radius:8px;font-size:12px;color:var(--muted);font-style:italic;text-align:center">No candidates in this depth slice — even after expanding the corridor to 12 mi. Skip this level (click Next →) or widen the corridor and re-run.</div>';
+  } else {
+    var emoji = { fresh:'🔴', warm:'🟠', yellow:'🟡', ripe:'🟢', never:'⚪' };
+    html += slice.candidates.map(function(c, i){
+      var checked = picks.some(function(p){ return p.name === c.name; }) ? 'checked' : '';
+      var safeName = String(c.name).replace(/'/g,"\\'").replace(/"/g,'&quot;');
+      var typeIcon = c.bizType === 'mva' ? '⚖' : '🏥';
+      var typeLbl  = c.bizType === 'mva' ? 'MVA' : 'Clinic';
+      var staleLbl = (c.days == null) ? 'never visited' : (c.days + 'd ago');
+      var dot = emoji[c.rec.key] || '⚪';
+      var sideSign = c.perp >= 0 ? '+' : '−';
+      var sideColor = c.perp >= 0 ? '#3b82f6' : '#ef4444';
+      var perpStr = sideSign + Math.abs(c.perp).toFixed(1) + ' mi';
+      return '<label style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid #f1f5f9;border-radius:8px;cursor:pointer;background:#fff;margin-bottom:4px;transition:background .12s" onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'#fff\'">'
+        + '<input type="checkbox" '+checked+' onchange="_rpV5ToggleCheck('+k+',\''+safeName+'\',this.checked)" style="cursor:pointer;flex-shrink:0">'
+        + '<span style="font-size:13px">'+dot+' '+typeIcon+'</span>'
+        + '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><strong>'+c.name.replace(/</g,'&lt;')+'</strong> <span style="color:var(--muted);font-size:10px">· '+typeLbl+' · '+staleLbl+'</span></span>'
+        + '<span title="Deroute from the Start→End line: '+(c.perp>=0?'positive':'negative')+' side · '+Math.abs(c.perp).toFixed(2)+' miles perpendicular" style="font-size:9px;color:#fff;background:'+sideColor+';border-radius:8px;padding:2px 7px;font-weight:700;flex-shrink:0">'+perpStr+'</span>'
+        + '</label>';
+    }).join('');
+  }
+  // Navigation buttons
+  html += '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:14px;padding-top:10px;border-top:1px solid var(--border)">'
+    + '<button onclick="_rpV5PrevLevel()" '+(k===1?'disabled':'')+' style="background:'+(k===1?'#e5e7eb':'#fff')+';color:'+(k===1?'#9ca3af':'#1F3864')+';border:1px solid var(--border);border-radius:8px;padding:8px 14px;font-size:12px;font-weight:600;cursor:'+(k===1?'not-allowed':'pointer')+';font-family:DM Sans,sans-serif">← Previous</button>'
+    + '<span style="font-size:11px;color:var(--muted)">'+(picks.length===0 ? 'No picks — will skip this level' : (picks.length + ' pick'+(picks.length===1?'':'s')+' from this level'))+'</span>'
+    + (k < N
+        ? '<button onclick="_rpV5NextLevel()" style="background:#7030A0;color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">Next level →</button>'
+        : '<button onclick="_rpV5ShowSummary()" style="background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">Review &amp; finish →</button>')
+    + '</div>';
+  box.style.display = 'block';
+  box.innerHTML = html;
+}
+window._rpV5ShowLevel = _rpV5ShowLevel;
+
+function _rpV5ToggleCheck(k, name, on){
+  var key = 'level' + k;
+  if(!_RP_V5_PICKS[key]) _RP_V5_PICKS[key] = [];
+  if(on){
+    // Find the candidate object in the cached level data
+    var slice = _RP_V5_LAST && _RP_V5_LAST.slices[k - 1];
+    var c = slice && slice.candidates.find(function(x){ return x.name === name; });
+    if(c && !_RP_V5_PICKS[key].some(function(p){ return p.name === name; })){
+      _RP_V5_PICKS[key].push(c);
+    }
+  } else {
+    _RP_V5_PICKS[key] = _RP_V5_PICKS[key].filter(function(p){ return p.name !== name; });
+  }
+  // Update the "picks from this level" counter inline
+  _rpV5ShowLevel(k);
+}
+window._rpV5ToggleCheck = _rpV5ToggleCheck;
+
+function _rpV5NextLevel(){
+  if(_RP_V5_STEP < _RP_V5_N){
+    _rpV5ShowLevel(_RP_V5_STEP + 1);
+  } else {
+    _rpV5ShowSummary();
+  }
+}
+window._rpV5NextLevel = _rpV5NextLevel;
+
+function _rpV5PrevLevel(){
+  if(_RP_V5_STEP > 1) _rpV5ShowLevel(_RP_V5_STEP - 1);
+}
+window._rpV5PrevLevel = _rpV5PrevLevel;
+
+function _rpV5ShowSummary(){
+  var box = document.getElementById('rp-results');
+  if(!box) return;
+  var allPicks = [];
+  for(var k = 1; k <= _RP_V5_N; k++){
+    var list = _RP_V5_PICKS['level' + k] || [];
+    list.forEach(function(p){ allPicks.push(Object.assign({_level: k}, p)); });
+  }
+  // Check for cross-side deroute
+  var posCount = allPicks.filter(function(p){ return p.perp >= 0; }).length;
+  var negCount = allPicks.filter(function(p){ return p.perp <  0; }).length;
+  var hasCrossSide = (posCount > 0 && negCount > 0);
+  // Estimate total deroute miles (sum of 2× absolute perp for each pick)
+  var derouteMi = allPicks.reduce(function(s, p){ return s + 2 * p.absPerp; }, 0);
+  var derouteMin = Math.round((derouteMi * 1.4 / 30) * 60);  // urban factor
+  var html = '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px">'
+    + '<div style="font-size:14px;font-weight:700;color:var(--text)">📋 Review &amp; finish</div>'
+    + '<button onclick="_rpV5ShowLevel(1)" style="background:#fff;color:#1F3864;border:1px solid var(--border);border-radius:6px;padding:5px 10px;font-size:11px;font-weight:600;cursor:pointer">← Back to Level 1</button>'
+    + '</div>';
+  if(allPicks.length === 0){
+    html += '<div style="padding:16px;background:#fff7ed;border:1px solid #fed7aa;border-left:3px solid #f59e0b;border-radius:8px;font-size:12px;color:#7c2d12">No stops picked across any level. Go back and check a few candidates, or pick a different Start/End / corridor width.</div>';
+  } else {
+    if(hasCrossSide){
+      html += '<div style="background:#fff7ed;border:1px solid #fed7aa;border-left:3px solid #f59e0b;border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:#7c2d12;line-height:1.45">'
+        + '<strong>⚠ Cross-side deroute:</strong> '+posCount+' pick'+(posCount===1?'':'s')+' on the <span style="color:#3b82f6;font-weight:700">+ side</span> and '+negCount+' on the <span style="color:#ef4444;font-weight:700">− side</span> of the Start→End line. The car will zigzag perpendicular each time, adding roughly <strong>'+derouteMi.toFixed(1)+' mi · ~'+derouteMin+' min</strong> to your drive.'
+        + '</div>';
+    }
+    html += '<div style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:var(--text)">'
+      + '<strong>'+allPicks.length+' stop'+(allPicks.length===1?'':'s')+' picked across '+Object.keys(_RP_V5_PICKS).filter(function(k){return (_RP_V5_PICKS[k]||[]).length>0;}).length+' level'+'</strong>'
+      + '</div>';
+    // Per-level list
+    for(var k = 1; k <= _RP_V5_N; k++){
+      var list = _RP_V5_PICKS['level' + k] || [];
+      if(list.length === 0) continue;
+      html += '<div style="margin-bottom:10px"><div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Level '+k+'</div>';
+      list.forEach(function(p){
+        var typeIcon = p.bizType === 'mva' ? '⚖' : '🏥';
+        var sideSign = p.perp >= 0 ? '+' : '−';
+        html += '<div style="padding:5px 9px;background:#fff;border:1px solid var(--border);border-radius:6px;margin-bottom:3px;display:flex;align-items:center;gap:8px;font-size:11px">'
+          + '<span>'+typeIcon+'</span>'
+          + '<span style="flex:1;font-weight:600">'+p.name.replace(/</g,'&lt;')+'</span>'
+          + '<span style="color:var(--muted)">'+sideSign+Math.abs(p.perp).toFixed(1)+' mi · '+((p.days==null)?'never':p.days+'d')+'</span>'
+          + '</div>';
+      });
+      html += '</div>';
+    }
+  }
+  // Footer buttons
+  html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;padding-top:10px;border-top:1px solid var(--border)">'
+    + '<button onclick="_rpV5ShowLevel('+_RP_V5_N+')" style="background:#fff;color:#1F3864;border:1px solid var(--border);border-radius:8px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:DM Sans,sans-serif">← Edit picks</button>'
+    + (allPicks.length === 0
+        ? '<button disabled style="background:#cbd5e1;color:#94a3b8;border:none;border-radius:8px;padding:8px 22px;font-size:12px;font-weight:700;cursor:not-allowed;font-family:DM Sans,sans-serif">Generate route →</button>'
+        : '<button onclick="_rpV5GenerateRoute()" style="background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;border:none;border-radius:8px;padding:8px 22px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">Generate route →</button>')
+    + '</div>';
+  box.innerHTML = html;
+}
+window._rpV5ShowSummary = _rpV5ShowSummary;
+
+// Compile picks across all levels, order them along the Start→End line,
+// and run the existing finalize flow which sets up _RP_SLOT_PICKS and
+// triggers the OSRM review pane.
+function _rpV5GenerateRoute(){
+  if(!_RP_V5_LAST){ if(typeof showToast === 'function') showToast('Run "Find candidates" first.'); return; }
+  var allPicks = [];
+  for(var k = 1; k <= _RP_V5_N; k++){
+    var list = _RP_V5_PICKS['level' + k] || [];
+    list.forEach(function(p){ allPicks.push(p); });
+  }
+  if(allPicks.length === 0){
+    if(typeof showToast === 'function') showToast('No stops picked — check at least one candidate in any level.');
+    return;
+  }
+  // Sort by t (position along route, Start → End)
+  allPicks.sort(function(a, b){ return a.t - b.t; });
+  // Resolve start/end names for the finalize flow
+  var startName = (document.getElementById('rp-start-search') || {}).value || 'Start';
+  var endName   = (document.getElementById('rp-end-search')   || {}).value || '';
+  var endKey    = (document.getElementById('rp-end')          || {}).value || '';
+  function _strip(s){ return String(s||'').replace(/^[^A-Za-z0-9]+/,'').split(' · ')[0].trim(); }
+  startName = _strip(startName);
+  endName   = _strip(endName);
+  if(!endName || /round\s*trip/i.test(endName) || endKey === '__same__') endName = startName;
+  if(typeof _rpResolveCoord === 'function'){
+    if(!_rpResolveCoord(startName) || !_rpResolveCoord(endName)){
+      if(typeof showToast === 'function') showToast('Start or End not resolvable on the map — re-pick from suggestions.');
+      return;
+    }
+  }
+  _RP_START_NAME = startName;
+  _RP_END_NAME   = endName;
+  _RP_N          = allPicks.length;
+  _RP_SLOT_PICKS = allPicks.map(function(p){
+    return {
+      name: p.name, bizType: p.bizType, coord: p.coord,
+      days: p.days, dist: p.absPerp,
+      leadStatus: 'not_visited', leadLevel: 0
+    };
+  });
+  if(typeof closeRoutePlanner === 'function') closeRoutePlanner();
+  if(typeof _rpRefreshHighlights === 'function') _rpRefreshHighlights();
+  if(typeof _rpUpdateStatus === 'function') _rpUpdateStatus();
+  if(typeof _rpFinalizeSmart === 'function') _rpFinalizeSmart();
+}
+window._rpV5GenerateRoute = _rpV5GenerateRoute;
+
+// Override the corridor mode's "Find candidates" handler to start the v5
+// wizard instead of the old v4 all-levels-at-once view.
+(function _rpV5HookFind(){
+  var prev = window._rpFindOrPickClick;
+  window._rpFindOrPickClick = function(){
+    if(_RP_MODE === 'random'){
+      if(typeof prev === 'function') return prev.apply(this, arguments);
+      return;
+    }
+    _rpV5Start();
+  };
+})();
 
 // Render the planned route on the day map: start pin, end pin, recommendation
 // pins in order, and a dashed polyline through them.
