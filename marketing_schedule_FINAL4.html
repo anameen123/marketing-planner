@@ -246,7 +246,7 @@ textarea.rnotes:focus{border-color:var(--purple);outline:none}
 .m-conf-Duaa{background:#dbeafe;color:#1e40af;border:1px solid #93c5fd}
 .m-conf-MsSadia{background:#dcfce7;color:#166534;border:1px solid #86efac}
 .m-conf-DrAhsan{background:#ede9fe;color:#5b21b6;border:1px solid #c4b5fd}
-.cal-ov{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:6000}
+.cal-ov{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:6800}
 .cal-pop{background:#fff;border-radius:14px;width:268px;overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,.2)}
 .cal-pop-top{background:var(--navy);color:#fff;padding:13px 16px;font-weight:600;font-size:13px;display:flex;justify-content:space-between;align-items:center}
 .cal-pop-top button{background:rgba(255,255,255,.15);border:none;color:#fff;width:26px;height:26px;border-radius:6px;cursor:pointer;font-size:15px}
@@ -406,7 +406,10 @@ textarea.rnotes:focus{border-color:var(--purple);outline:none}
 .admin-btn{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);color:#fff;padding:6px 13px;border-radius:7px;font-size:11px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;display:flex;align-items:center;gap:6px;margin-left:auto}
 .admin-btn:hover{background:rgba(255,255,255,.22)}
 
-/* Admin modal */
+/* Admin modal. Backdrop-click-to-close is wired globally in JS via a
+   delegated click handler that listens for clicks where target === .modal-ov
+   (i.e. the dim backdrop itself, not the inner content). Per user 2026-05-22 —
+   was a usability gap; tapping the dim area felt like it should dismiss. */
 .modal-ov{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:6500}
 .modal-box{background:#fff;border-radius:16px;width:420px;overflow:hidden;box-shadow:0 16px 48px rgba(0,0,0,.22)}
 .modal-top{background:var(--navy);color:#fff;padding:16px 20px;font-weight:700;font-size:14px;display:flex;justify-content:space-between;align-items:center}
@@ -4321,7 +4324,11 @@ function _oemValidate(){
 }
 window._oemValidate = _oemValidate;
 
-function saveOutreachEngagement(){
+// Renamed 2026-05-22 from saveOutreachEngagement → saveOutreachEngagementFromVisit
+// because saveOutreachEngagement(name, partial) at line ~3249 is a DIFFERENT
+// data-layer function used by the clinic-history modal. Both being declared
+// caused the second to shadow the first, breaking history-modal saves silently.
+function saveOutreachEngagementFromVisit(){
   if(_OEM_DI == null || _OEM_RI == null) return;
   var row = S.days[_OEM_DI] && S.days[_OEM_DI].rows && S.days[_OEM_DI].rows[_OEM_RI];
   if(!row){ closeOutreachEngagementModal(); return; }
@@ -4355,7 +4362,7 @@ function saveOutreachEngagement(){
   if(typeof showToast === 'function') showToast('Engagement saved · ' + total + ' people · ' + phones + ' phones · ' + emails + ' emails');
   closeOutreachEngagementModal();
 }
-window.saveOutreachEngagement = saveOutreachEngagement;
+window.saveOutreachEngagementFromVisit = saveOutreachEngagementFromVisit;
 
 // Helper used by the visit-row renderer — returns the engagement badge HTML
 // (or empty string if no engagement saved yet).
@@ -9555,7 +9562,7 @@ function _ensureEmergencySignOut(){
   btn.innerHTML = '<span style="font-size:11px">🚪</span> Sign out';
   // display:none by default — _updateEmergencySignOutVisibility decides
   // whether to show it based on the active tab.
-  btn.style.cssText = 'position:fixed;top:8px;right:12px;z-index:99999;background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:8px;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;box-shadow:0 4px 12px rgba(0,0,0,.25);display:none;align-items:center;gap:5px;opacity:.85;transition:opacity .15s';
+  btn.style.cssText = 'position:fixed;top:8px;right:12px;z-index:9990;background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:8px;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;box-shadow:0 4px 12px rgba(0,0,0,.25);display:none;align-items:center;gap:5px;opacity:.85;transition:opacity .15s';
   btn.onmouseover = function(){ btn.style.opacity = '1'; };
   btn.onmouseout  = function(){ btn.style.opacity = '.85'; };
   document.body.appendChild(btn);
@@ -14162,6 +14169,71 @@ window.closeAdminNotifDropdown = closeAdminNotifDropdown;
       // If the click is inside the dropdown OR on the bell button, ignore.
       if(dd.contains(e.target) || (btn && btn.contains(e.target))) return;
       dd.style.display = 'none';
+    });
+  }
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', attach);
+  } else {
+    attach();
+  }
+})();
+
+// ── BACKDROP-CLICK-TO-CLOSE for every .modal-ov modal (per user 2026-05-22)
+// Single delegated listener: if the user clicks the dim backdrop area (i.e.
+// the .modal-ov element itself, not its inner .modal-box), find the matching
+// close function and call it. Falls back to setting display:none if no
+// close-function name match. Skips confirm-modal (user must tap Yes/No
+// explicitly — accidental backdrop dismissal would feel like data loss).
+(function(){
+  // Map known modal IDs → close-function names. If a modal isn't in this map,
+  // we fall back to setting display:none which is universally safe.
+  var CLOSERS = {
+    'add-visit-modal':          'closeAddVisit',
+    'add-member-modal':         'closeAddMember',
+    'admin-modal':              'closeAdmin',
+    'route-planner-modal':      'closeRoutePlanner',
+    'bulk-contact-modal':       'closeBulkContactImport',
+    'add-lead-modal':           'closeAddLeadModal',
+    'edit-lead-modal':          'closeEditLeadModal',
+    'set-target-modal':         'closeSetTarget',
+    'clinic-history-modal':     'closeClinicHistory',
+    'add-event-modal':          'closeAddEvent',
+    'add-obs-modal':            'closeAddObs',
+    'spending-modal':           'closeSpending',
+    'referral-adjust-modal':    'closeReferralAdjust',
+    'spending-approval-modal':  'closeSpendingApproval',
+    'add-mva-modal':            'closeAddMVA',
+    'add-outreach-modal':       'closeAddOutreach',
+    'lead-status-modal':        'closeLeadStatusModal',
+    'outreach-engagement-modal':'closeOutreachEngagementModal',
+    'edit-visit-modal':         'closeEditVisit',
+    'cancel-reason-modal':      'closeCancelReason',
+    'observance-reminder-modal':'closeObservanceReminder',
+    'event-reminder-modal':     'closeEventReminder',
+    'add-clinic-modal':         'closeAddClinic',
+    'shift-total-modal':        'closeShiftTotalForm',
+    'mismatch-reason-modal':    'closeMismatchReason',
+    'mapv2-settings-modal':     'closeMapV2Settings',
+    'referral-form-modal':      'closeReferralForm',
+    'add-announcement-modal':   'closeAddAnnouncement',
+    'add-ann-modal':            'closeAddAnnouncement'
+  };
+  function attach(){
+    document.addEventListener('mousedown', function(e){
+      var t = e.target;
+      // Only the dim backdrop element itself fires this — clicks on inner
+      // content bubble through DOM but their target is the inner element,
+      // not the overlay.
+      if(!t || !t.classList || !t.classList.contains('modal-ov')) return;
+      var id = t.id || '';
+      // Never auto-close the confirm modal — would feel like data loss.
+      if(id === 'confirm-modal') return;
+      var fnName = CLOSERS[id];
+      if(fnName && typeof window[fnName] === 'function'){
+        try { window[fnName](); return; } catch(_){}
+      }
+      // Universal fallback — just hide
+      t.style.display = 'none';
     });
   }
   if(document.readyState === 'loading'){
@@ -28412,7 +28484,7 @@ function confirmAddMember(){
   setTimeout(function(){
     var ov = document.createElement('div');
     ov.id = 'add-member-followup-overlay';
-    ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(15,23,42,.55);display:flex;align-items:center;justify-content:center;padding:18px;font-family:DM Sans,sans-serif';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:9990;background:rgba(15,23,42,.55);display:flex;align-items:center;justify-content:center;padding:18px;font-family:DM Sans,sans-serif';
     ov.innerHTML = ''
       + '<div style="background:#fff;border-radius:16px;max-width:500px;width:100%;padding:22px 24px 20px;box-shadow:0 20px 60px rgba(0,0,0,.35)">'
       +   '<div style="font-size:17px;font-weight:800;margin-bottom:6px;color:#0f172a">✓ ' + name.replace(/[<>]/g,'') + ' added to the planner</div>'
@@ -39822,7 +39894,7 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
     </div>
     <div class="modal-foot">
       <button class="btn-cancel" onclick="closeOutreachEngagementModal()">Cancel</button>
-      <button class="btn-save" onclick="saveOutreachEngagement()">Save engagement</button>
+      <button class="btn-save" onclick="saveOutreachEngagementFromVisit()">Save engagement</button>
     </div>
   </div>
 </div>
