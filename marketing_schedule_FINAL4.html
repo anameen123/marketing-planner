@@ -1498,7 +1498,7 @@ body.role-front_desk #referrals-view {
       <!-- Dropdown — hidden by default; toggled by toggleAdminNotif(). Title +
            empty-state copy are role-aware and rewritten by renderAdminNotifications(). -->
       <div id="admin-notif-dropdown"
-           style="display:none;position:absolute;top:42px;right:0;width:380px;max-width:calc(100vw - 24px);background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 32px rgba(15,23,42,.22);overflow:hidden;z-index:8000"
+           style="display:none;position:absolute;top:42px;right:0;width:380px;max-width:calc(100vw - 24px);background:#ffffff;background-color:#ffffff;border:1px solid #cbd5e1;border-radius:12px;box-shadow:0 18px 44px rgba(15,23,42,.45),0 4px 12px rgba(15,23,42,.20);overflow:hidden;z-index:8000;opacity:1"
            onclick="event.stopPropagation()">
         <div style="background:linear-gradient(135deg,#1F3864,#0f172a);color:#fff;padding:10px 14px;display:flex;align-items:center;justify-content:space-between">
           <div id="admin-notif-title" style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:12px;letter-spacing:.04em">
@@ -26984,6 +26984,38 @@ function getMonthCompleted(name, year, month){
   return { rate: rate, completed: completed, assigned: assigned };
 }
 window.getMonthCompleted = getMonthCompleted;
+
+// Returns the last N months of completion data for a member, ending with the
+// LIVE current month. Filled even when assigned=0 / completed=0 — the line +
+// bar charts then render visible dots/bars at the baseline, with the
+// draw-in animation kicking off via animateChartSvg(). Per user 2026-05-22 —
+// fixes the empty Performance-tab charts (renderPerfCharts, renderMonthlyVisits,
+// renderMonthlyCompletion silently threw because this function was undefined).
+function getMonthlyHistory(name, monthsBack){
+  var now = new Date();
+  var out = [];
+  var n = parseInt(monthsBack, 10) || 3;
+  for(var i = n - 1; i >= 0; i--){
+    var d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    var y = d.getFullYear();
+    var m = d.getMonth();
+    var s = (typeof getMonthCompleted === 'function')
+      ? getMonthCompleted(name, y, m)
+      : { rate: 0, completed: 0, assigned: 0 };
+    out.push({
+      year:      y,
+      month:     m,
+      label:     d.toLocaleDateString('en-US', { month:'short', year:'numeric' }),
+      shortLabel:d.toLocaleDateString('en-US', { month:'short' }),
+      rate:      s.rate,
+      completed: s.completed,
+      assigned:  s.assigned,
+      isNow:     (i === 0)
+    });
+  }
+  return out;
+}
+window.getMonthlyHistory = getMonthlyHistory;
 
 function renderMonthlyCompletion(name){
   var wrap=document.getElementById('monthly-completion-wrap');
