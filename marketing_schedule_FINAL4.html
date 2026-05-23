@@ -12690,48 +12690,12 @@ function _rlRenderCalDayDetail(iso){
   });
   reconHtml += '</div>';
 
-  // Shift totals breakdown (which front desk reported what)
-  var shiftRows = SHIFT_TOTALS_LOG.filter(function(e){ return e.shiftDate === iso; });
-  shiftRows.sort(function(a,b){
-    var fa = REFERRAL_FACILITIES.findIndex(function(x){ return x.key === a.facilityKey; });
-    var fb = REFERRAL_FACILITIES.findIndex(function(x){ return x.key === b.facilityKey; });
-    return fa - fb;
-  });
+  // Shift totals panel removed per user 2026-05-22 — counter is now driven
+  // by individual Log-a-Patient entries. No separate shift-reconciliation
+  // step needed. SHIFT_TOTALS_LOG data structure is preserved as dead code
+  // so legacy saved data still round-trips, but the drill-down no longer
+  // shows it.
   var shiftHtml = '';
-  if(shiftRows.length){
-    shiftHtml = '<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">📊 Shift totals reported</div>'
-              + '<table style="width:100%;border-collapse:collapse;margin-bottom:14px;font-size:11px">'
-              + '<thead><tr style="background:#fafbfc;border-bottom:1px solid var(--border)">'
-              +   '<th style="text-align:left;padding:6px 10px;font-size:9px;color:var(--muted);text-transform:uppercase">Facility</th>'
-              +   '<th style="text-align:left;padding:6px 10px;font-size:9px;color:var(--muted);text-transform:uppercase">Shift</th>'
-              +   '<th style="text-align:right;padding:6px 10px;font-size:9px;color:var(--muted);text-transform:uppercase">Total</th>'
-              +   '<th style="text-align:left;padding:6px 10px;font-size:9px;color:var(--muted);text-transform:uppercase">Filled by</th>'
-              +   '<th style="text-align:left;padding:6px 10px;font-size:9px;color:var(--muted);text-transform:uppercase">Gap reason</th>'
-              + '</tr></thead><tbody>';
-    shiftRows.forEach(function(s){
-      var fac = REFERRAL_FACILITIES.find(function(x){ return x.key === s.facilityKey; });
-      var rDef = s.mismatchReason ? MISMATCH_REASONS.find(function(r){ return r.key === s.mismatchReason; }) : null;
-      var reasonCell = '';
-      if(rDef){
-        reasonCell = '<div style="font-size:10px;color:#92400e">' + rDef.icon + ' ' + esc(rDef.label) + '</div>';
-        if(s.mismatchReasonNotes){
-          reasonCell += '<div style="font-size:9px;color:var(--muted);font-style:italic;margin-top:2px">"' + esc(s.mismatchReasonNotes) + '"</div>';
-        }
-      } else {
-        reasonCell = '<span style="font-size:10px;color:var(--muted);font-style:italic">—</span>';
-      }
-      shiftHtml += '<tr style="border-bottom:1px solid #f1f5f9">'
-                + '<td style="padding:6px 10px">🏥 ' + esc(fac ? fac.short : s.facilityKey) + '</td>'
-                + '<td style="padding:6px 10px;color:var(--muted)">' + esc(s.shiftName) + '</td>'
-                + '<td style="padding:6px 10px;text-align:right;font-weight:800;font-family:DM Mono,monospace;color:#1F3864">' + s.reportedTotal + '</td>'
-                + '<td style="padding:6px 10px;color:var(--muted)">' + esc(s.filledByName || '—') + '</td>'
-                + '<td style="padding:6px 10px">' + reasonCell + '</td>'
-                + '</tr>';
-    });
-    shiftHtml += '</tbody></table>';
-  } else {
-    shiftHtml = '<div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:10px 14px;font-size:11px;color:#92400e;margin-bottom:14px">⚠️ No shift totals reported for this day yet. Front-desk staff: click <strong>📊 Log shift total</strong> above to report.</div>';
-  }
 
   // Logged entries for this date (compact list)
   var entries = REFERRAL_LOG.filter(function(e){
@@ -13084,10 +13048,13 @@ function openReferralForm(editId){
   // so the form starts in the normal full-record state. When editing an
   // existing record, also 'have' (anonymous entries don't open this dialog).
   if(typeof _rlResetMode === 'function') _rlResetMode();
-  // Populate member dropdown
+  // Populate member dropdown. Per user 2026-05-22: includes a "None" option
+  // for patients who never saw any marketing rep — those still count toward
+  // the facility's overall referral counter but don't credit any team member.
   var mSel = document.getElementById('rl-member');
   if(mSel){
     var mHtml = '<option value="">— Pick a member —</option>';
+    mHtml +=    '<option value="__none__">🚫 None — no marketing rep saw this patient</option>';
     if(typeof MEMBERS !== 'undefined'){
       MEMBERS.forEach(function(m){ mHtml += '<option value="' + m + '">' + m + '</option>'; });
     }
@@ -13557,20 +13524,19 @@ function submitReferralForm(){
     sourceType:    document.getElementById('rl-source').dataset.sourceType || '',
     // destination + attribution
     destinationFacility: ((document.querySelector('input[name="rl-dest"]:checked') || {}).value) || '',
-    memberName:    document.getElementById('rl-member').value,
-    // Per user 2026-05-19: collect ALL members to credit (primary picker +
-    // any extras added via "+ Add another member"). Used when 2+ members
-    // were both at the same source (e.g. an outreach event together).
-    memberNames:   (function(){
-      var picks = [];
-      var primary = document.getElementById('rl-member').value;
-      if(primary) picks.push(primary);
-      Array.from(document.querySelectorAll('#rl-member-extras [data-member]')).forEach(function(chip){
-        var n = chip.getAttribute('data-member');
-        if(n && picks.indexOf(n) < 0) picks.push(n);
-      });
-      return picks;
+    // Per user 2026-05-22: simplified — single member picker, no extras.
+    // "__none__" means the patient never saw any marketing rep — the
+    // referral still counts toward the facility's overall counter, but
+    // no team member gets credit on their personal counter.
+    memberName:    (function(){
+      var v = document.getElementById('rl-member').value;
+      return (v === '__none__') ? '' : v;
     })(),
+    memberNames:   (function(){
+      var v = document.getElementById('rl-member').value;
+      return (v && v !== '__none__') ? [v] : [];
+    })(),
+    noMarketingRep: (document.getElementById('rl-member').value === '__none__'),
     filledByName:  document.getElementById('rl-filler').value,
     // extras
     extraNotes:    document.getElementById('rl-notes').value
@@ -13599,7 +13565,11 @@ function submitReferralForm(){
     showErr('You can\'t log a referral for a future date. Use today\'s date or an earlier one.');
     return;
   }
-  if(!data.memberName)          { showErr('Pick the marketing team member to credit.'); return; }
+  // Member is required to be PICKED (one of the options) but "None" is
+  // a valid choice — it just means no team member gets credit. We check
+  // the raw dropdown value to distinguish blank (not picked) from None.
+  var _rawMember = document.getElementById('rl-member').value;
+  if(!_rawMember)               { showErr('Pick a marketing team member, or choose "None — no marketing rep saw this patient".'); return; }
   if(!data.destinationFacility) { showErr('Pick a destination facility.'); return; }
   if(!data.filledByName)        { showErr('Enter the name of the person filling this form.'); return; }
   // Per user 2026-05-19: member_direct requires the full cascade —
@@ -39333,7 +39303,9 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
       <div style="font-size:11px;color:var(--muted);margin-top:3px">Log every incoming patient referral · drives member &amp; clinic counters automatically</div>
     </div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <button onclick="openShiftTotalForm()" style="background:#fff;color:#1F3864;border:1px solid #1F3864;border-radius:8px;padding:9px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;display:inline-flex;align-items:center;gap:6px" title="Log the total patients you saw this shift (for reconciliation)">📊 Log shift total</button>
+      <!-- Shift-total button removed per user 2026-05-22 — counter is now
+           driven directly by each Log-a-Patient entry. No separate shift
+           reconciliation step. -->
       <button onclick="openReferralForm()" style="background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;border:none;border-radius:8px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;display:inline-flex;align-items:center;gap:6px">➕ Log a Patient</button>
     </div>
   </div>
@@ -39357,19 +39329,20 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
   <!-- Per-channel monthly counters (v2): Google/Walk-in/Repeat/etc. -->
   <div id="rl-channels" style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px 18px;margin-bottom:18px;box-shadow:0 2px 10px rgba(15,23,42,.05)"></div>
 
-  <!-- Per-member breakdown — each member's 3-facility counters with month nav -->
-  <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px 20px;margin-bottom:18px;box-shadow:0 2px 10px rgba(15,23,42,.05)">
-    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:10px">
-      <div style="font-size:13px;font-weight:700;color:var(--text)">👥 Per-member referral totals</div>
-      <div style="display:flex;align-items:center;gap:6px">
-        <button onclick="navMemberCountersMonth(-1)" style="background:#fff;border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer;color:#1F3864">◀</button>
-        <div id="rl-mem-month-label" style="font-size:12px;font-weight:700;color:var(--text);min-width:130px;text-align:center"></div>
-        <button onclick="navMemberCountersMonth(1)"  style="background:#fff;border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer;color:#1F3864">▶</button>
-        <button onclick="navMemberCountersMonth(0)"  style="background:#f1f5f9;border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:10px;font-weight:600;cursor:pointer;color:var(--muted);margin-left:4px">Today</button>
-        <button onclick="navMemberCountersMonth('all')" id="rl-mem-alltime-btn" style="background:#f1f5f9;border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:10px;font-weight:600;cursor:pointer;color:var(--muted)" title="Show all-time totals">All-time</button>
+  <!-- Per-member breakdown (per user 2026-05-22 — made smaller).
+       Slimmer padding, smaller heading + month-nav, tighter card grid. -->
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 14px;margin-bottom:14px;box-shadow:0 1px 6px rgba(15,23,42,.04)">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px">
+      <div style="font-size:11px;font-weight:700;color:var(--text)">👥 Per-member referral totals</div>
+      <div style="display:flex;align-items:center;gap:4px">
+        <button onclick="navMemberCountersMonth(-1)" style="background:#fff;border:1px solid var(--border);border-radius:5px;padding:2px 8px;font-size:11px;font-weight:700;cursor:pointer;color:#1F3864">◀</button>
+        <div id="rl-mem-month-label" style="font-size:11px;font-weight:700;color:var(--text);min-width:110px;text-align:center"></div>
+        <button onclick="navMemberCountersMonth(1)"  style="background:#fff;border:1px solid var(--border);border-radius:5px;padding:2px 8px;font-size:11px;font-weight:700;cursor:pointer;color:#1F3864">▶</button>
+        <button onclick="navMemberCountersMonth(0)"  style="background:#f1f5f9;border:1px solid var(--border);border-radius:5px;padding:2px 8px;font-size:9px;font-weight:600;cursor:pointer;color:var(--muted);margin-left:3px">Today</button>
+        <button onclick="navMemberCountersMonth('all')" id="rl-mem-alltime-btn" style="background:#f1f5f9;border:1px solid var(--border);border-radius:5px;padding:2px 8px;font-size:9px;font-weight:600;cursor:pointer;color:var(--muted)" title="Show all-time totals">All-time</button>
       </div>
     </div>
-    <div id="rl-member-totals" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:10px"></div>
+    <div id="rl-member-totals" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px"></div>
   </div>
 
   <!-- Filters (3 dropdowns + free-text search) -->
@@ -39770,13 +39743,16 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
         <div>
           <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">
-            Marketing member(s) to credit <span style="color:#ef4444">*</span>
+            Marketing member to credit <span style="color:#ef4444">*</span>
           </label>
           <select id="rl-member" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box"></select>
-          <!-- Additional-member chips for credit (outreach events with multiple
-               members attending together). Populated by addReferralExtraMember(). -->
-          <div id="rl-member-extras" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px"></div>
-          <button type="button" onclick="addReferralExtraMember()" style="margin-top:6px;background:#fff;color:#1F3864;border:1px solid #1F3864;border-radius:6px;padding:5px 11px;font-size:10px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif" title="Credit more than one member for this referral (useful when 2+ members were at the same outreach event)">+ Add another member</button>
+          <!-- Hidden placeholder kept so existing submit code that reads
+               #rl-member-extras doesn't break — the "+ Add another member"
+               affordance was removed per user 2026-05-22. A "None" option
+               is appended to the rl-member dropdown by openReferralForm()
+               for patients who never saw any marketing rep. -->
+          <div id="rl-member-extras" style="display:none"></div>
+          <div style="font-size:10px;color:var(--muted);margin-top:4px;font-style:italic">If the patient didn't see anyone from marketing, pick <strong>None — no marketing rep</strong>.</div>
         </div>
         <div>
           <!-- Placeholder kept here for grid layout symmetry; the actual
