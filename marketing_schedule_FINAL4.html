@@ -29338,21 +29338,61 @@ function renderFinancesLog(){
         + '</div>';
     }).join('');
 
-    return '<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:14px;box-shadow:0 1px 6px rgba(15,23,42,.05)">'
-      + '<div style="background:#f4f5f9;padding:11px 16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;border-bottom:1px solid var(--border)">'
-      +   '<div style="font-size:13px;font-weight:700;color:var(--text)">📅 '+dateLong+'</div>'
-      +   '<div style="display:flex;align-items:center;gap:6px">'
-      +     '<span style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-weight:700">Daily total</span>'
-      +     '<span style="font-size:18px;font-weight:700;font-family:DM Mono,monospace;color:var(--navy)">$'+dayTotal.toFixed(2)+'</span>'
+    // Per user 2026-05-22: each day card is now COLLAPSIBLE.
+    // Compact summary (date + visit count + daily total) is the always-visible
+    // header. The body of entries is hidden by default and toggles when the
+    // user clicks the header. Designed for months with many days each
+    // containing many visits — keeps the page short and scannable.
+    var dayId = 'fin-day-' + dk.replace(/[^a-z0-9]/gi,'');
+    var visitCount = entries.length;
+    var visitWord = (visitCount === 1) ? 'visit' : 'visits';
+    return '<div id="'+dayId+'" class="fin-day-card" style="background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:8px;box-shadow:0 1px 6px rgba(15,23,42,.05)">'
+      + '<div onclick="_finToggleDay(\''+dayId+'\')" style="background:#f4f5f9;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;cursor:pointer;transition:background .15s" onmouseover="this.style.background=\'#e9ecf3\'" onmouseout="this.style.background=\'#f4f5f9\'">'
+      +   '<div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0">'
+      +     '<span class="fin-day-chev" style="font-size:11px;color:var(--muted);transition:transform .2s;display:inline-block;width:12px;text-align:center">▶</span>'
+      +     '<span style="font-size:13px;font-weight:700;color:var(--text)">📅 '+dateLong+'</span>'
+      +     '<span style="font-size:10px;color:var(--muted);background:#fff;border:1px solid var(--border);border-radius:10px;padding:1px 7px;font-weight:600">'+visitCount+' '+visitWord+'</span>'
+      +   '</div>'
+      +   '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0">'
+      +     '<span style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-weight:700">Daily total</span>'
+      +     '<span style="font-size:16px;font-weight:700;font-family:DM Mono,monospace;color:var(--navy)">$'+dayTotal.toFixed(2)+'</span>'
       +   '</div>'
       + '</div>'
-      + '<div style="padding:12px 14px">' + entriesHtml + '</div>'
+      + '<div class="fin-day-body" style="display:none;padding:12px 14px;border-top:1px solid var(--border)">' + entriesHtml + '</div>'
       + '</div>';
   }).join('');
 
   body.innerHTML = monthHeader + daysHtml;
+  // Auto-expand the most recent (top) day card so the user sees something
+  // immediately without having to click. Subsequent days are collapsed.
+  // Per user 2026-05-22 — "compact and expandable, but we need to see what's
+  // there at a glance."
+  try {
+    var firstCard = body.querySelector('.fin-day-card');
+    if(firstCard){
+      var firstBody = firstCard.querySelector('.fin-day-body');
+      var firstChev = firstCard.querySelector('.fin-day-chev');
+      if(firstBody) firstBody.style.display = 'block';
+      if(firstChev) firstChev.style.transform = 'rotate(90deg)';
+    }
+  } catch(_){}
 }
 window.renderFinancesLog = renderFinancesLog;
+
+// Spending-log: toggle one day card's body open/closed (per user 2026-05-22).
+// Click the day header → body slides into view, chevron rotates to point down.
+// Click again → body hides, chevron points right.
+function _finToggleDay(dayId){
+  var card = document.getElementById(dayId);
+  if(!card) return;
+  var bodyEl = card.querySelector('.fin-day-body');
+  var chev = card.querySelector('.fin-day-chev');
+  if(!bodyEl) return;
+  var isOpen = bodyEl.style.display !== 'none';
+  bodyEl.style.display = isOpen ? 'none' : 'block';
+  if(chev) chev.style.transform = isOpen ? 'rotate(0deg)' : 'rotate(90deg)';
+}
+window._finToggleDay = _finToggleDay;
 
 // Clears the From/To date inputs in the Spending Log filter row and re-renders.
 // Wired to the ✕ button next to the date pickers. Re-renders so the list
@@ -31338,14 +31378,11 @@ function renderKPICards(name){
   var now = nowReal;
 
   var cards='';
-  // 1. Visits Completed — ALL-TIME for this member, clickable to filter Completed Visits sub-tab
+  // Per user 2026-05-22: removed the "Visits Completed (ALL-TIME)" KPI card.
+  // It duplicated the "Completed" tile already shown in the 5-tile strip
+  // at the top of the profile header — same number, twice on screen.
+  // Header strip stays; this redundant card is gone.
   var safeName = name.replace(/'/g,"\\'");
-  cards+='<div class="kpi-card kpi-clickable" onclick="gotoCompletedVisits(\'Completed\',\''+safeName+'\')" title="Click to see the full list filtered to '+name+'">'
-    +'<div class="kpi-card-top"><div class="kpi-label">Visits Completed <span style="font-size:9px;opacity:.6">↗ click to view list</span></div>'
-    +'<span class="kpi-badge badge-grey" style="font-weight:700">ALL-TIME</span></div>'
-    +'<div class="kpi-nums"><div class="kpi-actual" style="color:#16a34a">'+s.comp+'</div></div>'
-    +'<div class="kpi-sub">'+name+'’s career total &middot; updates live as visits are completed</div>'
-    +'</div>';
   // 2. Business leads — month + all-time
   var leadsMonth=sm.leads;
   var leadsAllTime=s.leads; // all from schedule (all-time in current data)
