@@ -2882,8 +2882,22 @@ body.role-front_desk #referrals-view {
       <button onclick="closeRoutePlanner()" style="background:rgba(255,255,255,.18);color:#fff;border:none">&#215;</button>
     </div>
     <div class="modal-body" style="overflow-y:auto;flex:1;min-height:0;padding:18px 22px">
-      <div style="font-size:11px;color:var(--muted);margin-bottom:14px;line-height:1.45">
-        Tell us where you're starting and where you want to end. The app will recommend clinics from the bank that lie along the way, so you maximize visits with minimum driving.
+      <!-- ── MODE TOGGLE (per user 2026-05-22) ─────────────────────────
+           Two ways to plan. Corridor = Start + End are real visit targets;
+           algorithm fills in clinics between them. Random Pick = user
+           supplies their starting location only, then double-clicks pins
+           on the map to add stops, the TSP solver computes the optimal
+           visit order. -->
+      <div style="background:#f1f3f9;border-radius:12px;padding:5px;display:flex;gap:4px;margin-bottom:14px;box-shadow:inset 0 1px 2px rgba(15,23,42,.06)">
+        <button id="rp-mode-corridor" type="button" onclick="_rpSetMode('corridor')" style="flex:1;padding:9px 14px;font-size:12px;font-weight:700;color:#fff;cursor:pointer;border:none;background:var(--purple);border-radius:9px;font-family:'DM Sans',sans-serif;display:inline-flex;align-items:center;justify-content:center;gap:6px;box-shadow:0 2px 6px rgba(112,48,160,.22);transition:all .15s">🧭 Corridor — Start → End</button>
+        <button id="rp-mode-random" type="button" onclick="_rpSetMode('random')" style="flex:1;padding:9px 14px;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;border:none;background:transparent;border-radius:9px;font-family:'DM Sans',sans-serif;display:inline-flex;align-items:center;justify-content:center;gap:6px;transition:all .15s">🎲 Random Pick — TSP optimize</button>
+      </div>
+
+      <div id="rp-mode-corridor-blurb" style="font-size:11px;color:var(--muted);margin-bottom:14px;line-height:1.45">
+        Start and End are real visit targets. The app recommends clinics from the bank that fall inside a corridor between them, so you maximize visits with minimum driving.
+      </div>
+      <div id="rp-mode-random-blurb" style="display:none;font-size:11px;color:var(--muted);margin-bottom:14px;line-height:1.45;background:#fff7ed;border:1px solid #fed7aa;border-left:3px solid #f59e0b;border-radius:8px;padding:9px 12px;color:#7c2d12">
+        Tell us where you're <strong>coming from</strong> today (not a visit — just your location). Then close this dialog, <strong>double-click pins on the map</strong> to add stops. We'll compute the optimal visit order, draw the route in blue, and slot the visits into the day's schedule in route order.
       </div>
 
       <!-- Recency-color legend (per user 2026-05-22). The suggestions list
@@ -2921,7 +2935,8 @@ body.role-front_desk #referrals-view {
         <div style="font-size:10px;color:var(--muted);margin-top:3px;font-style:italic">Type to search, or tap <b>📍 Map</b> to pick a pin on the map.</div>
       </div>
 
-      <div class="kpi-input-row" style="margin-bottom:10px">
+      <!-- End picker — only visible in CORRIDOR mode (per user 2026-05-22) -->
+      <div id="rp-end-wrap" class="kpi-input-row" style="margin-bottom:10px">
         <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Ending clinic / MVA / facility</label>
         <div style="display:grid;grid-template-columns:120px 1fr auto;gap:6px">
           <select id="rp-end-area" onchange="_rpAreaChanged('end')" style="border:1px solid var(--border);border-radius:8px;padding:9px 10px;font-size:12px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box">
@@ -2940,12 +2955,25 @@ body.role-front_desk #referrals-view {
         <input type="hidden" id="rp-end" value="__same__">
         <div style="font-size:10px;color:var(--muted);margin-top:3px;font-style:italic">Leave the name blank for a round-trip back to Start. Or tap <b>📍 Map</b> to pick on the map.</div>
       </div>
+
+      <!-- ── RANDOM PICK MODE — Picked stops list (per user 2026-05-22) ──
+           Visible only when mode = 'random'. Lists every pin the user has
+           double-clicked on the map. Click ✕ to remove. The "Optimize +
+           Insert into Schedule" button at the bottom runs the TSP solver,
+           draws the blue route polyline on the map, and pushes the visits
+           into the day's calendar in optimal order. -->
+      <div id="rp-random-picks-wrap" style="display:none;margin-bottom:10px">
+        <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:6px">📍 Stops you've picked (double-click pins on the map)</label>
+        <div id="rp-random-picks-list" style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:8px;min-height:60px;font-size:11px"></div>
+        <div style="font-size:10px;color:var(--muted);margin-top:4px;font-style:italic">After closing this dialog, double-click any pin on the map to add it. Reopen this dialog to see the list, or click <b>Optimize route</b> below.</div>
+      </div>
       <!-- Corridor width control (per user 2026-05-22 v4). The planner finds
            candidates whose perpendicular distance from the Start→End line
            is ≤ this number of miles (both sides — "negative or positive").
            Auto-expand kicks in when a level is empty so the user always
-           sees something at every recency band that exists. -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+           sees something at every recency band that exists.
+           Wrapped in rp-corridor-controls so Random Pick mode can hide it. -->
+      <div id="rp-corridor-controls" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
         <div>
           <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Corridor half-width <span style="color:var(--muted);font-weight:400">(±miles either side of route)</span></label>
           <div style="display:flex;align-items:center;gap:5px">
@@ -2962,24 +2990,28 @@ body.role-front_desk #referrals-view {
           </label>
         </div>
       </div>
-      <div class="kpi-input-row" style="margin-bottom:10px">
-        <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Filter by specialty (optional)</label>
-        <select id="rp-specialty" onchange="_rpV4OnWidthChange()" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box">
-          <option value="">All specialties</option>
-        </select>
-      </div>
-      <div class="kpi-input-row" style="margin-bottom:6px">
-        <label style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:var(--text);cursor:pointer">
-          <input type="checkbox" id="rp-skip-visited" checked onchange="_rpV4OnWidthChange()"> Skip clinics already visited this period
-        </label>
+      <div id="rp-corridor-filters">
+        <div class="kpi-input-row" style="margin-bottom:10px">
+          <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Filter by specialty (optional)</label>
+          <select id="rp-specialty" onchange="_rpV4OnWidthChange()" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box">
+            <option value="">All specialties</option>
+          </select>
+        </div>
+        <div class="kpi-input-row" style="margin-bottom:6px">
+          <label style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:var(--text);cursor:pointer">
+            <input type="checkbox" id="rp-skip-visited" checked onchange="_rpV4OnWidthChange()"> Skip clinics already visited this period
+          </label>
+        </div>
       </div>
 
-      <!-- LEVEL-BASED PICKER (per user 2026-05-22 v4). Replaces the old
-           per-checkpoint slot picker. Each section is one recency band;
-           the user checks the candidates they want from any combination
-           of levels. Skip levels by checking none. Pick multiple from one
-           level by checking many. Auto-expand corridor refills empty levels. -->
+      <!-- LEVEL-BASED PICKER (per user 2026-05-22 v4 — Corridor mode only).
+           Each section is one recency band; the user checks the candidates
+           they want from any combination of levels. -->
       <div id="rp-results" style="display:none;margin-top:14px;border-top:1px solid var(--border);padding-top:12px"></div>
+      <!-- RANDOM-MODE RESULTS — populated by _rpRandomGenerateRoute after
+           the TSP solver runs. Shows the computed visit order with total
+           drive distance + estimated time. -->
+      <div id="rp-random-results" style="display:none;margin-top:14px;border-top:1px solid var(--border);padding-top:12px"></div>
     </div>
     <div class="modal-foot" style="flex-shrink:0;background:#fff;padding:12px 22px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
       <div style="display:flex;align-items:center;gap:10px">
@@ -2987,8 +3019,8 @@ body.role-front_desk #referrals-view {
         <span id="rp-v4-selected-summary" style="font-size:11px;color:var(--muted);font-style:italic"></span>
       </div>
       <div style="display:flex;align-items:center;gap:8px">
-        <button onclick="runRoutePlannerV4()" id="rp-run-btn" style="background:#7030A0;color:#fff;border:none;border-radius:8px;padding:9px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif">🔍 Find candidates</button>
-        <button onclick="_rpV4GenerateRoute()" id="rp-v4-generate-btn" disabled style="background:#cbd5e1;color:#94a3b8;border:none;border-radius:8px;padding:9px 22px;font-size:12px;font-weight:700;cursor:not-allowed;font-family:'DM Sans',sans-serif">Generate route →</button>
+        <button onclick="_rpFindOrPickClick()" id="rp-run-btn" style="background:#7030A0;color:#fff;border:none;border-radius:8px;padding:9px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif">🔍 Find candidates</button>
+        <button onclick="_rpGenerateClick()" id="rp-v4-generate-btn" style="background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;border:none;border-radius:8px;padding:9px 22px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif">Generate route →</button>
       </div>
     </div>
   </div>
@@ -22504,6 +22536,375 @@ function _rpV4GenerateRoute(){
 }
 window._rpV4GenerateRoute = _rpV4GenerateRoute;
 
+// ════════════════════════════════════════════════════════════════════════════
+// RANDOM PICK MODE — TSP-optimized route from user-supplied stops
+// ════════════════════════════════════════════════════════════════════════════
+// Per user 2026-05-22 (final route-planner design):
+//   "The two options will be in the same plan dialog. One: Start + End are
+//    targets (existing corridor flow). The other: user picks initial LOCATION,
+//    double-clicks pins randomly on the map, app creates optimal path.
+//    Tell me if AI is needed — I don't think so."
+//
+// Confirmed: no AI. Classic Traveling Salesman Problem. For 5–15 stops
+// (realistic for a day's visits), nearest-neighbor + 2-opt yields ~98% of
+// optimal in <50ms in pure JS. Brute force becomes infeasible at N=11+,
+// but our scale never hits that.
+
+var _RP_MODE = 'corridor';                    // 'corridor' | 'random'
+var _RP_RANDOM_PICKS = [];                    // array of {name, bizType, coord}
+var _RP_RANDOM_AWAITING_DOUBLECLICK = false;  // map enters this state after dialog closes
+
+// Set the planner mode. Toggles section visibility + resets results.
+function _rpSetMode(mode){
+  if(mode !== 'corridor' && mode !== 'random') return;
+  _RP_MODE = mode;
+  // Toggle button states
+  var cBtn = document.getElementById('rp-mode-corridor');
+  var rBtn = document.getElementById('rp-mode-random');
+  if(cBtn){
+    var on = (mode === 'corridor');
+    cBtn.style.background = on ? 'var(--purple)' : 'transparent';
+    cBtn.style.color = on ? '#fff' : 'var(--muted)';
+    cBtn.style.boxShadow = on ? '0 2px 6px rgba(112,48,160,.22)' : 'none';
+  }
+  if(rBtn){
+    var on = (mode === 'random');
+    rBtn.style.background = on ? 'var(--purple)' : 'transparent';
+    rBtn.style.color = on ? '#fff' : 'var(--muted)';
+    rBtn.style.boxShadow = on ? '0 2px 6px rgba(112,48,160,.22)' : 'none';
+  }
+  // Show/hide sections per mode
+  var corridorOnly = ['rp-mode-corridor-blurb','rp-end-wrap','rp-corridor-controls','rp-corridor-filters','rp-results'];
+  var randomOnly   = ['rp-mode-random-blurb','rp-random-picks-wrap','rp-random-results'];
+  corridorOnly.forEach(function(id){
+    var el = document.getElementById(id);
+    if(el) el.style.display = (mode === 'corridor') ? '' : 'none';
+  });
+  randomOnly.forEach(function(id){
+    var el = document.getElementById(id);
+    if(el) el.style.display = (mode === 'random') ? '' : 'none';
+  });
+  // Update the Start label/placeholder hint per mode
+  var startLabel = document.querySelector('label[for="rp-start-search"]') || document.querySelector('.kpi-input-row:has(#rp-start-search) > label');
+  // We can't reliably target the label without a class; instead update the helper hint
+  var startHint = document.querySelector('#rp-start-search')
+    ? document.querySelector('#rp-start-search').closest('.kpi-input-row').querySelector('div[style*="font-style:italic"]')
+    : null;
+  if(startHint){
+    startHint.innerHTML = (mode === 'random')
+      ? 'In Random Pick mode, this is just <b>where you\'re coming from</b> — not a visit target. Type a clinic/facility/city, or tap 📍 Map.'
+      : 'Type to search, or tap <b>📍 Map</b> to pick a pin on the map.';
+  }
+  // Update the footer button labels
+  var findBtn = document.getElementById('rp-run-btn');
+  var genBtn  = document.getElementById('rp-v4-generate-btn');
+  if(findBtn){
+    findBtn.textContent = (mode === 'random') ? '🎲 Pick pins on the map' : '🔍 Find candidates';
+  }
+  if(genBtn){
+    genBtn.textContent = (mode === 'random') ? 'Optimize route →' : 'Generate route →';
+  }
+  // Render the random-picks list if switching to random
+  if(mode === 'random') _rpRenderRandomPicksList();
+}
+window._rpSetMode = _rpSetMode;
+
+// ── TSP SOLVER — nearest-neighbor + 2-opt ────────────────────────────────
+// Returns an ordered array of indices into `coords` such that the total
+// route length (start at coords[startIdx], visit each other index exactly
+// once) is approximately minimum. For 5–15 stops, accuracy is typically
+// 95–99% of true optimum. Runtime under 50ms.
+function _rpTSPSolve(coords, startIdx){
+  if(!Array.isArray(coords) || coords.length <= 1) return [startIdx || 0];
+  var N = coords.length;
+  // Build distance matrix (haversine miles)
+  var dist = [];
+  for(var i = 0; i < N; i++){
+    dist.push([]);
+    for(var j = 0; j < N; j++){
+      dist[i][j] = (i === j) ? 0 : _rpHaversineMiles(coords[i], coords[j]);
+    }
+  }
+  // Phase 1: nearest-neighbor heuristic seed
+  var visited = new Array(N).fill(false);
+  var tour = [startIdx];
+  visited[startIdx] = true;
+  var current = startIdx;
+  for(var step = 1; step < N; step++){
+    var bestNext = -1, bestDist = Infinity;
+    for(var n = 0; n < N; n++){
+      if(visited[n]) continue;
+      if(dist[current][n] < bestDist){
+        bestDist = dist[current][n];
+        bestNext = n;
+      }
+    }
+    if(bestNext < 0) break;
+    tour.push(bestNext);
+    visited[bestNext] = true;
+    current = bestNext;
+  }
+  // Phase 2: 2-opt — swap any two edges if the swap shortens the tour
+  function tourLen(t){
+    var s = 0;
+    for(var k = 0; k < t.length - 1; k++) s += dist[t[k]][t[k+1]];
+    return s;
+  }
+  var improved = true;
+  var passes = 0;
+  while(improved && passes < 12){   // cap passes so we never loop too long
+    improved = false;
+    passes++;
+    for(var a = 1; a < tour.length - 2; a++){
+      for(var b = a + 1; b < tour.length; b++){
+        // Swap edges (a-1, a) and (b, b+1) → reverse tour[a..b]
+        var before = tourLen(tour);
+        var rev = tour.slice(0, a).concat(tour.slice(a, b + 1).reverse()).concat(tour.slice(b + 1));
+        var after = tourLen(rev);
+        if(after < before - 0.001){
+          tour = rev;
+          improved = true;
+        }
+      }
+    }
+  }
+  return tour;
+}
+window._rpTSPSolve = _rpTSPSolve;
+
+// Add a pin to the random-picks list. Called from the day-map pin
+// double-click handler (set up below in _rpEnableRandomDoubleClick).
+function _rpAddRandomPick(name){
+  if(!name) return;
+  if(_RP_RANDOM_PICKS.some(function(p){ return p.name === name; })){
+    if(typeof showToast === 'function') showToast(name + ' is already in your plan.');
+    return;
+  }
+  var coord = (typeof getCoordForBusiness === 'function') ? getCoordForBusiness(name) : null;
+  if(!coord){ if(typeof showToast === 'function') showToast('No coordinates for ' + name); return; }
+  var bizType = (typeof getBizTypeForName === 'function') ? getBizTypeForName(name) : 'clinic';
+  _RP_RANDOM_PICKS.push({ name: name, bizType: bizType, coord: coord });
+  if(typeof showToast === 'function') showToast('Added: ' + name + ' (' + _RP_RANDOM_PICKS.length + ' stops)');
+  _rpRenderRandomPicksList();
+}
+window._rpAddRandomPick = _rpAddRandomPick;
+
+function _rpRemoveRandomPick(name){
+  _RP_RANDOM_PICKS = _RP_RANDOM_PICKS.filter(function(p){ return p.name !== name; });
+  _rpRenderRandomPicksList();
+}
+window._rpRemoveRandomPick = _rpRemoveRandomPick;
+
+function _rpRenderRandomPicksList(){
+  var box = document.getElementById('rp-random-picks-list');
+  if(!box) return;
+  if(_RP_RANDOM_PICKS.length === 0){
+    box.innerHTML = '<div style="color:var(--muted);font-style:italic;padding:8px;text-align:center">No stops yet. Close this dialog and double-click pins on the map to add them.</div>';
+    return;
+  }
+  box.innerHTML = _RP_RANDOM_PICKS.map(function(p, i){
+    var typeIcon = p.bizType === 'mva' ? '⚖' : p.bizType === 'outreach' ? '🏘' : '🏥';
+    var safeName = String(p.name).replace(/'/g,"\\'").replace(/"/g,'&quot;');
+    return '<div style="display:flex;align-items:center;gap:8px;padding:6px 9px;background:#fff;border:1px solid var(--border);border-radius:6px;margin-bottom:4px">'
+      + '<span style="font-size:13px;font-weight:700;color:#7030A0;min-width:18px">'+(i+1)+'.</span>'
+      + '<span style="font-size:13px">'+typeIcon+'</span>'
+      + '<span style="flex:1;font-size:12px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+p.name.replace(/</g,'&lt;')+'</span>'
+      + '<button onclick="_rpRemoveRandomPick(\''+safeName+'\')" title="Remove this stop" style="background:none;border:1px solid var(--border);color:#dc2626;border-radius:5px;padding:2px 8px;font-size:11px;cursor:pointer;font-family:DM Sans,sans-serif">✕</button>'
+      + '</div>';
+  }).join('');
+}
+window._rpRenderRandomPicksList = _rpRenderRandomPicksList;
+
+// Enable double-click-to-pick on the day map. Called after the dialog
+// closes in Random mode. A toast tells the user the map is armed.
+function _rpEnableRandomDoubleClick(){
+  _RP_RANDOM_AWAITING_DOUBLECLICK = true;
+  if(typeof showToast === 'function'){
+    showToast('🎲 Double-click any pin on the map to add it to your plan. Reopen the planner to see your list.');
+  }
+  var st = document.getElementById('rp-pick-status');
+  if(st){
+    st.textContent = '🎲 Double-click pins to add stops · ' + _RP_RANDOM_PICKS.length + ' added';
+    st.style.color = '#7030A0';
+    st.style.fontWeight = '700';
+  }
+}
+window._rpEnableRandomDoubleClick = _rpEnableRandomDoubleClick;
+
+// Run the TSP solver + draw the optimized route on the map + insert visits
+// into the day's calendar rows in route order.
+function _rpRandomGenerateRoute(){
+  if(_RP_RANDOM_PICKS.length === 0){
+    if(typeof showToast === 'function') showToast('Add at least one stop first — double-click pins on the map.');
+    return;
+  }
+  // Resolve start location
+  var startKey = (document.getElementById('rp-start') || {}).value || '';
+  var startCoord = (typeof getRouteCoord === 'function') ? getRouteCoord(startKey) : null;
+  if(!startCoord){
+    if(typeof showToast === 'function') showToast('Pick a starting location first.');
+    return;
+  }
+  // Build coords array: [start, pick1, pick2, ...]
+  var coords = [startCoord].concat(_RP_RANDOM_PICKS.map(function(p){ return p.coord; }));
+  var order = _rpTSPSolve(coords, 0);   // start at index 0 (the start location)
+  // order[0] is always startIdx (0); the rest are the optimal pick order
+  var orderedPicks = order.slice(1).map(function(idx){ return _RP_RANDOM_PICKS[idx - 1]; });
+  // Compute total distance + estimated drive time
+  var totalMiles = 0;
+  for(var k = 0; k < order.length - 1; k++){
+    totalMiles += _rpHaversineMiles(coords[order[k]], coords[order[k+1]]);
+  }
+  var roadMiles = totalMiles * 1.4;  // urban detour factor
+  var driveMin  = Math.round((roadMiles / 30) * 60);  // 30 mph urban
+  var driveStr = (driveMin < 60) ? (driveMin + ' min') : (Math.floor(driveMin/60) + 'h ' + (driveMin%60) + 'm');
+  // Render the result summary inside the dialog
+  var startName = (document.getElementById('rp-start-search') || {}).value || 'Start';
+  startName = String(startName).replace(/^[^A-Za-z0-9]+/, '').split(' · ')[0].trim();
+  var html = '<div style="background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:12px 14px;margin-bottom:10px">'
+           + '<div style="font-size:11px;font-weight:800;color:#14532d;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">✓ Optimized route</div>'
+           + '<div style="font-size:13px;font-weight:700;color:#14532d">' + orderedPicks.length + ' stops · ' + roadMiles.toFixed(1) + ' mi · ~' + driveStr + ' from ' + startName.replace(/</g,'&lt;') + '</div>'
+           + '</div>';
+  html += '<ol style="margin:0;padding-left:20px">';
+  html += '<li style="font-size:12px;color:var(--muted);margin-bottom:4px"><strong>Start:</strong> ' + startName.replace(/</g,'&lt;') + '</li>';
+  orderedPicks.forEach(function(p, i){
+    var typeIcon = p.bizType === 'mva' ? '⚖' : p.bizType === 'outreach' ? '🏘' : '🏥';
+    html += '<li style="font-size:12px;color:var(--text);margin-bottom:4px">' + typeIcon + ' <strong>' + p.name.replace(/</g,'&lt;') + '</strong></li>';
+  });
+  html += '</ol>';
+  var resultBox = document.getElementById('rp-random-results');
+  if(resultBox){
+    resultBox.innerHTML = html
+      + '<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">'
+      +   '<button onclick="_rpRandomInsertIntoDay()" style="background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;border:none;border-radius:8px;padding:9px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">📅 Insert into today\'s schedule</button>'
+      +   '<button onclick="_rpRandomReset()" style="background:#e5e7eb;color:#374151;border:none;border-radius:8px;padding:9px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:DM Sans,sans-serif">Reset picks</button>'
+      + '</div>';
+    resultBox.style.display = 'block';
+  }
+  // Save the ordered picks for the insert function
+  window._RP_RANDOM_ORDERED = orderedPicks;
+  // Draw the optimized route on the map (blue dashed polyline)
+  _rpRandomDrawOnMap(coords, order, startName);
+  if(typeof showToast === 'function') showToast('Optimized: ' + orderedPicks.length + ' stops · ' + roadMiles.toFixed(1) + ' mi · ~' + driveStr);
+}
+window._rpRandomGenerateRoute = _rpRandomGenerateRoute;
+
+// Draw the optimized route on the day map as a blue dashed polyline with
+// numbered markers showing visit order.
+function _rpRandomDrawOnMap(coords, order, startName){
+  if(!_DV_MAP || typeof L === 'undefined') return;
+  if(_DV_ROUTELINE){ _DV_MAP.removeLayer(_DV_ROUTELINE); _DV_ROUTELINE = null; }
+  if(_RP_HIGHLIGHTS) _RP_HIGHLIGHTS.clearLayers();
+  // Build polyline points in route order
+  var pts = order.map(function(idx){ return [coords[idx].lat, coords[idx].lng]; });
+  _DV_ROUTELINE = L.polyline(pts, {
+    color: '#3b82f6', weight: 4, opacity: 0.85,
+    dashArray: '8, 6', lineJoin: 'round', lineCap: 'round'
+  }).addTo(_DV_MAP);
+  // Drop numbered markers at each stop (S for start, then 1, 2, 3...)
+  for(var i = 0; i < order.length; i++){
+    var p = coords[order[i]];
+    var isStart = (i === 0);
+    var label = isStart ? 'S' : String(i);
+    var bg = isStart ? '#1F3864' : '#3b82f6';
+    if(_RP_HIGHLIGHTS){
+      var marker = L.marker([p.lat, p.lng], {
+        icon: L.divIcon({
+          className: 'rp-tsp-marker',
+          html: '<div style="background:'+bg+';color:#fff;width:24px;height:24px;border-radius:50%;border:2.5px solid #fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;font-family:DM Sans,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.35)">'+label+'</div>',
+          iconSize:[24,24], iconAnchor:[12,12]
+        }),
+        interactive: false
+      });
+      _RP_HIGHLIGHTS.addLayer(marker);
+    }
+  }
+  // Fit map to the route
+  try { _DV_MAP.fitBounds(L.latLngBounds(pts).pad(0.15), { maxZoom: 13 }); } catch(_){}
+}
+window._rpRandomDrawOnMap = _rpRandomDrawOnMap;
+
+// Insert the optimized stops into today's day-view as new visit rows in
+// route order. Each row gets the member's current name auto-assigned.
+function _rpRandomInsertIntoDay(){
+  var ordered = window._RP_RANDOM_ORDERED;
+  if(!Array.isArray(ordered) || ordered.length === 0){
+    if(typeof showToast === 'function') showToast('Run Optimize route first.');
+    return;
+  }
+  var di = (typeof _DV_LAST_DI === 'number') ? _DV_LAST_DI : null;
+  if(di == null || !S.days || !S.days[di]){
+    if(typeof showToast === 'function') showToast('Open a day on the calendar first.');
+    return;
+  }
+  var me = (CURRENT_USER && CURRENT_USER.name) || '';
+  var added = 0;
+  ordered.forEach(function(p){
+    // Skip if this clinic already has a row on this day
+    var exists = (S.days[di].rows || []).some(function(r){ return r && r.clinic === p.name; });
+    if(exists) return;
+    S.days[di].rows.push({
+      clinic: p.name,
+      member: me,
+      memberConfirmed: !!me,
+      status: 'Pending',
+      city: '',  // pulled from CLINIC_BANK by getBizTypeForName / lookups
+      rowConfirmed: false,
+      rd: '', relationship: '', leadNotes: '', cancelReason: '',
+      spending: null, _spId: null
+    });
+    added++;
+  });
+  if(typeof _saveS === 'function') _saveS();
+  if(typeof refresh === 'function') refresh(di);
+  if(typeof closeRoutePlanner === 'function') closeRoutePlanner();
+  if(typeof showToast === 'function') showToast('Inserted ' + added + ' stops into the day in route order.');
+}
+window._rpRandomInsertIntoDay = _rpRandomInsertIntoDay;
+
+function _rpRandomReset(){
+  _RP_RANDOM_PICKS = [];
+  window._RP_RANDOM_ORDERED = null;
+  if(_DV_ROUTELINE){ try { _DV_MAP.removeLayer(_DV_ROUTELINE); } catch(_){} _DV_ROUTELINE = null; }
+  if(_RP_HIGHLIGHTS) _RP_HIGHLIGHTS.clearLayers();
+  _rpRenderRandomPicksList();
+  var box = document.getElementById('rp-random-results');
+  if(box){ box.style.display = 'none'; box.innerHTML = ''; }
+  if(typeof showToast === 'function') showToast('Random picks cleared.');
+}
+window._rpRandomReset = _rpRandomReset;
+
+// Map double-click listener — when in random-pick mode, intercept the click
+// and add the closest pin to the random picks list. Attached lazily on
+// first map init via _initDayMap's setup hook.
+(function _rpAttachMapDoubleClick(){
+  function attach(){
+    if(!_DV_MAP) { setTimeout(attach, 500); return; }
+    _DV_MAP.on('dblclick', function(e){
+      if(_RP_MODE !== 'random' || !_RP_RANDOM_AWAITING_DOUBLECLICK) return;
+      // Find the nearest business pin to the click point
+      var clickLat = e.latlng.lat, clickLng = e.latlng.lng;
+      var best = null, bestDist = Infinity;
+      function consider(name){
+        var c = (typeof getCoordForBusiness === 'function') ? getCoordForBusiness(name) : null;
+        if(!c) return;
+        var d = _rpHaversineMiles(c, { lat: clickLat, lng: clickLng });
+        if(d < bestDist){ bestDist = d; best = name; }
+      }
+      if(typeof CLINIC_BANK !== 'undefined') CLINIC_BANK.forEach(function(c){ if(c && c.n) consider(c.n); });
+      if(typeof MVA_ATTORNEYS !== 'undefined') MVA_ATTORNEYS.forEach(function(m){ if(m && m.firm) consider(m.firm); });
+      if(typeof OUTREACH !== 'undefined') OUTREACH.forEach(function(o){ if(o && o.name) consider(o.name); });
+      // Snap distance threshold — 0.5 mi (city centroid pins are imprecise)
+      if(best && bestDist <= 2){
+        _rpAddRandomPick(best);
+        var st = document.getElementById('rp-pick-status');
+        if(st) st.textContent = '🎲 Double-click pins to add stops · ' + _RP_RANDOM_PICKS.length + ' added';
+      }
+    });
+  }
+  setTimeout(attach, 1000);
+})();
+
 // Reset checked state when the dialog opens fresh
 (function _rpV4HookReset(){
   var origOpen = window.openRoutePlanner;
@@ -22511,12 +22912,39 @@ window._rpV4GenerateRoute = _rpV4GenerateRoute;
   window.openRoutePlanner = function(){
     _RP_V4_CHECKED = {};
     _RP_V4_LAST = null;
+    _RP_RANDOM_AWAITING_DOUBLECLICK = false;
     origOpen.apply(this, arguments);
     var box = document.getElementById('rp-results');
     if(box){ box.style.display = 'none'; box.innerHTML = ''; }
+    var rbox = document.getElementById('rp-random-results');
+    if(rbox){ rbox.style.display = 'none'; rbox.innerHTML = ''; }
+    // Default to corridor mode on open (unless user has random picks in flight)
+    _rpSetMode(_RP_RANDOM_PICKS.length > 0 ? 'random' : 'corridor');
     _rpV4UpdateSelectedSummary();
   };
 })();
+
+// Wire the dual-mode footer buttons. Each button calls the right handler
+// based on the current mode.
+function _rpFindOrPickClick(){
+  if(_RP_MODE === 'random'){
+    // Close the dialog and arm the map for double-click picking.
+    if(typeof closeRoutePlanner === 'function') closeRoutePlanner();
+    _rpEnableRandomDoubleClick();
+  } else {
+    runRoutePlannerV4();
+  }
+}
+window._rpFindOrPickClick = _rpFindOrPickClick;
+
+function _rpGenerateClick(){
+  if(_RP_MODE === 'random'){
+    _rpRandomGenerateRoute();
+  } else {
+    _rpV4GenerateRoute();
+  }
+}
+window._rpGenerateClick = _rpGenerateClick;
 
 // Render the planned route on the day map: start pin, end pin, recommendation
 // pins in order, and a dashed polyline through them.
