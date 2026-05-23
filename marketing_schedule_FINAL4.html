@@ -1667,12 +1667,14 @@ body.role-front_desk #referrals-view {
         <div class="cal-month-nav">
           <span id="cal-month-label">May 2026</span>
           <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
-            <!-- Business-type chips (per user 2026-05-22) — toggle which
-                 business types contribute to the day's visit-count badge.
-                 Default = all on. Tap a chip to mute that type. -->
-            <button id="cal-bizchip-clinic"   type="button" onclick="toggleCalBizType('clinic')"   title="Show / hide CLINIC visits on the calendar" style="background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.35);color:#fff;border-radius:14px;padding:3px 9px;font-size:10px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;letter-spacing:.02em">🏥 Clinics</button>
-            <button id="cal-bizchip-mva"      type="button" onclick="toggleCalBizType('mva')"      title="Show / hide MVA-attorney visits" style="background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.35);color:#fff;border-radius:14px;padding:3px 9px;font-size:10px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;letter-spacing:.02em">⚖ MVAs</button>
-            <button id="cal-bizchip-outreach" type="button" onclick="toggleCalBizType('outreach')" title="Show / hide community-outreach visits" style="background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.35);color:#fff;border-radius:14px;padding:3px 9px;font-size:10px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;letter-spacing:.02em">🏘 Outreach</button>
+            <!-- Business-type chips (per user 2026-05-22 v2) — rebuilt as proper
+                 flex pills so the icon + label sit INSIDE the same background,
+                 not floating separately. Visible solid border, slightly bigger
+                 padding for readability. Toggle which business types contribute
+                 to the day's visit-count badge; default = all on. -->
+            <button id="cal-bizchip-clinic"   type="button" onclick="toggleCalBizType('clinic')"   title="Show / hide CLINIC visits on the calendar"     style="display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,.22);border:1.5px solid rgba(255,255,255,.55);color:#fff;border-radius:18px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;letter-spacing:.02em;line-height:1;white-space:nowrap"><span style="font-size:13px;line-height:1">🏥</span><span>Clinics</span></button>
+            <button id="cal-bizchip-mva"      type="button" onclick="toggleCalBizType('mva')"      title="Show / hide MVA-attorney visits"               style="display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,.22);border:1.5px solid rgba(255,255,255,.55);color:#fff;border-radius:18px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;letter-spacing:.02em;line-height:1;white-space:nowrap"><span style="font-size:13px;line-height:1">⚖</span><span>MVAs</span></button>
+            <button id="cal-bizchip-outreach" type="button" onclick="toggleCalBizType('outreach')" title="Show / hide community-outreach visits"         style="display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,.22);border:1.5px solid rgba(255,255,255,.55);color:#fff;border-radius:18px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;letter-spacing:.02em;line-height:1;white-space:nowrap"><span style="font-size:13px;line-height:1">🏘</span><span>Outreach</span></button>
             <span style="opacity:.35;color:#fff">·</span>
             <!-- Member filter — pick a member to show only days containing
                  visits assigned to / completed by / canceled by them. -->
@@ -26525,10 +26527,14 @@ function _refreshCalBizChips(){
     var el = document.getElementById('cal-bizchip-'+t);
     if(!el) return;
     var on = !!_CAL_BIZ_TYPES[t];
-    el.style.background = on ? 'rgba(255,255,255,.18)' : 'rgba(255,255,255,.05)';
-    el.style.color      = on ? '#fff' : 'rgba(255,255,255,.4)';
+    // Keep the chip as ONE cohesive pill in both states — icon + text inside
+    // the same border. Muted state dims everything together (lower opacity +
+    // strike-through on the inner text spans), but the pill shape stays.
+    el.style.background     = on ? 'rgba(255,255,255,.22)' : 'rgba(255,255,255,.08)';
+    el.style.borderColor    = on ? 'rgba(255,255,255,.55)' : 'rgba(255,255,255,.25)';
+    el.style.color          = on ? '#fff' : 'rgba(255,255,255,.45)';
+    el.style.opacity        = on ? '1' : '.7';
     el.style.textDecoration = on ? '' : 'line-through';
-    el.style.opacity    = on ? '1' : '.55';
   });
 }
 window._refreshCalBizChips = _refreshCalBizChips;
