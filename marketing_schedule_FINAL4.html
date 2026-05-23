@@ -23333,24 +23333,12 @@ function rowHTML(row,di,ri){
   var num=row.isRescheduled?'<span style="color:#f59e0b;font-size:9px">&#8629;</span>':'<span style="color:var(--muted)">'+(ri+1)+'</span>';
 
   // -- AREA CELL --
-  // Always inline-editable when the visit is in the edit window. Locked dates
-  // (members beyond yesterday/today/future, or after Sunday 8 PM) show a static chip.
-  var areaCell;
-  var areaEditable = canEditDate(day.date);
-  if(areaEditable){
-    var areaOpts='';
-    AREAS.forEach(function(a){areaOpts+='<option value="'+a+'"'+(a===city?' selected':'')+'>'+a+'</option>';});
-    areaCell='<select class="area-sel" onchange="setCity('+di+','+ri+',this.value)" title="Click to change area">'+areaOpts+'</select>';
-    if(city==='Other'){
-      var inp=document.createElement('input');
-      inp.className='custom-area-input';inp.placeholder='Type & Enter...';inp.value=row.customCity||'';
-      inp.setAttribute('oninput','setField('+di+','+ri+',"customCity",this.value)');
-      inp.setAttribute('onkeydown','if(event.key==="Enter"){event.preventDefault();pinCity('+di+','+ri+');}');
-      areaCell+='<br>'+inp.outerHTML;
-    }
-  } else {
-    areaCell='<span class="chip c-'+chipCls(city)+'" title="Locked — week sealed at Sunday 8 PM">'+city+'</span>';
-  }
+  // Per user 2026-05-22: the Area column is READ-ONLY for everyone (including
+  // admin). Area is tied to the clinic record itself — a business doesn't
+  // move cities. If admin genuinely needs to change a clinic's city, that
+  // requires the explicit "Move business to another area" affordance on the
+  // clinic card (admin-only, double-confirm). The calendar row never edits it.
+  var areaCell = '<span class="chip c-'+chipCls(city)+'" title="Area is tied to the clinic — edit on the clinic card if it truly moved.">'+city+'</span>';
 
   // -- CLINIC CELL --
   var clinicCell;
