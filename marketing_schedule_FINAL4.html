@@ -18644,6 +18644,13 @@ window.joinOutreachVisit = joinOutreachVisit;
 function getMemberStats(){
   var st={};
   MEMBERS.forEach(function(m){st[m]={comp:0,post:0,canc:0,pend:0,leads:0,total:0};});
+  // Per user 2026-05-24 dedupe Phase 2 (T6): visit counters still come from
+  // row history (the only place visit STATE lives), but ".leads" now reads
+  // from CLINIC_LEADS so per-member-profile and team-overview agree. Before,
+  // ".leads" counted ROWS marked Established (could double-count if a member
+  // visited the same clinic twice + marked Established both times), while
+  // _computeTeamStats counted UNIQUE CLINICS in Established state. They
+  // could silently disagree by the count of repeat visits.
   S.days.forEach(function(day){day.rows.forEach(function(r){
     if(!r.clinic) return;
     // Iterate ALL members on this row (primary + co-attendees from outreach)
@@ -18651,15 +18658,21 @@ function getMemberStats(){
     members.forEach(function(memName){
       if(!st[memName]) return;
       st[memName].total++;
-      if(r.status==='Completed'){
-        st[memName].comp++;
-        if(r.relationship==='Established') st[memName].leads++;
-      }
-      else if(r.status==='Postponed') st[memName].post++;
-      else if(r.status==='Canceled')  st[memName].canc++;
-      else st[memName].pend++;
+      if(r.status==='Completed')       st[memName].comp++;
+      else if(r.status==='Postponed')  st[memName].post++;
+      else if(r.status==='Canceled')   st[memName].canc++;
+      else                              st[memName].pend++;
     });
   });});
+  // All-time leads from CLINIC_LEADS — same logic _computeTeamStats uses.
+  if(typeof CLINIC_LEADS === 'object' && CLINIC_LEADS){
+    Object.keys(CLINIC_LEADS).forEach(function(clinic){
+      var l = CLINIC_LEADS[clinic];
+      if(l && l.status === 'established' && l.member && st[l.member]){
+        st[l.member].leads++;
+      }
+    });
+  }
   return st;
 }
 
@@ -29813,25 +29826,12 @@ window.getMonthTargetSum=getMonthTargetSum;
 function renderPerfCharts(){
   if(!currentMember)return;
   var name=currentMember;
-  var now=new Date();
-  var y=now.getFullYear(),m=now.getMonth();
-
-  var curData=getMonthCompleted(name,y,m);
-  var monthTarget=getMonthTargetSum(name,y,m)||curData.assigned;
-  var rate=monthTarget>0?Math.round((curData.completed/monthTarget)*100):curData.rate;
-  var leads=getLeadsThisMonth(name);
-  var monthLabel=now.toLocaleDateString('en-US',{month:'long',year:'numeric'});
-  var rc=rate>=80?'#22c55e':rate>=50?'#f59e0b':'#ef4444';
-
-  var grid=document.getElementById('perf-stats-grid');
-  if(grid){
-    grid.innerHTML=
-      '<div class="perf-stat"><div class="perf-stat-n" style="color:'+rc+'">'+rate+'%</div><div class="perf-stat-l">Completion Rate</div><div class="perf-stat-sub">'+monthLabel+' · live</div></div>'+
-      '<div class="perf-stat"><div class="perf-stat-n" style="color:#22c55e">'+curData.completed+'</div><div class="perf-stat-l">Completed</div><div class="perf-stat-sub">'+monthLabel+' · live</div></div>'+
-      '<div class="perf-stat"><div class="perf-stat-n" style="color:#7030A0">'+monthTarget+'</div><div class="perf-stat-l">Target</div><div class="perf-stat-sub">'+monthLabel+' · sum of weekly</div></div>'+
-      '<div class="perf-stat"><div class="perf-stat-n" style="color:#f59e0b">'+leads+'</div><div class="perf-stat-l">Leads</div><div class="perf-stat-sub">'+monthLabel+' · live</div></div>';
-  }
-
+  // Per user 2026-05-24 dedupe Phase 3 (T4): the 4 stat tiles (Completion
+  // Rate / Completed / Target / Leads) that used to live in #perf-stats-grid
+  // here were dead code — the container was removed from markup but the
+  // render block stayed. Every number it computed already shows on the
+  // Overview KPI cards above (post-Phase-1 cleanup) or on the avatar strip.
+  // Keeping only the line + bar chart renders, which ARE used.
   var lp=parseInt((document.getElementById('perf-line-period')||{value:3}).value);
   var bp=parseInt((document.getElementById('perf-bar-period')||{value:3}).value);
   _drawPerfLine('perf-line-svg',getMonthlyHistory(name,lp));
