@@ -10958,7 +10958,13 @@ window.renderHelpView = renderHelpView;
 // purge. Backed by DataLayer KV (localStorage + Supabase sync). Polls
 // every 3 seconds while the tab is visible.
 // ═══════════════════════════════════════════════════════════════════════
-var CHAT_ROSTER = ['admin', 'abrar', 'sadia', 'ahsan'];  // usernames
+// Per user 2026-05-24: Team Chat feature paused — not convinced on the
+// bandwidth math (image-inline base64 + ETag re-fetches). Setting roster
+// to empty hides the sidebar entry from everyone AND blocks all send/load
+// code paths via the existing CHAT_ROSTER.indexOf checks. Code stays in
+// place so we can re-enable later (just restore the roster + move images
+// to Supabase Storage).
+var CHAT_ROSTER = [];  // [] = feature hidden. Original: ['admin','abrar','sadia','ahsan']
 var CHAT_LS_KEY = 'wcg_chat_v1';
 var CHAT_STATE = {
   messages: [],          // [{id, sender, threadId, text, image, createdAt}]
