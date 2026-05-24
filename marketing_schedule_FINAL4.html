@@ -1672,9 +1672,9 @@ body.role-front_desk #referrals-view {
        element with a higher local z. 5000 puts them above all normal page
        content while still sitting below modal overlays (which run 9500+). -->
   <div style="position:sticky;top:0;z-index:5000"><div class="header">
-    <!-- Logo + title — both clickable, return to dashboard (with discard-confirm if a modal is open) -->
+    <!-- Logo + title — both clickable, return to Home (with discard-confirm if a modal is open) -->
     <div onclick="goHomeFromHeader()"
-         title="Click to return to the Dashboard"
+         title="Click to return to Home"
          style="display:flex;align-items:center;gap:14px;cursor:pointer;padding:4px 8px;border-radius:8px;transition:background .15s ease, transform .15s ease"
          onmouseover="this.style.background='rgba(255,255,255,.08)';this.style.transform='translateX(1px)'"
          onmouseout="this.style.background='transparent';this.style.transform=''">
@@ -26624,8 +26624,12 @@ function _closeAllModals(){
 }
 
 function goHomeFromHeader(){
+  // Per user 2026-05-24: clicking the logo/title in the header should go
+  // to the HOME tab (the welcome landing page), not Dashboard. Was sending
+  // people to the calendar by mistake — same code path was used for "go
+  // back to the schedule" historically.
   function go(){
-    if(typeof switchTab === 'function') switchTab('schedule');
+    if(typeof switchTab === 'function') switchTab('home');
     if(typeof showLanding === 'function') showLanding();
     window.scrollTo(0, 0);
   }
@@ -26654,7 +26658,7 @@ function goHomeFromHeader(){
   var list = open.map(function(m){ return '   • ' + (titleMap[m.id] || m.id); }).join('\n');
   showConfirm({
     icon: '⚠️',
-    msg: 'Discard your changes and go to Dashboard?',
+    msg: 'Discard your changes and go to Home?',
     sub: 'You have something open:\n' + list + '\n\nClick "Discard" to throw it away, or "Cancel" to keep working.',
     yesLabel: 'Discard',
     danger: true,
