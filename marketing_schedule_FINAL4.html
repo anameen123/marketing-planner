@@ -22722,6 +22722,68 @@ function _rpDrawRouteLine(){
 // we don't hammer the public OSRM server.
 var _RP_OSRM_CACHE = {};
 
+// ── ETA STATE (per user 2026-05-24) ──────────────────────────────────────
+// Departure time used to compute per-stop arrival times. Defaults to NOW
+// when the planner opens; user can edit via the picker in the review pane.
+// Format: 'HH:MM' (24-hour). Persisted across renders within a session.
+// Time-on-site between stops — assumed minutes a member spends at each
+// clinic before driving to the next. Default 30 min; user can tweak.
+var _RP_DEPARTURE_TIME = null;     // 'HH:MM' or null = use now
+var _RP_TIME_ON_SITE_MIN = 30;
+
+// Helper — round a Date to next 5-minute mark (cleaner display).
+function _rpRoundTime(d){
+  var m = d.getMinutes();
+  d.setMinutes(Math.round(m / 5) * 5);
+  d.setSeconds(0);
+  return d;
+}
+// Helper — format a Date as "10:45 AM" / "2:13 PM" for display.
+function _rpFmtTime(d){
+  try {
+    return d.toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit' });
+  } catch(_){
+    var h = d.getHours(), m = d.getMinutes();
+    var ap = h >= 12 ? 'PM' : 'AM';
+    h = h % 12 || 12;
+    return h + ':' + String(m).padStart(2,'0') + ' ' + ap;
+  }
+}
+// Resolve the current departure-time anchor (a Date object). Used by both
+// Corridor and Random Pick mode so they share the same start time.
+function _rpResolveDepartureDate(){
+  var now = new Date();
+  if(!_RP_DEPARTURE_TIME){
+    // Default — "in 15 minutes from now", rounded to the next 5 min mark.
+    now.setMinutes(now.getMinutes() + 15);
+    return _rpRoundTime(now);
+  }
+  var parts = String(_RP_DEPARTURE_TIME).split(':');
+  if(parts.length !== 2) return now;
+  var d = new Date();
+  d.setHours(parseInt(parts[0],10) || 0, parseInt(parts[1],10) || 0, 0, 0);
+  return d;
+}
+window._rpResolveDepartureDate = _rpResolveDepartureDate;
+
+// Called when the user edits the departure-time input in the review pane.
+// Re-renders so the ETAs update immediately without a fresh route fetch.
+function _rpSetDepartureTime(val){
+  _RP_DEPARTURE_TIME = val || null;
+  // Re-render whichever review pane is currently visible
+  if(typeof _rpReRenderReview === 'function') _rpReRenderReview();
+}
+window._rpSetDepartureTime = _rpSetDepartureTime;
+
+function _rpSetTimeOnSite(val){
+  var v = parseInt(val, 10);
+  if(isNaN(v) || v < 0) v = 0;
+  if(v > 240) v = 240;
+  _RP_TIME_ON_SITE_MIN = v;
+  if(typeof _rpReRenderReview === 'function') _rpReRenderReview();
+}
+window._rpSetTimeOnSite = _rpSetTimeOnSite;
+
 // Call OSRM public demo (free, no API key) to get real road-network
 // driving distance + duration through a series of waypoints. Returns a
 // promise resolving to {legs:[{distMi,durMin}...], totalDistMi, totalDurMin}
@@ -22876,28 +22938,54 @@ window._rpFinalizeSmart = _rpFinalizeSmart;
 // line estimates (pending=true), then again once OSRM has responded with
 // real numbers (pending=false). The HTML structure is identical so the
 // user sees a smooth update without the pane flickering.
+// Per user 2026-05-24: now includes a departure-time picker + cumulative
+// arrival-time column ("Arrive ~10:45 AM") so the day is plannable to the
+// minute, not just by total drive time.
+var _RP_LAST_REVIEW_ARGS = null;
 function _rpRenderReviewPane(legs, pending, routingFailed, source){
+  // Snapshot args so _rpReRenderReview can replay the render when the
+  // user edits the departure time picker.
+  _RP_LAST_REVIEW_ARGS = { legs: legs, pending: pending, routingFailed: routingFailed, source: source };
   var panel = document.getElementById('rp-smart-panel');
   if(!panel) return;
   var avgMph = 28;
   var totalDist = legs.reduce(function(s, l){ return s + l.dist; }, 0);
-  var totalMinutes = legs.reduce(function(s, l){
+  var totalDriveMin = legs.reduce(function(s, l){
     return s + (l.durMin != null ? l.durMin : (l.dist / avgMph * 60));
   }, 0);
+  // ── ETA chain ──────────────────────────────────────────────────────
+  // Start from the user's departure time. For each leg, arrival = previous
+  // arrival + drive minutes. Add time-on-site between intermediate stops
+  // (not on the final leg). Total trip = drive + (stops × on-site).
+  var depart = _rpResolveDepartureDate();
+  var cursor = new Date(depart.getTime());
+  var stopOnSite = (_RP_TIME_ON_SITE_MIN || 0);
+  var intermediateStops = Math.max(0, legs.length - 1); // legs - 1 stops between start and end
   var rowsHtml = legs.map(function(l, i){
     var rec = (l.to.days != null) ? recencyBucket(l.to.days) : (l.to.name === _RP_END_NAME ? null : recencyBucket(null));
     var recChip = rec ? '<span style="display:inline-flex;align-items:center;gap:3px;font-size:9px;color:#374151;background:#fff;border:1px solid var(--border);border-radius:8px;padding:1px 6px;margin-left:6px"><span style="display:inline-block;width:7px;height:7px;background:' + rec.color + ';border-radius:50%"></span>' + rec.short + '</span>' : '';
     var minutes = l.durMin != null ? l.durMin : (l.dist / avgMph * 60);
+    // Advance cursor by the drive time, then capture arrival time
+    cursor = new Date(cursor.getTime() + minutes * 60 * 1000);
+    var arriveStr = _rpFmtTime(cursor);
+    // If this isn't the final leg, also tack on the on-site time for the
+    // NEXT departure (does not affect THIS leg's arrival display).
+    if(i < legs.length - 1){
+      cursor = new Date(cursor.getTime() + stopOnSite * 60 * 1000);
+    }
     return '<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px dashed var(--border);font-size:12px">'
       +   '<div style="font-size:10px;color:var(--muted);min-width:40px">' + (i === legs.length-1 ? 'Final' : 'Leg ' + (i+1)) + '</div>'
       +   '<div style="flex:1;min-width:0">' + String(l.from.name).replace(/</g,'&lt;') + ' → <b>' + String(l.to.name).replace(/</g,'&lt;') + '</b>' + recChip + '</div>'
-      +   '<div style="font-family:DM Mono,monospace;font-size:11px;color:#1F3864;min-width:100px;text-align:right">' + l.dist.toFixed(1) + ' mi · ~' + Math.round(minutes) + ' min</div>'
+      +   '<div style="font-family:DM Mono,monospace;font-size:11px;color:#1F3864;min-width:88px;text-align:right">' + l.dist.toFixed(1) + ' mi · ~' + Math.round(minutes) + ' min</div>'
+      +   '<div style="font-family:DM Mono,monospace;font-size:11px;color:#7030A0;min-width:84px;text-align:right;font-weight:700" title="Estimated arrival at ' + String(l.to.name).replace(/"/g,'&quot;') + '">🕒 ' + arriveStr + '</div>'
       + '</div>';
   }).join('');
+  var totalElapsedMin = totalDriveMin + (intermediateStops * stopOnSite);
+  var finishCursor = new Date(depart.getTime() + totalElapsedMin * 60 * 1000);
   // Status line — explains what numbers the user is looking at.
   var statusHtml;
   if(pending){
-    statusHtml = '<div style="font-size:10px;color:#1d4ed8;font-style:italic;margin-bottom:10px;display:flex;align-items:center;gap:6px">⏳ Estimates shown — fetching real driving times from OSRM…</div>';
+    statusHtml = '<div style="font-size:10px;color:#1d4ed8;font-style:italic;margin-bottom:10px;display:flex;align-items:center;gap:6px">⏳ Estimates shown — fetching real driving times…</div>';
   } else if(routingFailed){
     statusHtml = '<div style="font-size:10px;color:#92400e;font-style:italic;margin-bottom:10px">⚠ Live routing server unavailable — showing straight-line estimates at ~28 mph metro average. Try again in a moment or just proceed.</div>';
   } else if(source === 'google'){
@@ -22905,11 +22993,21 @@ function _rpRenderReviewPane(legs, pending, routingFailed, source){
   } else {
     statusHtml = '<div style="font-size:10px;color:#166534;font-style:italic;margin-bottom:10px">✓ Real road-network driving times via <a href="https://project-osrm.org/" target="_blank" rel="noopener" style="color:#166534">OSRM</a> (free, open-source routing).</div>';
   }
+  // Default departure value for the input (HH:MM)
+  var depHH = String(depart.getHours()).padStart(2,'0');
+  var depMM = String(depart.getMinutes()).padStart(2,'0');
+  var departInputVal = depHH + ':' + depMM;
   panel.innerHTML = ''
     + '<div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:10px">📋 Review your route</div>'
+    // Departure-time + time-on-site pickers — the ETA chain anchors here.
+    + '<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:10px 14px;margin-bottom:10px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">'
+    +   '<label style="font-size:11px;color:#1e3a8a;font-weight:700;display:flex;align-items:center;gap:6px">🚗 Depart at <input type="time" value="' + departInputVal + '" onchange="_rpSetDepartureTime(this.value)" style="background:#fff;border:1px solid #93c5fd;border-radius:6px;padding:4px 8px;font-size:12px;font-weight:600;font-family:DM Sans,sans-serif"></label>'
+    +   '<label style="font-size:11px;color:#1e3a8a;font-weight:700;display:flex;align-items:center;gap:6px">⏱ Time at each stop <input type="number" min="0" max="240" value="' + (_RP_TIME_ON_SITE_MIN || 0) + '" onchange="_rpSetTimeOnSite(this.value)" style="background:#fff;border:1px solid #93c5fd;border-radius:6px;padding:4px 8px;font-size:12px;font-weight:600;font-family:DM Mono,monospace;width:64px">min</label>'
+    +   '<div style="margin-left:auto;font-size:11px;color:#1e3a8a">Last stop: <strong style="color:#7030A0;font-family:DM Mono,monospace">' + _rpFmtTime(finishCursor) + '</strong></div>'
+    + '</div>'
     + '<div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px 14px;margin-bottom:10px">'
     +   rowsHtml
-    +   '<div style="display:flex;justify-content:space-between;padding-top:10px;margin-top:6px;border-top:1px solid var(--border);font-size:13px;font-weight:700;color:#1F3864"><div>Total</div><div style="font-family:DM Mono,monospace">' + totalDist.toFixed(1) + ' mi · ~' + Math.round(totalMinutes) + ' min</div></div>'
+    +   '<div style="display:flex;justify-content:space-between;padding-top:10px;margin-top:6px;border-top:1px solid var(--border);font-size:13px;font-weight:700;color:#1F3864"><div>Total drive · on-site</div><div style="font-family:DM Mono,monospace">' + totalDist.toFixed(1) + ' mi · ~' + Math.round(totalDriveMin) + ' min drive + ' + (intermediateStops * stopOnSite) + ' min on-site = ~' + Math.round(totalElapsedMin) + ' min</div></div>'
     + '</div>'
     + statusHtml
     + '<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">'
@@ -22917,6 +23015,25 @@ function _rpRenderReviewPane(legs, pending, routingFailed, source){
     +   '<button onclick="_rpLockInRoute()" style="background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">✓ Lock in route &amp; add visits to schedule</button>'
     + '</div>';
 }
+// Cheap re-render — replays the last review pane args. Called when the
+// user edits departure-time / time-on-site so the ETAs refresh without
+// re-fetching the route from Google. Handles BOTH Corridor (smart panel)
+// and Random Pick (random results) panes; whichever was rendered last
+// gets the refresh.
+function _rpReRenderReview(){
+  // Random Pick pane re-render takes precedence when it was the last one
+  // shown — both functions stamp their own LAST_*_ARGS so we can tell.
+  var randomBox = document.getElementById('rp-random-results');
+  if(_RP_LAST_RANDOM_ARGS && randomBox && randomBox.style.display !== 'none'){
+    var r = _RP_LAST_RANDOM_ARGS;
+    _rpRenderRandomResultPane(r.legs, r.startName, r.pending, r.failed, r.source);
+    return;
+  }
+  if(!_RP_LAST_REVIEW_ARGS) return;
+  var a = _RP_LAST_REVIEW_ARGS;
+  _rpRenderReviewPane(a.legs, a.pending, a.routingFailed, a.source);
+}
+window._rpReRenderReview = _rpReRenderReview;
 window._rpRenderReviewPane = _rpRenderReviewPane;
 
 // Lock-in: add each picked visit to today's schedule, in order.
@@ -24461,9 +24578,7 @@ function _rpRandomGenerateRoute(){
     if(typeof showToast === 'function') showToast('Add at least one stop first — double-click pins on the map.');
     return;
   }
-  // Resolve start location. Prefer the explicit double-click pick (any pin
-  // type — clinic, MVA, outreach, facility). Fall back to whatever the text
-  // input resolves through getRouteCoord for the legacy/admin manual path.
+  // Resolve start location.
   var startCoord = null, startKey = '';
   if(_RP_RANDOM_START && _RP_RANDOM_START.coord){
     startCoord = _RP_RANDOM_START.coord;
@@ -24471,7 +24586,6 @@ function _rpRandomGenerateRoute(){
   } else {
     startKey = (document.getElementById('rp-start') || {}).value || '';
     startCoord = (typeof getRouteCoord === 'function') ? getRouteCoord(startKey) : null;
-    // Last-resort: maybe the start is a pin we can resolve via getCoordForBusiness
     if(!startCoord && startKey && typeof getCoordForBusiness === 'function'){
       startCoord = getCoordForBusiness(startKey);
     }
@@ -24480,49 +24594,129 @@ function _rpRandomGenerateRoute(){
     if(typeof showToast === 'function') showToast('Pick a starting location first — double-click any pin on the map.');
     return;
   }
-  // Build coords array: [start, pick1, pick2, ...]
+  // TSP optimal order using haversine (fast, no API cost). The ORDER comes
+  // from this; the real road distances/durations get fetched after.
   var coords = [startCoord].concat(_RP_RANDOM_PICKS.map(function(p){ return p.coord; }));
-  var order = _rpTSPSolve(coords, 0);   // start at index 0 (the start location)
-  // order[0] is always startIdx (0); the rest are the optimal pick order
+  var order = _rpTSPSolve(coords, 0);
   var orderedPicks = order.slice(1).map(function(idx){ return _RP_RANDOM_PICKS[idx - 1]; });
-  // Compute total distance + estimated drive time
-  var totalMiles = 0;
-  for(var k = 0; k < order.length - 1; k++){
-    totalMiles += _rpHaversineMiles(coords[order[k]], coords[order[k+1]]);
-  }
-  var roadMiles = totalMiles * 1.4;  // urban detour factor
-  var driveMin  = Math.round((roadMiles / 30) * 60);  // 30 mph urban
-  var driveStr = (driveMin < 60) ? (driveMin + ' min') : (Math.floor(driveMin/60) + 'h ' + (driveMin%60) + 'm');
-  // Render the result summary inside the dialog
-  var startName = (document.getElementById('rp-start-search') || {}).value || 'Start';
-  startName = String(startName).replace(/^[^A-Za-z0-9]+/, '').split(' · ')[0].trim();
-  var html = '<div style="background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:12px 14px;margin-bottom:10px">'
-           + '<div style="font-size:11px;font-weight:800;color:#14532d;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">✓ Optimized route</div>'
-           + '<div style="font-size:13px;font-weight:700;color:#14532d">' + orderedPicks.length + ' stops · ' + roadMiles.toFixed(1) + ' mi · ~' + driveStr + ' from ' + startName.replace(/</g,'&lt;') + '</div>'
-           + '</div>';
-  html += '<ol style="margin:0;padding-left:20px">';
-  html += '<li style="font-size:12px;color:var(--muted);margin-bottom:4px"><strong>Start:</strong> ' + startName.replace(/</g,'&lt;') + '</li>';
-  orderedPicks.forEach(function(p, i){
-    var typeIcon = p.bizType === 'mva' ? '⚖' : p.bizType === 'outreach' ? '🏘' : '🏥';
-    html += '<li style="font-size:12px;color:var(--text);margin-bottom:4px">' + typeIcon + ' <strong>' + p.name.replace(/</g,'&lt;') + '</strong></li>';
-  });
-  html += '</ol>';
-  var resultBox = document.getElementById('rp-random-results');
-  if(resultBox){
-    resultBox.innerHTML = html
-      + '<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">'
-      +   '<button onclick="_rpRandomInsertIntoDay()" style="background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;border:none;border-radius:8px;padding:9px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">📅 Insert into today\'s schedule</button>'
-      +   '<button onclick="_rpRandomReset()" style="background:#e5e7eb;color:#374151;border:none;border-radius:8px;padding:9px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:DM Sans,sans-serif">Reset picks</button>'
-      + '</div>';
-    resultBox.style.display = 'block';
-  }
-  // Save the ordered picks for the insert function
+  // Save ordered picks early so the Lock-in button has them
   window._RP_RANDOM_ORDERED = orderedPicks;
-  // Draw the optimized route on the map (blue dashed polyline)
+  // Quick estimate to show immediately while we fetch real distances
+  var hMi = 0;
+  for(var k = 0; k < order.length - 1; k++){
+    hMi += _rpHaversineMiles(coords[order[k]], coords[order[k+1]]);
+  }
+  var startName = (_RP_RANDOM_START && _RP_RANDOM_START.name) || ((document.getElementById('rp-start-search') || {}).value || 'Start');
+  startName = String(startName).replace(/^[^A-Za-z0-9]+/, '').split(' · ')[0].trim();
+  // Build initial leg list with haversine estimates — we'll upgrade once
+  // Google/OSRM responds.
+  var legs = [];
+  var prevPt = { name: startName, coord: startCoord };
+  orderedPicks.forEach(function(p){
+    legs.push({
+      from: prevPt,
+      to: { name: p.name, coord: p.coord, bizType: p.bizType },
+      dist: _rpHaversineMiles(prevPt.coord, p.coord) * 1.4,  // initial 1.4 metro factor
+      durMin: null
+    });
+    prevPt = { name: p.name, coord: p.coord };
+  });
+  // Render quick — pending = true so the user sees "fetching..."
+  _rpRenderRandomResultPane(legs, startName, /*pending*/ true);
+  // Draw the polyline on the map immediately
   _rpRandomDrawOnMap(coords, order, startName);
-  if(typeof showToast === 'function') showToast('Optimized: ' + orderedPicks.length + ' stops · ' + roadMiles.toFixed(1) + ' mi · ~' + driveStr);
+  // Fetch real driving distances + traffic-aware durations from Google
+  // (with OSRM fallback). Same router the Corridor mode uses.
+  var waypoints = [startCoord].concat(orderedPicks.map(function(p){ return p.coord; }));
+  if(typeof _rpFetchRoute === 'function'){
+    _rpFetchRoute(waypoints).then(function(res){
+      if(!res){
+        _rpRenderRandomResultPane(legs, startName, /*pending*/ false, /*failed*/ true);
+        return;
+      }
+      res.legs.forEach(function(rl, i){
+        if(legs[i]){
+          legs[i].dist = rl.distMi;
+          legs[i].durMin = rl.durMin;
+        }
+      });
+      _rpRenderRandomResultPane(legs, startName, /*pending*/ false, /*failed*/ false, res.source);
+    });
+  } else {
+    _rpRenderRandomResultPane(legs, startName, /*pending*/ false, /*failed*/ true);
+  }
+  if(typeof showToast === 'function') showToast('Optimized: ' + orderedPicks.length + ' stops · ' + hMi.toFixed(1) + ' mi straight-line · fetching real drive times…');
 }
 window._rpRandomGenerateRoute = _rpRandomGenerateRoute;
+
+// Render the Random Pick result pane — mirrors the Corridor review pane
+// design (ETA chain + departure picker + time-on-site) so users see the
+// same fancy planning detail in both modes.
+var _RP_LAST_RANDOM_ARGS = null;
+function _rpRenderRandomResultPane(legs, startName, pending, failed, source){
+  _RP_LAST_RANDOM_ARGS = { legs:legs, startName:startName, pending:pending, failed:failed, source:source };
+  var resultBox = document.getElementById('rp-random-results');
+  if(!resultBox) return;
+  var avgMph = 28;
+  var totalDist = legs.reduce(function(s, l){ return s + l.dist; }, 0);
+  var totalDriveMin = legs.reduce(function(s, l){
+    return s + (l.durMin != null ? l.durMin : (l.dist / avgMph * 60));
+  }, 0);
+  var depart = _rpResolveDepartureDate();
+  var cursor = new Date(depart.getTime());
+  var stopOnSite = (_RP_TIME_ON_SITE_MIN || 0);
+  var intermediateStops = Math.max(0, legs.length - 1);
+  var depHH = String(depart.getHours()).padStart(2,'0');
+  var depMM = String(depart.getMinutes()).padStart(2,'0');
+  var departInputVal = depHH + ':' + depMM;
+  // Build the ordered-stops list with ETAs
+  var rowsHtml = '<li style="font-size:12px;color:var(--muted);margin-bottom:4px"><strong>Start:</strong> ' + startName.replace(/</g,'&lt;') + ' <span style="font-family:DM Mono,monospace;color:#7030A0">🕒 ' + _rpFmtTime(depart) + '</span></li>';
+  legs.forEach(function(l, i){
+    var minutes = l.durMin != null ? l.durMin : (l.dist / avgMph * 60);
+    cursor = new Date(cursor.getTime() + minutes * 60 * 1000);
+    var arriveStr = _rpFmtTime(cursor);
+    if(i < legs.length - 1){
+      cursor = new Date(cursor.getTime() + stopOnSite * 60 * 1000);
+    }
+    var typeIcon = l.to.bizType === 'mva' ? '⚖' : l.to.bizType === 'outreach' ? '🏘' : '🏥';
+    rowsHtml += '<li style="font-size:12px;color:var(--text);margin-bottom:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
+      + '<span style="flex-shrink:0">' + typeIcon + '</span>'
+      + '<strong style="flex:1;min-width:0">' + l.to.name.replace(/</g,'&lt;') + '</strong>'
+      + '<span style="font-family:DM Mono,monospace;font-size:10px;color:#1F3864;background:#eff6ff;padding:1px 6px;border-radius:6px">' + l.dist.toFixed(1) + ' mi · ' + Math.round(minutes) + ' min</span>'
+      + '<span style="font-family:DM Mono,monospace;font-size:11px;color:#7030A0;font-weight:700">🕒 ' + arriveStr + '</span>'
+      + '</li>';
+  });
+  var totalElapsedMin = totalDriveMin + (intermediateStops * stopOnSite);
+  var finishCursor = new Date(depart.getTime() + totalElapsedMin * 60 * 1000);
+  var statusHtml;
+  if(pending){
+    statusHtml = '<div style="font-size:10px;color:#1d4ed8;font-style:italic;margin-top:4px">⏳ Estimates shown — fetching real driving times…</div>';
+  } else if(failed){
+    statusHtml = '<div style="font-size:10px;color:#92400e;font-style:italic;margin-top:4px">⚠ Live routing server unavailable — using straight-line × 1.4 metro factor.</div>';
+  } else if(source === 'google'){
+    statusHtml = '<div style="font-size:10px;color:#166534;font-style:italic;margin-top:4px">✓ Real driving times via <b>Google Maps</b> (traffic-aware).</div>';
+  } else {
+    statusHtml = '<div style="font-size:10px;color:#166534;font-style:italic;margin-top:4px">✓ Real road-network driving times via OSRM.</div>';
+  }
+  resultBox.innerHTML = ''
+    + '<div style="background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:12px 14px;margin-bottom:10px">'
+    +   '<div style="font-size:11px;font-weight:800;color:#14532d;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">✓ Optimized route</div>'
+    +   '<div style="font-size:13px;font-weight:700;color:#14532d">' + legs.length + ' stops · ' + totalDist.toFixed(1) + ' mi · ~' + Math.round(totalDriveMin) + ' min drive · last stop ' + _rpFmtTime(finishCursor) + '</div>'
+    + '</div>'
+    // Departure + on-site pickers
+    + '<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:10px 14px;margin-bottom:10px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">'
+    +   '<label style="font-size:11px;color:#1e3a8a;font-weight:700;display:flex;align-items:center;gap:6px">🚗 Depart at <input type="time" value="' + departInputVal + '" onchange="_rpSetDepartureTime(this.value)" style="background:#fff;border:1px solid #93c5fd;border-radius:6px;padding:4px 8px;font-size:12px;font-weight:600;font-family:DM Sans,sans-serif"></label>'
+    +   '<label style="font-size:11px;color:#1e3a8a;font-weight:700;display:flex;align-items:center;gap:6px">⏱ Time at each stop <input type="number" min="0" max="240" value="' + (_RP_TIME_ON_SITE_MIN || 0) + '" onchange="_rpSetTimeOnSite(this.value)" style="background:#fff;border:1px solid #93c5fd;border-radius:6px;padding:4px 8px;font-size:12px;font-weight:600;font-family:DM Mono,monospace;width:64px">min</label>'
+    + '</div>'
+    + '<ol style="margin:0;padding-left:20px">' + rowsHtml + '</ol>'
+    + statusHtml
+    + '<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">'
+    +   '<button onclick="_rpRandomInsertIntoDay()" style="background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;border:none;border-radius:8px;padding:9px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">📅 Insert into today\'s schedule</button>'
+    +   '<button onclick="_rpRandomReset()" style="background:#e5e7eb;color:#374151;border:none;border-radius:8px;padding:9px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:DM Sans,sans-serif">Reset picks</button>'
+    + '</div>';
+  resultBox.style.display = 'block';
+}
+window._rpRenderRandomResultPane = _rpRenderRandomResultPane;
 
 // Draw the optimized route on the day map as a blue dashed polyline with
 // numbered markers showing visit order.
