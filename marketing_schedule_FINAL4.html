@@ -2986,6 +2986,12 @@ body.role-front_desk #referrals-view {
          over when you drill in. -->
     <div id="dv-member-toggle-wrap" style="margin-left:auto;display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.18);padding:6px 11px;border-radius:8px;flex-wrap:wrap">
       <span style="font-size:11px;color:#fff;font-weight:600;text-transform:uppercase;letter-spacing:.04em;opacity:.9">Filter:</span>
+      <!-- Per user 2026-05-24: the SELECT closed-state stays white-on-translucent
+           (matches the dark header band), but the dropdown LIST shows on the
+           browser's native popup with a white background — so we need DARK
+           text on the <option> elements. Per-option color: stays light
+           when the picker is closed (white chip), goes dark when the menu
+           is open (popup renders with browser-default white background). -->
       <select id="dv-member-filter" onchange="setDayViewMemberFilter(this.value)" title="Whose visits to show on this day" style="background:rgba(255,255,255,.22);border:1px solid rgba(255,255,255,.4);color:#fff;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;outline:none">
         <option value="__all__" style="color:#1F3864">👥 All members</option>
       </select>
@@ -28950,26 +28956,34 @@ function renderDayTable(di){
     var toggleBtn  = document.getElementById('dv-toggle-show-all');
     var pickerEl   = document.getElementById('dv-member-filter');
     var meName     = (CURRENT_USER && CURRENT_USER.name) || '';
-    // Populate the dropdown every render so newly-added members appear
+    // Populate the dropdown every render so newly-added members appear.
+    // Per user 2026-05-24 fix: every <option> needs dark text + white bg
+    // explicitly, otherwise it inherits the closed-state white color and
+    // the native popup shows white-on-white when the user clicks the chip.
     if(pickerEl){
       var prevVal = pickerEl.value;
-      var optsHtml = '<option value="__all__">👥 All members</option>';
+      var optStyle = ' style="color:#1e293b;background:#fff"';
+      var optsHtml = '<option value="__all__"' + optStyle + '>👥 All members</option>';
       if(meName){
-        optsHtml += '<option value="' + meName.replace(/"/g,'&quot;') + '">👤 Just me (' + meName + ')</option>';
+        optsHtml += '<option value="' + meName.replace(/"/g,'&quot;') + '"' + optStyle + '>👤 Just me (' + meName + ')</option>';
       }
       if(typeof MEMBERS !== 'undefined' && Array.isArray(MEMBERS)){
         MEMBERS.forEach(function(m){
           if(m === meName) return; // already covered by "Just me"
-          optsHtml += '<option value="' + m.replace(/"/g,'&quot;') + '">' + m + '</option>';
+          optsHtml += '<option value="' + m.replace(/"/g,'&quot;') + '"' + optStyle + '>' + m + '</option>';
         });
       }
       pickerEl.innerHTML = optsHtml;
-      // Initial value: mirror _CAL_MEMBER_FILTER (or fall back to me / all)
+      // Per user 2026-05-24: default = "Just me". Mirrors _CAL_MEMBER_FILTER
+      // (which the calendar seeds to current user) — only falls back to All
+      // if explicitly toggled, or if there's no current user to filter by.
       var initialVal;
       if(_DAY_VIEW_SHOW_ALL){
         initialVal = '__all__';
       } else if(_filterMember){
         initialVal = _filterMember;
+      } else if(meName){
+        initialVal = meName;
       } else {
         initialVal = '__all__';
       }
@@ -29949,6 +29963,36 @@ function openClinicHistory(clinicName,city,doctor,specialty){
   if(doctor&&doctor!=='TBD')meta.push(doctor);
   if(specialty)meta.push(specialty);
   document.getElementById('ch-meta').textContent = meta.join(' \u00b7 ');
+  // Per user 2026-05-24: render the tier badge in the modal header so the
+  // current tier is visible from inside the detail view (was only on the
+  // card before). Tier rules mirror _buildReferralCounterBlock \u2014 same
+  // calculation, same medal palette.
+  try {
+    var _chType = (typeof getBizTypeForName === 'function') ? getBizTypeForName(clinicName) : 'clinic';
+    var _chTierKey = (_chType === 'mva' || _chType === 'outreach') ? _chType : 'clinic';
+    var _chHistoricCount = (typeof getReferralCountForTier === 'function') ? getReferralCountForTier(clinicName) : 0;
+    var _chCurrentCount = (typeof BUSINESS_REFERRALS !== 'undefined' && BUSINESS_REFERRALS[clinicName])
+      ? (BUSINESS_REFERRALS[clinicName].currentCount || 0)
+      : 0;
+    var _chTier = (typeof getTierForReferralCount === 'function')
+      ? getTierForReferralCount(_chTierKey, _chHistoricCount)
+      : { id:0, name:'?' };
+    var _chTierStyle = (typeof getTierStyle === 'function')
+      ? getTierStyle(_chTierKey, _chTier.id)
+      : { bg:'#f1f5f9', fg:'#1e293b', border:'#cbd5e1', glow:'rgba(0,0,0,0)' };
+    var _chTierWrap = document.getElementById('ch-tier-row');
+    if(!_chTierWrap){
+      _chTierWrap = document.createElement('div');
+      _chTierWrap.id = 'ch-tier-row';
+      _chTierWrap.style.cssText = 'display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:6px 0 2px';
+      var _chMetaEl = document.getElementById('ch-meta');
+      if(_chMetaEl && _chMetaEl.parentNode) _chMetaEl.parentNode.insertBefore(_chTierWrap, _chMetaEl.nextSibling);
+    }
+    _chTierWrap.innerHTML =
+        '<span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Current tier:</span>'
+      + '<span style="background:' + _chTierStyle.bg + ';color:' + _chTierStyle.fg + ';border:1px solid ' + _chTierStyle.border + ';font-size:11px;font-weight:800;padding:3px 10px;border-radius:10px;letter-spacing:.04em;box-shadow:0 1px 2px ' + _chTierStyle.glow + '">\ud83c\udfc5 Tier ' + (_chTier.name || '?') + '</span>'
+      + '<span style="font-size:10px;color:var(--muted)">' + _chCurrentCount + ' referral' + (_chCurrentCount === 1 ? '' : 's') + ' this period</span>';
+  } catch(_){}
   // Render the contact info panel (phone / fax / website / distance / nearest facility)
   if(typeof _renderClinicContactPanel === 'function') _renderClinicContactPanel(clinicName);
 
