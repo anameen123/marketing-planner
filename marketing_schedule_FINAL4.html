@@ -13103,7 +13103,11 @@ function renderReferralLog(){
               +   '<div style="font-size:20px;font-weight:800;font-family:DM Mono,monospace;color:#1F3864">' + thisCnt + '</div>'
               +   '<div style="font-size:10px">' + deltaHtml + '</div>'
               + '</div>'
-              + '<div style="font-size:9px;color:var(--muted);margin-top:2px">prev: ' + prevCnt + ' · total: ' + (counts[c.key] ? counts[c.key].total : 0) + '</div>'
+              // Per user 2026-05-24 dedupe RF1: dropped "· total: N" — the
+              // gradient hero card up top already shows the grand total, and
+              // summing the channel totals here was an easy way for them to
+              // drift apart. Keep just the previous-month comparison.
+              + '<div style="font-size:9px;color:var(--muted);margin-top:2px">prev: ' + prevCnt + '</div>'
               + '</div>';
     });
     chHtml += '</div>';
@@ -29710,7 +29714,9 @@ function renderMonthlyCompletion(name){
       +'<div style="height:10px;background:#f0f0f5;border-radius:10px;overflow:hidden">'
       +'<div style="height:100%;width:'+Math.min(100,curData.rate)+'%;background:'+barColor+';border-radius:10px;transition:width .5s ease"></div>'
       +'</div>'
-      +'<div style="font-size:10px;color:var(--muted);margin-top:4px">'+curData.completed+' of '+curData.assigned+' visits completed this month</div>'
+      // Per user 2026-05-24 dedupe T1: dropped the second "X of Y visits
+      // completed this month" line — line 29709 above already shows the
+      // same pair as the progress bar header.
       +'</div></div>';
   }
 
@@ -34063,16 +34069,17 @@ function renderKPICards(name){
     +'<div class="kpi-card-top"><div class="kpi-label">Business Leads</div>'
     +'<span class="kpi-badge badge-'+lColor+'">'+lBadge+'</span></div>'
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">'
-    +'<div style="text-align:center;background:#f8f9fc;border-radius:8px;padding:8px 4px">'
-    +'<div style="font-size:20px;font-weight:700;font-family:DM Mono,monospace;color:var(--navy)">'+leadsMonth+'</div>'
+    // Per user 2026-05-24 dedupe T2: drop the "All time" leads tile here —
+    // identical number already shows on the avatar strip above. Keep only
+    // "This month" since that's the per-period actionable metric.
+    +'<div style="text-align:center;background:#f8f9fc;border-radius:8px;padding:8px 4px;margin-bottom:8px">'
+    +'<div style="font-size:24px;font-weight:700;font-family:DM Mono,monospace;color:var(--navy)">'+leadsMonth+'</div>'
     +'<div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-top:2px">This month'+(KPI_TARGETS.leadsPerPeriod?' / '+KPI_TARGETS.leadsPerPeriod:'')+'</div>'
-    +'</div>'
-    +'<div style="text-align:center;background:#f8f9fc;border-radius:8px;padding:8px 4px">'
-    +'<div style="font-size:20px;font-weight:700;font-family:DM Mono,monospace;color:#7030A0">'+leadsAllTime+'</div>'
-    +'<div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-top:2px">All time</div>'
     +'</div></div>'
     +(KPI_TARGETS.leadsPerPeriod?'<div class="progress-bar"><div class="progress-fill" style="width:'+Math.min(100,Math.round((leadsMonth/(KPI_TARGETS.leadsPerPeriod||1))*100))+'%;background:'+(lColor==='green'?'#22c55e':lColor==='yellow'?'#f59e0b':'#ef4444')+'"></div></div>':'')
-    +'<div class="kpi-sub">'+s.comp+' completed visits · '+(s.comp>0?Math.round((leadsAllTime/s.comp)*100)+'% lead rate':'—')+'</div>'
+    // Per user 2026-05-24 dedupe T1: dropped the "X completed visits · Y%
+    // lead rate" subtitle — completed count already shows on the avatar
+    // strip + the Completion Rate card right below.
     +'</div>';
   // 3. Visit completion rate — ALL-TIME (since the member started)
   var compRateAllTime = s.total>0 ? Math.round((s.comp/s.total)*100) : 0;
@@ -34081,7 +34088,8 @@ function renderKPICards(name){
     +'<div class="kpi-card-top"><div class="kpi-label">Completion Rate</div>'
     +'<span class="kpi-badge badge-grey" style="font-weight:700">ALL-TIME</span></div>'
     +'<div class="kpi-nums"><div class="kpi-actual" style="color:'+rateColor+'">'+compRateAllTime+'%</div></div>'
-    +'<div class="kpi-sub">'+s.comp+' completed of '+s.total+' assigned (career total)</div>'
+    // Per user 2026-05-24 dedupe T1: dropped subtitle "X completed of Y
+    // assigned" — that pair already lives on the avatar strip above.
     +'</div>';
   // 4. Visits per Area — interactive dropdown showing per-area count (ALL-TIME)
   // Build the per-area visit count map for this member.
@@ -34124,7 +34132,10 @@ function renderKPICards(name){
     +'<div class="kpi-card-top"><div class="kpi-label">💰 Spending</div>'
     +'<span class="kpi-badge badge-grey" style="font-weight:700">' + spendLabel.toUpperCase() + '</span></div>'
     +'<div class="kpi-nums"><div class="kpi-actual" style="color:#16a34a">' + spendFormatted + '</div></div>'
-    +'<div class="kpi-sub">' + sm.comp + ' completed visit' + (sm.comp !== 1 ? 's' : '') + ' &middot; updates live</div>'
+    // Per user 2026-05-24 dedupe T1: dropped "X completed visits" subtitle
+    // — same number already on the avatar strip + Completion Rate card.
+    // Kept just the live-update hint as a small footer.
+    +'<div class="kpi-sub" style="opacity:.7">updates live as visits complete</div>'
     +'</div>';
 
   document.getElementById('kpi-cards').innerHTML=cards;
