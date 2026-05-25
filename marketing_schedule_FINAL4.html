@@ -3218,6 +3218,21 @@ body.role-front_desk #referrals-view {
         <button id="rp-mode-random" type="button" onclick="_rpSetMode('random')" style="flex:1;padding:9px 14px;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;border:none;background:transparent;border-radius:9px;font-family:'DM Sans',sans-serif;display:inline-flex;align-items:center;justify-content:center;gap:6px;transition:all .15s">🎲 Random Pick — TSP optimize</button>
       </div>
 
+      <!-- ── ADMIN-ONLY AI TOGGLE ──────────────────────────────────────
+           Per user 2026-05-25 Phase 8. Lets admin (Mahmoud) enable a
+           Gemini-powered alternative planner alongside the hardcoded
+           algorithm so results can be compared side-by-side.
+           Hidden for non-admin members. The whole block (#rp-ai-toggle-wrap)
+           can be deleted as one chunk along with the AI module JS section
+           to fully remove the feature. -->
+      <div id="rp-ai-toggle-wrap" style="display:none;margin-bottom:14px;background:linear-gradient(135deg,#faf5ff,#f0fdfa);border:1px solid #d8b4fe;border-radius:10px;padding:10px 12px">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none">
+          <input type="checkbox" id="rp-ai-toggle" onchange="_rpAiOnToggleChange(this.checked)" style="width:16px;height:16px;cursor:pointer;accent-color:#7c3aed">
+          <span style="font-size:12px;font-weight:700;color:#581c87">🤖 Use AI planning <span style="background:#7c3aed;color:#fff;font-size:9px;padding:1px 5px;border-radius:3px;margin-left:4px;font-weight:700">ADMIN · EXPERIMENTAL</span></span>
+        </label>
+        <div id="rp-ai-status-hint" style="font-size:10px;color:#64748b;margin-top:4px;line-height:1.4;font-style:italic">AI planning OFF — using hardcoded algorithm.</div>
+      </div>
+
       <div id="rp-mode-corridor-blurb" style="font-size:11px;color:var(--muted);margin-bottom:14px;line-height:1.45">
         Start and End are real visit targets. The app recommends clinics from the bank that fall inside a corridor between them, so you maximize visits with minimum driving.
       </div>
@@ -26229,6 +26244,562 @@ function _rpRwGenerate(){
   });
 }
 window._rpRwGenerate = _rpRwGenerate;
+
+// ════════════════════════════════════════════════════════════════════════════
+// ░░ PHASE 8 — ADMIN-ONLY AI PLANNER MODULE (opt-in, self-contained) ░░
+// ════════════════════════════════════════════════════════════════════════════
+// Per user 2026-05-25: "Let me give them an option to either use AI or not
+// use AI for the both options. It's gonna be for me only. And analyze the
+// difference between the results... separately, you know, so if we wanna
+// remove it later, it's not gonna affect what I've originally created."
+//
+// DESIGN PRINCIPLES:
+//   1. Self-contained — every state var, function, and DOM hook lives in
+//      this single block. To DELETE the feature: remove this block + the
+//      #rp-ai-toggle-wrap div in the HTML. Nothing else needs changing.
+//   2. ADDITIVE — wraps _rpRwGenerate by reassigning window._rpRwGenerate
+//      to a wrapper that captures the original. If this block is deleted,
+//      the wrap never runs and the original function is hit directly.
+//   3. ADMIN-ONLY — toggle is hidden for non-admin users. The toggle state
+//      isn't persisted across sessions (sticks to local _RP_AI.enabled).
+//   4. Falls back gracefully — if Gemini errors or returns garbage, the
+//      original algorithm result is still shown. AI just adds a 4th route
+//      card (Random Pick) or an advisory panel (Corridor).
+// ────────────────────────────────────────────────────────────────────────────
+
+var _RP_AI = {
+  enabled: false,              // master toggle (admin-controlled)
+  lastResult: null,            // most recent AI route for inspection
+  lastError: null,
+  lastCorridorAdvice: null     // corridor-mode AI second opinion
+};
+window._RP_AI = _RP_AI;
+
+// Called by the HTML toggle's onchange. Updates state + hint text.
+function _rpAiOnToggleChange(checked){
+  _RP_AI.enabled = !!checked;
+  var lbl = document.getElementById('rp-ai-status-hint');
+  if(!lbl) return;
+  if(!_RP_AI.enabled){
+    lbl.textContent = 'AI planning OFF — using hardcoded algorithm.';
+    lbl.style.color = '#64748b';
+    return;
+  }
+  if(typeof hasGeminiKey !== 'function' || !hasGeminiKey()){
+    lbl.innerHTML = '⚠ <b>No Gemini key set.</b> Open ⚙ Map v2 settings to paste your key — toggle will be ignored until then.';
+    lbl.style.color = '#b91c1c';
+    return;
+  }
+  lbl.innerHTML = '🤖 AI planning ON — Gemini will suggest an alternative route alongside the algorithm so you can compare.';
+  lbl.style.color = '#6b21a8';
+}
+window._rpAiOnToggleChange = _rpAiOnToggleChange;
+
+// Visibility — show only for admin. Called whenever the planner opens.
+function _rpAiSyncVisibility(){
+  var wrap = document.getElementById('rp-ai-toggle-wrap');
+  if(!wrap) return;
+  var canSee = (typeof isAdmin === 'function') && isAdmin();
+  wrap.style.display = canSee ? 'block' : 'none';
+  if(!canSee){
+    // Force-off for non-admin so a stale state can't leak
+    _RP_AI.enabled = false;
+    var cb = document.getElementById('rp-ai-toggle');
+    if(cb) cb.checked = false;
+    return;
+  }
+  // Sync hint text to current state
+  _rpAiOnToggleChange(_RP_AI.enabled);
+  // Make sure checkbox matches state
+  var cb2 = document.getElementById('rp-ai-toggle');
+  if(cb2) cb2.checked = !!_RP_AI.enabled;
+}
+window._rpAiSyncVisibility = _rpAiSyncVisibility;
+
+// Returns true only if all conditions for AI use are met right now.
+function _rpAiCanRun(){
+  if(typeof isAdmin !== 'function' || !isAdmin()) return false;
+  if(!_RP_AI.enabled) return false;
+  if(typeof hasGeminiKey !== 'function' || !hasGeminiKey()) return false;
+  return true;
+}
+window._rpAiCanRun = _rpAiCanRun;
+
+// ── RANDOM PICK INTEGRATION ─────────────────────────────────────────────────
+// Given the same constraints _rpRwBuildRoutes used, ask Gemini to pick + order
+// the N stops. Resolves with a route object in the SAME shape the renderer
+// expects (so it slots into result.routes without renderer changes).
+function _rpAiPlanRandomRoute(){
+  return new Promise(function(resolve){
+    if(!_rpAiCanRun()) { resolve(null); return; }
+    if(typeof _bumpQuota !== 'function' || !_bumpQuota('gemini')){
+      _RP_AI.lastError = 'Daily Gemini quota reached';
+      resolve(null); return;
+    }
+    var start = _RP_RW && _RP_RW.start;
+    var N = _RP_RW && _RP_RW.numVisits;
+    var totalMin = (_RP_RW && _RP_RW.totalHours || 0) * 60;
+    var stopMin = (_RP_RW && _RP_RW.stopMinutes) || 0;
+    if(!start || !start.coord){ resolve(null); return; }
+
+    // Reuse the SAME locked-stops + candidate pool the algorithm just used
+    var locked = (typeof _rpRwLockedStops === 'function') ? _rpRwLockedStops() : [];
+    if(start.isVisit){
+      locked = locked.filter(function(l){ return l.name !== start.name; });
+    }
+    var startCounts = start.isVisit ? 1 : 0;
+    var needNew = N - locked.length - startCounts;
+    if(needNew < 0){ resolve(null); return; }
+
+    var excludeSet = {};
+    excludeSet[start.name] = true;
+    locked.forEach(function(l){ excludeSet[l.name] = true; });
+    var pool = (needNew > 0 && typeof _rpRwBuildCandidatePool === 'function')
+      ? _rpRwBuildCandidatePool(start.coord, excludeSet) : [];
+    if(needNew > 0 && pool.length === 0){ resolve(null); return; }
+
+    // Trim pool to the closest ~40 to keep the prompt compact
+    var poolForPrompt = pool.slice(0, 40).map(function(c){
+      var d = (typeof daysSinceLastVisit === 'function') ? daysSinceLastVisit(c.name) : null;
+      return {
+        name: c.name,
+        city: c.city || '',
+        daysSinceVisit: (d == null ? 'never' : d),
+        leadLevel: c.leadLevel || 0,
+        roughMiFromStart: (typeof _rpHaversineMiles === 'function' && c.coord)
+          ? Number(_rpHaversineMiles(start.coord, c.coord).toFixed(1))
+          : null
+      };
+    });
+
+    var prompt = ''
+      + 'You are a routing planner for a medical-marketing rep doing in-person clinic visits.\n'
+      + 'Pick the OPTIMAL set of stops AND their visiting order for today, given the constraints.\n'
+      + 'Respond ONLY with valid JSON (no markdown, no prose outside the JSON object).\n\n'
+      + 'CONSTRAINTS:\n'
+      + '  Start: ' + start.name + ' at (' + start.coord.lat.toFixed(4) + ', ' + start.coord.lng.toFixed(4) + ')\n'
+      + '  Total stops requested: ' + N + '  (round-trip — end back at start)\n'
+      + '  Total time budget: ' + totalMin + ' minutes\n'
+      + '  Time at each stop: ' + stopMin + ' minutes  (so drive budget = ' + (totalMin - N * stopMin) + ' min)\n\n'
+      + (locked.length
+          ? 'LOCKED STOPS (must be included — already scheduled for today):\n'
+            + JSON.stringify(locked.map(function(l){ return l.name; })) + '\n\n'
+          : '')
+      + 'CANDIDATE POOL — pick ' + (N - locked.length - startCounts) + ' of these (only their EXACT names):\n'
+      + JSON.stringify(poolForPrompt, null, 2) + '\n\n'
+      + 'OBJECTIVE:\n'
+      + '  - Maximize relationship value: prefer clinics with high daysSinceVisit (stale) or "never" visited.\n'
+      + '  - daysSinceVisit >= 21 (or "never") = ripe; 14-20 = warm; < 14 = too recent (skip unless cluster forces it).\n'
+      + '  - Higher leadLevel = established lead, slight boost.\n'
+      + '  - Minimize zig-zag: cluster geographically. Use roughMiFromStart as a hint.\n'
+      + '  - Order stops so total drive distance is minimized (TSP-like).\n\n'
+      + 'OUTPUT SHAPE (strict):\n'
+      + '{\n'
+      + '  "orderedStopNames": [ "<exact name #1>", "<exact name #2>", ... ],\n'
+      + '  "reasoning": "<2-3 sentence summary of WHY you picked these and this order>"\n'
+      + '}\n\n'
+      + 'CRITICAL: orderedStopNames must contain ' + N + ' names total, each an EXACT match from the locked\n'
+      + 'list and/or candidate pool above. Do not invent names. Do not omit locked stops.\n';
+
+    var url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key='
+            + encodeURIComponent(MAPV2_CONFIG.geminiKey);
+    fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [ { parts: [ { text: prompt } ] } ],
+        generationConfig: {
+          temperature: 0.4,
+          maxOutputTokens: 900,
+          responseMimeType: 'application/json'
+        }
+      })
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(json){
+      if(json.error){ _RP_AI.lastError = json.error.message; resolve(null); return; }
+      var text = '';
+      try { text = json.candidates[0].content.parts.map(function(p){ return p.text || ''; }).join(''); } catch(e){}
+      var parsed;
+      try { parsed = JSON.parse(text); }
+      catch(_){
+        var m = text.match(/\{[\s\S]*\}/);
+        if(m){ try { parsed = JSON.parse(m[0]); } catch(_2){} }
+      }
+      if(!parsed || !Array.isArray(parsed.orderedStopNames) || parsed.orderedStopNames.length === 0){
+        _RP_AI.lastError = 'Gemini returned no valid stop list';
+        resolve(null); return;
+      }
+      // Map names back to full records (locked + pool)
+      var lookup = {};
+      locked.forEach(function(l){ lookup[String(l.name).toLowerCase()] = l; });
+      pool.forEach(function(c){ lookup[String(c.name).toLowerCase()] = c; });
+      var ordered = parsed.orderedStopNames
+        .map(function(n){ return lookup[String(n).toLowerCase()]; })
+        .filter(Boolean);
+      if(ordered.length === 0){
+        _RP_AI.lastError = 'Gemini names did not match the pool';
+        resolve(null); return;
+      }
+
+      // Build the route object in the renderer's shape
+      var allStops = ordered.slice();
+      var waypoints = [start.coord].concat(allStops.map(function(s){ return s.coord; })).concat([start.coord]);
+      var googleAvailable = (typeof hasMapsKey === 'function') && hasMapsKey();
+
+      function _fallbackMiles(){
+        var mi = 0;
+        if(typeof _rpHaversineMiles !== 'function') return 0;
+        for(var i=0; i<waypoints.length-1; i++){
+          mi += _rpHaversineMiles(waypoints[i], waypoints[i+1]);
+        }
+        return mi;
+      }
+      function _finalize(rt){
+        var greenN = allStops.filter(function(s){
+          var d = (typeof daysSinceLastVisit === 'function') ? daysSinceLastVisit(s.name) : null;
+          return (d == null) || (d >= 21);
+        }).length;
+        var yellowN = allStops.filter(function(s){
+          var d = (typeof daysSinceLastVisit === 'function') ? daysSinceLastVisit(s.name) : null;
+          return d != null && d >= 14 && d < 21;
+        }).length;
+        rt.allStops = allStops;
+        rt.orderedStops = allStops;
+        rt.newPicks = allStops.filter(function(s){
+          return !locked.some(function(l){ return l.name === s.name; });
+        });
+        rt.mix = { green: greenN, yellow: yellowN, red: allStops.length - greenN - yellowN };
+        rt.totalRouteMin = Math.round(rt.totalDriveMin + (allStops.length + startCounts) * stopMin);
+        rt.fitsBudget = (rt.totalRouteMin <= totalMin);
+        rt.strategy = 'AI';
+        rt.aiGenerated = true;
+        rt.aiReasoning = parsed.reasoning || '';
+        _RP_AI.lastResult = rt;
+        resolve(rt);
+      }
+      if(googleAvailable && typeof _rpFetchGoogleRoute === 'function'){
+        _rpFetchGoogleRoute(waypoints).then(function(res){
+          var rt = {};
+          if(res && res.legs){
+            rt.totalDriveMin = res.legs.reduce(function(s,l){ return s + l.durMin; }, 0);
+            rt.totalMiles    = res.legs.reduce(function(s,l){ return s + l.distMi; }, 0);
+            rt.legs = res.legs;
+            rt.path = res.path || null;
+            rt.source = 'google';
+          } else {
+            rt.totalMiles = _fallbackMiles();
+            rt.totalDriveMin = Math.round((rt.totalMiles * 1.4 / 30) * 60);
+            rt.source = 'haversine-fallback';
+          }
+          _finalize(rt);
+        }).catch(function(){
+          var rt = { totalMiles: _fallbackMiles() };
+          rt.totalDriveMin = Math.round((rt.totalMiles * 1.4 / 30) * 60);
+          rt.source = 'haversine-fallback';
+          _finalize(rt);
+        });
+      } else {
+        var rt2 = { totalMiles: _fallbackMiles() };
+        rt2.totalDriveMin = Math.round((rt2.totalMiles * 1.4 / 30) * 60);
+        rt2.source = 'haversine';
+        _finalize(rt2);
+      }
+    })
+    .catch(function(e){
+      _RP_AI.lastError = String(e && e.message || e);
+      resolve(null);
+    });
+  });
+}
+window._rpAiPlanRandomRoute = _rpAiPlanRandomRoute;
+
+// ── WRAPPER: hook the wizard's Generate to append an AI route ────────────
+// Captures the existing window._rpRwGenerate, replaces with a wrapper that
+// runs the original AND (if AI is on) appends an AI route to the rendered
+// result. Removing this whole module restores the original function.
+(function _rpAiHookRandomPickGenerate(){
+  var orig = window._rpRwGenerate;
+  if(typeof orig !== 'function') return;
+  window._rpRwGenerate = function(){
+    var btn = document.getElementById('rp-rw-generate-btn');
+    if(btn){ btn.disabled = true; btn.textContent = '⏳ Generating…'; }
+    window._RP_RW_BATCH = 1;
+    window._RP_RW_SHOWN_NAMES = {};
+    // Call the SAME underlying builder the original uses
+    _rpRwBuildRoutes().then(function(result){
+      if(!_rpAiCanRun()){
+        // AI not active — exact original behavior
+        if(btn){ btn.disabled = false; btn.textContent = '⚡ Generate routes'; }
+        if(typeof _rpRwRenderRoutes === 'function') _rpRwRenderRoutes(result, false);
+        return;
+      }
+      // AI ON — kick off the AI route in parallel
+      if(btn){ btn.textContent = '⏳ + 🤖 Asking AI…'; }
+      _rpAiPlanRandomRoute().then(function(aiRoute){
+        if(btn){ btn.disabled = false; btn.textContent = '⚡ Generate routes'; }
+        if(aiRoute){
+          // Prepend AI route so it shows at the top for comparison
+          result.routes = [aiRoute].concat(result.routes || []);
+        } else if(_RP_AI.lastError){
+          // Show an inline error banner via toast — but still render algorithm routes
+          if(typeof showToast === 'function') showToast('🤖 AI route failed: ' + _RP_AI.lastError);
+        }
+        if(typeof _rpRwRenderRoutes === 'function') _rpRwRenderRoutes(result, false);
+      });
+    });
+  };
+})();
+
+// ── RENDERER PATCH: badge AI routes inside _rpRwRenderRoutes output ──────
+// The original renderer doesn't know about r.aiGenerated. Instead of forking
+// the renderer, we wrap it: call the original, then post-process the DOM to
+// add an "🤖 AI" badge + reasoning note to AI-generated route cards.
+(function _rpAiHookRenderRoutes(){
+  var origRender = window._rpRwRenderRoutes;
+  if(typeof origRender !== 'function') return;
+  window._rpRwRenderRoutes = function(result, isReroll){
+    origRender(result, isReroll);
+    try {
+      if(!result || !result.routes) return;
+      var box = document.getElementById('rp-random-results');
+      if(!box) return;
+      // Decorate each route card whose index corresponds to an AI route
+      var cards = box.querySelectorAll('div[style*="border:2px solid"]');
+      result.routes.forEach(function(r, i){
+        if(!r || !r.aiGenerated) return;
+        var card = cards[i];
+        if(!card) return;
+        // Replace the card's border + title styling to mark it AI
+        card.style.border = '2px solid #7c3aed';
+        card.style.background = 'linear-gradient(180deg,#faf5ff,#ffffff)';
+        // Update the title row to show 🤖 AI badge
+        var titleRow = card.querySelector('div[style*="justify-content:space-between"]');
+        if(titleRow){
+          var titleEl = titleRow.firstElementChild;
+          if(titleEl){
+            titleEl.innerHTML = '🤖 AI Suggestion <span style="background:#7c3aed;color:#fff;font-size:9px;padding:1px 6px;border-radius:3px;font-weight:700;margin-left:4px">GEMINI</span>';
+            titleEl.style.color = '#581c87';
+          }
+        }
+        // Append a reasoning panel BELOW the stops list
+        if(r.aiReasoning){
+          var rb = document.createElement('div');
+          rb.style.cssText = 'background:#f5f3ff;border-left:3px solid #7c3aed;border-radius:4px;padding:8px 10px;margin-top:8px;font-size:11px;color:#581c87;line-height:1.5';
+          rb.innerHTML = '<b>💭 AI reasoning:</b> ' + String(r.aiReasoning).replace(/</g, '&lt;');
+          // Insert before the action button row
+          var actionRow = card.querySelector('div[style*="justify-content:flex-end"]');
+          if(actionRow) card.insertBefore(rb, actionRow);
+          else card.appendChild(rb);
+        }
+      });
+    } catch(_e){ /* never let decoration break render */ }
+  };
+})();
+
+// ── CORRIDOR INTEGRATION ──────────────────────────────────────────────────
+// Adds an "🤖 Ask AI for second opinion" button to the corridor candidate
+// results panel. When clicked, sends the bucket of found candidates to Gemini
+// and asks which it would prioritize. Shows result as an advisory panel —
+// does NOT auto-execute. User decides whether to apply the AI's picks.
+function _rpAiCorridorSecondOpinion(){
+  if(!_rpAiCanRun()){
+    if(typeof showToast === 'function') showToast('Enable the AI toggle first (admin only) + set a Gemini key in ⚙ Map v2.');
+    return;
+  }
+  if(!window._RP_V4_LAST || !window._RP_V4_LAST.buckets){
+    if(typeof showToast === 'function') showToast('Run "Find candidates" first — AI needs a candidate pool to compare against.');
+    return;
+  }
+  if(typeof _bumpQuota !== 'function' || !_bumpQuota('gemini')){
+    if(typeof showToast === 'function') showToast('Daily Gemini quota reached.');
+    return;
+  }
+  // Flatten all bucket candidates into one pool with priority hints
+  var allCands = [];
+  Object.keys(window._RP_V4_LAST.buckets).forEach(function(lvl){
+    window._RP_V4_LAST.buckets[lvl].forEach(function(c){
+      allCands.push({
+        name: c.name,
+        city: c.city || '',
+        bizType: c.bizType,
+        daysSinceVisit: (c.days == null ? 'never' : c.days),
+        leadLevel: c.leadLevel || 0,
+        perpendicularMi: c.perp != null ? Number(c.perp).toFixed(1) : null,
+        positionAlongRoute: c.t != null ? Number(c.t).toFixed(2) : null,
+        level: lvl
+      });
+    });
+  });
+  if(allCands.length === 0){
+    if(typeof showToast === 'function') showToast('No candidates in the current corridor.');
+    return;
+  }
+  // Render a placeholder in the panel
+  var panel = document.getElementById('rp-ai-corridor-advice');
+  if(panel){
+    panel.style.display = 'block';
+    panel.innerHTML = '<div style="font-size:11px;color:#6b21a8;font-style:italic">⏳ Asking AI for a second opinion…</div>';
+  }
+  var prompt = ''
+    + 'You are a routing advisor for a medical-marketing rep. The rep has defined a Start→End\n'
+    + 'corridor and the algorithm has surfaced the candidates below. The rep needs to pick\n'
+    + 'which ones to actually visit today. Recommend the BEST 5-8 candidates to prioritize.\n'
+    + 'Respond ONLY with JSON.\n\n'
+    + 'GUIDANCE:\n'
+    + '  - daysSinceVisit >= 21 OR "never" = highest priority (stale or untouched).\n'
+    + '  - daysSinceVisit 14-20 = moderate priority.\n'
+    + '  - daysSinceVisit < 14 = skip unless geographically necessary.\n'
+    + '  - leadLevel higher = stronger established relationship, slight boost.\n'
+    + '  - perpendicularMi small = on the route line; large = detour.\n'
+    + '  - positionAlongRoute clusters along Start→End — prefer spread vs. all-at-one-end.\n\n'
+    + 'CANDIDATES:\n'
+    + JSON.stringify(allCands, null, 2) + '\n\n'
+    + 'OUTPUT JSON SHAPE:\n'
+    + '{\n'
+    + '  "priorityNames": [ "<exact name 1>", "<exact name 2>", ... 5-8 items ],\n'
+    + '  "reasoning": "<2-4 sentence explanation of why these and how you balanced detour vs. recency>"\n'
+    + '}\n';
+
+  var url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key='
+          + encodeURIComponent(MAPV2_CONFIG.geminiKey);
+  fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [ { parts: [ { text: prompt } ] } ],
+      generationConfig: { temperature: 0.4, maxOutputTokens: 800, responseMimeType: 'application/json' }
+    })
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(json){
+    if(json.error){
+      if(panel) panel.innerHTML = '<div style="font-size:11px;color:#b91c1c">⚠ AI error: ' + String(json.error.message).replace(/</g,'&lt;') + '</div>';
+      return;
+    }
+    var text = '';
+    try { text = json.candidates[0].content.parts.map(function(p){ return p.text || ''; }).join(''); } catch(e){}
+    var parsed;
+    try { parsed = JSON.parse(text); }
+    catch(_){
+      var m = text.match(/\{[\s\S]*\}/);
+      if(m){ try { parsed = JSON.parse(m[0]); } catch(_2){} }
+    }
+    if(!parsed || !Array.isArray(parsed.priorityNames)){
+      if(panel) panel.innerHTML = '<div style="font-size:11px;color:#b91c1c">⚠ AI returned no usable picks.</div>';
+      return;
+    }
+    _RP_AI.lastCorridorAdvice = parsed;
+    // Compare to what the user has already checked
+    var algoChecked = Object.keys(window._RP_V4_CHECKED || {});
+    var aiSet = {};
+    parsed.priorityNames.forEach(function(n){ aiSet[String(n).toLowerCase()] = true; });
+    var algoOnly = algoChecked.filter(function(n){ return !aiSet[n.toLowerCase()]; });
+    var aiOnly   = parsed.priorityNames.filter(function(n){
+      return !algoChecked.some(function(a){ return a.toLowerCase() === String(n).toLowerCase(); });
+    });
+    if(panel){
+      panel.innerHTML =
+        '<div style="background:linear-gradient(135deg,#faf5ff,#ffffff);border:1px solid #d8b4fe;border-radius:8px;padding:12px;font-size:11px;color:#1e293b">'
+        + '<div style="font-weight:700;color:#581c87;margin-bottom:6px;display:flex;align-items:center;gap:6px">🤖 AI Second Opinion <span style="background:#7c3aed;color:#fff;font-size:9px;padding:1px 5px;border-radius:3px;font-weight:700">GEMINI</span></div>'
+        + '<div style="background:#f5f3ff;border-radius:4px;padding:8px;margin-bottom:8px;font-style:italic;color:#581c87"><b>💭 Reasoning:</b> ' + String(parsed.reasoning || '').replace(/</g,'&lt;') + '</div>'
+        + '<div style="margin-bottom:6px"><b>AI prioritizes:</b><div style="margin-top:4px;line-height:1.7">'
+        +   parsed.priorityNames.map(function(n){
+              var inAlgo = algoChecked.some(function(a){ return a.toLowerCase() === String(n).toLowerCase(); });
+              return '<span style="display:inline-block;margin:2px 4px 2px 0;padding:3px 8px;border-radius:4px;background:' + (inAlgo ? '#dcfce7' : '#fef3c7') + ';color:' + (inAlgo ? '#14532d' : '#78350f') + ';font-size:10px;font-weight:600">' + String(n).replace(/</g,'&lt;') + (inAlgo ? ' ✓' : ' ★') + '</span>';
+            }).join('')
+        + '</div></div>'
+        + (aiOnly.length ? '<div style="font-size:10px;color:#92400e;margin-top:6px"><b>★ AI suggests adding:</b> ' + aiOnly.map(function(n){ return String(n).replace(/</g,'&lt;'); }).join(', ') + '</div>' : '')
+        + (algoOnly.length ? '<div style="font-size:10px;color:#475569;margin-top:4px"><b>Algorithm checked but AI skipped:</b> ' + algoOnly.map(function(n){ return n.replace(/</g,'&lt;'); }).join(', ') + '</div>' : '')
+        + '<div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap">'
+        +   '<button onclick="_rpAiApplyCorridorPicks()" style="background:#7c3aed;color:#fff;border:none;border-radius:5px;padding:6px 11px;font-size:11px;font-weight:700;cursor:pointer">Apply AI picks</button>'
+        +   '<button onclick="document.getElementById(\'rp-ai-corridor-advice\').style.display=\'none\'" style="background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:5px;padding:6px 11px;font-size:11px;font-weight:600;cursor:pointer">Dismiss</button>'
+        + '</div>'
+        + '</div>';
+    }
+  })
+  .catch(function(e){
+    if(panel) panel.innerHTML = '<div style="font-size:11px;color:#b91c1c">⚠ AI request failed: ' + String(e && e.message || e).replace(/</g,'&lt;') + '</div>';
+  });
+}
+window._rpAiCorridorSecondOpinion = _rpAiCorridorSecondOpinion;
+
+// Apply AI's picks → overwrite _RP_V4_CHECKED with the AI's priority list,
+// then re-render the candidate UI so the checkboxes reflect the new selection.
+function _rpAiApplyCorridorPicks(){
+  if(!_RP_AI.lastCorridorAdvice || !window._RP_V4_LAST) return;
+  // Collect all available candidate names (across buckets) for validation
+  var available = {};
+  Object.keys(window._RP_V4_LAST.buckets).forEach(function(lvl){
+    window._RP_V4_LAST.buckets[lvl].forEach(function(c){
+      available[String(c.name).toLowerCase()] = c.name;
+    });
+  });
+  var newChecked = {};
+  _RP_AI.lastCorridorAdvice.priorityNames.forEach(function(n){
+    var canon = available[String(n).toLowerCase()];
+    if(canon) newChecked[canon] = true;
+  });
+  if(Object.keys(newChecked).length === 0){
+    if(typeof showToast === 'function') showToast('AI picks did not match any current candidates.');
+    return;
+  }
+  window._RP_V4_CHECKED = newChecked;
+  if(typeof _rpV4UpdateSelectedSummary === 'function') _rpV4UpdateSelectedSummary();
+  // Re-render the candidate panel so checkbox state matches the new selection.
+  // _rpV4RenderResults reads from _RP_V4_LAST + _RP_V4_CHECKED directly.
+  if(typeof _rpV4RenderResults === 'function'){
+    _rpV4RenderResults();
+    // _rpV4RenderResults overwrites the panel — re-inject the AI advisory.
+    setTimeout(function(){ try { _rpAiEnsureCorridorButton(); } catch(_){} }, 0);
+  }
+  if(typeof showToast === 'function') showToast('🤖 AI picks applied — ' + Object.keys(newChecked).length + ' candidates checked.');
+}
+window._rpAiApplyCorridorPicks = _rpAiApplyCorridorPicks;
+
+// Inject the corridor "Second opinion" button + advisory panel into the
+// candidate-results DOM. Called lazily after corridor "Find candidates" runs.
+function _rpAiEnsureCorridorButton(){
+  if(!_rpAiCanRun()) return;
+  var resBox = document.getElementById('rp-results');
+  if(!resBox || resBox.style.display === 'none') return;
+  if(document.getElementById('rp-ai-corridor-btn')) return;  // already injected
+  var bar = document.createElement('div');
+  bar.id = 'rp-ai-corridor-bar';
+  bar.style.cssText = 'margin-top:10px;padding-top:10px;border-top:1px dashed #d8b4fe';
+  bar.innerHTML =
+    '<button id="rp-ai-corridor-btn" type="button" onclick="_rpAiCorridorSecondOpinion()" style="background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;border:none;border-radius:6px;padding:8px 14px;font-size:11px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px">🤖 Ask AI for a second opinion</button>'
+    + '<div id="rp-ai-corridor-advice" style="display:none;margin-top:10px"></div>';
+  resBox.appendChild(bar);
+}
+window._rpAiEnsureCorridorButton = _rpAiEnsureCorridorButton;
+
+// Wrap _rpV4RenderResults to inject the AI button after candidates render.
+// _rpV4RenderResults overwrites #rp-results.innerHTML on every call, so we
+// re-append the AI button + advisory after each render.
+(function _rpAiHookCorridorRender(){
+  var origRender = window._rpV4RenderResults;
+  if(typeof origRender !== 'function') return;
+  window._rpV4RenderResults = function(){
+    var ret = origRender.apply(this, arguments);
+    try { _rpAiEnsureCorridorButton(); } catch(_e){}
+    return ret;
+  };
+})();
+
+// Wrap openRoutePlanner to sync the AI toggle visibility every time it opens
+(function _rpAiHookOpenPlanner(){
+  var origOpen = window.openRoutePlanner;
+  if(typeof origOpen !== 'function') return;
+  window.openRoutePlanner = function(){
+    var ret = origOpen.apply(this, arguments);
+    try { _rpAiSyncVisibility(); } catch(_e){}
+    return ret;
+  };
+})();
+// ════════════════════════════════════════════════════════════════════════════
+// ░░ END AI PLANNER MODULE ░░
+// ════════════════════════════════════════════════════════════════════════════
 
 // ════════════════════════════════════════════════════════════════════════════
 // PHASE 3d — Show-more + Pick route + push to today's schedule
