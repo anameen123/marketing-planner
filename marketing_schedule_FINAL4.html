@@ -19740,6 +19740,7 @@ function openEditVisit(di, ri){
   // Member dropdown
   var memSel = document.getElementById('ev-member');
   var memHint = document.getElementById('ev-member-hint');
+  var memRow = document.getElementById('ev-member-row');
   var isAdminUser = (typeof isAdmin === 'function' && isAdmin());
   if(memSel){
     var opts = '<option value="">-- Unassigned --</option>';
@@ -19748,19 +19749,21 @@ function openEditVisit(di, ri){
     });
     memSel.innerHTML = opts;
     memSel.value = row.member || '';
-    // Per user 2026-05-19: a member can't reassign a visit to someone else.
-    // Admin can pick any member. Members see their own name only (no dropdown).
-    if(!isAdminUser){
-      memSel.disabled = true;
-      memSel.style.opacity = '.7';
-      memSel.style.cursor = 'not-allowed';
-      if(memHint) memHint.textContent = 'Only admin can re-assign this visit to a different member.';
-    } else {
+    // Per user 2026-05-25 (revised): members never see the Assigned Member
+    // field - any visit they add is auto-assigned to them and only admin
+    // can re-assign. Hiding the whole row removes clutter from the Fill
+    // & Confirm dialog. Admin still sees + edits the dropdown.
+    if(memRow){
+      memRow.style.display = isAdminUser ? '' : 'none';
+    }
+    if(isAdminUser){
       memSel.disabled = false;
       memSel.style.opacity = '';
       memSel.style.cursor = '';
       if(memHint) memHint.textContent = 'Admin — you can reassign this visit to any team member.';
     }
+    // (Members never see this UI, but keep the select in sync with row.member
+    // so confirmEditVisit reads the correct value when it runs.)
   }
   // Status
   var statSel = document.getElementById('ev-status');
@@ -45549,8 +45552,13 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
         <div id="ev-meta-line" style="font-size:11px;color:var(--muted);margin-top:2px"></div>
       </div>
 
-      <!-- Member assignment -->
-      <div class="kpi-input-row">
+      <!-- Member assignment — admin-only (hidden for members per user 2026-05-25:
+           "this should not include the assigned member because any member can
+           assign anything to himself"). Container gets display:none toggled
+           inside openEditVisit() based on isAdmin(). The select still exists in
+           the DOM so confirmEditVisit() can read its value (it stays in sync
+           with the row's current member). -->
+      <div class="kpi-input-row" id="ev-member-row">
         <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Assigned Member</label>
         <select id="ev-member" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box"></select>
         <div id="ev-member-hint" style="font-size:10px;color:var(--muted);margin-top:4px;font-style:italic"></div>
