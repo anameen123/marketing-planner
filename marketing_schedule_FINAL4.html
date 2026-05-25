@@ -25441,6 +25441,37 @@ function _rpV4GenerateRoute(){
   // Refresh map highlights for Start + End
   if(typeof _rpRefreshHighlights === 'function') _rpRefreshHighlights();
   if(typeof _rpUpdateStatus === 'function') _rpUpdateStatus();
+  // Per user 2026-05-25: if Start / End is a real clinic / MVA / outreach
+  // (i.e. a visit-able business), auto-add it to today's schedule. If it's
+  // one of the 4 WCG facilities (Frisco ER, Castle Hills ER, Urgent Care
+  // Plano, Richardson) or a custom address, it's just a reference point —
+  // NOT a visit. Same isVisit rule the Random Pick wizard already uses.
+  try {
+    var _addedFromEndpoints = 0;
+    function _isBusinessName(n){
+      if(!n) return false;
+      var low = n.toLowerCase();
+      if(typeof CLINIC_BANK !== 'undefined' && CLINIC_BANK.some(function(c){ return (c.n||'').toLowerCase() === low; })) return true;
+      if(typeof MVA_ATTORNEYS !== 'undefined' && MVA_ATTORNEYS.some(function(m){ return (m.firm||'').toLowerCase() === low; })) return true;
+      if(typeof OUTREACH !== 'undefined' && OUTREACH.some(function(o){ return (o.name||'').toLowerCase() === low; })) return true;
+      return false;
+    }
+    if(_isBusinessName(startName) && typeof addRecommendationToDay === 'function'){
+      // Only add if not already on today's schedule (dedupe by name)
+      var diNow = (typeof _DV_LAST_DI === 'number') ? _DV_LAST_DI : null;
+      var dayNow = (diNow != null && S.days) ? S.days[diNow] : null;
+      var startExists = dayNow && Array.isArray(dayNow.rows) && dayNow.rows.some(function(r){ return r && r.clinic === startName; });
+      if(!startExists){ addRecommendationToDay(startName); _addedFromEndpoints++; }
+    }
+    if(endName && endName !== startName && _isBusinessName(endName) && typeof addRecommendationToDay === 'function'){
+      var dayNow2 = (typeof _DV_LAST_DI === 'number' && S.days) ? S.days[_DV_LAST_DI] : null;
+      var endExists = dayNow2 && Array.isArray(dayNow2.rows) && dayNow2.rows.some(function(r){ return r && r.clinic === endName; });
+      if(!endExists){ addRecommendationToDay(endName); _addedFromEndpoints++; }
+    }
+    if(_addedFromEndpoints > 0 && typeof showToast === 'function'){
+      showToast('Added ' + _addedFromEndpoints + ' Start/End ' + (_addedFromEndpoints === 1 ? 'clinic' : 'clinics') + ' to today\'s schedule.');
+    }
+  } catch(e){ try { console.warn('[corridor] auto-add Start/End failed:', e); } catch(_){} }
   // Run the finalize → OSRM review pane the user already knows
   if(typeof _rpFinalizeSmart === 'function') _rpFinalizeSmart();
 }
