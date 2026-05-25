@@ -25040,6 +25040,15 @@ function _rpHandleRandomDoubleClick(latlng){
     if(startHidden)  startHidden.value  = best.name;
     if(startVisible) startVisible.value = '📍 ' + best.name;
     _rpDrawStartMarker(best.coord, best.name);
+    // Per user 2026-05-25: "once they selected the map, we'll zoom in
+    // on that area." After the start is locked in, pan + zoom the map
+    // to ~12 (neighborhood scale) so the user can see candidate pins
+    // around the start without scrolling. Animated for clarity.
+    try {
+      if(typeof _DV_MAP !== 'undefined' && _DV_MAP && best.coord){
+        _DV_MAP.setView([best.coord.lat, best.coord.lng], 12, { animate: true });
+      }
+    } catch(_){}
     _RP_RANDOM_STEP = 'stops';
     if(typeof showToast === 'function') showToast('✓ Start set: ' + best.name + '. Now double-click pins to add stops.');
     _rpRefreshRandomStatus();
