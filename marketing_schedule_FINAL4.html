@@ -24315,6 +24315,26 @@ function _rpV4ProjectT(P, A, B){
   return t;
 }
 
+// Per user 2026-05-24: build a Set of clinic names ALREADY on the active
+// day's schedule so the Route Planner doesn't recommend them again. Active
+// day = whichever day-view is open (S.currentDay). Includes every status
+// (Pending / Postponed / Completed / Canceled) — once scheduled, it's
+// scheduled, and another row for the same clinic on the same day is just
+// noise. Returns an empty Set if no day is open.
+function _rpScheduledClinicsForActiveDay(){
+  var set = {};
+  try {
+    if(typeof S === 'undefined' || S.currentDay == null) return set;
+    var day = S.days && S.days[S.currentDay];
+    if(!day || !Array.isArray(day.rows)) return set;
+    day.rows.forEach(function(r){
+      if(r && r.clinic) set[r.clinic] = true;
+    });
+  } catch(_){}
+  return set;
+}
+window._rpScheduledClinicsForActiveDay = _rpScheduledClinicsForActiveDay;
+
 // Find ALL candidates whose perpendicular distance to A→B is ≤ halfWidth,
 // grouped by recency bucket. Respects spec filter + skip-already-visited.
 function _rpV4Collect(A, B, halfWidth, opts){
@@ -24322,10 +24342,14 @@ function _rpV4Collect(A, B, halfWidth, opts){
   var specFilter  = opts.specFilter || '';
   var skipVisited = !!opts.skipVisited;
   var includeRed  = !!opts.includeRed;
+  var scheduled = _rpScheduledClinicsForActiveDay();
   var byBucket = { fresh:[], warm:[], yellow:[], ripe:[], never:[] };
   function consider(name, bizType, spec, city){
     if(!name) return;
     if(specFilter && spec !== specFilter) return;
+    // Per user 2026-05-24: skip clinics already on the current day's
+    // schedule — recommending a clinic that's already booked is just noise.
+    if(scheduled[name]) return;
     var coord = (typeof getCoordForBusiness === 'function') ? getCoordForBusiness(name) : null;
     if(!coord) return;
     var perp = _rpV4PerpMiles(coord, A, B);
@@ -24759,6 +24783,9 @@ window._rpTSPSolve = _rpTSPSolve;
 
 // Add a pin to the random-picks list. Called from the day-map pin
 // double-click handler (set up below in _rpEnableRandomDoubleClick).
+// Per user 2026-05-24: also warns the user (without blocking) if the
+// clinic is already on today's schedule — they probably don't want to
+// double-book, but we let them through with eyes open.
 function _rpAddRandomPick(name){
   if(!name) return;
   if(_RP_RANDOM_PICKS.some(function(p){ return p.name === name; })){
@@ -24768,6 +24795,14 @@ function _rpAddRandomPick(name){
   var coord = (typeof getCoordForBusiness === 'function') ? getCoordForBusiness(name) : null;
   if(!coord){ if(typeof showToast === 'function') showToast('No coordinates for ' + name); return; }
   var bizType = (typeof getBizTypeForName === 'function') ? getBizTypeForName(name) : 'clinic';
+  // Skip-if-scheduled: silently drop the pick + show a clear toast so the
+  // user understands why. Less destructive than a blocking confirm dialog
+  // for what's an honest mistake (clicking the wrong pin).
+  var scheduled = _rpScheduledClinicsForActiveDay();
+  if(scheduled[name]){
+    if(typeof showToast === 'function') showToast(name + ' is already on today\'s schedule — pick another pin.');
+    return;
+  }
   _RP_RANDOM_PICKS.push({ name: name, bizType: bizType, coord: coord });
   if(typeof showToast === 'function') showToast('Added: ' + name + ' (' + _RP_RANDOM_PICKS.length + ' stops)');
   if(typeof _rpRefreshRandomStatus === 'function') _rpRefreshRandomStatus(); else _rpRenderRandomPicksList();
@@ -25401,11 +25436,14 @@ function _rpV5FindForLevel(A, B, k, opts){
   // Depth-slice bounds along the Start→End line
   var tLo = (k - 1) / N;
   var tHi = k / N;
+  var scheduled = _rpScheduledClinicsForActiveDay();
   function collect(width){
     var out = [];
     function consider(name, bizType, spec){
       if(!name) return;
       if(specFilter && spec !== specFilter) return;
+      // Per user 2026-05-24: skip clinics already on today's schedule.
+      if(scheduled[name]) return;
       var coord = (typeof getCoordForBusiness === 'function') ? getCoordForBusiness(name) : null;
       if(!coord) return;
       var t = _rpV5ProjT(coord, A, B);
