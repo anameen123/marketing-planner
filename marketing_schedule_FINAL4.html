@@ -807,6 +807,16 @@ body.activity-bell-open [class*="marquee"]{
 #admin-notif-list{background:#fff}
 #admin-notif-list > *{background-color:#fff}
 
+/* Patient Log collapsibles — chevron rotates 90° when details is open. */
+#rl-channels-details summary,
+#rl-members-details summary{outline:none}
+#rl-channels-details summary::-webkit-details-marker,
+#rl-members-details summary::-webkit-details-marker{display:none}
+#rl-channels-details[open] .rl-chev,
+#rl-members-details[open] .rl-chev{transform:rotate(90deg);color:#7030A0}
+#rl-channels-details summary:hover,
+#rl-members-details summary:hover{background:#fafbfc}
+
 /* ── TEAM CHAT (per user 2026-05-23) ────────────────────────────────────
    WhatsApp/Telegram-style layout: 280px thread list on left, message
    thread + composer on right. Messages right-aligned + purple-tinted
@@ -12925,6 +12935,35 @@ function getMemberAllFacilityCounts(memberName, monthKey){
 window.getMemberAllFacilityCounts = getMemberAllFacilityCounts;
 
 // ── REFERRAL LOG: UI RENDERERS ────────────────────────────────────────
+// Per user 2026-05-24: remember whether the channel + per-member panels
+// are expanded so they don't snap back to collapsed on every re-render.
+// localStorage so the user's preference survives reloads. Defaults to
+// collapsed = panels start tucked away to reduce visual noise.
+var _RL_PANEL_LS_KEY = 'wcg_rl_panels_v1';
+function _rlSavePanelState(panel, open){
+  try {
+    var raw = localStorage.getItem(_RL_PANEL_LS_KEY);
+    var st = raw ? JSON.parse(raw) : {};
+    if(!st || typeof st !== 'object') st = {};
+    st[panel] = !!open;
+    localStorage.setItem(_RL_PANEL_LS_KEY, JSON.stringify(st));
+  } catch(_){}
+}
+window._rlSavePanelState = _rlSavePanelState;
+function _rlRestorePanelStates(){
+  try {
+    var raw = localStorage.getItem(_RL_PANEL_LS_KEY);
+    if(!raw) return;
+    var st = JSON.parse(raw);
+    if(!st || typeof st !== 'object') return;
+    var ch = document.getElementById('rl-channels-details');
+    var mb = document.getElementById('rl-members-details');
+    if(ch) ch.open = !!st.channels;
+    if(mb) mb.open = !!st.members;
+  } catch(_){}
+}
+window._rlRestorePanelStates = _rlRestorePanelStates;
+
 function renderReferralLog(){
   var view = document.getElementById('referrals-view');
   if(!view) return;
@@ -31168,6 +31207,9 @@ function switchTab(tab, opts){
     // Calendar one paints since it's the visible default.
     if(typeof renderReferralCalendar === 'function') renderReferralCalendar();
     if(typeof renderReferralLog === 'function') renderReferralLog();
+    // Per user 2026-05-24: restore the collapsed/expanded state of the
+    // channel + per-member panels from localStorage.
+    if(typeof _rlRestorePanelStates === 'function') _rlRestorePanelStates();
   }
   if(tab==='members'){
     // Default behavior: clicking the Team tab button takes you to the FIRST
@@ -41494,24 +41536,36 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
   <!-- Summary strip — total referrals + per-facility totals + per-member panel -->
   <div id="rl-summary" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:14px"></div>
 
-  <!-- Per-channel monthly counters (v2): Google/Walk-in/Repeat/etc. -->
-  <div id="rl-channels" style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px 18px;margin-bottom:18px;box-shadow:0 2px 10px rgba(15,23,42,.05)"></div>
+  <!-- Per user 2026-05-24: both panels below were visually noisy on first
+       open. Wrapped in <details> so they're COLLAPSED by default (header
+       chip only). Click to expand. State persists during the session via
+       open attribute; localStorage keeps the user's preference across
+       reloads (see _rlRestorePanelStates JS hook). -->
 
-  <!-- Per-member breakdown (per user 2026-05-22 — made smaller).
-       Slimmer padding, smaller heading + month-nav, tighter card grid. -->
-  <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 14px;margin-bottom:14px;box-shadow:0 1px 6px rgba(15,23,42,.04)">
-    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px">
-      <div style="font-size:11px;font-weight:700;color:var(--text)">👥 Per-member referral totals</div>
-      <div style="display:flex;align-items:center;gap:4px">
-        <button onclick="navMemberCountersMonth(-1)" style="background:#fff;border:1px solid var(--border);border-radius:5px;padding:2px 8px;font-size:11px;font-weight:700;cursor:pointer;color:#1F3864">◀</button>
+  <!-- Per-channel monthly counters (v2): Google/Walk-in/Repeat/etc. -->
+  <details id="rl-channels-details" style="background:var(--card);border:1px solid var(--border);border-radius:14px;margin-bottom:14px;box-shadow:0 2px 10px rgba(15,23,42,.05);overflow:hidden" ontoggle="_rlSavePanelState('channels', this.open)">
+    <summary style="cursor:pointer;padding:12px 18px;list-style:none;display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12px;font-weight:700;color:var(--text);user-select:none">
+      <span style="display:flex;align-items:center;gap:8px">🔍 Referrals by source channel <span style="font-size:9px;font-weight:600;color:var(--muted);background:#f1f5f9;padding:2px 7px;border-radius:8px;letter-spacing:.04em;text-transform:uppercase">click to expand</span></span>
+      <span class="rl-chev" style="color:var(--muted);font-size:12px;transition:transform .15s ease">▶</span>
+    </summary>
+    <div id="rl-channels" style="padding:0 18px 14px"></div>
+  </details>
+
+  <!-- Per-member breakdown — also collapsed by default. -->
+  <details id="rl-members-details" style="background:var(--card);border:1px solid var(--border);border-radius:10px;margin-bottom:14px;box-shadow:0 1px 6px rgba(15,23,42,.04);overflow:hidden" ontoggle="_rlSavePanelState('members', this.open)">
+    <summary style="cursor:pointer;padding:10px 14px;list-style:none;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:11px;font-weight:700;color:var(--text);user-select:none">
+      <span style="display:flex;align-items:center;gap:8px">👥 Per-member referral totals <span style="font-size:9px;font-weight:600;color:var(--muted);background:#f1f5f9;padding:2px 7px;border-radius:8px;letter-spacing:.04em;text-transform:uppercase">click to expand</span></span>
+      <span style="display:flex;align-items:center;gap:4px;font-weight:400">
+        <button onclick="event.stopPropagation();event.preventDefault();navMemberCountersMonth(-1)" style="background:#fff;border:1px solid var(--border);border-radius:5px;padding:2px 8px;font-size:11px;font-weight:700;cursor:pointer;color:#1F3864">◀</button>
         <div id="rl-mem-month-label" style="font-size:11px;font-weight:700;color:var(--text);min-width:110px;text-align:center"></div>
-        <button onclick="navMemberCountersMonth(1)"  style="background:#fff;border:1px solid var(--border);border-radius:5px;padding:2px 8px;font-size:11px;font-weight:700;cursor:pointer;color:#1F3864">▶</button>
-        <button onclick="navMemberCountersMonth(0)"  style="background:#f1f5f9;border:1px solid var(--border);border-radius:5px;padding:2px 8px;font-size:9px;font-weight:600;cursor:pointer;color:var(--muted);margin-left:3px">Today</button>
-        <button onclick="navMemberCountersMonth('all')" id="rl-mem-alltime-btn" style="background:#f1f5f9;border:1px solid var(--border);border-radius:5px;padding:2px 8px;font-size:9px;font-weight:600;cursor:pointer;color:var(--muted)" title="Show all-time totals">All-time</button>
-      </div>
-    </div>
-    <div id="rl-member-totals" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px"></div>
-  </div>
+        <button onclick="event.stopPropagation();event.preventDefault();navMemberCountersMonth(1)"  style="background:#fff;border:1px solid var(--border);border-radius:5px;padding:2px 8px;font-size:11px;font-weight:700;cursor:pointer;color:#1F3864">▶</button>
+        <button onclick="event.stopPropagation();event.preventDefault();navMemberCountersMonth(0)"  style="background:#f1f5f9;border:1px solid var(--border);border-radius:5px;padding:2px 8px;font-size:9px;font-weight:600;cursor:pointer;color:var(--muted);margin-left:3px">Today</button>
+        <button onclick="event.stopPropagation();event.preventDefault();navMemberCountersMonth('all')" id="rl-mem-alltime-btn" style="background:#f1f5f9;border:1px solid var(--border);border-radius:5px;padding:2px 8px;font-size:9px;font-weight:600;cursor:pointer;color:var(--muted)" title="Show all-time totals">All-time</button>
+        <span class="rl-chev" style="color:var(--muted);font-size:12px;transition:transform .15s ease;margin-left:6px">▶</span>
+      </span>
+    </summary>
+    <div id="rl-member-totals" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px;padding:0 14px 12px"></div>
+  </details>
 
   <!-- Filters (3 dropdowns + free-text search) -->
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center">
