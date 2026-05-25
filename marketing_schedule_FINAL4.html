@@ -11008,7 +11008,169 @@ function renderHelpView(){
     + step(3,
       'The 🔔 bell shows activity on your work',
       'Top-right of the page. Click it to see the last 10 events touching your visits or your clinics. Each row is clickable — it jumps you straight to the visit / clinic / day where the action happened.', '');
-  var sections = section('🧭', 'Navigating the app', 'The basics — where things live', navContent);
+  // ── Per user 2026-05-25 (#18): 4-part guidebook at the top of the
+  // Help tab. Each "part" is a <details> card; inside is a list of
+  // walkthrough items; clicking an item expands a step-by-step panel.
+  // Audio narration slot ([🎤 Listen]) placed on each item header so
+  // we can drop in audio later without changing the structure.
+  function guideItem(id, title, steps){
+    // steps is array of {n,title,body} or strings. Render as a nested
+    // <details> so each topic opens independently.
+    var stepHtml = steps.map(function(s, i){
+      var n = (typeof s === 'object' && s.n != null) ? s.n : (i + 1);
+      var sTitle = typeof s === 'object' ? s.title : ('Step ' + n);
+      var sBody  = typeof s === 'object' ? (s.body || '') : s;
+      return '<div style="display:flex;gap:10px;padding:8px 0;border-bottom:1px dashed #e2e8f0">'
+        +    '<div style="flex-shrink:0;background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11px">' + n + '</div>'
+        +    '<div style="flex:1;min-width:0;font-size:12px;color:#0f172a;line-height:1.5">'
+        +      '<div style="font-weight:600;margin-bottom:3px">' + sTitle + '</div>'
+        +      '<div style="color:#475569">' + sBody + '</div>'
+        +    '</div>'
+        + '</div>';
+    }).join('');
+    return '<details style="background:#fff;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;overflow:hidden">'
+      + '<summary style="cursor:pointer;padding:10px 14px;font-size:12px;font-weight:600;color:#1F3864;list-style:none;display:flex;align-items:center;gap:8px;background:#f8fafc">'
+      +   '<span style="font-size:14px">▸</span>'
+      +   '<span style="flex:1">' + title + '</span>'
+      +   '<span style="font-size:9px;color:var(--muted);background:#fff;border:1px solid var(--border);border-radius:10px;padding:1px 7px">🎤 Listen — coming soon</span>'
+      + '</summary>'
+      + '<div style="padding:10px 14px">' + stepHtml + '</div>'
+      + '</details>';
+  }
+  function guidePart(num, icon, title, subtitle, itemsHtml){
+    return '<details style="background:#fff;border:2px solid #cbd5e1;border-radius:12px;margin-bottom:14px;overflow:hidden">'
+      + '<summary style="cursor:pointer;padding:16px 20px;list-style:none;background:linear-gradient(135deg,#f8fafc,#fff);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:14px">'
+      +   '<div style="background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px;flex-shrink:0">' + num + '</div>'
+      +   '<div style="flex:1;min-width:0">'
+      +     '<div style="font-size:15px;font-weight:800;color:#0f172a">' + icon + ' ' + title + '</div>'
+      +     '<div style="font-size:11px;color:var(--muted);margin-top:2px">' + subtitle + '</div>'
+      +   '</div>'
+      +   '<span style="font-size:18px;color:#7030A0">▾</span>'
+      + '</summary>'
+      + '<div style="padding:14px 20px">' + itemsHtml + '</div>'
+      + '</details>';
+  }
+  // Build the 4 parts
+  var part1Items = ''
+    + guideItem('add-visit', 'Log a new visit on the calendar', [
+        { title: 'Open the Dashboard tab', body: 'Click <b>Dashboard</b> in the left sidebar — the monthly calendar loads.' },
+        { title: 'Click the day you want', body: 'The day-view opens beneath the calendar with that day\'s list of visits.' },
+        { title: 'Click "+ Add visit"', body: 'Top-right of the day-view. The Add Visit dialog opens.' },
+        { title: 'Pick the clinic from the bank', body: 'Type the clinic name — the dropdown shows matches from CLINIC_BANK / MVA / Outreach. You cannot type a free-form name; it has to be in the bank.' },
+        { title: 'Confirm', body: 'Hit <b>Save</b>. The row appears in the day-view assigned to you.' }
+      ])
+    + guideItem('complete-visit', 'Mark a visit as Completed', [
+        { title: 'Open the day with the visit', body: 'Dashboard → click the day.' },
+        { title: 'Click ✏ Edit on the row', body: 'The Edit Visit dialog opens. The visit must be today or earlier — future visits can\'t be marked completed.' },
+        { title: 'Set status = Completed', body: 'Pick "Completed" from the Status dropdown.' },
+        { title: 'Enter spending', body: 'Click "Enter spending" to add items (food, samples, etc.) or check "no spending" if nothing was spent.' },
+        { title: 'Set the lead outcome', body: 'Pick Established / None / N/A — this updates the clinic\'s lead status in the Bank.' },
+        { title: 'Save + Confirm', body: 'Save the dialog, then click the green ✓ Confirm button on the row to lock it in.' }
+      ])
+    + guideItem('edit-cancel-postpone', 'Edit, cancel, or postpone a visit', [
+        { title: 'Open the day-view, click ✏ Edit on the row', body: 'The Edit dialog opens with all fields.' },
+        { title: 'To <b>postpone</b>', body: 'Set status = Postponed and pick the new date. A ghost row appears on that future date.' },
+        { title: 'To <b>cancel</b>', body: 'Set status = Canceled and enter a reason in the cancellation box. Required.' },
+        { title: 'To change member assignment', body: 'Only admin can change which member owns the visit. Members can self-assign / unassign only.' }
+      ])
+    + guideItem('plan-route-corridor', 'Plan a route — Corridor mode (Start → End)', [
+        { title: 'Click 🧭 Plan a Route', body: 'Top-right of the day-view map.' },
+        { title: 'Pick Start + End', body: 'Type clinic names or click pins on the map. The corridor between them becomes the search area.' },
+        { title: 'Adjust corridor width + visit count', body: 'Default ±3 mi, 5 levels. The algorithm builds a per-level checklist of stale clinics.' },
+        { title: 'Walk through each level', body: 'Tick the clinics you want to add at each level. Skip any. Re-do if you want.' },
+        { title: 'Finalize', body: 'Click Generate Route. The visits get inserted into the day in optimal order.' }
+      ])
+    + guideItem('plan-route-random', 'Plan a route — Random Pick wizard', [
+        { title: 'Click 🧭 Plan a Route → 🎲 Random Pick', body: 'The 4-step wizard opens.' },
+        { title: 'Step 1 — pick start', body: 'Facility (Frisco / Castle Hills / Plano / Richardson) OR custom location (your home, anywhere) OR a clinic that counts as visit #1.' },
+        { title: 'Step 2 — number of visits', body: 'How many stops total on this route. 1–12.' },
+        { title: 'Step 3 — total time', body: 'How long you have (hours). 0.5–12.' },
+        { title: 'Step 4 — minutes per stop', body: 'Time you spend at each clinic. Default 12 min. The wizard shows a live drive-budget preview.' },
+        { title: 'Generate routes', body: '3 candidates appear. If you don\'t like any, click "Show me 3 different routes" once for 3 alternates (6 total max).' },
+        { title: 'Pick + refine', body: 'Click "Use this route" → swap up to 50% of visits with nearby alternatives (5 shown per swap, green priority). Live ETA recalc on each swap.' },
+        { title: 'Confirm + push', body: 'Final Confirm pushes all stops into today\'s schedule in TSP order. Existing visits already on the schedule are reordered, not duplicated.' }
+      ]);
+  var part2Items = ''
+    + guideItem('log-patient', 'Log a patient referral (with survey)', [
+        { title: 'Open the Referrals tab', body: 'Front-desk users land here automatically. Members see a read-only version.' },
+        { title: 'Click "+ Log a Patient"', body: 'The form opens.' },
+        { title: 'Fill your name + channel', body: 'Channel = how the patient heard about us (Google / Walk-in / Member direct / etc.).' },
+        { title: 'If Member direct → pick source business', body: 'Cascading: pick clinic / MVA / outreach. This bumps the per-clinic referral counter for the tier system.' },
+        { title: 'Set patient count + insurance', body: 'Most logs are 1 patient. Pick insurance or self-pay.' },
+        { title: 'Save', body: 'The entry appears in the log. You can edit/delete your own entries within 24 hr; admin forever.' }
+      ])
+    + guideItem('log-no-survey', 'Log a "no survey info" patient', [
+        { title: 'On the Log a Patient form', body: 'Check the "No survey info" box.' },
+        { title: 'Just enter the count', body: 'No channel / source needed. This bumps the patient counter but doesn\'t affect tier scores.' },
+        { title: 'Save', body: 'Used when the patient walked in but didn\'t tell you how they found us.' }
+      ])
+    + guideItem('filter-log', 'Filter / search the patient log', [
+        { title: 'Open the Referrals tab', body: 'You\'ll see one panel per WCG facility (Frisco / Castle Hills / Plano / Richardson).' },
+        { title: 'Use the filter chips at top', body: 'Filter by Insurance vs Self-pay, or by date range.' },
+        { title: 'Click a member\'s name to drill down', body: 'See only that member\'s patients in the chosen period.' }
+      ]);
+  var part3Items = ''
+    + guideItem('browse-bank', 'Browse the Bank of Targets', [
+        { title: 'Click Businesses → Bank of Targets', body: 'You see all clinics / MVAs / outreach orgs as cards.' },
+        { title: 'Filter by tier or recency', body: 'Top of the page. T1 / T2 / T3 by lead status, or 0-13d / 14-20d / 21+ by recency.' },
+        { title: 'Click a card to see details', body: 'Opens an inline popup with visit history, lead status, contacts, address.' }
+      ])
+    + guideItem('set-lead-status', 'Update a clinic\'s lead status', [
+        { title: 'Lead status is set on Completed visits', body: 'You don\'t edit it from the clinic card — instead complete a visit at that clinic.' },
+        { title: 'During the visit completion', body: 'In the Edit Visit dialog, pick Established / None / N/A as the outcome.' },
+        { title: 'Established → tier bump', body: 'Once a clinic\'s lead is Established, it counts toward your tier score and the Patient Log counter activates for it.' }
+      ])
+    + guideItem('view-clinic-history', 'View a clinic\'s history', [
+        { title: 'From the day-view', body: 'Click the clinic name in a row → inline popup opens.' },
+        { title: 'From the Bank of Targets', body: 'Click any card → same popup. Shows: every visit, recency, current lead status, address, contacts.' }
+      ])
+    + guideItem('add-clinic', 'Add a new clinic / MVA / outreach', [
+        { title: 'Open Businesses → Bank of Targets', body: 'Click "+ Add new business" top-right.' },
+        { title: 'Pick the type', body: 'Clinic / MVA Attorney / Community Outreach.' },
+        { title: 'Fill required fields', body: 'Name + city + specialty (clinic) / firm + attorney (MVA) / event + city (outreach). Address is recommended.' },
+        { title: 'Save', body: 'It joins the bank and shows up in route planner + Add Visit picker.' }
+      ])
+    + guideItem('enter-spending', 'Enter spending for a Completed visit', [
+        { title: 'On the Edit Visit dialog (with status = Completed)', body: 'Click "Enter spending".' },
+        { title: 'Add line items', body: 'Food / samples / gifts — each as a category + amount. Multiple items allowed.' },
+        { title: 'Or mark "no spending"', body: 'If you spent nothing, check the box — it still counts as a completed visit but no $ recorded.' }
+      ]);
+  var part4Items = ''
+    + guideItem('view-performance', 'View your performance', [
+        { title: 'Click your name in the sidebar → Profile', body: 'Or click the user icon top-right.' },
+        { title: 'Overview tab', body: 'KPI summary: total visits, completion %, current month spending, tier breakdown.' },
+        { title: 'Performance tab', body: 'Charts: visits per week, recency mix, lead-conversion ratio.' }
+      ])
+    + guideItem('browse-history', 'Browse your history (month / calendar)', [
+        { title: 'Profile → History tab', body: 'Default shows all-time list paginated.' },
+        { title: 'Use ‹ › to navigate months', body: 'Top of the page. Monthly totals (visits / completed / spending) update live.' },
+        { title: 'Switch to 📅 Calendar view', body: 'Grid showing each day in the month — green = all completed, yellow = mixed, red = pending.' },
+        { title: 'Click a calendar day', body: 'List filters to just that day\'s visits.' }
+      ])
+    + guideItem('print-progress-report', 'Print a quarterly progress report', [
+        { title: 'Reports tab', body: 'Click "Progress Report" section.' },
+        { title: 'Pick the period', body: 'This month / last month / current quarter / last quarter.' },
+        { title: 'Click Print', body: 'Browser print dialog opens with a clean print-styled view — KPIs, top clinics, member rankings.' }
+      ])
+    + guideItem('read-announcements', 'Read team announcements', [
+        { title: 'Top of every page — yellow bar', body: 'Latest announcement scrolls there.' },
+        { title: 'Click "View all"', body: 'Opens the full announcement list. Admin can post new ones.' },
+        { title: 'The 🔔 bell shows what\'s new on YOUR visits', body: 'Activity feed — last 10 events touching rows you own.' }
+      ])
+    + guideItem('edit-profile', 'Edit your profile', [
+        { title: 'Click your user icon → Profile', body: 'Top-right of the header.' },
+        { title: 'Change your display name', body: 'Type into the name field, hit Save. Other team members see the new name on next sync.' },
+        { title: 'Password lives in Microsoft', body: 'Change via account.microsoft.com — the planner doesn\'t store it.' }
+      ]);
+  var guidebook = section('📚', 'How to use the planner — guided walkthroughs',
+    'Click a part to expand. Click any task inside to see step-by-step instructions. Audio narration coming soon.',
+        guidePart('1', '🗓', 'Visits & Calendar',      'Logging, completing, editing, and route planning',    part1Items)
+      + guidePart('2', '🩺', 'Patient Referrals',      'For front-desk: logging patients + filtering the log', part2Items)
+      + guidePart('3', '🏢', 'Businesses, Leads, Spending', 'Bank of Targets, lead status, adding new clinics',  part3Items)
+      + guidePart('4', '👤', 'Profile, History, Reports', 'Your performance, history navigation, printable reports', part4Items)
+  );
+  var sections = guidebook;
+  sections += section('🧭', 'Navigating the app', 'The basics — where things live', navContent);
 
   // ── Section: Adding & confirming visits (members + admin) ─────────────
   if(!isFD){
