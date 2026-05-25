@@ -20229,6 +20229,29 @@ function confirmEditVisit(){
         prevStatus, newStatus);
     } catch(e){}
   }
+  // Per user 2026-05-25: when admin reassigns the visit member, push a
+  // DEDICATED audit-log entry so the row's Assigned Member cell can show
+  // a small "↳ overridden by admin" caption underneath the new name. The
+  // generic logAdminVisitChange above only captures status; we need a
+  // member-specific entry to drive the inline caption rendering.
+  try {
+    var _prevMemberForAudit = (window._evMemberOrig != null) ? window._evMemberOrig : '';
+    if(newMember !== _prevMemberForAudit
+       && typeof isAdmin === 'function' && isAdmin()
+       && CURRENT_USER && CURRENT_USER.name !== _prevMemberForAudit){
+      if(!Array.isArray(row.auditLog)) row.auditLog = [];
+      row.auditLog.push({
+        ts: new Date().toISOString(),
+        admin: CURRENT_USER.name || 'Admin',
+        action: 'Reassigned member',
+        field: 'member',
+        before: _prevMemberForAudit || '(unassigned)',
+        after:  newMember || '(unassigned)',
+        summary: 'Admin reassigned the visit from ' + (_prevMemberForAudit || '(unassigned)') + ' to ' + (newMember || '(unassigned)'),
+        originalAuthor: _prevMemberForAudit || ''
+      });
+    }
+  } catch(_){}
   closeEditVisit();
   if(typeof refresh === 'function') refresh(di);
   if(typeof renderCounters === 'function') renderCounters();
@@ -28645,6 +28668,25 @@ function rowHTML(row,di,ri){
   // Even admin must go through the Fill / Edit Follow-up wizard to change
   // assignment. The wizard shows the Assigned Member dropdown for admin only.
   var _editBtnHtml = '';
+  // Per user 2026-05-25: if admin has reassigned this visit, show a small
+  // "↳ overridden by admin" caption below the member chip. Reads from
+  // row.auditLog — Phase 4 stored each admin action; we look for any with
+  // field === 'member' (pushed by confirmEditVisit when newMember changed).
+  var _memberOverrideNote = '';
+  if(row.auditLog && Array.isArray(row.auditLog)){
+    var lastMemberChange = null;
+    for(var _ai = row.auditLog.length - 1; _ai >= 0; _ai--){
+      var _ae = row.auditLog[_ai];
+      if(_ae && _ae.field === 'member'){ lastMemberChange = _ae; break; }
+    }
+    if(lastMemberChange){
+      var _when = lastMemberChange.ts ? new Date(lastMemberChange.ts).toLocaleDateString('en-US',{month:'short',day:'numeric'}) : '';
+      var _byAdmin = (lastMemberChange.admin || 'Admin').replace(/</g,'&lt;');
+      var _tipText = 'Reassigned from ' + (lastMemberChange.before || '?') + ' to ' + (lastMemberChange.after || '?')
+                   + ' on ' + (lastMemberChange.ts ? new Date(lastMemberChange.ts).toLocaleString() : '?');
+      _memberOverrideNote = '<div style="font-size:9px;color:#92400e;background:#fef3c7;border-left:2px solid #f59e0b;padding:2px 6px;margin-top:3px;border-radius:3px;cursor:help" title="' + _tipText.replace(/"/g,'&quot;') + '">↳ overridden by admin' + (_byAdmin && _byAdmin !== 'Admin' ? ' (' + _byAdmin + ')' : '') + (_when ? ' · ' + _when : '') + '</div>';
+    }
+  }
   // Dropdown is shown to admin always; to members only if they can self-
   // assign (unassigned row) or it's already their row. Otherwise we show
   // a small "Assigned to X (locked)" label.
@@ -28653,7 +28695,7 @@ function rowHTML(row,di,ri){
                        || (typeof canSelfAssignToRow === 'function' && canSelfAssignToRow(row));
   var memberCell=row.memberConfirmed
     ?'<div><div style="display:flex;align-items:center;gap:5px"><span class="chip m-conf-'+mKey(row.member)+' member-link" data-member="'+(row.member||'').replace(/"/g,'&quot;')+'" title="Open '+row.member+'\'s profile" style="cursor:pointer">'+row.member+'</span>'
-      +_editBtnHtml+'</div>'+coMembersHtml+joinBtnHtml+'</div>'
+      +_editBtnHtml+'</div>'+_memberOverrideNote+coMembersHtml+joinBtnHtml+'</div>'
     :( _canChangeMember
         ?'<div style="display:flex;flex-direction:column;gap:3px">'
           +'<select class="'+mCls+'" onchange="setMember('+di+','+ri+',this.value)">'+mOpts+'</select>'
