@@ -25277,15 +25277,386 @@ function _rpRwHandleMapPick(latlng){
 }
 window._rpRwHandleMapPick = _rpRwHandleMapPick;
 
-// Phase 3c — Generate. For 3a this is a placeholder.
-function _rpRwGenerate(){
-  if(typeof showToast === 'function'){
-    showToast('Algorithm coming in Phase 3c. Inputs locked: '
-      + _RP_RW.numVisits + ' visits, ' + _RP_RW.totalHours + ' hr, '
-      + _RP_RW.stopMinutes + ' min/stop, start: ' + (_RP_RW.start ? _RP_RW.start.name : '?'));
+// ════════════════════════════════════════════════════════════════════════════
+// PHASE 3c — ROUTE-GENERATION ALGORITHM
+// ════════════════════════════════════════════════════════════════════════════
+// Constrained TSP variant. Given a start + N visits + time budget, generate
+// up to 3 candidate routes. Existing today-schedule visits get pulled in as
+// MUST-INCLUDE stops. Priority order: green (21+d / never) > yellow (14-20d)
+// > red (0-13d, only if we couldn't fill from green/yellow). No AI used —
+// pure JS with a recency-weighted greedy + TSP optimizer + Google Directions
+// for real drive times.
+// ────────────────────────────────────────────────────────────────────────────
+
+// Score a candidate. Higher = more attractive pick.
+//   recency:  green=300, yellow=200, red=100, never=300
+//   minus haversine miles from `from` (closer wins ties)
+function _rpRwScoreCandidate(name, from){
+  var coord = (typeof getCoordForBusiness === 'function') ? getCoordForBusiness(name) : null;
+  if(!coord) return { score: -Infinity };
+  var days = (typeof daysSinceLastVisit === 'function') ? daysSinceLastVisit(name) : null;
+  var recencyScore;
+  if(days == null)        recencyScore = 300;  // never visited - top priority
+  else if(days >= 21)     recencyScore = 300;  // green
+  else if(days >= 14)     recencyScore = 200;  // yellow
+  else                    recencyScore = 100;  // red
+  var miles = _rpHaversineMiles(from, coord);
+  return {
+    score: recencyScore - miles,
+    recencyScore: recencyScore,
+    miles: miles,
+    coord: coord,
+    days: days
+  };
+}
+
+// Build the full candidate pool from CLINIC_BANK + MVA_ATTORNEYS + OUTREACH,
+// excluding any name in `excludeSet`. Returns scored + sorted (best first).
+function _rpRwBuildCandidatePool(from, excludeSet){
+  var out = [];
+  function add(name, bizType){
+    if(!name || excludeSet[name]) return;
+    var sc = _rpRwScoreCandidate(name, from);
+    if(sc.score === -Infinity) return;   // no coords
+    out.push({ name: name, bizType: bizType, score: sc.score,
+               recencyScore: sc.recencyScore, miles: sc.miles,
+               coord: sc.coord, days: sc.days });
   }
+  if(typeof CLINIC_BANK !== 'undefined')   CLINIC_BANK.forEach(function(c){ if(c && c.n) add(c.n, 'clinic'); });
+  if(typeof MVA_ATTORNEYS !== 'undefined') MVA_ATTORNEYS.forEach(function(m){ if(m && m.firm) add(m.firm, 'mva'); });
+  if(typeof OUTREACH !== 'undefined')      OUTREACH.forEach(function(o){ if(o && o.name) add(o.name, 'outreach'); });
+  out.sort(function(a, b){ return b.score - a.score; });
+  return out;
+}
+
+// Pull today's already-scheduled visits as locked stops.
+function _rpRwLockedStops(){
+  var out = [];
+  if(typeof S === 'undefined' || S.currentDay == null) return out;
+  var day = S.days && S.days[S.currentDay];
+  if(!day || !Array.isArray(day.rows)) return out;
+  day.rows.forEach(function(r, idx){
+    if(!r || !r.clinic) return;
+    var coord = (typeof getCoordForBusiness === 'function') ? getCoordForBusiness(r.clinic) : null;
+    if(!coord) return;
+    out.push({
+      name: r.clinic, coord: coord, bizType: (r.type || 'clinic'),
+      isExisting: true, rowIdx: idx
+    });
+  });
+  return out;
+}
+
+// Three pick strategies. Each returns up to N stops (or fewer if pool exhausted).
+//   A. greedy by score (recency priority, ties by distance)
+//   B. tight cluster — score-weighted but also penalize centroid distance
+//   C. mixed — alternates between green and yellow buckets for variety
+function _rpRwPickStops(pool, need, from, strategy){
+  if(need <= 0) return [];
+  var picks = [];
+  var used = {};
+  if(strategy === 'A'){
+    // Greedy: best score first
+    for(var i = 0; i < pool.length && picks.length < need; i++){
+      if(used[pool[i].name]) continue;
+      picks.push(pool[i]);
+      used[pool[i].name] = true;
+    }
+  } else if(strategy === 'B'){
+    // Tight cluster: seed with best, then pick each next one minimizing
+    // sum of distances to current picks (still prefers green/yellow over red)
+    if(pool.length === 0) return [];
+    picks.push(pool[0]);
+    used[pool[0].name] = true;
+    while(picks.length < need){
+      var bestIdx = -1, bestScore = -Infinity;
+      for(var j = 0; j < pool.length; j++){
+        if(used[pool[j].name]) continue;
+        // Penalize distance to existing picks
+        var sumD = 0;
+        for(var k = 0; k < picks.length; k++){
+          sumD += _rpHaversineMiles(pool[j].coord, picks[k].coord);
+        }
+        var avgD = sumD / picks.length;
+        var s = pool[j].recencyScore - (avgD * 1.5);   // tighter penalty than basic score
+        if(s > bestScore){ bestScore = s; bestIdx = j; }
+      }
+      if(bestIdx < 0) break;
+      picks.push(pool[bestIdx]);
+      used[pool[bestIdx].name] = true;
+    }
+  } else if(strategy === 'C'){
+    // Mixed — alternate between green and yellow buckets to give the user
+    // a more varied route. Falls back to red if both empty.
+    var green = pool.filter(function(c){ return c.recencyScore === 300 && !used[c.name]; });
+    var yellow = pool.filter(function(c){ return c.recencyScore === 200 && !used[c.name]; });
+    var red = pool.filter(function(c){ return c.recencyScore === 100 && !used[c.name]; });
+    var preferGreen = true;
+    while(picks.length < need){
+      var nxt = null;
+      if(preferGreen && green.length){ nxt = green.shift(); }
+      else if(yellow.length){ nxt = yellow.shift(); }
+      else if(green.length){ nxt = green.shift(); }
+      else if(red.length){ nxt = red.shift(); }
+      if(!nxt) break;
+      picks.push(nxt);
+      used[nxt.name] = true;
+      preferGreen = !preferGreen;
+    }
+  }
+  return picks;
+}
+
+// MAIN BUILDER — Phase 3c entry point. Async because Google Directions is async.
+// Returns Promise<{ routes: [...], error: string|null, impossibilityMath: {...}|null }>
+function _rpRwBuildRoutes(){
+  return new Promise(function(resolve){
+    var start = _RP_RW.start;
+    var N = _RP_RW.numVisits;
+    var totalMin = _RP_RW.totalHours * 60;
+    var stopMin  = _RP_RW.stopMinutes;
+    if(!start || !start.coord){
+      resolve({ routes: [], error: 'No starting location set.' });
+      return;
+    }
+    // 1. Locked stops from today's schedule
+    var locked = _rpRwLockedStops();
+    // If start IS a clinic on today's schedule, dedupe it out of locked
+    if(start.isVisit){
+      locked = locked.filter(function(l){ return l.name !== start.name; });
+    }
+    var lockedCount = locked.length;
+    // 2. How many NEW stops do we need?
+    var startCounts = start.isVisit ? 1 : 0;
+    var needNew = N - lockedCount - startCounts;
+    if(needNew < 0){
+      resolve({
+        routes: [], error: 'too-many-locked',
+        impossibilityMath: {
+          existingCount: lockedCount, askedFor: N,
+          message: 'You already have ' + lockedCount + ' visits on today\'s schedule. '
+                 + 'Route must include all of them — set total ≥ ' + lockedCount + ' or remove some.'
+        }
+      });
+      return;
+    }
+    // 3. Budget math
+    var stopTotal = N * stopMin;
+    var driveBudget = totalMin - stopTotal;
+    if(driveBudget <= 0){
+      resolve({
+        routes: [], error: 'no-drive-budget',
+        impossibilityMath: {
+          totalMin: totalMin, stopTotal: stopTotal, driveBudget: driveBudget,
+          message: 'Your stop time (' + N + ' × ' + stopMin + ' min = ' + stopTotal + ' min) '
+                 + 'is already ≥ your total budget (' + totalMin + ' min). Increase time or '
+                 + 'reduce visits.'
+        }
+      });
+      return;
+    }
+    // 4. Build excluded set (start + locked stops + nothing else)
+    var excludeSet = {};
+    excludeSet[start.name] = true;
+    locked.forEach(function(l){ excludeSet[l.name] = true; });
+    // 5. Build pool (already excludes scheduled clinics if they're in S.days)
+    var pool = (needNew > 0) ? _rpRwBuildCandidatePool(start.coord, excludeSet) : [];
+    if(needNew > 0 && pool.length === 0){
+      resolve({
+        routes: [], error: 'no-candidates',
+        impossibilityMath: {
+          message: 'No unvisited / unscheduled clinics found in the candidate pool. '
+                 + 'Add more clinics to the bank or reduce visit count.'
+        }
+      });
+      return;
+    }
+    // 6. Generate 3 strategy variants
+    var strategies = ['A', 'B', 'C'];
+    var rawRoutes = strategies.map(function(strat){
+      var newPicks = _rpRwPickStops(pool, needNew, start.coord, strat);
+      // Combine: locked stops + new picks (TSP will reorder)
+      var allStops = locked.concat(newPicks);
+      return { strategy: strat, allStops: allStops, newPicks: newPicks };
+    });
+    // 7. Dedupe identical routes (different strategies sometimes pick the same set)
+    var seen = {};
+    rawRoutes = rawRoutes.filter(function(r){
+      var sig = r.allStops.map(function(s){ return s.name; }).sort().join('|');
+      if(seen[sig]) return false;
+      seen[sig] = true;
+      return true;
+    });
+    // 8. TSP-optimize each route. Start is index 0, fixed.
+    rawRoutes.forEach(function(r){
+      if(r.allStops.length === 0){ r.orderedStops = []; return; }
+      // coords array: [start, allStops...]
+      var coords = [start.coord].concat(r.allStops.map(function(s){ return s.coord; }));
+      var tour = _rpTSPSolve(coords, 0);   // returns indices, tour[0] = start
+      // Reorder stops to match tour (skip tour[0] which is the start)
+      r.orderedStops = tour.slice(1).map(function(idx){ return r.allStops[idx - 1]; });
+    });
+    // 9. Fetch real Google drive times for each
+    var googleAvailable = (typeof hasMapsKey === 'function') && hasMapsKey();
+    var fetchPromises = rawRoutes.map(function(r){
+      var waypoints = [start.coord].concat(r.orderedStops.map(function(s){ return s.coord; }));
+      // Round trip back to start (per random pick semantics)
+      waypoints.push(start.coord);
+      if(googleAvailable){
+        return _rpFetchGoogleRoute(waypoints).then(function(googleRes){
+          if(googleRes && googleRes.legs){
+            r.totalDriveMin = googleRes.legs.reduce(function(s, l){ return s + l.durMin; }, 0);
+            r.totalMiles = googleRes.legs.reduce(function(s, l){ return s + l.distMi; }, 0);
+            r.legs = googleRes.legs;
+            r.path = googleRes.path || null;
+            r.source = 'google';
+          } else {
+            // Fallback to haversine if google failed
+            r.totalMiles = 0;
+            for(var i = 0; i < waypoints.length - 1; i++){
+              r.totalMiles += _rpHaversineMiles(waypoints[i], waypoints[i+1]);
+            }
+            r.totalDriveMin = Math.round((r.totalMiles * 1.4 / 30) * 60);
+            r.source = 'haversine-fallback';
+          }
+          return r;
+        });
+      } else {
+        // Haversine-only fallback when no Maps key
+        r.totalMiles = 0;
+        for(var i = 0; i < waypoints.length - 1; i++){
+          r.totalMiles += _rpHaversineMiles(waypoints[i], waypoints[i+1]);
+        }
+        r.totalDriveMin = Math.round((r.totalMiles * 1.4 / 30) * 60);
+        r.source = 'haversine';
+        return Promise.resolve(r);
+      }
+    });
+    Promise.all(fetchPromises).then(function(){
+      // 10. Annotate with feasibility + priority mix
+      rawRoutes.forEach(function(r){
+        r.totalRouteMin = Math.round(r.totalDriveMin + stopTotal);
+        r.fitsBudget = (r.totalRouteMin <= totalMin);
+        var greenN = r.allStops.filter(function(s){
+          var d = (typeof daysSinceLastVisit === 'function') ? daysSinceLastVisit(s.name) : null;
+          return (d == null) || (d >= 21);
+        }).length;
+        var yellowN = r.allStops.filter(function(s){
+          var d = (typeof daysSinceLastVisit === 'function') ? daysSinceLastVisit(s.name) : null;
+          return d != null && d >= 14 && d < 21;
+        }).length;
+        var redN = r.allStops.length - greenN - yellowN;
+        r.mix = { green: greenN, yellow: yellowN, red: redN };
+      });
+      // 11. Feasibility filter — drop unfeasible UNLESS all are unfeasible
+      // (in which case show the closest one with a warning)
+      var feasible = rawRoutes.filter(function(r){ return r.fitsBudget; });
+      var output;
+      if(feasible.length > 0){
+        // Sort: most green first, then shortest drive
+        feasible.sort(function(a, b){
+          if(a.mix.green !== b.mix.green) return b.mix.green - a.mix.green;
+          return a.totalDriveMin - b.totalDriveMin;
+        });
+        output = { routes: feasible.slice(0, 3), error: null };
+      } else if(rawRoutes.length > 0){
+        // None fit — return the closest one with overflow warning
+        rawRoutes.sort(function(a, b){ return a.totalRouteMin - b.totalRouteMin; });
+        var minRouteMin = rawRoutes[0].totalRouteMin;
+        output = {
+          routes: rawRoutes.slice(0, 3), error: 'over-budget',
+          impossibilityMath: {
+            totalMin: totalMin, neededMin: minRouteMin,
+            overBy: minRouteMin - totalMin,
+            message: 'Shortest feasible route is ' + minRouteMin + ' min — over your '
+                   + totalMin + ' min budget by ' + (minRouteMin - totalMin) + ' min. '
+                   + 'Reduce visits, increase time, or pick anyway.'
+          }
+        };
+      } else {
+        output = { routes: [], error: 'no-routes' };
+      }
+      resolve(output);
+    });
+  });
+}
+window._rpRwBuildRoutes = _rpRwBuildRoutes;
+
+// Phase 3c kick — runs the builder + renders results (Phase 3d will polish).
+function _rpRwGenerate(){
+  var btn = document.getElementById('rp-rw-generate-btn');
+  if(btn){ btn.disabled = true; btn.textContent = '⏳ Generating…'; }
+  _rpRwBuildRoutes().then(function(result){
+    if(btn){ btn.disabled = false; btn.textContent = '⚡ Generate routes'; }
+    // Phase 3d will replace this with proper UI. For 3c we drop a JSON
+    // summary into the existing rp-random-results pane so the user can
+    // see what the algorithm produced.
+    var box = document.getElementById('rp-random-results');
+    if(!box) return;
+    box.style.display = 'block';
+    if(result.error && result.routes.length === 0){
+      box.innerHTML =
+        '<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:14px;color:#991b1b">'
+        + '<div style="font-weight:700;margin-bottom:6px">⚠️ Can\'t generate a route</div>'
+        + '<div style="font-size:12px">' + (result.impossibilityMath ? result.impossibilityMath.message : result.error) + '</div>'
+        + '</div>';
+      return;
+    }
+    var overBudgetBanner = '';
+    if(result.error === 'over-budget' && result.impossibilityMath){
+      overBudgetBanner =
+        '<div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:10px;margin-bottom:10px;color:#92400e;font-size:12px">'
+        + '<b>⚠️ Tight fit:</b> ' + result.impossibilityMath.message
+        + '</div>';
+    }
+    box.innerHTML = overBudgetBanner + result.routes.map(function(r, i){
+      var stopsHtml = r.orderedStops.map(function(s, idx){
+        var d = (typeof daysSinceLastVisit === 'function') ? daysSinceLastVisit(s.name) : null;
+        var dotColor = (d == null || d >= 21) ? '#16a34a' : (d >= 14) ? '#eab308' : '#ef4444';
+        var dStr = (d == null) ? 'new' : (d + 'd');
+        var lockedMark = s.isExisting ? ' <span style="background:#7030A0;color:#fff;padding:1px 5px;border-radius:3px;font-size:9px;font-weight:700">EXISTING</span>' : '';
+        return '<div style="display:flex;align-items:center;gap:6px;padding:4px 0;font-size:11px">'
+          +   '<span style="display:inline-block;width:18px;height:18px;background:#1F3864;color:#fff;border-radius:50%;text-align:center;line-height:18px;font-size:10px;font-weight:700">' + (idx+1) + '</span>'
+          +   '<span style="display:inline-block;width:8px;height:8px;background:' + dotColor + ';border-radius:50%"></span>'
+          +   '<span style="flex:1;color:#0f172a">' + s.name.replace(/</g,'&lt;') + lockedMark + '</span>'
+          +   '<span style="color:var(--muted);font-size:10px">' + dStr + '</span>'
+          + '</div>';
+      }).join('');
+      var fits = r.fitsBudget ? '#16a34a' : '#f59e0b';
+      var srcBadge = r.source === 'google'
+        ? '<span style="background:#16a34a;color:#fff;padding:1px 6px;border-radius:3px;font-size:9px;font-weight:700">GOOGLE</span>'
+        : '<span style="background:#9ca3af;color:#fff;padding:1px 6px;border-radius:3px;font-size:9px;font-weight:700">EST</span>';
+      return '<div style="background:#fff;border:2px solid ' + (i === 0 ? '#7030A0' : '#e5e7eb') + ';border-radius:8px;padding:12px;margin-bottom:10px">'
+        + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
+        +   '<div style="font-weight:700;color:#1F3864;font-size:13px">Route ' + (i + 1) + ' ' + (i === 0 ? '· best match' : '') + '</div>'
+        +   srcBadge
+        + '</div>'
+        + '<div style="display:flex;gap:14px;font-size:11px;margin-bottom:8px;color:#475569">'
+        +   '<span>🚗 <b>' + Math.round(r.totalDriveMin) + '</b> min drive</span>'
+        +   '<span>⏱ <b style="color:' + fits + '">' + r.totalRouteMin + '</b> / ' + (_RP_RW.totalHours * 60) + ' min</span>'
+        +   '<span>📏 <b>' + r.totalMiles.toFixed(1) + '</b> mi</span>'
+        +   '<span>🟢 ' + r.mix.green + ' · 🟡 ' + r.mix.yellow + (r.mix.red ? ' · 🔴 ' + r.mix.red : '') + '</span>'
+        + '</div>'
+        + '<div style="background:#f8fafc;border-radius:6px;padding:8px">' + stopsHtml + '</div>'
+        + '<div style="display:flex;justify-content:flex-end;gap:6px;margin-top:10px">'
+        +   '<button onclick="_rpRwPickRoute(' + i + ')" style="background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;border:none;border-radius:6px;padding:7px 14px;font-size:11px;font-weight:700;cursor:pointer">Use this route →</button>'
+        + '</div>'
+        + '</div>';
+    }).join('');
+    // Cache for Phase 3d/3e pick + swap handlers
+    window._RP_RW_LAST_RESULT = result;
+  });
 }
 window._rpRwGenerate = _rpRwGenerate;
+
+// Stub for Phase 3d - clicking "Use this route" picks one for refinement.
+function _rpRwPickRoute(idx){
+  if(typeof showToast === 'function'){
+    showToast('Route ' + (idx + 1) + ' picked. Confirm + swap-visit polish ship in Phase 3d/3e.');
+  }
+  window._RP_RW_PICKED_INDEX = idx;
+}
+window._rpRwPickRoute = _rpRwPickRoute;
 
 // Set the planner mode. Toggles section visibility + resets results.
 function _rpSetMode(mode){
