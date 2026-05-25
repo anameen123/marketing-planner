@@ -24355,13 +24355,17 @@ function renderDayMap(di){
   // and a route summary card below the map. No API key — local haversine
   // estimate (see _haversineMiles / _estimateDriveMin above).
   var totalMiles = 0, totalMin = 0;
+  // Track ETA label markers so we can replace them when Google data arrives
+  var _etaLabelMarkers = [];
   if(routeLine.length >= 2 && typeof L !== 'undefined' && L.polyline){
     try {
+      // 1) IMMEDIATE haversine fallback - draw the straight-line route + ETA
+      //    labels right away so the user sees SOMETHING in the first paint.
       _DV_ROUTELINE = L.polyline(routeLine, {
         color: '#3b82f6',
         weight: 4,
         opacity: 0.85,
-        dashArray: '8, 6',
+        dashArray: '8, 6',   // dashed = "estimated", we'll switch to solid once Google replies
         lineJoin: 'round',
         lineCap: 'round'
       });
@@ -24373,10 +24377,8 @@ function renderDayMap(di){
         var mins  = _estimateDriveMin(miles);
         totalMiles += miles;
         totalMin   += mins;
-        // Midpoint of the segment for the label position
         var midLat = (a[0] + b[0]) / 2;
         var midLng = (a[1] + b[1]) / 2;
-        // Tiny pill-shaped divIcon — readable but doesn't fight the pins
         var labelHtml =
           '<div style="background:#fff;border:1px solid #3b82f6;color:#1e40af;'
           + 'font-family:DM Sans,sans-serif;font-size:10px;font-weight:700;'
@@ -24386,17 +24388,84 @@ function renderDayMap(di){
           + '</div>';
         try {
           var lbl = L.marker([midLat, midLng], {
-            interactive: false,
-            keyboard: false,
+            interactive: false, keyboard: false,
             icon: L.divIcon({
               className: 'route-eta-label',
               html: labelHtml,
-              iconSize: [110, 18],
-              iconAnchor: [55, 9]
+              iconSize: [110, 18], iconAnchor: [55, 9]
             })
           });
           _DV_MARKERS.addLayer(lbl);
+          _etaLabelMarkers.push(lbl);
         } catch(_){}
+      }
+      // 2) ASYNC upgrade to real Google driving path (per user 2026-05-25:
+      //    "it actually draws a straight line, that's not correct — needs
+      //    to go through some paths to reach... real ETA with toll-aware").
+      //    Fires only if a Maps key is configured. Falls back silently to
+      //    the haversine straight lines we already drew above if the call
+      //    fails or no key is set.
+      if(typeof hasMapsKey === 'function' && hasMapsKey() && typeof _rpFetchGoogleRoute === 'function'){
+        var waypoints = routeLine.map(function(p){ return { lat: p[0], lng: p[1] }; });
+        _rpFetchGoogleRoute(waypoints).then(function(res){
+          if(!res || !res.path || res.path.length < 2) return;
+          // Replace the dashed haversine polyline with the SOLID real-road one
+          try { if(_DV_ROUTELINE) _DV_MAP.removeLayer(_DV_ROUTELINE); } catch(_){}
+          _DV_ROUTELINE = L.polyline(res.path, {
+            color: '#1e40af',   // darker blue = "actual road path"
+            weight: 5,
+            opacity: 0.9,
+            // No dashArray → solid line means "real Google route, traffic-aware"
+            lineJoin: 'round',
+            lineCap: 'round'
+          });
+          _DV_MARKERS.addLayer(_DV_ROUTELINE);
+          // Replace the ETA labels with the REAL leg durations from Google
+          _etaLabelMarkers.forEach(function(m){ try { _DV_MARKERS.removeLayer(m); } catch(_){} });
+          _etaLabelMarkers = [];
+          if(res.legs && res.legs.length === routeLine.length - 1){
+            for(var li = 0; li < res.legs.length; li++){
+              var leg = res.legs[li];
+              var aP = routeLine[li], bP = routeLine[li + 1];
+              var midL = (aP[0] + bP[0]) / 2, midN = (aP[1] + bP[1]) / 2;
+              var realMin = Math.round(leg.durMin);
+              var realMi  = leg.distMi.toFixed(1);
+              var lblHtml =
+                '<div style="background:#1e40af;border:1px solid #1e3a8a;color:#fff;'
+                + 'font-family:DM Sans,sans-serif;font-size:10px;font-weight:700;'
+                + 'padding:2px 7px;border-radius:10px;white-space:nowrap;'
+                + 'box-shadow:0 1px 4px rgba(30,64,175,.4);line-height:1.2">'
+                + '🚗 ' + realMin + ' min · ' + realMi + ' mi'
+                + '</div>';
+              try {
+                var lbl2 = L.marker([midL, midN], {
+                  interactive: false, keyboard: false,
+                  icon: L.divIcon({
+                    className: 'route-eta-label google',
+                    html: lblHtml,
+                    iconSize: [120, 18], iconAnchor: [60, 9]
+                  })
+                });
+                _DV_MARKERS.addLayer(lbl2);
+                _etaLabelMarkers.push(lbl2);
+              } catch(_){}
+            }
+          }
+          // Update the summary card totals with the REAL Google numbers
+          try {
+            var sumElG = document.getElementById('dv-route-summary');
+            if(sumElG && res.totalDistMi != null){
+              var realTotalMin = Math.round(res.totalDurMin);
+              sumElG.innerHTML =
+                '<div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:18px;font-size:12px">'
+                + '<div style="display:flex;align-items:center;gap:6px"><span style="color:#64748b;font-size:10px;text-transform:uppercase;letter-spacing:.06em;font-weight:700">Stops</span><span style="font-weight:800;color:#0f172a;font-size:14px">' + routeLine.length + '</span></div>'
+                + '<div style="display:flex;align-items:center;gap:6px"><span style="color:#64748b;font-size:10px;text-transform:uppercase;letter-spacing:.06em;font-weight:700">Distance</span><span style="font-weight:800;color:#0f172a;font-size:14px">' + res.totalDistMi.toFixed(1) + ' mi</span></div>'
+                + '<div style="display:flex;align-items:center;gap:6px"><span style="color:#64748b;font-size:10px;text-transform:uppercase;letter-spacing:.06em;font-weight:700">Drive time</span><span style="font-weight:800;color:#1e40af;font-size:14px">' + _formatDriveTime(realTotalMin) + '</span></div>'
+                + '<div style="font-size:10px;color:#16a34a;font-weight:700;flex-basis:100%;text-align:center;margin-top:2px">🚗 Real Google route · traffic-aware · road-network distance</div>'
+                + '</div>';
+            }
+          } catch(_){}
+        }).catch(function(){ /* silent fallback to haversine */ });
       }
     } catch(e){ try { console.warn('[map] polyline failed:', e); } catch(_){} }
   }
