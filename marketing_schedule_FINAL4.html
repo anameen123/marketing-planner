@@ -19937,6 +19937,14 @@ function confirmEditVisit(){
   var newRdIso  = (document.getElementById('ev-rd')     || {}).value || '';
   var newCancelReason = ((document.getElementById('ev-cancel-reason') || {}).value || '').trim();
   var newNotes  = ((document.getElementById('ev-notes') || {}).value || '').trim();
+  // Per user 2026-05-25: HARD GUARD - only admin can change the assigned
+  // member. The UI hides the field for non-admin, but if someone inspects
+  // the DOM and tweaks the hidden <select> value, this line forces it
+  // back to the row's current member before anything else runs.
+  // Defense-in-depth: UI lock + save-path lock.
+  if(typeof isAdmin === 'function' && !isAdmin()){
+    newMember = row.member || '';
+  }
   // Per user 2026-05-25 (Phase 7): show a REVIEW modal listing the diff
   // before applying. The modal's "Confirm changes" button sets
   // _evReviewApproved=true and re-calls confirmEditVisit, which then
