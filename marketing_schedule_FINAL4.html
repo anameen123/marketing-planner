@@ -23760,12 +23760,41 @@ function renderDayMap(di){
     _DV_MARKERS.addLayer(m);
     pts.push([c.lat, c.lng]);
   });
-  // Fit map to all pins, with reasonable bounds
-  if(pts.length > 0){
-    try { _DV_MAP.fitBounds(L.latLngBounds(pts).pad(0.2), { maxZoom: 12 }); } catch(e){}
+  // Fit map to all pins, with reasonable bounds.
+  // Per user 2026-05-25: "default for the map should be zoomed in on the
+  // clinics, not on Planet Earth." That bug happens when fitBounds runs
+  // while the map container has 0×0 pixels (because the tab is hidden or
+  // hasn't laid out yet) — Leaflet then can't compute the right zoom and
+  // collapses to zoom 0 (world wraparound). Fix: invalidateSize FIRST so
+  // Leaflet knows the real container dimensions, and only then fitBounds.
+  // If the container is still 0×0 (very first paint), fall back to the DFW
+  // setView from _initDayMap and try again after a short delay.
+  function _fitWhenReady(retry){
+    try { _DV_MAP.invalidateSize(); } catch(_){}
+    var size = (_DV_MAP && _DV_MAP.getSize) ? _DV_MAP.getSize() : null;
+    if(!size || size.x < 50 || size.y < 50){
+      // Container not laid out yet — keep DFW setView and try again
+      try { _DV_MAP.setView([33.07, -96.78], 10); } catch(_){}
+      if((retry|0) < 5) setTimeout(function(){ _fitWhenReady((retry|0)+1); }, 250);
+      return;
+    }
+    if(pts.length > 0){
+      try {
+        // minZoom guarantees we never zoom further out than DFW metro — even
+        // if a stray pin is at the wrong continent, the map stays useful.
+        _DV_MAP.fitBounds(L.latLngBounds(pts).pad(0.2), { maxZoom: 12 });
+        if(_DV_MAP.getZoom() < 9) _DV_MAP.setView([33.07, -96.78], 10);
+      } catch(e){
+        try { _DV_MAP.setView([33.07, -96.78], 10); } catch(_){}
+      }
+    } else {
+      try { _DV_MAP.setView([33.07, -96.78], 10); } catch(_){}
+    }
   }
-  // Make sure the map renders correctly after possibly being hidden
-  setTimeout(function(){ try { _DV_MAP.invalidateSize(); } catch(e){} }, 200);
+  _fitWhenReady(0);
+  // One more invalidateSize after a longer delay catches the case where the
+  // container resizes (e.g. sidebar toggle) right after the initial render.
+  setTimeout(function(){ try { _DV_MAP.invalidateSize(); } catch(e){} }, 400);
 }
 window.renderDayMap = renderDayMap;
 
