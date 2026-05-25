@@ -188,6 +188,14 @@ td:last-child{border-right:none}
 .row-outreach td { background:#ecfdf5 !important }   /* green */
 .row-outreach td:first-child { border-left:3px solid #10b981 }
 .editing-row td{background:#faf5ff!important}
+/* Per user 2026-05-25 Phase 7: row fill-state coloring for unconfirmed
+   rows (light amber, "needs filling") vs confirmed rows (light blue,
+   "done"). These take precedence over the biz-type colors but yield to
+   the state-based ones (canceled red / mosque green / rescheduled amber). */
+.row-unfilled td{background:#fffbeb!important;border-bottom:1px solid #fde68a}
+.row-unfilled td:first-child{border-left:3px solid #f59e0b}
+.row-filled td{background:#eff6ff!important}
+.row-filled td:first-child{border-left:3px solid #2563eb}
 .num-cell{font-size:10px;color:var(--muted);text-align:center;width:28px}
 .date-cell{font-size:10px;font-weight:600;color:var(--navy);white-space:nowrap}
 .chip{display:inline-block;font-size:10px;font-weight:600;padding:2px 8px;border-radius:20px;white-space:nowrap}
@@ -19929,6 +19937,50 @@ function confirmEditVisit(){
   var newRdIso  = (document.getElementById('ev-rd')     || {}).value || '';
   var newCancelReason = ((document.getElementById('ev-cancel-reason') || {}).value || '').trim();
   var newNotes  = ((document.getElementById('ev-notes') || {}).value || '').trim();
+  // Per user 2026-05-25 (Phase 7): show a REVIEW modal listing the diff
+  // before applying. The modal's "Confirm changes" button sets
+  // _evReviewApproved=true and re-calls confirmEditVisit, which then
+  // skips the review and runs the actual apply path below.
+  if(!window._evReviewApproved){
+    // Build a diff summary first. Validation still runs (so we don't
+    // show a review for invalid data only to fail later).
+    // — Snapshot prevs
+    var prevMember = row.member || '';
+    var prevStatusForDiff = row.status || 'Pending';
+    var prevRdIsoForDiff = '';
+    if(row.rd){
+      var _rdp = row.rd.split('/');
+      if(_rdp.length === 3) prevRdIsoForDiff = _rdp[2] + '-' + _rdp[0].padStart(2,'0') + '-' + _rdp[1].padStart(2,'0');
+    }
+    var prevCancelReason = row.cancelReason || '';
+    var prevNotes = row.leadNotes || '';
+    // — Spending + lead (already mutated on the row by their sub-dialogs)
+    var spForReview = row.spending;
+    var spText = !spForReview ? '—'
+      : spForReview.zeroSpending ? '$0 (no spending)'
+      : ('$' + (spForReview.total != null ? spForReview.total.toFixed(2) : '?'));
+    var leadForReview = row.relationship || '';
+    var changes = [];
+    if(newMember !== prevMember)               changes.push({ field: 'Assigned member', before: prevMember || '—', after: newMember || '—' });
+    if(newStatus !== prevStatusForDiff)        changes.push({ field: 'Status',          before: prevStatusForDiff,  after: newStatus });
+    if(newRdIso !== prevRdIsoForDiff)          changes.push({ field: 'Reschedule date', before: prevRdIsoForDiff || '—', after: newRdIso || '—' });
+    if(newCancelReason !== prevCancelReason)   changes.push({ field: 'Cancel reason',   before: prevCancelReason || '—', after: newCancelReason || '—' });
+    if(newNotes !== prevNotes)                 changes.push({ field: 'Notes',           before: prevNotes || '—', after: newNotes || '—' });
+    // Always show spending + lead in the review since they may have been
+    // updated via the sub-dialogs (which already mutated the row).
+    var alwaysShow = [
+      { field: 'Spending', value: spText },
+      { field: 'Lead outcome', value: leadForReview || '—' }
+    ];
+    // Show the review modal (always, even if changes==[]) - users may have
+    // changed spending or lead via the sub-dialogs without changing form
+    // fields. The "no changes" shortcut still runs AFTER review confirm so
+    // truly-noop edits don't churn counters.
+    _evShowConfirmReview(changes, alwaysShow);
+    return;
+  }
+  // Review was approved — clear the flag and proceed to apply.
+  window._evReviewApproved = false;
   // Validate
   if(newStatus === 'Postponed' && !newRdIso){
     showErr('Pick the rescheduled date.');
@@ -20121,6 +20173,83 @@ function confirmEditVisit(){
   }
 }
 window.confirmEditVisit = confirmEditVisit;
+
+// Phase 7 — review modal opened by confirmEditVisit before the actual apply.
+// Renders a list of "what's about to change" so the user can verify before
+// the override hits all counters/charts/derived state.
+function _evShowConfirmReview(changes, alwaysShow){
+  // Inject overlay (no separate HTML needed — keeps the codebase tidy)
+  var existing = document.getElementById('ev-review-modal');
+  if(existing) try { existing.remove(); } catch(_){}
+  var ov = document.createElement('div');
+  ov.id = 'ev-review-modal';
+  ov.className = 'modal-ov';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:9750;display:flex;align-items:center;justify-content:center;padding:20px';
+  var box = document.createElement('div');
+  box.style.cssText = 'background:#fff;border-radius:12px;max-width:560px;width:100%;max-height:85vh;overflow:auto;box-shadow:0 16px 40px rgba(0,0,0,.25);font-family:DM Sans,sans-serif';
+  var changesHtml = '';
+  if(changes.length > 0){
+    changesHtml = '<div style="padding:14px 20px"><div style="font-size:12px;font-weight:700;color:#7030A0;margin-bottom:10px">📝 Changes you\'re making</div>';
+    changes.forEach(function(c){
+      var beforeText = String(c.before).replace(/</g,'&lt;');
+      var afterText  = String(c.after).replace(/</g,'&lt;');
+      changesHtml += '<div style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid #f1f5f9">'
+        +    '<div style="font-size:11px;font-weight:700;color:#0f172a;flex-shrink:0;width:120px">' + c.field + '</div>'
+        +    '<div style="flex:1;font-size:11px;color:#475569;line-height:1.5">'
+        +      '<span style="background:#fef2f2;padding:1px 6px;border-radius:3px;text-decoration:line-through;color:#991b1b">' + beforeText + '</span>'
+        +      ' <span style="color:var(--muted);margin:0 4px">→</span> '
+        +      '<span style="background:#dcfce7;padding:1px 6px;border-radius:3px;color:#166534;font-weight:600">' + afterText + '</span>'
+        +    '</div>'
+        + '</div>';
+    });
+    changesHtml += '</div>';
+  } else {
+    changesHtml = '<div style="padding:14px 20px;font-size:12px;color:var(--muted);font-style:italic">No form-field changes — but spending or lead may have been updated via the sub-dialogs (shown below).</div>';
+  }
+  var alwaysHtml = '<div style="padding:14px 20px;background:#f8fafc;border-top:1px solid var(--border)"><div style="font-size:12px;font-weight:700;color:#1F3864;margin-bottom:8px">💼 Final values that will be saved</div>';
+  alwaysShow.forEach(function(a){
+    var v = String(a.value).replace(/</g,'&lt;');
+    alwaysHtml += '<div style="display:flex;align-items:center;gap:10px;padding:5px 0;font-size:11px">'
+      +    '<div style="font-weight:700;color:#0f172a;width:120px">' + a.field + '</div>'
+      +    '<div style="flex:1;color:#1e293b">' + v + '</div>'
+      + '</div>';
+  });
+  alwaysHtml += '</div>';
+  box.innerHTML =
+      '<div style="background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;padding:14px 20px;display:flex;align-items:center;justify-content:space-between">'
+    + '  <div style="font-weight:700;font-size:14px">🔎 Review changes before confirming</div>'
+    + '  <button onclick="_evCancelReview()" style="background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.4);color:#fff;border-radius:5px;padding:3px 10px;font-size:13px;cursor:pointer;font-family:inherit">×</button>'
+    + '</div>'
+    + '<div style="padding:14px 20px;background:#fef3c7;border-bottom:1px solid #fcd34d;color:#92400e;font-size:11px;line-height:1.5">'
+    + '  ⚠️ <b>Confirming will OVERRIDE all previous data + recompute every counter, chart, and KPI.</b> Review carefully.'
+    + '</div>'
+    + changesHtml + alwaysHtml
+    + '<div style="padding:14px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px">'
+    + '  <button onclick="_evCancelReview()" style="background:#e5e7eb;color:#374151;border:none;border-radius:6px;padding:8px 16px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">← Go back to edit</button>'
+    + '  <button onclick="_evApproveReview()" style="background:linear-gradient(135deg,#16a34a,#15803d);color:#fff;border:none;border-radius:6px;padding:8px 22px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">✓ Confirm changes</button>'
+    + '</div>';
+  ov.appendChild(box);
+  document.body.appendChild(ov);
+}
+window._evShowConfirmReview = _evShowConfirmReview;
+
+function _evCancelReview(){
+  var ov = document.getElementById('ev-review-modal');
+  if(ov){ try { ov.remove(); } catch(_){} }
+  window._evReviewApproved = false;
+}
+window._evCancelReview = _evCancelReview;
+
+function _evApproveReview(){
+  var ov = document.getElementById('ev-review-modal');
+  if(ov){ try { ov.remove(); } catch(_){} }
+  window._evReviewApproved = true;
+  // Re-call confirmEditVisit — this time the review-skip branch fires
+  // and the actual apply runs.
+  if(typeof confirmEditVisit === 'function') confirmEditVisit();
+}
+window._evApproveReview = _evApproveReview;
+
 function confirmManual(di,ri){
   var row=S.days[di].rows[ri];
   if(!row.clinic.trim()){showToast('Please enter a clinic name first');return;}
@@ -28292,11 +28421,22 @@ function rowHTML(row,di,ri){
     typeClass = bt === 'mva' ? 'row-mva' : bt === 'outreach' ? 'row-outreach' : 'row-clinic';
   }
   // State-based row colors take priority over type colors.
-  // Order: Canceled (highest — must be obvious) > Mosque > Rescheduled > Editing > Type.
+  // Order: Canceled (highest — must be obvious) > Mosque > Rescheduled > Editing
+  //      > Fill-state (unfilled/filled, per user 2026-05-25 Phase 7) > Type.
+  // Unfilled = row exists but rowConfirmed is false (needs Fill Follow-up).
+  // Filled  = row.rowConfirmed === true (Edit Follow-up only).
+  // Manual / blank rows skip the fill-state coloring entirely.
+  var _fillStateCls = '';
+  if(row.clinic && !row.isManual){
+    if(row.rowConfirmed){ _fillStateCls = 'row-filled'; }
+    else                { _fillStateCls = 'row-unfilled'; }
+  }
   var rowCls = (row.status === 'Canceled') ? 'canceled-row'
              : row.isMosque ? 'mosque-row'
              : row.isRescheduled ? 'rescheduled-row'
              : (row.editing||row.isManual) ? 'editing-row'
+             : _fillStateCls
+             ? _fillStateCls
              : typeClass;
   var badges='';
   if(row.isMosque)badges='<div class="mosque-badge">&#128331; Jummah</div>';
