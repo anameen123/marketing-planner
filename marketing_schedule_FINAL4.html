@@ -25582,81 +25582,251 @@ function _rpRwBuildRoutes(){
 }
 window._rpRwBuildRoutes = _rpRwBuildRoutes;
 
-// Phase 3c kick — runs the builder + renders results (Phase 3d will polish).
+// Phase 3c/3d kick — runs the builder + delegates display to _rpRwRenderRoutes.
 function _rpRwGenerate(){
   var btn = document.getElementById('rp-rw-generate-btn');
   if(btn){ btn.disabled = true; btn.textContent = '⏳ Generating…'; }
+  // Reset batch tracker on a fresh Generate
+  window._RP_RW_BATCH = 1;
+  window._RP_RW_SHOWN_NAMES = {};
   _rpRwBuildRoutes().then(function(result){
     if(btn){ btn.disabled = false; btn.textContent = '⚡ Generate routes'; }
-    // Phase 3d will replace this with proper UI. For 3c we drop a JSON
-    // summary into the existing rp-random-results pane so the user can
-    // see what the algorithm produced.
-    var box = document.getElementById('rp-random-results');
-    if(!box) return;
-    box.style.display = 'block';
-    if(result.error && result.routes.length === 0){
-      box.innerHTML =
-        '<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:14px;color:#991b1b">'
-        + '<div style="font-weight:700;margin-bottom:6px">⚠️ Can\'t generate a route</div>'
-        + '<div style="font-size:12px">' + (result.impossibilityMath ? result.impossibilityMath.message : result.error) + '</div>'
-        + '</div>';
-      return;
-    }
-    var overBudgetBanner = '';
-    if(result.error === 'over-budget' && result.impossibilityMath){
-      overBudgetBanner =
-        '<div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:10px;margin-bottom:10px;color:#92400e;font-size:12px">'
-        + '<b>⚠️ Tight fit:</b> ' + result.impossibilityMath.message
-        + '</div>';
-    }
-    box.innerHTML = overBudgetBanner + result.routes.map(function(r, i){
-      var stopsHtml = r.orderedStops.map(function(s, idx){
-        var d = (typeof daysSinceLastVisit === 'function') ? daysSinceLastVisit(s.name) : null;
-        var dotColor = (d == null || d >= 21) ? '#16a34a' : (d >= 14) ? '#eab308' : '#ef4444';
-        var dStr = (d == null) ? 'new' : (d + 'd');
-        var lockedMark = s.isExisting ? ' <span style="background:#7030A0;color:#fff;padding:1px 5px;border-radius:3px;font-size:9px;font-weight:700">EXISTING</span>' : '';
-        return '<div style="display:flex;align-items:center;gap:6px;padding:4px 0;font-size:11px">'
-          +   '<span style="display:inline-block;width:18px;height:18px;background:#1F3864;color:#fff;border-radius:50%;text-align:center;line-height:18px;font-size:10px;font-weight:700">' + (idx+1) + '</span>'
-          +   '<span style="display:inline-block;width:8px;height:8px;background:' + dotColor + ';border-radius:50%"></span>'
-          +   '<span style="flex:1;color:#0f172a">' + s.name.replace(/</g,'&lt;') + lockedMark + '</span>'
-          +   '<span style="color:var(--muted);font-size:10px">' + dStr + '</span>'
-          + '</div>';
-      }).join('');
-      var fits = r.fitsBudget ? '#16a34a' : '#f59e0b';
-      var srcBadge = r.source === 'google'
-        ? '<span style="background:#16a34a;color:#fff;padding:1px 6px;border-radius:3px;font-size:9px;font-weight:700">GOOGLE</span>'
-        : '<span style="background:#9ca3af;color:#fff;padding:1px 6px;border-radius:3px;font-size:9px;font-weight:700">EST</span>';
-      return '<div style="background:#fff;border:2px solid ' + (i === 0 ? '#7030A0' : '#e5e7eb') + ';border-radius:8px;padding:12px;margin-bottom:10px">'
-        + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
-        +   '<div style="font-weight:700;color:#1F3864;font-size:13px">Route ' + (i + 1) + ' ' + (i === 0 ? '· best match' : '') + '</div>'
-        +   srcBadge
-        + '</div>'
-        + '<div style="display:flex;gap:14px;font-size:11px;margin-bottom:8px;color:#475569">'
-        +   '<span>🚗 <b>' + Math.round(r.totalDriveMin) + '</b> min drive</span>'
-        +   '<span>⏱ <b style="color:' + fits + '">' + r.totalRouteMin + '</b> / ' + (_RP_RW.totalHours * 60) + ' min</span>'
-        +   '<span>📏 <b>' + r.totalMiles.toFixed(1) + '</b> mi</span>'
-        +   '<span>🟢 ' + r.mix.green + ' · 🟡 ' + r.mix.yellow + (r.mix.red ? ' · 🔴 ' + r.mix.red : '') + '</span>'
-        + '</div>'
-        + '<div style="background:#f8fafc;border-radius:6px;padding:8px">' + stopsHtml + '</div>'
-        + '<div style="display:flex;justify-content:flex-end;gap:6px;margin-top:10px">'
-        +   '<button onclick="_rpRwPickRoute(' + i + ')" style="background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;border:none;border-radius:6px;padding:7px 14px;font-size:11px;font-weight:700;cursor:pointer">Use this route →</button>'
-        + '</div>'
-        + '</div>';
-    }).join('');
-    // Cache for Phase 3d/3e pick + swap handlers
-    window._RP_RW_LAST_RESULT = result;
+    if(typeof _rpRwRenderRoutes === 'function') _rpRwRenderRoutes(result, false);
   });
 }
 window._rpRwGenerate = _rpRwGenerate;
 
-// Stub for Phase 3d - clicking "Use this route" picks one for refinement.
-function _rpRwPickRoute(idx){
-  if(typeof showToast === 'function'){
-    showToast('Route ' + (idx + 1) + ' picked. Confirm + swap-visit polish ship in Phase 3d/3e.');
+// ════════════════════════════════════════════════════════════════════════════
+// PHASE 3d — Show-more + Pick route + push to today's schedule
+// ════════════════════════════════════════════════════════════════════════════
+// State for "Show 3 more" — tracks stops shown in the first batch so the
+// second batch excludes them.
+window._RP_RW_BATCH = 1;                 // 1 = initial 3, 2 = reroll 3
+window._RP_RW_SHOWN_NAMES = {};          // stop names already shown in any batch
+
+// Render the routes — wraps Phase 3c's display logic with a "Show 3 more"
+// button when we're on batch 1. Splitting the renderer out so Generate +
+// Show-more reuse it.
+function _rpRwRenderRoutes(result, isReroll){
+  var box = document.getElementById('rp-random-results');
+  if(!box) return;
+  box.style.display = 'block';
+  if(result.error && result.routes.length === 0){
+    box.innerHTML =
+      '<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:14px;color:#991b1b">'
+      + '<div style="font-weight:700;margin-bottom:6px">⚠️ Can\'t generate a route</div>'
+      + '<div style="font-size:12px">' + (result.impossibilityMath ? result.impossibilityMath.message : result.error) + '</div>'
+      + '</div>';
+    return;
   }
-  window._RP_RW_PICKED_INDEX = idx;
+  // Track shown stop names for the reroll-exclusion logic
+  result.routes.forEach(function(r){
+    r.orderedStops.forEach(function(s){ window._RP_RW_SHOWN_NAMES[s.name] = true; });
+  });
+  var overBudgetBanner = '';
+  if(result.error === 'over-budget' && result.impossibilityMath){
+    overBudgetBanner =
+      '<div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:10px;margin-bottom:10px;color:#92400e;font-size:12px">'
+      + '<b>⚠️ Tight fit:</b> ' + result.impossibilityMath.message
+      + ' You can still pick a route and proceed, but expect to finish over the time budget.'
+      + '</div>';
+  }
+  var batchHeader = isReroll
+    ? '<div style="font-size:11px;color:#7030A0;font-weight:700;margin-bottom:8px">🔁 Alternate routes (batch 2 of 2)</div>'
+    : '<div style="font-size:11px;color:#1F3864;font-weight:700;margin-bottom:8px">📋 Recommended routes (batch 1 of up to 2)</div>';
+  var html = batchHeader + overBudgetBanner;
+  html += result.routes.map(function(r, i){
+    var stopsHtml = r.orderedStops.map(function(s, idx){
+      var d = (typeof daysSinceLastVisit === 'function') ? daysSinceLastVisit(s.name) : null;
+      var dotColor = (d == null || d >= 21) ? '#16a34a' : (d >= 14) ? '#eab308' : '#ef4444';
+      var dStr = (d == null) ? 'new' : (d + 'd');
+      var lockedMark = s.isExisting ? ' <span style="background:#7030A0;color:#fff;padding:1px 5px;border-radius:3px;font-size:9px;font-weight:700">EXISTING</span>' : '';
+      return '<div style="display:flex;align-items:center;gap:6px;padding:4px 0;font-size:11px">'
+        +   '<span style="display:inline-block;width:18px;height:18px;background:#1F3864;color:#fff;border-radius:50%;text-align:center;line-height:18px;font-size:10px;font-weight:700">' + (idx+1) + '</span>'
+        +   '<span style="display:inline-block;width:8px;height:8px;background:' + dotColor + ';border-radius:50%"></span>'
+        +   '<span style="flex:1;color:#0f172a">' + s.name.replace(/</g,'&lt;') + lockedMark + '</span>'
+        +   '<span style="color:var(--muted);font-size:10px">' + dStr + '</span>'
+        + '</div>';
+    }).join('');
+    var fits = r.fitsBudget ? '#16a34a' : '#f59e0b';
+    var srcBadge = r.source === 'google'
+      ? '<span style="background:#16a34a;color:#fff;padding:1px 6px;border-radius:3px;font-size:9px;font-weight:700">GOOGLE</span>'
+      : '<span style="background:#9ca3af;color:#fff;padding:1px 6px;border-radius:3px;font-size:9px;font-weight:700">EST</span>';
+    return '<div style="background:#fff;border:2px solid ' + (i === 0 ? '#7030A0' : '#e5e7eb') + ';border-radius:8px;padding:12px;margin-bottom:10px">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
+      +   '<div style="font-weight:700;color:#1F3864;font-size:13px">Route ' + (i + 1) + ' ' + (i === 0 ? '· best match' : '') + '</div>'
+      +   srcBadge
+      + '</div>'
+      + '<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:11px;margin-bottom:8px;color:#475569">'
+      +   '<span>🚗 <b>' + Math.round(r.totalDriveMin) + '</b> min drive</span>'
+      +   '<span>⏱ <b style="color:' + fits + '">' + r.totalRouteMin + '</b> / ' + (_RP_RW.totalHours * 60) + ' min</span>'
+      +   '<span>📏 <b>' + r.totalMiles.toFixed(1) + '</b> mi</span>'
+      +   '<span>🟢 ' + r.mix.green + ' · 🟡 ' + r.mix.yellow + (r.mix.red ? ' · 🔴 ' + r.mix.red : '') + '</span>'
+      + '</div>'
+      + '<div style="background:#f8fafc;border-radius:6px;padding:8px">' + stopsHtml + '</div>'
+      + '<div style="display:flex;justify-content:flex-end;gap:6px;margin-top:10px">'
+      +   '<button onclick="_rpRwPickRoute(' + i + ')" style="background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;border:none;border-radius:6px;padding:7px 14px;font-size:11px;font-weight:700;cursor:pointer">Use this route →</button>'
+      + '</div>'
+      + '</div>';
+  }).join('');
+  // Footer: Show-more button (only on batch 1) + Restart button
+  html += '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">';
+  if(window._RP_RW_BATCH === 1){
+    html += '<button onclick="_rpRwShowMore()" style="background:#fff;border:1px solid #7030A0;color:#7030A0;border-radius:6px;padding:7px 14px;font-size:11px;font-weight:700;cursor:pointer">🔁 Show me 3 different routes</button>';
+  } else {
+    html += '<span style="font-size:11px;color:var(--muted);font-style:italic">All alternates shown (max 6 per session)</span>';
+  }
+  html += '<button onclick="_rpRwRestart()" style="background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:7px 12px;font-size:11px;font-weight:600;cursor:pointer">Restart wizard</button>';
+  html += '</div>';
+  box.innerHTML = html;
+  // Cache the result for swap/pick handlers
+  window._RP_RW_LAST_RESULT = result;
+}
+window._rpRwRenderRoutes = _rpRwRenderRoutes;
+
+// "Show me 3 different routes" — re-runs algorithm with batch-1 stops
+// excluded from the candidate pool. Capped at 1 reroll (max 6 routes).
+function _rpRwShowMore(){
+  if(window._RP_RW_BATCH >= 2){
+    if(typeof showToast === 'function') showToast('Max 6 routes per session. Restart the wizard to generate from scratch.');
+    return;
+  }
+  window._RP_RW_BATCH = 2;
+  var btn = document.getElementById('rp-random-results').querySelector('button');
+  // Stash the excluded names for the rebuild
+  window._RP_RW_BATCH2_EXCLUDE = Object.assign({}, window._RP_RW_SHOWN_NAMES);
+  // Re-run with same inputs
+  _rpRwBuildRoutes().then(function(result){
+    // Filter routes that share too many stops with batch 1
+    var filtered = result.routes.filter(function(r){
+      var newOnes = r.orderedStops.filter(function(s){
+        return !window._RP_RW_BATCH2_EXCLUDE[s.name];
+      }).length;
+      // Require at least 50% of stops to be new
+      return newOnes >= Math.ceil(r.orderedStops.length / 2);
+    });
+    if(filtered.length === 0){
+      // Fall back to original routes if filter eliminated everything
+      filtered = result.routes;
+    }
+    var filteredResult = {
+      routes: filtered.slice(0, 3),
+      error: result.error,
+      impossibilityMath: result.impossibilityMath
+    };
+    _rpRwRenderRoutes(filteredResult, true);
+  });
+}
+window._rpRwShowMore = _rpRwShowMore;
+
+// Restart wizard from step 1, clear all state
+function _rpRwRestart(){
+  if(typeof _rpRwReset === 'function') _rpRwReset();
+  window._RP_RW_BATCH = 1;
+  window._RP_RW_SHOWN_NAMES = {};
+  window._RP_RW_LAST_RESULT = null;
+  // Clear UI
+  var box = document.getElementById('rp-random-results');
+  if(box){ box.innerHTML = ''; box.style.display = 'none'; }
+  // Reset inputs
+  var fSel = document.getElementById('rp-rw-facility-select'); if(fSel) fSel.value = '';
+  var cInp = document.getElementById('rp-rw-clinic-search'); if(cInp) cInp.value = '';
+  var customInp = document.getElementById('rp-rw-custom-name'); if(customInp) customInp.value = '';
+  var sum = document.getElementById('rp-rw-step-1-summary'); if(sum){ sum.innerHTML = ''; sum.style.display = 'none'; }
+  // Snap to step 1
+  if(typeof _rpRwGoto === 'function') _rpRwGoto(1);
+  // Clear start marker
+  if(typeof _rpClearStartMarker === 'function') _rpClearStartMarker();
+}
+window._rpRwRestart = _rpRwRestart;
+
+// User clicked "Use this route" - push the route to today's schedule.
+// Per user 2026-05-25: reorder existing rows freely, insert new ones in
+// TSP order, preserve all existing data (status, member, spending, etc.).
+function _rpRwPickRoute(idx){
+  var result = window._RP_RW_LAST_RESULT;
+  if(!result || !result.routes || !result.routes[idx]){
+    if(typeof showToast === 'function') showToast('Route not found - try regenerating.');
+    return;
+  }
+  var route = result.routes[idx];
+  // Confirm over-budget proceed-anyway
+  if(!route.fitsBudget){
+    var over = route.totalRouteMin - (_RP_RW.totalHours * 60);
+    var ok = window.confirm('⚠️ This route is ' + over + ' min over your time budget.\n\n'
+      + 'Total: ' + route.totalRouteMin + ' min vs your ' + (_RP_RW.totalHours * 60) + ' min budget.\n\n'
+      + 'Proceed anyway?');
+    if(!ok) return;
+  }
+  // Push to schedule (Phase 3e will offer a swap editor first; for now go direct)
+  _rpRwPushRouteToSchedule(route);
 }
 window._rpRwPickRoute = _rpRwPickRoute;
+
+// Push a finalized route into today's S.days[di].rows. Preserves data for
+// existing rows by matching on clinic name. New stops get fresh rows.
+function _rpRwPushRouteToSchedule(route){
+  var di = (typeof S !== 'undefined' && S.currentDay != null) ? S.currentDay : null;
+  if(di == null){
+    if(typeof showToast === 'function') showToast('Open a day on the calendar first.');
+    return;
+  }
+  var day = S.days[di];
+  if(!day){ if(typeof showToast === 'function') showToast('Active day not found.'); return; }
+  if(!Array.isArray(day.rows)) day.rows = [];
+  // Index existing rows by clinic name
+  var existingByName = {};
+  day.rows.forEach(function(r){
+    if(r && r.clinic && !existingByName[r.clinic]) existingByName[r.clinic] = r;
+  });
+  var me = (CURRENT_USER && CURRENT_USER.name) || '';
+  // Build new ordered rows array
+  var newRows = [];
+  // If start.isVisit, add start as first row (preserving existing data if any)
+  if(_RP_RW.start && _RP_RW.start.isVisit){
+    var startName = _RP_RW.start.name;
+    if(existingByName[startName]){
+      newRows.push(existingByName[startName]);
+      delete existingByName[startName];
+    } else {
+      newRows.push({
+        clinic: startName, member: me, memberConfirmed: !!me,
+        status: 'Pending', city: '', rowConfirmed: false,
+        rd: '', relationship: '', leadNotes: '', cancelReason: '',
+        spending: null, _spId: null
+      });
+    }
+  }
+  // Then each ordered stop
+  route.orderedStops.forEach(function(s){
+    if(existingByName[s.name]){
+      newRows.push(existingByName[s.name]);
+      delete existingByName[s.name];
+    } else {
+      newRows.push({
+        clinic: s.name, member: me, memberConfirmed: !!me,
+        status: 'Pending', city: '', rowConfirmed: false,
+        rd: '', relationship: '', leadNotes: '', cancelReason: '',
+        spending: null, _spId: null
+      });
+    }
+  });
+  // Append any remaining existing rows that weren't part of the route
+  // (preserves visits to clinics with no coords + intentional add-on rows)
+  Object.keys(existingByName).forEach(function(k){
+    if(existingByName[k]) newRows.push(existingByName[k]);
+  });
+  day.rows = newRows;
+  if(typeof _saveS === 'function') _saveS();
+  if(typeof refresh === 'function') refresh(di);
+  if(typeof closeRoutePlanner === 'function') closeRoutePlanner();
+  // Reset wizard for next time
+  _rpRwRestart();
+  if(typeof showToast === 'function'){
+    showToast('✓ Route added — ' + route.orderedStops.length + ' stops in TSP order, ' + Math.round(route.totalDriveMin) + ' min drive.');
+  }
+}
+window._rpRwPushRouteToSchedule = _rpRwPushRouteToSchedule;
 
 // Set the planner mode. Toggles section visibility + resets results.
 function _rpSetMode(mode){
