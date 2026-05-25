@@ -24379,17 +24379,23 @@ function renderDayMap(di){
           + '</div>';
       }
     } catch(_){}
-    if(typeof hasMapsKey === 'function' && hasMapsKey() && typeof _rpFetchGoogleRoute === 'function'){
+    if(typeof _rpFetchRoute === 'function'){
       var waypoints = routeLine.map(function(p){ return { lat: p[0], lng: p[1] }; });
-      _rpFetchGoogleRoute(waypoints).then(function(res){
+      // Use _rpFetchRoute (smart router: Google → OSRM fallback) instead of
+      // _rpFetchGoogleRoute directly. Google Directions REST API doesn't
+      // ship CORS headers, so direct browser fetches fail with "Failed to
+      // fetch" — _rpFetchRoute catches that and falls back to OSRM which
+      // is CORS-friendly + still road-following. We get a real polyline
+      // either way (Google numbers when available, OSRM as backup).
+      _rpFetchRoute(waypoints).then(function(res){
         if(!res || !res.path || res.path.length < 2){
-          // Google failed/no path — just show "no route" on the summary; NO line on the map.
+          // Both routers failed — show advisory, no line on map.
           try {
             var sumElFail = document.getElementById('dv-route-summary');
             if(sumElFail){
               sumElFail.innerHTML =
                 '<div style="font-size:11px;color:#92400e;text-align:center">'
-                + '⚠ Couldn\'t load real route from Google. Pins shown without connecting line.'
+                + '⚠ Couldn\'t load route data. Pins shown without connecting line.'
                 + '</div>';
             }
           } catch(_){}
