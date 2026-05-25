@@ -28423,13 +28423,22 @@ function rowHTML(row,di,ri){
   // State-based row colors take priority over type colors.
   // Order: Canceled (highest — must be obvious) > Mosque > Rescheduled > Editing
   //      > Fill-state (unfilled/filled, per user 2026-05-25 Phase 7) > Type.
-  // Unfilled = row exists but rowConfirmed is false (needs Fill Follow-up).
-  // Filled  = row.rowConfirmed === true (Edit Follow-up only).
-  // Manual / blank rows skip the fill-state coloring entirely.
+  // Per user 2026-05-25 (revised): "filled" matches the same condition the
+  // button label uses — if ANY follow-up data is present (status not
+  // Pending, spending recorded, lead set, notes, or outreach contacts),
+  // the row is considered filled and shows blue. This catches legacy
+  // rows that have data but rowConfirmed=false because data was filled
+  // inline before Phase 6. The user goes through Edit Follow-up to lock
+  // it in, but visually the row matches reality (data IS there).
+  var _hasFollowupData = (row.status && row.status !== 'Pending')
+    || !!row.relationship
+    || !!(row.spending && (row.spending.zeroSpending || (row.spending.items && row.spending.items.length)))
+    || !!(row.leadNotes && row.leadNotes.trim())
+    || !!(row.outreachContacts && row.outreachContacts.total != null);
   var _fillStateCls = '';
   if(row.clinic && !row.isManual){
-    if(row.rowConfirmed){ _fillStateCls = 'row-filled'; }
-    else                { _fillStateCls = 'row-unfilled'; }
+    if(row.rowConfirmed || _hasFollowupData){ _fillStateCls = 'row-filled'; }
+    else                                     { _fillStateCls = 'row-unfilled'; }
   }
   var rowCls = (row.status === 'Canceled') ? 'canceled-row'
              : row.isMosque ? 'mosque-row'
