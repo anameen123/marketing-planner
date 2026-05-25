@@ -3291,7 +3291,7 @@ body.role-front_desk #referrals-view {
           <!-- Per-type input panels (only one visible based on radio) -->
           <div id="rp-rw-start-facility" style="margin-top:10px">
             <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Pick facility</label>
-            <select id="rp-rw-facility-select" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-size:12px;background:#fff">
+            <select id="rp-rw-facility-select" onchange="_rpRwFacilityPick(this.value)" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-size:12px;background:#fff">
               <option value="">— Choose —</option>
               <option value="_facility_frisco_er">Frisco ER</option>
               <option value="_facility_castle_hills_er">Castle Hills ER</option>
@@ -3306,8 +3306,8 @@ body.role-front_desk #referrals-view {
             <div style="font-size:10px;color:var(--muted);margin-top:4px;font-style:italic">Custom locations show as a temporary blue pin and don't create a visit row.</div>
           </div>
           <div id="rp-rw-start-clinic" style="display:none;margin-top:10px">
-            <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Type to search clinic</label>
-            <input id="rp-rw-clinic-search" type="text" placeholder="Start typing a clinic name…" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-size:12px;background:#fff;box-sizing:border-box">
+            <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Type to search clinic / MVA / outreach</label>
+            <input id="rp-rw-clinic-search" type="text" placeholder="Start typing a name…" oninput="_rpRwClinicSearch()" onfocus="_rpRwClinicSearch()" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-size:12px;background:#fff;box-sizing:border-box">
             <div id="rp-rw-clinic-suggestions" style="background:#fff;border:1px solid var(--border);border-radius:6px;margin-top:4px;max-height:160px;overflow-y:auto;display:none"></div>
             <button type="button" onclick="_rpRwStartPickOnMap()" style="margin-top:6px;background:#1F3864;color:#fff;border:none;border-radius:5px;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer">📍 Or pick on map</button>
           </div>
@@ -25091,15 +25091,191 @@ function _rpRwUpdateBudgetPreview(){
 }
 window._rpRwUpdateBudgetPreview = _rpRwUpdateBudgetPreview;
 
-// Map-pick handler — called when user clicks "Pick on map" in step 1.
-// Closes the planner temporarily, lets them double-click a pin, then reopens.
-// (Phase 3b will fill this in fully; for 3a it's a stub.)
-function _rpRwStartPickOnMap(){
-  if(typeof showToast === 'function'){
-    showToast('Map picker coming in Phase 3b — for now, pick a facility or type a clinic name.');
+// ── CLINIC TYPEAHEAD (Phase 3b) ─────────────────────────────────────
+// Search across CLINIC_BANK + MVA_ATTORNEYS + OUTREACH for the user's
+// typed query, render up to 8 matches, clicking one locks it in.
+function _rpRwClinicSearch(){
+  var inp = document.getElementById('rp-rw-clinic-search');
+  var box = document.getElementById('rp-rw-clinic-suggestions');
+  if(!inp || !box) return;
+  var q = (inp.value || '').toLowerCase().trim();
+  if(q.length < 1){ box.style.display = 'none'; box.innerHTML = ''; return; }
+  // Build a unified pool of names with their type
+  var pool = [];
+  if(typeof CLINIC_BANK !== 'undefined' && Array.isArray(CLINIC_BANK)){
+    CLINIC_BANK.forEach(function(c){ if(c && c.n) pool.push({ name: c.n, type: 'clinic', city: c.c || '' }); });
   }
+  if(typeof MVA_ATTORNEYS !== 'undefined' && Array.isArray(MVA_ATTORNEYS)){
+    MVA_ATTORNEYS.forEach(function(m){ if(m && m.firm) pool.push({ name: m.firm, type: 'mva', city: m.city || '' }); });
+  }
+  if(typeof OUTREACH !== 'undefined' && Array.isArray(OUTREACH)){
+    OUTREACH.forEach(function(o){ if(o && o.name) pool.push({ name: o.name, type: 'outreach', city: o.city || '' }); });
+  }
+  // Filter: starts-with first, then contains
+  var matches = pool.filter(function(p){
+    return p.name.toLowerCase().indexOf(q) !== -1;
+  }).sort(function(a, b){
+    var aStarts = a.name.toLowerCase().indexOf(q) === 0;
+    var bStarts = b.name.toLowerCase().indexOf(q) === 0;
+    if(aStarts !== bStarts) return aStarts ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  }).slice(0, 8);
+  if(matches.length === 0){
+    box.style.display = 'block';
+    box.innerHTML = '<div style="padding:8px;color:var(--muted);font-style:italic;font-size:11px">No matches</div>';
+    return;
+  }
+  box.style.display = 'block';
+  box.innerHTML = matches.map(function(m){
+    var letter = m.type === 'mva' ? 'M' : m.type === 'outreach' ? 'O' : 'C';
+    var letterBg = m.type === 'mva' ? '#16a34a' : m.type === 'outreach' ? '#7030A0' : '#eab308';
+    var safeName = String(m.name).replace(/</g,'&lt;').replace(/'/g,"&#39;");
+    var dataAttr = 'data-name="' + safeName + '" data-type="' + m.type + '"';
+    return '<div ' + dataAttr + ' onclick="_rpRwClinicPick(this.dataset.name, this.dataset.type)" '
+      +    'style="padding:7px 10px;cursor:pointer;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;gap:8px;font-size:12px" '
+      +    'onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'\'">'
+      +    '<span style="display:inline-block;width:18px;height:18px;background:'+ letterBg +';color:#fff;border-radius:50%;text-align:center;line-height:18px;font-size:10px;font-weight:800;flex-shrink:0">'+ letter +'</span>'
+      +    '<span style="flex:1;min-width:0">'
+      +      '<div style="color:#0f172a;font-weight:600">' + safeName + '</div>'
+      +      (m.city ? '<div style="font-size:10px;color:var(--muted)">' + m.city + '</div>' : '')
+      +    '</span>'
+      + '</div>';
+  }).join('');
+}
+window._rpRwClinicSearch = _rpRwClinicSearch;
+
+function _rpRwClinicPick(name, type){
+  if(!name) return;
+  var coord = (typeof getCoordForBusiness === 'function') ? getCoordForBusiness(name) : null;
+  if(!coord){
+    if(typeof showToast === 'function') showToast('No coordinates known for ' + name + '. Try another.');
+    return;
+  }
+  _RP_RW.start = {
+    name: name, coord: coord, kind: type || 'clinic',
+    // Clinics-as-start count as visit #1 (per user requirement)
+    isVisit: true
+  };
+  // Reflect into the input
+  var inp = document.getElementById('rp-rw-clinic-search');
+  if(inp) inp.value = name;
+  // Hide suggestions
+  var box = document.getElementById('rp-rw-clinic-suggestions');
+  if(box){ box.style.display = 'none'; }
+  // Show summary
+  if(typeof _rpRwTryResolveStart === 'function') _rpRwTryResolveStart();
+  // Zoom the map to the start area (zoom 12 — neighborhood scale)
+  try {
+    if(typeof _DV_MAP !== 'undefined' && _DV_MAP){
+      _DV_MAP.setView([coord.lat, coord.lng], 12, { animate: true });
+    }
+  } catch(_){}
+  // Drop the persistent "S" marker so the user sees their start visually
+  try { if(typeof _rpDrawStartMarker === 'function') _rpDrawStartMarker(coord, name); } catch(_){}
+}
+window._rpRwClinicPick = _rpRwClinicPick;
+
+// Facility dropdown change handler — locks in the start, zooms map.
+function _rpRwFacilityPick(key){
+  if(!key || !ROUTE_COORDS[key]){ _RP_RW.start = null; return; }
+  var f = ROUTE_COORDS[key];
+  _RP_RW.start = {
+    name: f.label, coord: { lat: f.lat, lng: f.lng },
+    kind: 'facility', isVisit: false
+  };
+  if(typeof _rpRwTryResolveStart === 'function') _rpRwTryResolveStart();
+  try {
+    if(typeof _DV_MAP !== 'undefined' && _DV_MAP){
+      _DV_MAP.setView([f.lat, f.lng], 12, { animate: true });
+    }
+    if(typeof _rpDrawStartMarker === 'function'){
+      _rpDrawStartMarker({ lat: f.lat, lng: f.lng }, f.label);
+    }
+  } catch(_){}
+}
+window._rpRwFacilityPick = _rpRwFacilityPick;
+
+// ── MAP-PICK FOR STEP 1 (Phase 3b) ──────────────────────────────────
+// User clicks "Pick on map" → arm a one-shot map click listener that
+// captures coords. For 'custom' type, captures any click + uses the
+// typed name as label. For 'clinic' type, snaps to nearest pin (same
+// 2-mi tolerance as random pick). For 'facility', this button doesn't
+// even appear (dropdown is the picker).
+var _RP_RW_MAP_PICK_ACTIVE = false;
+var _RP_RW_MAP_PICK_BANNER = null;
+function _rpRwStartPickOnMap(){
+  if(_RP_RW.startType === 'facility'){
+    if(typeof showToast === 'function') showToast('Use the dropdown for facilities.');
+    return;
+  }
+  if(_RP_RW.startType === 'custom'){
+    var nm = (document.getElementById('rp-rw-custom-name') || {}).value || '';
+    if(!nm.trim()){
+      if(typeof showToast === 'function') showToast('Type a label first (e.g. "Home"), then pick on map.');
+      return;
+    }
+  }
+  _RP_RW_MAP_PICK_ACTIVE = true;
+  // Floating banner — fixed at top of viewport, above the map
+  var b = document.createElement('div');
+  b.style.cssText = 'position:fixed;top:60px;left:50%;transform:translateX(-50%);z-index:9999;background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;padding:10px 18px;border-radius:8px;font-family:DM Sans,sans-serif;font-size:12px;font-weight:700;box-shadow:0 4px 14px rgba(0,0,0,.25);display:flex;align-items:center;gap:12px';
+  b.innerHTML = (_RP_RW.startType === 'clinic')
+    ? '📍 Click on a pin to set your starting clinic <button onclick="_rpRwCancelMapPick()" style="background:rgba(255,255,255,.2);color:#fff;border:1px solid rgba(255,255,255,.5);border-radius:5px;padding:3px 10px;font-size:11px;cursor:pointer;font-family:inherit">✕ Cancel</button>'
+    : '📍 Click anywhere on the map to set your custom location <button onclick="_rpRwCancelMapPick()" style="background:rgba(255,255,255,.2);color:#fff;border:1px solid rgba(255,255,255,.5);border-radius:5px;padding:3px 10px;font-size:11px;cursor:pointer;font-family:inherit">✕ Cancel</button>';
+  document.body.appendChild(b);
+  _RP_RW_MAP_PICK_BANNER = b;
 }
 window._rpRwStartPickOnMap = _rpRwStartPickOnMap;
+
+function _rpRwCancelMapPick(){
+  _RP_RW_MAP_PICK_ACTIVE = false;
+  if(_RP_RW_MAP_PICK_BANNER){
+    try { document.body.removeChild(_RP_RW_MAP_PICK_BANNER); } catch(_){}
+    _RP_RW_MAP_PICK_BANNER = null;
+  }
+}
+window._rpRwCancelMapPick = _rpRwCancelMapPick;
+
+// Called by the map click handler when a pick is in progress.
+function _rpRwHandleMapPick(latlng){
+  if(!_RP_RW_MAP_PICK_ACTIVE || !latlng) return false;
+  if(_RP_RW.startType === 'clinic'){
+    // Snap to nearest pin within 2 mi
+    var best = null, bestDist = Infinity;
+    function consider(name){
+      var c = (typeof getCoordForBusiness === 'function') ? getCoordForBusiness(name) : null;
+      if(!c) return;
+      var d = _rpHaversineMiles(c, { lat: latlng.lat, lng: latlng.lng });
+      if(d < bestDist){ bestDist = d; best = { name: name, coord: c }; }
+    }
+    if(typeof CLINIC_BANK !== 'undefined') CLINIC_BANK.forEach(function(c){ if(c && c.n) consider(c.n); });
+    if(typeof MVA_ATTORNEYS !== 'undefined') MVA_ATTORNEYS.forEach(function(m){ if(m && m.firm) consider(m.firm); });
+    if(typeof OUTREACH !== 'undefined') OUTREACH.forEach(function(o){ if(o && o.name) consider(o.name); });
+    if(!best || bestDist > 2){
+      if(typeof showToast === 'function') showToast('No pin within 2 mi. Try closer to a marker.');
+      return false;
+    }
+    _RP_RW.start = { name: best.name, coord: best.coord, kind: 'clinic', isVisit: true };
+    var inp = document.getElementById('rp-rw-clinic-search');
+    if(inp) inp.value = best.name;
+  } else if(_RP_RW.startType === 'custom'){
+    var name = (document.getElementById('rp-rw-custom-name') || {}).value.trim() || 'Custom location';
+    _RP_RW.start = { name: name, coord: { lat: latlng.lat, lng: latlng.lng }, kind: 'custom', isVisit: false };
+  }
+  // Cancel the picker, zoom in, drop S marker
+  _rpRwCancelMapPick();
+  if(typeof _rpRwTryResolveStart === 'function') _rpRwTryResolveStart();
+  try {
+    if(typeof _DV_MAP !== 'undefined' && _DV_MAP && _RP_RW.start){
+      _DV_MAP.setView([_RP_RW.start.coord.lat, _RP_RW.start.coord.lng], 12, { animate: true });
+    }
+    if(typeof _rpDrawStartMarker === 'function' && _RP_RW.start){
+      _rpDrawStartMarker(_RP_RW.start.coord, _RP_RW.start.name);
+    }
+  } catch(_){}
+  return true;
+}
+window._rpRwHandleMapPick = _rpRwHandleMapPick;
 
 // Phase 3c — Generate. For 3a this is a placeholder.
 function _rpRwGenerate(){
@@ -25815,6 +25991,16 @@ window._rpRandomReset = _rpRandomReset;
       if(_RP_MODE !== 'random' || !_RP_RANDOM_AWAITING_DOUBLECLICK) return;
       if(typeof _rpHandleRandomDoubleClick === 'function'){
         _rpHandleRandomDoubleClick(e.latlng);
+      }
+    });
+    // Per user 2026-05-25 Phase 3b: single-click map picker for the new
+    // wizard's "Pick on map" button. Only fires when _RP_RW_MAP_PICK_ACTIVE
+    // is true (set by _rpRwStartPickOnMap, cleared by handle/cancel).
+    _DV_MAP.on('click', function(e){
+      if(typeof _RP_RW_MAP_PICK_ACTIVE !== 'undefined' && _RP_RW_MAP_PICK_ACTIVE){
+        if(typeof _rpRwHandleMapPick === 'function'){
+          _rpRwHandleMapPick(e.latlng);
+        }
       }
     });
   }
