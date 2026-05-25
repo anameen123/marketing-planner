@@ -19768,11 +19768,18 @@ function openEditVisit(di, ri){
       memSel.disabled = false;
       memSel.style.opacity = '';
       memSel.style.cursor = '';
-      if(memHint) memHint.textContent = 'Admin — you can reassign this visit to any team member.';
+      if(memHint) memHint.textContent = 'Admin — change requires explicit Confirm reassignment step below.';
     }
     // (Members never see this UI, but keep the select in sync with row.member
     // so confirmEditVisit reads the correct value when it runs.)
   }
+  // Per user 2026-05-25: reset reassignment gate state on every dialog open
+  window._evMemberOrig = row.member || '';
+  window._evMemberReassignConfirmed = false;
+  var _gateEl = document.getElementById('ev-member-reassign-gate');
+  var _doneEl = document.getElementById('ev-member-reassign-confirmed');
+  if(_gateEl) _gateEl.style.display = 'none';
+  if(_doneEl) _doneEl.style.display = 'none';
   // Status
   var statSel = document.getElementById('ev-status');
   if(statSel){ statSel.value = row.status || 'Pending'; }
@@ -19887,6 +19894,58 @@ function _evRenderLeadSummary(row){
 // Bridge into the existing spending / lead-status modals from inside the Edit
 // dialog. The user finishes those flows and lands back here — the summary
 // boxes refresh automatically because they read from the row's live state.
+// Per user 2026-05-25: admin must explicitly confirm a member reassignment.
+// Tracked here so confirmEditVisit can validate. Reset on every openEditVisit.
+window._evMemberOrig = null;
+window._evMemberReassignConfirmed = false;
+
+function _evOnMemberDropdownChange(){
+  if(typeof isAdmin === 'function' && !isAdmin()) return;
+  var sel = document.getElementById('ev-member');
+  if(!sel) return;
+  var orig = window._evMemberOrig || '';
+  var curr = sel.value || '';
+  var gate = document.getElementById('ev-member-reassign-gate');
+  var done = document.getElementById('ev-member-reassign-confirmed');
+  if(curr === orig){
+    if(gate) gate.style.display = 'none';
+    if(done) done.style.display = 'none';
+    window._evMemberReassignConfirmed = false;
+    return;
+  }
+  // Value differs — show the gate, hide the confirmed banner
+  if(gate){
+    gate.style.display = 'block';
+    var fromEl = document.getElementById('ev-member-reassign-from');
+    var toEl   = document.getElementById('ev-member-reassign-to');
+    if(fromEl) fromEl.textContent = orig || '(unassigned)';
+    if(toEl)   toEl.textContent   = curr || '(unassigned)';
+  }
+  if(done) done.style.display = 'none';
+  window._evMemberReassignConfirmed = false;
+}
+window._evOnMemberDropdownChange = _evOnMemberDropdownChange;
+
+function _evConfirmReassign(){
+  window._evMemberReassignConfirmed = true;
+  var gate = document.getElementById('ev-member-reassign-gate');
+  var done = document.getElementById('ev-member-reassign-confirmed');
+  if(gate) gate.style.display = 'none';
+  if(done) done.style.display = 'block';
+}
+window._evConfirmReassign = _evConfirmReassign;
+
+function _evCancelReassign(){
+  var sel = document.getElementById('ev-member');
+  if(sel) sel.value = window._evMemberOrig || '';
+  window._evMemberReassignConfirmed = false;
+  var gate = document.getElementById('ev-member-reassign-gate');
+  var done = document.getElementById('ev-member-reassign-confirmed');
+  if(gate) gate.style.display = 'none';
+  if(done) done.style.display = 'none';
+}
+window._evCancelReassign = _evCancelReassign;
+
 function _evOpenSpendingFromEdit(){
   if(_evDi == null || _evRi == null) return;
   // Per user 2026-05-25: previous code looked for `openSpendingModal`
@@ -19944,6 +20003,18 @@ function confirmEditVisit(){
   // Defense-in-depth: UI lock + save-path lock.
   if(typeof isAdmin === 'function' && !isAdmin()){
     newMember = row.member || '';
+  }
+  // ADMIN REASSIGN GATE — even admin must explicitly confirm a reassignment
+  // before save accepts it. If the dropdown was changed but the inline
+  // "✓ Confirm reassignment" button wasn't clicked, block the save with a
+  // clear error and scroll the gate into view.
+  if(typeof isAdmin === 'function' && isAdmin()){
+    if(newMember !== (row.member || '') && !window._evMemberReassignConfirmed){
+      showErr('You changed the assigned member but didn\'t confirm the reassignment. Scroll up and click "✓ Confirm reassignment" — OR click "Cancel reassign" to revert.');
+      var gateScroll = document.getElementById('ev-member-reassign-gate');
+      if(gateScroll && gateScroll.scrollIntoView){ try { gateScroll.scrollIntoView({ behavior:'smooth', block:'center' }); } catch(_){} }
+      return;
+    }
   }
   // Per user 2026-05-25 (Phase 7): show a REVIEW modal listing the diff
   // before applying. The modal's "Confirm changes" button sets
@@ -20304,16 +20375,24 @@ function openVisitConfirmFlow(di, ri){
   window._evWizardMode = true;
   if(typeof openEditVisit === 'function'){
     openEditVisit(di, ri);
-    // Swap the modal's chrome to read as a fresh-fill flow, not "edit".
+    // Per user 2026-05-25: dialog title MUST match the click that opened it.
+    // If the row has any follow-up data already, this is an EDIT flow; else
+    // it's the FILL flow. Same _hasFollowupData check as the row's button
+    // label (commit 002154b).
+    var _hasData = (row.status && row.status !== 'Pending')
+      || !!row.relationship
+      || !!(row.spending && (row.spending.zeroSpending || (row.spending.items && row.spending.items.length)))
+      || !!(row.leadNotes && row.leadNotes.trim())
+      || !!(row.outreachContacts && row.outreachContacts.total != null);
     setTimeout(function(){
       var top = document.querySelector('#edit-visit-modal .modal-top');
       if(top){
         var btn = top.querySelector('button');
-        top.innerHTML = '🪄 Fill &amp; confirm visit';
+        top.innerHTML = _hasData ? '✏ Edit follow-up' : '🪄 Fill &amp; confirm visit';
         if(btn) top.appendChild(btn);
       }
       var saveBtn = document.querySelector('#edit-visit-modal .btn-save');
-      if(saveBtn) saveBtn.textContent = '✓ Confirm visit (final)';
+      if(saveBtn) saveBtn.textContent = _hasData ? '✓ Confirm changes' : '✓ Confirm visit (final)';
       // Hide the "OVERWRITE prior data" warning since this is the first save
       var modalBody = document.querySelector('#edit-visit-modal .modal-body');
       if(modalBody){
@@ -45724,8 +45803,26 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
            with the row's current member). -->
       <div class="kpi-input-row" id="ev-member-row">
         <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Assigned Member</label>
-        <select id="ev-member" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box"></select>
+        <select id="ev-member" onchange="_evOnMemberDropdownChange()" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box"></select>
         <div id="ev-member-hint" style="font-size:10px;color:var(--muted);margin-top:4px;font-style:italic"></div>
+        <!-- Per user 2026-05-25: admin must explicitly CONFIRM a reassignment
+             before the rest of the wizard accepts it. "It's a very crucial
+             thing to do." The gate below only appears when the dropdown value
+             differs from the row's current member. Once confirmed, the rest
+             of the wizard runs normally on save. -->
+        <div id="ev-member-reassign-gate" style="display:none;margin-top:8px;background:#fef3c7;border:1px solid #fcd34d;border-radius:6px;padding:9px 12px">
+          <div style="font-size:11px;color:#92400e;line-height:1.5;margin-bottom:6px">
+            <b>⚠ Reassignment pending.</b> You're moving this visit from
+            <b id="ev-member-reassign-from">—</b> to
+            <b id="ev-member-reassign-to">—</b>. This is a crucial change —
+            click below to confirm BEFORE saving the dialog.
+          </div>
+          <button type="button" id="ev-member-reassign-confirm-btn" onclick="_evConfirmReassign()" style="background:#dc2626;color:#fff;border:none;border-radius:5px;padding:6px 14px;font-size:11px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif">✓ Confirm reassignment</button>
+          <button type="button" onclick="_evCancelReassign()" style="background:transparent;color:#92400e;border:1px solid #fcd34d;border-radius:5px;padding:6px 12px;font-size:11px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;margin-left:6px">Cancel reassign</button>
+        </div>
+        <div id="ev-member-reassign-confirmed" style="display:none;margin-top:8px;background:#dcfce7;border:1px solid #86efac;border-radius:6px;padding:7px 12px;font-size:11px;color:#166534">
+          <b>✓ Reassignment confirmed.</b> The change will apply when you click "Confirm changes" at the bottom.
+        </div>
       </div>
 
       <!-- Status -->
