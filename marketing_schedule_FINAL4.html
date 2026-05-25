@@ -6323,40 +6323,23 @@ function _acRunGemini(){
              + 'with this exact name exists in this city, return found: false. NEVER invent\n'
              + 'phone numbers or addresses. If a field is unknown, return empty string.';
 
-  var url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='
-          + encodeURIComponent(MAPV2_CONFIG.geminiKey);
-  fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [ { parts: [ { text: prompt } ] } ],
-      generationConfig: {
-        temperature: 0.2, maxOutputTokens: 600,
-        responseMimeType: 'application/json'
-      }
-    })
-  })
-  .then(function(r){ return r.json(); })
-  .then(function(json){
+  // Phase 8b: route through GitHub Models (was Gemini)
+  _callAIChat(prompt, { temperature: 0.2, maxTokens: 600, wantJson: true })
+  .then(function(text){
     btnEl.disabled = false;
     btnEl.style.opacity = '1';
-    if(json.error){ statusEl.textContent = 'âœ— ' + json.error.message; statusEl.style.color = '#dc2626'; return; }
-    var text = '';
-    try { text = json.candidates[0].content.parts.map(function(p){ return p.text || ''; }).join(''); }
-    catch(e){ statusEl.textContent = 'âœ— Could not parse Gemini response'; statusEl.style.color = '#dc2626'; return; }
     var parsed;
     try { parsed = JSON.parse(text); }
     catch(e){
       var m = text.match(/\{[\s\S]*\}/);
-      if(m) try { parsed = JSON.parse(m[0]); } catch(_){}
+      if(m){ try { parsed = JSON.parse(m[0]); } catch(_){} }
     }
-    if(!parsed){ statusEl.textContent = 'âœ— Bad JSON from Gemini'; statusEl.style.color = '#dc2626'; return; }
+    if(!parsed){ statusEl.textContent = 'âœ— Bad JSON from AI'; statusEl.style.color = '#dc2626'; return; }
     if(!parsed.found){
-      statusEl.innerHTML = 'ðŸ¤” Gemini couldn\'t confidently identify this clinic. ' + (parsed.notes || 'Try a different spelling, or switch to Manual mode.');
+      statusEl.innerHTML = 'ðŸ¤” AI couldn\'t confidently identify this clinic. ' + (parsed.notes || 'Try a different spelling, or switch to Manual mode.');
       statusEl.style.color = '#d97706';
       return;
     }
-    // Fill the form
     _acFillFromGemini(parsed, city);
     var confBadge = parsed.confidence === 'high' ? 'âœ… HIGH confidence'
                   : parsed.confidence === 'medium' ? 'ðŸŸ¡ MEDIUM confidence' : 'ðŸ”´ LOW confidence';
@@ -6365,7 +6348,7 @@ function _acRunGemini(){
   })
   .catch(function(e){
     btnEl.disabled = false; btnEl.style.opacity = '1';
-    statusEl.textContent = 'âœ— Network error: ' + e.message;
+    statusEl.textContent = 'âœ— ' + (e && e.message || e);
     statusEl.style.color = '#dc2626';
   });
 }
@@ -14662,21 +14645,30 @@ function _mv2TestGeminiKey(){
   var k = document.getElementById('mv2-gemini-key').value.trim();
   if(!k){ status.textContent = 'Paste a key first.'; status.style.color = '#dc2626'; return; }
   status.textContent = 'â³ Testing Gemini...'; status.style.color = '#1F3864';
-  var url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + encodeURIComponent(k);
+  // Phase 8b: hit GitHub Models endpoint (was Gemini). Auth = Bearer token in header.
+  var url = 'https://models.github.ai/inference/chat/completions';
   var body = {
-    contents: [ { parts: [ { text: 'Reply with just the word: OK' } ] } ],
-    generationConfig: { temperature: 0, maxOutputTokens: 10 }
+    model: 'openai/gpt-4o-mini',
+    messages: [ { role: 'user', content: 'Reply with just the word: OK' } ],
+    temperature: 0, max_tokens: 10
   };
   fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Authorization': 'Bearer ' + k,
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    },
     body: JSON.stringify(body)
   })
-  .then(function(r){ return r.json(); }).then(function(json){
+  .then(function(r){
+    if(!r.ok){ return r.text().then(function(t){ throw new Error('HTTP ' + r.status + ': ' + (t || r.statusText || '').slice(0, 200)); }); }
+    return r.json();
+  }).then(function(json){
     if(json.error){
       status.textContent = 'âœ— ' + json.error.message;
       status.style.color = '#dc2626';
-    } else if(json.candidates && json.candidates.length){
+    } else if(json.choices && json.choices.length){
       status.textContent = 'âœ“ Gemini key works â€” model responded.';
       status.style.color = '#16a34a';
     } else {
@@ -20990,6 +20982,76 @@ window.isMapV2Enabled = isMapV2Enabled;
 window.hasMapsKey = hasMapsKey;
 window.hasGeminiKey = hasGeminiKey;
 
+// ─── PHASE 8b (per user 2026-05-25): unified AI chat call ───────────────────
+// Replaces all the Gemini fetch boilerplate scattered across the codebase
+// with a single helper that hits GitHub Models (OpenAI-compatible endpoint).
+// GitHub Models = Microsoft-owned, uses the same GitHub PAT that authenticates
+// the user's repo, free tier 50 req/day with NO card required. Aligns with
+// the project's Microsoft-only stack discipline noted in MEMORY.md.
+//
+// Storage: the GitHub PAT lives in MAPV2_CONFIG.geminiKey. Variable name is
+// kept for backwards compatibility — same storage slot, just a different
+// kind of key. UI labels updated separately to say "GitHub Models token".
+//
+// Returns Promise<string> resolving to the model's text output. Throws on
+// HTTP errors, missing key, or unexpected response shapes.
+//
+// opts:
+//   model:       default 'openai/gpt-4o-mini' (small, fast, free-tier-friendly)
+//   temperature: 0.0–2.0, default 0.4
+//   maxTokens:   default 900
+//   wantJson:    if true, asks model for strict JSON output (response_format).
+function _callAIChat(prompt, opts){
+  opts = opts || {};
+  return new Promise(function(resolve, reject){
+    if(!hasGeminiKey()){
+      reject(new Error('No AI key set — paste your GitHub Models token in ⚙ Map v2 settings.'));
+      return;
+    }
+    var url = 'https://models.github.ai/inference/chat/completions';
+    var body = {
+      model: opts.model || 'openai/gpt-4o-mini',
+      messages: [ { role: 'user', content: String(prompt || '') } ],
+      temperature: (opts.temperature != null ? opts.temperature : 0.4),
+      max_tokens:  (opts.maxTokens   != null ? opts.maxTokens   : 900)
+    };
+    if(opts.wantJson){
+      body.response_format = { type: 'json_object' };
+    }
+    fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + MAPV2_CONFIG.geminiKey,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify(body)
+    })
+    .then(function(r){
+      if(!r.ok){
+        return r.text().then(function(t){
+          throw new Error('GitHub Models ' + r.status + ': ' + (t || r.statusText || '').slice(0, 240));
+        });
+      }
+      return r.json();
+    })
+    .then(function(json){
+      if(json && json.error){
+        var msg = (json.error && json.error.message) || 'GitHub Models returned an error';
+        reject(new Error(msg));
+        return;
+      }
+      var text = '';
+      try { text = (json.choices && json.choices[0] && json.choices[0].message && json.choices[0].message.content) || ''; }
+      catch(e){ reject(new Error('Unexpected GitHub Models response shape')); return; }
+      if(!text){ reject(new Error('GitHub Models returned empty content')); return; }
+      resolve(text);
+    })
+    .catch(reject);
+  });
+}
+window._callAIChat = _callAIChat;
+
 // â”€â”€ DAILY QUOTA COUNTERS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Stored as { date: 'YYYY-MM-DD', mapsCalls: N, geminiCalls: N }.
 // Auto-resets at midnight (next call after a fresh day clears the counters).
@@ -21360,8 +21422,9 @@ window.decodePolyline = decodePolyline;
 // asks it to recommend priorities. Returns a short, structured response
 // that we render as a banner above the route.
 //
-// Gemini model: gemini-2.5-flash (free tier: 1500 req/day).
-// Endpoint: https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent
+// AI backend: GitHub Models (OpenAI-compatible, gpt-4o-mini default).
+// Endpoint: https://models.github.ai/inference/chat/completions
+// Free tier: 50 req/day, no card. Auth via GitHub PAT with Models read scope.
 //
 // Caller signature:
 //   askGeminiForRouteAdvice({
@@ -21404,40 +21467,16 @@ function askGeminiForRouteAdvice(ctx, cb){
     + '  "reasoning": "<2-3 sentence summary of your overall strategy>"\n'
     + '}\n';
 
-  var url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='
-          + encodeURIComponent(MAPV2_CONFIG.geminiKey);
-  var body = {
-    contents: [ { parts: [ { text: prompt } ] } ],
-    generationConfig: {
-      temperature: 0.3,
-      topK: 40,
-      topP: 0.9,
-      maxOutputTokens: 800,
-      // Request JSON output explicitly so we don't have to strip markdown.
-      responseMimeType: 'application/json'
-    }
-  };
-  fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
-  })
-  .then(function(r){ return r.json(); })
-  .then(function(json){
-    if(json.error){ cb(new Error('Gemini: ' + json.error.message)); return; }
-    if(!json.candidates || !json.candidates.length){ cb(new Error('Gemini returned no candidates')); return; }
-    var text = '';
-    try {
-      text = json.candidates[0].content.parts.map(function(p){ return p.text || ''; }).join('');
-    } catch(e){ cb(new Error('Could not parse Gemini response shape')); return; }
+  // Phase 8b: route through _callAIChat helper (was inline Gemini fetch).
+  _callAIChat(prompt, { temperature: 0.3, maxTokens: 800, wantJson: true })
+  .then(function(text){
     var parsed;
     try { parsed = JSON.parse(text); }
     catch(e){
-      // Sometimes the model wraps JSON in ```json ... ``` despite the mime hint
       var m = text.match(/\{[\s\S]*\}/);
-      if(m) try { parsed = JSON.parse(m[0]); } catch(_){}
+      if(m){ try { parsed = JSON.parse(m[0]); } catch(_){} }
     }
-    if(!parsed){ cb(new Error('Could not parse Gemini JSON: ' + text.slice(0, 150))); return; }
+    if(!parsed){ cb(new Error('Could not parse AI JSON: ' + text.slice(0, 150))); return; }
     cb(null, {
       recommendation: parsed.recommendation || '',
       priorityClinics: parsed.priorityClinics || [],
@@ -24122,41 +24161,24 @@ function explainRouteWithGemini(){
   statusEl.textContent = 'â³ Asking Gemini for a strategyâ€¦';
   outEl.innerHTML = '';
 
-  var url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='
-    + encodeURIComponent(MAPV2_CONFIG.geminiKey);
-  fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [ { parts: [ { text: prompt } ] } ],
-      generationConfig: { temperature: 0.4, maxOutputTokens: 300 }
-    })
-  })
-  .then(function(r){ return r.json(); })
-  .then(function(json){
+  // Phase 8b: route through GitHub Models (was Gemini).
+  _callAIChat(prompt, { temperature: 0.4, maxTokens: 300 })
+  .then(function(text){
     btn.disabled = false;
     btn.style.opacity = '1';
     statusEl.textContent = '';
-    if(json.error){
-      outEl.innerHTML = '<div style="color:#991b1b;background:#fee2e2;border:1px solid #fca5a5;border-radius:8px;padding:10px 14px;font-size:12px">âœ— ' + (json.error.message || 'Gemini error').replace(/</g, '&lt;') + '</div>';
-      return;
-    }
-    var text = '';
-    try { text = json.candidates[0].content.parts.map(function(p){ return p.text || ''; }).join(''); }
-    catch(_){ text = ''; }
     text = (text || '').trim();
     if(!text){
-      outEl.innerHTML = '<div style="color:var(--muted);font-style:italic;padding:6px 0">Gemini returned an empty response. Try again in a moment.</div>';
+      outEl.innerHTML = '<div style="color:var(--muted);font-style:italic;padding:6px 0">AI returned an empty response. Try again in a moment.</div>';
       return;
     }
-    // Render the explanation
-    outEl.innerHTML = '<div style="background:linear-gradient(135deg,#faf5ff,#eef2ff);border:1px solid #c4b5fd;border-radius:10px;padding:12px 16px;font-size:13px;line-height:1.55;color:#3730a3"><div style="font-size:10px;font-weight:800;color:#5b21b6;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;display:flex;align-items:center;gap:6px">ðŸ¤– Gemini Â· route strategy</div>' + text.replace(/</g, '&lt;').replace(/\n/g, '<br>') + '</div>';
+    outEl.innerHTML = '<div style="background:linear-gradient(135deg,#faf5ff,#eef2ff);border:1px solid #c4b5fd;border-radius:10px;padding:12px 16px;font-size:13px;line-height:1.55;color:#3730a3"><div style="font-size:10px;font-weight:800;color:#5b21b6;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;display:flex;align-items:center;gap:6px">ðŸ¤– AI Â· route strategy</div>' + text.replace(/</g, '&lt;').replace(/\n/g, '<br>') + '</div>';
   })
   .catch(function(err){
     btn.disabled = false;
     btn.style.opacity = '1';
     statusEl.textContent = '';
-    outEl.innerHTML = '<div style="color:#991b1b;background:#fee2e2;border:1px solid #fca5a5;border-radius:8px;padding:10px 14px;font-size:12px">âœ— Network error: ' + String(err.message || err).replace(/</g, '&lt;') + '</div>';
+    outEl.innerHTML = '<div style="color:#991b1b;background:#fee2e2;border:1px solid #fca5a5;border-radius:8px;padding:10px 14px;font-size:12px">âœ— ' + String(err.message || err).replace(/</g, '&lt;') + '</div>';
   });
 }
 window.explainRouteWithGemini = explainRouteWithGemini;
@@ -26468,25 +26490,9 @@ function _rpAiPlanRandomRoute(){
       + 'CRITICAL: orderedStopNames must contain ' + N + ' names total, each an EXACT match from the locked\n'
       + 'list and/or candidate pool above. Do not invent names. Do not omit locked stops.\n';
 
-    var url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='
-            + encodeURIComponent(MAPV2_CONFIG.geminiKey);
-    fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [ { parts: [ { text: prompt } ] } ],
-        generationConfig: {
-          temperature: 0.4,
-          maxOutputTokens: 900,
-          responseMimeType: 'application/json'
-        }
-      })
-    })
-    .then(function(r){ return r.json(); })
-    .then(function(json){
-      if(json.error){ _RP_AI.lastError = json.error.message; resolve(null); return; }
-      var text = '';
-      try { text = json.candidates[0].content.parts.map(function(p){ return p.text || ''; }).join(''); } catch(e){}
+    // Phase 8b: route through GitHub Models (was Gemini).
+    _callAIChat(prompt, { temperature: 0.4, maxTokens: 900, wantJson: true })
+    .then(function(text){
       var parsed;
       try { parsed = JSON.parse(text); }
       catch(_){
@@ -26494,7 +26500,7 @@ function _rpAiPlanRandomRoute(){
         if(m){ try { parsed = JSON.parse(m[0]); } catch(_2){} }
       }
       if(!parsed || !Array.isArray(parsed.orderedStopNames) || parsed.orderedStopNames.length === 0){
-        _RP_AI.lastError = 'Gemini returned no valid stop list';
+        _RP_AI.lastError = 'AI returned no valid stop list';
         resolve(null); return;
       }
       // Map names back to full records (locked + pool)
@@ -26645,7 +26651,7 @@ window._rpAiPlanRandomRoute = _rpAiPlanRandomRoute;
         if(titleRow){
           var titleEl = titleRow.firstElementChild;
           if(titleEl){
-            titleEl.innerHTML = 'ðŸ¤– AI Suggestion <span style="background:#7c3aed;color:#fff;font-size:9px;padding:1px 6px;border-radius:3px;font-weight:700;margin-left:4px">GEMINI</span>';
+            titleEl.innerHTML = 'ðŸ¤– AI Suggestion <span style="background:#7c3aed;color:#fff;font-size:9px;padding:1px 6px;border-radius:3px;font-weight:700;margin-left:4px">GPT-4o</span>';
             titleEl.style.color = '#581c87';
           }
         }
@@ -26728,28 +26734,24 @@ function _rpAiCorridorSecondOpinion(){
     + '  "reasoning": "<2-4 sentence explanation of why these and how you balanced detour vs. recency>"\n'
     + '}\n';
 
-  var url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key='
-          + encodeURIComponent(MAPV2_CONFIG.geminiKey);
-  fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [ { parts: [ { text: prompt } ] } ],
-      generationConfig: { temperature: 0.4, maxOutputTokens: 800, responseMimeType: 'application/json' }
-    })
-  })
-  .then(function(r){ return r.json(); })
-  .then(function(json){
-    if(json.error){
+  // Phase 8b: route through GitHub Models (was Gemini).
+  _callAIChat(prompt, { temperature: 0.4, maxTokens: 800, wantJson: true })
+  .then(function(text){
+    // Unified error handling moved into the parsing branch below — wrap
+    // a fake json envelope so the existing logic continues to work.
+    // Helper returned `text` directly. Block below is intentionally never
+    // entered — kept temporarily so existing closing braces line up; the
+    // dead path will be removed in a follow-up cleanup.
+    if(false){
+      var json = null;
       if(panel) panel.innerHTML = '<div style="font-size:11px;color:#b91c1c">âš  AI error: ' + String(json.error.message).replace(/</g,'&lt;') + '</div>';
       return;
     }
-    var text = '';
-    try { text = json.candidates[0].content.parts.map(function(p){ return p.text || ''; }).join(''); } catch(e){}
+    // Helper already provided `text` directly; parse it as JSON.
     var parsed;
-    try { parsed = JSON.parse(text); }
+    try { parsed = JSON.parse(text || ''); }
     catch(_){
-      var m = text.match(/\{[\s\S]*\}/);
+      var m = (text || '').match(/\{[\s\S]*\}/);
       if(m){ try { parsed = JSON.parse(m[0]); } catch(_2){} }
     }
     if(!parsed || !Array.isArray(parsed.priorityNames)){
@@ -26768,7 +26770,7 @@ function _rpAiCorridorSecondOpinion(){
     if(panel){
       panel.innerHTML =
         '<div style="background:linear-gradient(135deg,#faf5ff,#ffffff);border:1px solid #d8b4fe;border-radius:8px;padding:12px;font-size:11px;color:#1e293b">'
-        + '<div style="font-weight:700;color:#581c87;margin-bottom:6px;display:flex;align-items:center;gap:6px">ðŸ¤– AI Second Opinion <span style="background:#7c3aed;color:#fff;font-size:9px;padding:1px 5px;border-radius:3px;font-weight:700">GEMINI</span></div>'
+        + '<div style="font-weight:700;color:#581c87;margin-bottom:6px;display:flex;align-items:center;gap:6px">ðŸ¤– AI Second Opinion <span style="background:#7c3aed;color:#fff;font-size:9px;padding:1px 5px;border-radius:3px;font-weight:700">GPT-4o</span></div>'
         + '<div style="background:#f5f3ff;border-radius:4px;padding:8px;margin-bottom:8px;font-style:italic;color:#581c87"><b>ðŸ’­ Reasoning:</b> ' + String(parsed.reasoning || '').replace(/</g,'&lt;') + '</div>'
         + '<div style="margin-bottom:6px"><b>AI prioritizes:</b><div style="margin-top:4px;line-height:1.7">'
         +   parsed.priorityNames.map(function(n){
@@ -45363,15 +45365,16 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
         <div id="mv2-maps-status" style="font-size:10px;color:var(--muted);margin-top:5px;min-height:14px"></div>
       </div>
 
-      <!-- â”€â”€ Gemini API key â”€â”€ -->
+      <!-- â”€â”€ AI key (GitHub Models PAT) â”€â”€ -->
       <div style="margin-bottom:16px">
-        <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">ðŸ¤– Gemini AI key (from AI Studio)</label>
+        <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">ðŸ¤– AI key â€” GitHub Models PAT</label>
         <div style="display:flex;gap:6px">
-          <input type="text" id="mv2-gemini-key" placeholder="AIzaSy..." autocomplete="off"
+          <input type="text" id="mv2-gemini-key" placeholder="github_pat_..." autocomplete="off"
                  style="flex:1;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:12px;font-family:DM Mono,monospace;background:#fff;box-sizing:border-box">
           <button onclick="_mv2TestGeminiKey()" style="background:#1F3864;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:11px;font-weight:700;cursor:pointer">Test</button>
         </div>
         <div id="mv2-gemini-status" style="font-size:10px;color:var(--muted);margin-top:5px;min-height:14px"></div>
+        <div style="font-size:10px;color:var(--muted);margin-top:4px;font-style:italic">Free tier: 50 calls/day, no card. Generate at github.com/settings/personal-access-tokens with the <b>Models</b> permission (Read).</div>
       </div>
 
       <!-- â”€â”€ Daily caps â”€â”€ -->
