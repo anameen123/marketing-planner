@@ -11164,7 +11164,7 @@ function renderHelpView(){
         { title: 'Save', body: 'Used when the patient walked in but didn\'t tell you how they found us.' }
       ])
     + guideItem('filter-log', 'Filter / search the patient log', [
-        { title: 'Open the Referrals tab', body: 'You\'ll see one panel per WCG facility (Frisco / Castle Hills / Plano / Richardson).' },
+        { title: 'Open the Referrals tab', body: 'You\'ll see one panel per WCG facility (Frisco / Castle Hills / Plano).' },
         { title: 'Use the filter chips at top', body: 'Filter by Insurance vs Self-pay, or by date range.' },
         { title: 'Click a member\'s name to drill down', body: 'See only that member\'s patients in the chosen period.' }
       ]);
@@ -12422,12 +12422,14 @@ var REFERRAL_LOG_LS_KEY = 'wcg_referral_log_v1'; // existing key kept; entries g
 // can touch them. Previously this was 1 hour.
 var REFERRAL_EDIT_WINDOW_MS = 24 * 60 * 60 * 1000; // 24 hours
 // The 3 WCG facilities — keyed for stable storage. Labels for display.
+// Per user 2026-05-25 (Phase 11a): Richardson REMOVED from this list — it
+// was earlier added by mistake. Richardson is only a map navigation point
+// (kept in ROUTE_COORDS for the route-planner), NOT an actual WCG facility
+// that receives patients. Real facilities are only Frisco, Castle Hills, Plano.
 var REFERRAL_FACILITIES = [
   { key: 'frisco_er',        label: 'Frisco ER',        short: 'Frisco',     city: 'Frisco' },
   { key: 'castle_hills_er',  label: 'Castle Hills ER',  short: 'Carrollton', city: 'Carrollton' },
-  { key: 'plano_uc',         label: 'Urgent Care Plano',short: 'Plano',      city: 'Plano' },
-  // Per user 2026-05-25: 4th facility at 101 W Renner Rd, Richardson.
-  { key: 'richardson',       label: 'Richardson',       short: 'Richardson', city: 'Richardson' }
+  { key: 'plano_uc',         label: 'Urgent Care Plano',short: 'Plano',      city: 'Plano' }
 ];
 
 // ── REFERRAL CHANNELS (v2: 2026-05-18) ────────────────────────────────
@@ -12443,15 +12445,27 @@ var REFERRAL_FACILITIES = [
 // location is). "Member direct" still has business:false because the
 // per-clinic tier counter is bumped from the cascading business pick
 // inside the form, not from the channel flag.
+// Per user 2026-05-25 (Phase 11a): channels overhauled.
+//   - REMOVED 'google' (Google ads aren't a referral channel — patients
+//     find us via Google but get logged from whichever real channel they
+//     mention to front desk).
+//   - REMOVED 'walkin' (walk-ins always have an underlying cause —
+//     neighborhood, repeat, friend, etc. — that should be picked instead).
+//   - ADDED 'outreach_event' (community-outreach attendance picker —
+//     patient was recruited at a specific event; attribution goes to the
+//     event card, NOT to a marketing member).
+//   - Renamed 'member_direct' label to clarify it's a clinic/MVA referral.
+//   - Member-credit field is only shown for 'member_direct' (now the
+//     Phase-11 referral pipeline). Outreach-event channel attributes to
+//     the event, not a member. Every other channel hides the member field.
 var REFERRAL_CHANNELS = [
-  { key: 'google',        label: 'Google',               icon: '🔍', business: false },
-  { key: 'walkin',        label: 'Walk-in',              icon: '🚶', business: false },
-  { key: 'neighborhood',  label: 'Neighborhood',         icon: '🏘️', business: false },
-  { key: 'repeat',        label: 'Repeat patient',       icon: '🔁', business: false },
-  { key: 'friend',        label: 'Friend or family',     icon: '👨‍👩‍👧', business: false },
-  { key: 'insurance',     label: 'Insurance directory',  icon: '🪪', business: false },
-  { key: 'member_direct', label: 'Member direct',        icon: '🤝', business: true  },
-  { key: 'other',         label: 'Other',                icon: '❓', business: false }
+  { key: 'member_direct',  label: 'Referral (clinic / MVA)', icon: '🤝', business: true,  showsMember: true  },
+  { key: 'outreach_event', label: 'Community outreach event',icon: '🏘️', business: false, showsMember: false, showsEvent: true },
+  { key: 'repeat',         label: 'Repeat patient',          icon: '🔁', business: false, showsMember: false },
+  { key: 'friend',         label: 'Friend or family',        icon: '👨‍👩‍👧', business: false, showsMember: false },
+  { key: 'neighborhood',   label: 'Neighborhood',            icon: '🏘️', business: false, showsMember: false },
+  { key: 'insurance',      label: 'Insurance directory',     icon: '🪪', business: false, showsMember: false },
+  { key: 'other',          label: 'Other (specify)',         icon: '❓', business: false, showsMember: false, showsSpecify: true }
 ];
 window.REFERRAL_CHANNELS = REFERRAL_CHANNELS;
 
@@ -15110,31 +15124,96 @@ function _rlPickInsurance(name){
 }
 window._rlPickInsurance = _rlPickInsurance;
 
-// Show/hide the source-business autocomplete depending on the channel.
-// Business channel → show. Anything else (Google / Walk-in / etc.) → hide.
+// Show/hide every channel-dependent field. Per user 2026-05-25 (Phase 11a):
+// - Referral (clinic/MVA, business=true)    → source picker + member field
+// - Community outreach event (showsEvent)   → event picker, NO member field
+// - Other (showsSpecify)                    → free-text specify, NO member field
+// - All other non-referral channels         → no source, no event, NO member field
 function _rlChannelChanged(){
   var ch  = document.getElementById('rl-channel');
-  var wrap= document.getElementById('rl-source-wrap');
-  var hint= document.getElementById('rl-member-direct-hint');
-  if(!ch || !wrap) return;
+  var srcWrap     = document.getElementById('rl-source-wrap');
+  var hint        = document.getElementById('rl-member-direct-hint');
+  var memberWrap  = document.getElementById('rl-member-wrap');
+  var eventWrap   = document.getElementById('rl-event-wrap');
+  var specifyWrap = document.getElementById('rl-specify-wrap');
+  if(!ch) return;
   var chDef = REFERRAL_CHANNELS.find(function(c){ return c.key === ch.value; });
-  if(chDef && chDef.business){
-    // Per user 2026-05-19: only member_direct uses this section now.
-    wrap.style.display = '';
-    if(hint) hint.style.display = (ch.value === 'member_direct') ? 'block' : 'none';
-  } else {
-    wrap.style.display = 'none';
-    if(hint) hint.style.display = 'none';
-    // also clear the value so submit doesn't grab a leftover business name
-    var inp = document.getElementById('rl-source');
-    if(inp){ inp.value = ''; if(inp.dataset) inp.dataset.sourceType = ''; inp.disabled = true; inp.placeholder = 'Pick a type above first'; }
-    var sug = document.getElementById('rl-source-suggest');
-    if(sug) sug.style.display = 'none';
-    // Clear the type radios too
-    document.querySelectorAll('input[name="rl-source-type"]').forEach(function(r){ r.checked = false; });
+  // Source-business picker (clinic / MVA autocomplete)
+  if(srcWrap){
+    if(chDef && chDef.business){
+      srcWrap.style.display = '';
+      if(hint) hint.style.display = (ch.value === 'member_direct') ? 'block' : 'none';
+    } else {
+      srcWrap.style.display = 'none';
+      if(hint) hint.style.display = 'none';
+      var inp = document.getElementById('rl-source');
+      if(inp){ inp.value = ''; if(inp.dataset) inp.dataset.sourceType = ''; inp.disabled = true; inp.placeholder = 'Pick a type above first'; }
+      var sug = document.getElementById('rl-source-suggest');
+      if(sug) sug.style.display = 'none';
+      document.querySelectorAll('input[name="rl-source-type"]').forEach(function(r){ r.checked = false; });
+    }
+  }
+  // Marketing-member credit picker — only shown for the Referral channel
+  if(memberWrap){
+    memberWrap.style.display = (chDef && chDef.showsMember) ? '' : 'none';
+    if(chDef && !chDef.showsMember){
+      var mSel = document.getElementById('rl-member');
+      if(mSel) mSel.value = '__none__';   // "no member credited" stays sane on submit
+    }
+  }
+  // Community-outreach event picker — only for outreach_event channel
+  if(eventWrap){
+    eventWrap.style.display = (chDef && chDef.showsEvent) ? '' : 'none';
+    if(chDef && !chDef.showsEvent){
+      var eInp = document.getElementById('rl-event');
+      if(eInp) eInp.value = '';
+    }
+  }
+  // "Other" specify free-text — only for other channel
+  if(specifyWrap){
+    specifyWrap.style.display = (chDef && chDef.showsSpecify) ? '' : 'none';
+    if(chDef && !chDef.showsSpecify){
+      var spInp = document.getElementById('rl-other-specify');
+      if(spInp) spInp.value = '';
+    }
   }
 }
 window._rlChannelChanged = _rlChannelChanged;
+
+// Phase 11a: autocomplete for the community-outreach event picker. Searches
+// the OUTREACH bank; clicking a result fills the input.
+function _rlSuggestEvents(){
+  var inp = document.getElementById('rl-event');
+  var sug = document.getElementById('rl-event-suggest');
+  if(!inp || !sug) return;
+  if(typeof OUTREACH === 'undefined' || !Array.isArray(OUTREACH)){
+    sug.style.display = 'none'; return;
+  }
+  var q = (inp.value || '').trim().toLowerCase();
+  var matches = (q.length === 0)
+    ? OUTREACH.slice(0, 10)
+    : OUTREACH.filter(function(o){ return o.name && o.name.toLowerCase().indexOf(q) >= 0; }).slice(0, 10);
+  if(matches.length === 0){
+    sug.innerHTML = '<div style="padding:8px 12px;font-size:11px;color:var(--muted);font-style:italic">No event matches — keep typing or ask admin to add it to the Outreach bank.</div>';
+    sug.style.display = 'block';
+    return;
+  }
+  sug.innerHTML = matches.map(function(o){
+    var safe = (o.name || '').replace(/'/g,"\\'").replace(/"/g,'&quot;');
+    var city = o.city ? ' <span style="color:var(--muted);font-size:10px">· ' + o.city + '</span>' : '';
+    return '<div onclick="_rlPickEvent(\'' + safe + '\')" style="padding:7px 12px;cursor:pointer;border-bottom:1px solid #f1f5f9;font-size:12px;color:var(--text)" onmouseover="this.style.background=\'#f0fdf4\'" onmouseout="this.style.background=\'#fff\'">🏘️ ' + (o.name || '').replace(/</g,'&lt;') + city + '</div>';
+  }).join('');
+  sug.style.display = 'block';
+}
+window._rlSuggestEvents = _rlSuggestEvents;
+
+function _rlPickEvent(name){
+  var inp = document.getElementById('rl-event');
+  if(inp) inp.value = name;
+  var sug = document.getElementById('rl-event-suggest');
+  if(sug) sug.style.display = 'none';
+}
+window._rlPickEvent = _rlPickEvent;
 
 // When the user picks a Business Type radio (Clinic / MVA / Outreach),
 // unlock the name input and pre-set the search to filter by that type.
@@ -15427,6 +15506,9 @@ function submitReferralForm(){
     })(),
     noMarketingRep: (document.getElementById('rl-member').value === '__none__'),
     filledByName:  document.getElementById('rl-filler').value,
+    // Phase 11a: new channel-specific fields
+    outreachEventName: (document.getElementById('rl-event') || {}).value || '',
+    otherSpecify:      (document.getElementById('rl-other-specify') || {}).value || '',
     // extras
     extraNotes:    document.getElementById('rl-notes').value
   };
@@ -15454,11 +15536,13 @@ function submitReferralForm(){
     showErr('You can\'t log a referral for a future date. Use today\'s date or an earlier one.');
     return;
   }
-  // Member is required to be PICKED (one of the options) but "None" is
-  // a valid choice — it just means no team member gets credit. We check
-  // the raw dropdown value to distinguish blank (not picked) from None.
+  // Phase 11a: member is only required when the channel.showsMember flag is
+  // true (Referral channel). For every other channel we accept blank and
+  // auto-flag as "no marketing rep" — the entry still counts for the facility.
   var _rawMember = document.getElementById('rl-member').value;
-  if(!_rawMember)               { showErr('Pick a marketing team member, or choose "None".'); return; }
+  if(chDef && chDef.showsMember && !_rawMember){
+    showErr('Pick a marketing team member, or choose "None".'); return;
+  }
   if(!data.destinationFacility) { showErr('Pick a destination facility.'); return; }
   if(!data.filledByName)        { showErr('Enter the name of the person filling this form.'); return; }
   // Per user 2026-05-19: member_direct requires the full cascade —
@@ -15469,7 +15553,7 @@ function submitReferralForm(){
       return;
     }
     if(!data.sourceType){
-      showErr('Pick the source business TYPE (Clinic / MVA / Outreach) above.');
+      showErr('Pick the source business TYPE (Clinic / MVA) above.');
       return;
     }
     if(!data.sourceBusiness){
@@ -15477,8 +15561,16 @@ function submitReferralForm(){
       return;
     }
   } else if(chDef && chDef.business && !data.sourceBusiness){
-    showErr('Pick the source business — or change the channel above (Google / Walk-in / etc).');
+    showErr('Pick the source business — or change the channel above.');
     return;
+  }
+  // Phase 11a: outreach-event channel requires an event picked
+  if(chDef && chDef.showsEvent && !data.outreachEventName){
+    showErr('Pick the community outreach event the patient attended.'); return;
+  }
+  // Phase 11a: "Other" channel requires a specify text
+  if(chDef && chDef.showsSpecify && !(data.otherSpecify && data.otherSpecify.trim())){
+    showErr('Briefly specify the "Other" source (e.g. truck driver, billboard, employee).'); return;
   }
   // Strict mode for business channel: typed name must match a record in
   // CLINIC_BANK / MVA_ATTORNEYS / OUTREACH. Prevents typos that would
@@ -45963,15 +46055,17 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
           👇 First pick the <strong>marketing member</strong> who referred this patient (in the "Credit &amp; logger" section below), then pick the business <strong>type</strong> and <strong>name</strong> here.
         </div>
         <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:6px">Business type <span style="color:#ef4444">*</span></label>
-        <div id="rl-source-type-row" style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px">
+        <!-- Phase 11a (per user 2026-05-25): Outreach removed from this picker.
+             Outreach events are now handled by the standalone "Community
+             outreach event" channel — they're not referrals in the
+             call-the-front-desk sense. Referrals are only from clinics or
+             MVA attorneys. -->
+        <div id="rl-source-type-row" style="display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin-bottom:10px">
           <label style="display:flex;align-items:center;gap:6px;background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:8px 10px;cursor:pointer;font-size:11px;font-weight:600;color:var(--text)">
             <input type="radio" name="rl-source-type" value="clinic" onchange="_rlSourceTypeChanged()" style="accent-color:#3b82f6"> 🏥 Clinic
           </label>
           <label style="display:flex;align-items:center;gap:6px;background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:8px 10px;cursor:pointer;font-size:11px;font-weight:600;color:var(--text)">
             <input type="radio" name="rl-source-type" value="mva" onchange="_rlSourceTypeChanged()" style="accent-color:#f59e0b"> ⚖ MVA Attorney
-          </label>
-          <label style="display:flex;align-items:center;gap:6px;background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:8px 10px;cursor:pointer;font-size:11px;font-weight:600;color:var(--text)">
-            <input type="radio" name="rl-source-type" value="outreach" onchange="_rlSourceTypeChanged()" style="accent-color:#16a34a"> 🏘 Community Outreach
           </label>
         </div>
         <label id="rl-source-name-label" style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Business name <span style="color:#ef4444">*</span></label>
@@ -45991,6 +46085,13 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
       </div>
 
       <!-- ── SECTION 4: Attribution + filler ─────────────────────────── -->
+      <!-- Phase 11a (per user 2026-05-25): the member section is now
+           conditional — only shown when the channel is "Referral
+           (clinic / MVA)". For every other channel the patient wasn't
+           referred by a marketing member, so we hide the picker to avoid
+           accidental credit. Community-outreach channel shows an event
+           picker instead. Other shows a free-text specify field. -->
+      <div id="rl-member-wrap">
       <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">👥 Credit &amp; logger</div>
 
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
@@ -46012,6 +46113,31 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
                "Your name" field is promoted to its own full-width row
                below for visibility (per user 2026-05-19). -->
         </div>
+      </div>
+      </div><!-- /rl-member-wrap -->
+
+      <!-- Phase 11a: Community-outreach event picker — only shown when the
+           channel is "Community outreach event". Picks from the OUTREACH
+           bank. Patient count rolls up to the chosen event card. -->
+      <div id="rl-event-wrap" style="display:none;margin-bottom:14px;padding:12px 14px;background:#ecfdf5;border:1px solid #6ee7b7;border-radius:8px">
+        <label style="font-size:11px;font-weight:700;color:#065f46;display:block;margin-bottom:4px">🏘️ Community outreach event <span style="color:#dc2626">*</span></label>
+        <div style="position:relative">
+          <input type="text" id="rl-event" placeholder="Search outreach events / organizations…"
+                 oninput="_rlSuggestEvents()" onfocus="_rlSuggestEvents()"
+                 onblur="setTimeout(function(){var b=document.getElementById('rl-event-suggest');if(b)b.style.display='none';},180)"
+                 autocomplete="off"
+                 style="width:100%;border:1px solid #6ee7b7;border-radius:6px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box">
+          <div id="rl-event-suggest" style="display:none;position:absolute;left:0;right:0;top:100%;margin-top:2px;background:#fff;border:1px solid #6ee7b7;border-radius:6px;max-height:220px;overflow-y:auto;z-index:10;box-shadow:0 8px 20px rgba(6,95,70,.12)"></div>
+        </div>
+        <div style="font-size:10px;color:#065f46;margin-top:4px;font-style:italic">Patient counts toward this event's monthly card. No marketing member is credited individually.</div>
+      </div>
+
+      <!-- Phase 11a: "Other" specify field — only shown when the channel
+           is "Other (specify)". Required free-text. -->
+      <div id="rl-specify-wrap" style="display:none;margin-bottom:14px;padding:12px 14px;background:#fef3c7;border:1px solid #fcd34d;border-radius:8px">
+        <label style="font-size:11px;font-weight:700;color:#78350f;display:block;margin-bottom:4px">❓ Specify the source <span style="color:#dc2626">*</span></label>
+        <input type="text" id="rl-other-specify" placeholder="e.g. Truck driver passing through, billboard, employee referral…"
+               style="width:100%;border:1px solid #fcd34d;border-radius:6px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box">
       </div>
       <!-- ── FRONT-DESK FILLER NAME (per user 2026-05-19) ───────────────────
            Multiple staff share each facility's front-desk mailbox across
