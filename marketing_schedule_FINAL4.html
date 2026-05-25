@@ -807,6 +807,33 @@ body.activity-bell-open [class*="marquee"]{
 #admin-notif-list{background:#fff}
 #admin-notif-list > *{background-color:#fff}
 
+/* Progress Report — print stylesheet. When the user clicks "Save as PDF",
+   .printing-progress-report is added to body; everything except the report
+   element gets display:none for printing. */
+@media print{
+  body.printing-progress-report > *:not(#landing){display:none !important}
+  body.printing-progress-report #landing > *:not(#reports-view){display:none !important}
+  body.printing-progress-report #reports-view > *:not(#progress-report){display:none !important}
+  body.printing-progress-report .member-drawer,
+  body.printing-progress-report .member-drawer-backdrop,
+  body.printing-progress-report #emergency-signout-btn,
+  body.printing-progress-report .header,
+  body.printing-progress-report .main-nav,
+  body.printing-progress-report .motiv-ticker,
+  body.printing-progress-report .marquee-bar,
+  body.printing-progress-report .marquee-bar-tagline,
+  body.printing-progress-report #ann-bar{display:none !important}
+  body.printing-progress-report #progress-report{
+    box-shadow:none !important;border:none !important;border-radius:0 !important;
+    margin:0 !important;padding:0 !important;width:100% !important;max-width:100% !important;
+  }
+  body.printing-progress-report{margin:0 !important;padding:0 !important;background:#fff !important}
+  /* Avoid page breaks inside member cards / KPI cards */
+  body.printing-progress-report .pr-kpi-card,
+  body.printing-progress-report .pr-member-row,
+  body.printing-progress-report .pr-section{break-inside:avoid;page-break-inside:avoid}
+}
+
 /* Patient Log collapsibles — chevron rotates 90° when details is open. */
 #rl-channels-details summary,
 #rl-members-details summary{outline:none}
@@ -2941,6 +2968,37 @@ body.role-front_desk #referrals-view {
     </div>
     <div style="font-size:10px;opacity:.55;font-style:italic;margin-top:10px">Tip: open each CSV in Excel, then save-as <code style="background:rgba(255,255,255,.12);padding:1px 5px;border-radius:3px;font-family:DM Mono,monospace;font-size:10px">.xlsx</code> if you want formulas. Data is pulled live from the schedule, so the export reflects the current state at click time.</div>
   </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════
+       📊 PROGRESS REPORT (per user 2026-05-24)
+       Print-ready single-page summary of team progress for the selected
+       period. Picker → live re-render → "Save as PDF" via window.print()
+       and a print stylesheet that hides everything except #progress-report.
+       ════════════════════════════════════════════════════════════════════ -->
+  <div id="progress-report-controls" style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px 22px;margin-bottom:14px;box-shadow:0 2px 10px rgba(15,23,42,.05)">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px;margin-bottom:12px">
+      <div>
+        <div style="font-size:16px;font-weight:700;color:var(--text)">📊 Progress Report</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:3px">A single-page summary you can save as PDF or print for stakeholders.</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <label style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Period</label>
+        <select id="pr-period" onchange="renderProgressReport()" style="border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:12px;font-weight:600;font-family:'DM Sans',sans-serif;background:#fff;cursor:pointer">
+          <option value="this_month">This month</option>
+          <option value="last_month">Last month</option>
+          <option value="q1">Q1 (Jan – Mar)</option>
+          <option value="q2">Q2 (Apr – Jun)</option>
+          <option value="q3">Q3 (Jul – Sep)</option>
+          <option value="q4">Q4 (Oct – Dec)</option>
+          <option value="ytd">Year to date</option>
+        </select>
+        <button onclick="printProgressReport()" style="background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif">🖨 Save as PDF / Print</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- The actual printable report — rendered by renderProgressReport(). -->
+  <div id="progress-report" style="background:#fff;border:1px solid var(--border);border-radius:14px;padding:0;margin-bottom:22px;box-shadow:0 4px 14px rgba(15,23,42,.06);overflow:hidden"></div>
 
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
     <div>
@@ -31196,7 +31254,10 @@ function switchTab(tab, opts){
   if(motivBar) motivBar.style.display = isHome ? 'block' : 'none';
   // Tab-specific init
   if(tab==='home' && typeof renderHomePage === 'function') renderHomePage();
-  if(tab==='reports')renderRecords();
+  if(tab==='reports'){
+    renderRecords();
+    if(typeof renderProgressReport === 'function') renderProgressReport();
+  }
   if(tab==='bank')initBank();
   if(tab==='finances' && typeof renderFinances === 'function') renderFinances();
   if(tab==='feed'){ renderFeed(); if(typeof renderAdminFeed==='function') renderAdminFeed(); }
@@ -34843,6 +34904,223 @@ function _renderHomePageInternal(){
   }
 }
 window.renderHomePage = renderHomePage;
+
+// ═══════════════════════════════════════════════════════════════════════
+// PROGRESS REPORT — printable single-page summary (per user 2026-05-24)
+// Picks team-wide stats for a chosen period and renders them as a clean
+// presentation-style layout. Click "Save as PDF / Print" → window.print()
+// with a print stylesheet that hides everything except #progress-report.
+// ═══════════════════════════════════════════════════════════════════════
+function _prPeriodRange(periodKey){
+  var now = new Date();
+  var y = now.getFullYear(), m = now.getMonth();
+  if(periodKey === 'this_month'){
+    return { start: new Date(y, m, 1), end: new Date(y, m+1, 0, 23, 59, 59), label: now.toLocaleDateString('en-US', {month:'long', year:'numeric'}) };
+  }
+  if(periodKey === 'last_month'){
+    var lm = new Date(y, m-1, 1);
+    return { start: lm, end: new Date(y, m, 0, 23, 59, 59), label: lm.toLocaleDateString('en-US', {month:'long', year:'numeric'}) };
+  }
+  if(periodKey === 'q1') return { start: new Date(y, 0, 1), end: new Date(y, 3, 0, 23, 59, 59), label: 'Q1 · '+y };
+  if(periodKey === 'q2') return { start: new Date(y, 3, 1), end: new Date(y, 6, 0, 23, 59, 59), label: 'Q2 · '+y };
+  if(periodKey === 'q3') return { start: new Date(y, 6, 1), end: new Date(y, 9, 0, 23, 59, 59), label: 'Q3 · '+y };
+  if(periodKey === 'q4') return { start: new Date(y, 9, 1), end: new Date(y, 12, 0, 23, 59, 59), label: 'Q4 · '+y };
+  if(periodKey === 'ytd') return { start: new Date(y, 0, 1), end: now, label: 'Year to date · '+y };
+  return { start: new Date(y, m, 1), end: new Date(y, m+1, 0, 23, 59, 59), label: now.toLocaleDateString('en-US', {month:'long', year:'numeric'}) };
+}
+
+function _prComputeStats(start, end){
+  var byMember = {};
+  if(typeof MEMBERS !== 'undefined') MEMBERS.forEach(function(m){
+    byMember[m] = { completed:0, planned:0, postponed:0, canceled:0, leads:0, spending:0, clinics:{} };
+  });
+  var teamTotals = { completed:0, planned:0, postponed:0, canceled:0, leads:0, spending:0, totalRows:0 };
+  var perClinic = {};  // name → completed count (for top clinics)
+  if(typeof S !== 'undefined' && S.days){
+    S.days.forEach(function(day){
+      if(!day || !day.date) return;
+      var dDate = new Date(day.date+'T00:00:00');
+      if(dDate < start || dDate > end) return;
+      (day.rows || []).forEach(function(r){
+        if(!r || !r.clinic) return;
+        teamTotals.totalRows++;
+        var members = (typeof getRowMembers === 'function') ? getRowMembers(r) : (r.member?[r.member]:[]);
+        members.forEach(function(memName){
+          if(!byMember[memName]) return;
+          if(r.status === 'Completed'){
+            byMember[memName].completed++; teamTotals.completed++;
+            byMember[memName].clinics[r.clinic] = true;
+            perClinic[r.clinic] = (perClinic[r.clinic] || 0) + 1;
+            if(r.relationship === 'Established'){ byMember[memName].leads++; teamTotals.leads++; }
+            var s = r.spending;
+            if(s){
+              var amt = (typeof s.total === 'number') ? s.total
+                : (s.items && s.items.length) ? s.items.reduce(function(a,i){ return a + (parseFloat(i.amount)||0); }, 0)
+                : 0;
+              byMember[memName].spending += amt;
+              teamTotals.spending += amt;
+            }
+          } else if(r.status === 'Postponed'){ byMember[memName].postponed++; teamTotals.postponed++; }
+          else if(r.status === 'Canceled'){ byMember[memName].canceled++; teamTotals.canceled++; }
+          else { byMember[memName].planned++; teamTotals.planned++; }
+        });
+      });
+    });
+  }
+  // Top 5 clinics by completed visits in period
+  var topClinics = Object.keys(perClinic).map(function(n){ return { name:n, visits:perClinic[n] }; });
+  topClinics.sort(function(a,b){ return b.visits - a.visits; });
+  topClinics = topClinics.slice(0, 5);
+  return { byMember: byMember, totals: teamTotals, topClinics: topClinics };
+}
+
+function _prComputeReferrals(start, end){
+  // Patient referrals logged in the window
+  var total = 0, perFacility = {}, byMember = {}, perChannel = {};
+  if(typeof REFERRAL_FACILITIES !== 'undefined') REFERRAL_FACILITIES.forEach(function(f){ perFacility[f.key] = 0; });
+  if(typeof MEMBERS !== 'undefined') MEMBERS.forEach(function(m){ byMember[m] = 0; });
+  if(typeof REFERRAL_LOG !== 'undefined' && Array.isArray(REFERRAL_LOG)){
+    REFERRAL_LOG.forEach(function(e){
+      if(!e) return;
+      var d = e.entryDate || (e.ts || '').slice(0, 10);
+      if(!d) return;
+      var ed = new Date(d+'T00:00:00');
+      if(ed < start || ed > end) return;
+      var n = parseInt(e.patientCount, 10) || 1;
+      total += n;
+      if(e.destinationFacility && perFacility[e.destinationFacility] != null){
+        perFacility[e.destinationFacility] += n;
+      }
+      var memList = Array.isArray(e.memberNames) && e.memberNames.length ? e.memberNames : (e.memberName ? [e.memberName] : []);
+      memList.forEach(function(m){ if(byMember[m] != null) byMember[m] += n; });
+      var ch = e.sourceChannel || 'unknown';
+      perChannel[ch] = (perChannel[ch] || 0) + n;
+    });
+  }
+  return { total: total, perFacility: perFacility, byMember: byMember, perChannel: perChannel };
+}
+
+function renderProgressReport(){
+  var box = document.getElementById('progress-report');
+  if(!box) return;
+  var periodKey = (document.getElementById('pr-period') || {}).value || 'this_month';
+  var range = _prPeriodRange(periodKey);
+  var stats = _prComputeStats(range.start, range.end);
+  var refs  = _prComputeReferrals(range.start, range.end);
+  var compRate = (stats.totals.completed + stats.totals.canceled + stats.totals.postponed > 0)
+    ? Math.round(stats.totals.completed * 100 / (stats.totals.completed + stats.totals.canceled + stats.totals.postponed))
+    : 0;
+  var generatedAt = new Date().toLocaleString('en-US', { month:'long', day:'numeric', year:'numeric', hour:'numeric', minute:'2-digit' });
+
+  // ── Hero card (gradient with the period in big letters) ──────────────
+  var heroHtml = '<div class="pr-section" style="background:linear-gradient(135deg,#1F3864 0%,#7030A0 100%);color:#fff;padding:32px 36px">'
+    + '<div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;opacity:.85">Marketing Team Progress Report</div>'
+    + '<div style="font-size:32px;font-weight:800;margin-top:6px;line-height:1.1">' + range.label + '</div>'
+    + '<div style="font-size:11px;opacity:.75;margin-top:8px">Generated ' + generatedAt + ' · ICCoTX Marketing Planner</div>'
+    + '</div>';
+
+  // ── KPI strip ────────────────────────────────────────────────────────
+  var kpiHtml = '<div class="pr-section" style="padding:24px 36px;border-bottom:1px solid var(--border)">'
+    + '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:14px">'
+    +   '<div class="pr-kpi-card" style="background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:14px"><div style="font-size:30px;font-weight:800;color:#166534;font-family:DM Mono,monospace">' + stats.totals.completed + '</div><div style="font-size:10px;color:#166534;font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-top:4px">Completed visits</div></div>'
+    +   '<div class="pr-kpi-card" style="background:#eff6ff;border:1px solid #93c5fd;border-radius:10px;padding:14px"><div style="font-size:30px;font-weight:800;color:#1d4ed8;font-family:DM Mono,monospace">' + compRate + '%</div><div style="font-size:10px;color:#1e40af;font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-top:4px">Completion rate</div></div>'
+    +   '<div class="pr-kpi-card" style="background:#fef3c7;border:1px solid #fcd34d;border-radius:10px;padding:14px"><div style="font-size:30px;font-weight:800;color:#92400e;font-family:DM Mono,monospace">' + stats.totals.leads + '</div><div style="font-size:10px;color:#92400e;font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-top:4px">Leads established</div></div>'
+    +   '<div class="pr-kpi-card" style="background:#fef2f2;border:1px solid #fca5a5;border-radius:10px;padding:14px"><div style="font-size:30px;font-weight:800;color:#b91c1c;font-family:DM Mono,monospace">$' + stats.totals.spending.toFixed(0) + '</div><div style="font-size:10px;color:#991b1b;font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-top:4px">Total spending</div></div>'
+    +   '<div class="pr-kpi-card" style="background:#f5f3ff;border:1px solid #c4b5fd;border-radius:10px;padding:14px"><div style="font-size:30px;font-weight:800;color:#6d28d9;font-family:DM Mono,monospace">' + refs.total + '</div><div style="font-size:10px;color:#5b21b6;font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-top:4px">Patients referred</div></div>'
+    + '</div>'
+    + '</div>';
+
+  // ── Per-member performance ──────────────────────────────────────────
+  var maxCompleted = 0;
+  Object.keys(stats.byMember).forEach(function(m){ if(stats.byMember[m].completed > maxCompleted) maxCompleted = stats.byMember[m].completed; });
+  if(maxCompleted === 0) maxCompleted = 1;
+  var memberRows = Object.keys(stats.byMember).filter(function(m){
+    var s = stats.byMember[m];
+    return s.completed + s.planned + s.postponed + s.canceled > 0;
+  }).sort(function(a,b){ return stats.byMember[b].completed - stats.byMember[a].completed; });
+
+  var memHtml = '<div class="pr-section" style="padding:24px 36px;border-bottom:1px solid var(--border)">'
+    + '<div style="font-size:14px;font-weight:800;color:var(--text);margin-bottom:14px;text-transform:uppercase;letter-spacing:.05em">👥 Team performance</div>';
+  if(memberRows.length === 0){
+    memHtml += '<div style="color:var(--muted);font-style:italic;padding:14px 0">No team activity recorded in this period.</div>';
+  } else {
+    memberRows.forEach(function(m){
+      var s = stats.byMember[m];
+      var refsForMember = refs.byMember[m] || 0;
+      var pct = Math.round(s.completed * 100 / maxCompleted);
+      var color = (typeof MCOLORS !== 'undefined' && MCOLORS[m]) ? MCOLORS[m] : '#1F3864';
+      memHtml += '<div class="pr-member-row" style="display:grid;grid-template-columns:140px 1fr auto;gap:14px;align-items:center;padding:10px 0;border-bottom:1px solid #f1f5f9">'
+        + '<div style="font-weight:700;color:var(--text);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + m.replace(/</g,'&lt;') + '</div>'
+        + '<div><div style="height:10px;background:#f1f5f9;border-radius:6px;overflow:hidden"><div style="height:100%;width:' + pct + '%;background:' + color + ';border-radius:6px"></div></div></div>'
+        + '<div style="display:flex;gap:10px;align-items:center;font-size:11px;color:var(--text);font-family:DM Mono,monospace;white-space:nowrap">'
+        +   '<span title="Completed visits">✓ ' + s.completed + '</span>'
+        +   '<span title="Leads established" style="color:#92400e">★ ' + s.leads + '</span>'
+        +   '<span title="Patients referred" style="color:#6d28d9">👤 ' + refsForMember + '</span>'
+        +   '<span title="Total spending" style="color:#b91c1c">$' + s.spending.toFixed(0) + '</span>'
+        + '</div>'
+        + '</div>';
+    });
+  }
+  memHtml += '</div>';
+
+  // ── Top clinics + facility breakdown side-by-side ────────────────────
+  var topClinicsHtml = '<div style="font-size:14px;font-weight:800;color:var(--text);margin-bottom:10px;text-transform:uppercase;letter-spacing:.05em">🏥 Top clinics</div>';
+  if(stats.topClinics.length === 0){
+    topClinicsHtml += '<div style="color:var(--muted);font-style:italic">No clinics with completed visits in this period.</div>';
+  } else {
+    stats.topClinics.forEach(function(c, i){
+      topClinicsHtml += '<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid #f1f5f9">'
+        + '<div style="background:#7030A0;color:#fff;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex-shrink:0">' + (i+1) + '</div>'
+        + '<div style="flex:1;font-size:12px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + c.name.replace(/</g,'&lt;') + '</div>'
+        + '<div style="font-size:11px;font-weight:700;color:#7030A0;font-family:DM Mono,monospace">' + c.visits + '</div>'
+        + '</div>';
+    });
+  }
+  var facilityHtml = '<div style="font-size:14px;font-weight:800;color:var(--text);margin-bottom:10px;text-transform:uppercase;letter-spacing:.05em">🏨 Patient referrals by facility</div>';
+  if(typeof REFERRAL_FACILITIES !== 'undefined' && REFERRAL_FACILITIES.length){
+    REFERRAL_FACILITIES.forEach(function(f){
+      var n = refs.perFacility[f.key] || 0;
+      var pct = refs.total > 0 ? Math.round(n * 100 / refs.total) : 0;
+      facilityHtml += '<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid #f1f5f9">'
+        + '<div style="flex:1;font-size:12px;color:var(--text)">🏥 ' + f.label.replace(/</g,'&lt;') + '</div>'
+        + '<div style="font-size:11px;font-weight:700;color:#1F3864;font-family:DM Mono,monospace">' + n + '</div>'
+        + '<div style="font-size:10px;color:var(--muted);min-width:36px;text-align:right">' + pct + '%</div>'
+        + '</div>';
+    });
+  }
+  var bottomHtml = '<div class="pr-section" style="padding:24px 36px;display:grid;grid-template-columns:1fr 1fr;gap:30px;border-bottom:1px solid var(--border)">'
+    + '<div>' + topClinicsHtml + '</div>'
+    + '<div>' + facilityHtml + '</div>'
+    + '</div>';
+
+  // ── Summary line + footer ────────────────────────────────────────────
+  var summaryLine = stats.totals.completed + ' visits completed across ' + memberRows.length + ' active members · ' + stats.totals.leads + ' new leads · ' + refs.total + ' patients referred · $' + stats.totals.spending.toFixed(0) + ' spent';
+  var footerHtml = '<div class="pr-section" style="padding:20px 36px;background:#f8fafc">'
+    + '<div style="font-size:12px;color:var(--text);font-weight:600;text-align:center">' + summaryLine + '</div>'
+    + '<div style="font-size:10px;color:var(--muted);text-align:center;margin-top:6px;font-style:italic">ICCoTX Marketing Planner · Data pulled live at print time · Generated ' + generatedAt + '</div>'
+    + '</div>';
+
+  box.innerHTML = heroHtml + kpiHtml + memHtml + bottomHtml + footerHtml;
+}
+window.renderProgressReport = renderProgressReport;
+
+// Print handler — adds the body class that the print stylesheet listens
+// for, calls window.print(), then strips the class once the dialog closes.
+function printProgressReport(){
+  // Always re-render right before printing so the data is fresh.
+  renderProgressReport();
+  document.body.classList.add('printing-progress-report');
+  // Use setTimeout to let the class apply before print() fires
+  setTimeout(function(){
+    try { window.print(); } catch(_){}
+    // Strip the class after a small delay so the page returns to normal
+    // whether the user printed, saved-as-PDF, or canceled.
+    setTimeout(function(){
+      document.body.classList.remove('printing-progress-report');
+    }, 500);
+  }, 100);
+}
+window.printProgressReport = printProgressReport;
 
 function renderRecords(){
   // Populate the bulk-export dropdowns the first time the Reports tab is
