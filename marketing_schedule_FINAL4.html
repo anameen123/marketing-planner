@@ -2436,6 +2436,43 @@ body.role-front_desk #referrals-view {
      Lives at top level (NOT inside members-view) so it renders on every tab.
      The members-view parent is display:none until the Members tab opens, which
      would hide any modal nested inside it. -->
+<!-- Phase 10c (per user 2026-05-25): bulk-actions modal. Lists every visit
+     on the active day as a checkbox. Members can select some/all rows then
+     either Copy them to another day or Delete them in bulk. Copy respects
+     the existing same-week dedupe (Phase 9) — if the target day is in the
+     same Mon-Sun week, the user gets the same warning. -->
+<div id="bulk-actions-modal" style="display:none" class="modal-ov">
+  <div class="modal-box" style="width:560px;max-width:96vw;max-height:90vh;display:flex;flex-direction:column">
+    <div class="modal-top" style="flex-shrink:0;background:linear-gradient(135deg,#7030A0,#9333ea)">📋 Bulk actions — <span id="ba-date-label" style="font-weight:400;color:rgba(255,255,255,.85)">…</span> <button onclick="closeBulkActions()" style="background:rgba(255,255,255,.18);color:#fff;border:none">&#215;</button></div>
+    <div class="modal-body" style="overflow-y:auto;flex:1;min-height:0;padding:18px 22px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;font-size:11px">
+        <span style="color:var(--muted)">Pick the rows to act on:</span>
+        <span>
+          <button type="button" onclick="_baSelectAll(true)" style="background:#f1f5f9;border:1px solid var(--border);color:#475569;border-radius:5px;padding:4px 9px;font-size:10px;font-weight:600;cursor:pointer;margin-right:4px">Select all</button>
+          <button type="button" onclick="_baSelectAll(false)" style="background:#f1f5f9;border:1px solid var(--border);color:#475569;border-radius:5px;padding:4px 9px;font-size:10px;font-weight:600;cursor:pointer">Clear</button>
+        </span>
+      </div>
+      <div id="ba-rows-list" style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:6px;max-height:280px;overflow-y:auto;font-size:12px"></div>
+      <div id="ba-copy-target" style="display:none;margin-top:14px;background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;padding:12px 14px">
+        <label style="font-size:11px;font-weight:600;color:#3730a3;display:block;margin-bottom:6px">📅 Copy to date</label>
+        <input type="date" id="ba-target-date" style="width:100%;border:1px solid #c7d2fe;border-radius:6px;padding:8px 10px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box">
+        <div style="font-size:10px;color:#4338ca;margin-top:5px;font-style:italic">Selected visits will be cloned onto this date as fresh Pending rows. Original day untouched.</div>
+        <div style="display:flex;gap:6px;margin-top:10px;justify-content:flex-end">
+          <button type="button" onclick="_baCancelCopy()" style="background:#e5e7eb;border:none;color:#374151;border-radius:6px;padding:7px 14px;font-size:11px;font-weight:600;cursor:pointer">Cancel</button>
+          <button type="button" onclick="_baDoCopy()" style="background:linear-gradient(135deg,#1F3864,#7030A0);border:none;color:#fff;border-radius:6px;padding:7px 16px;font-size:11px;font-weight:700;cursor:pointer">✓ Copy</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot" style="flex-shrink:0;background:#fff;padding:12px 22px;border-top:1px solid var(--border);display:flex;justify-content:space-between;gap:8px;align-items:center">
+      <span id="ba-summary" style="font-size:11px;color:var(--muted);font-style:italic">0 selected</span>
+      <div style="display:flex;gap:6px">
+        <button type="button" onclick="_baOpenCopy()" style="background:#1F3864;border:none;color:#fff;border-radius:6px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer">📋 Copy to date…</button>
+        <button type="button" onclick="_baBulkDelete()" style="background:#dc2626;border:none;color:#fff;border-radius:6px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer">🗑 Delete</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="add-visit-modal" style="display:none" class="modal-ov">
   <div class="modal-box" style="width:520px;max-height:90vh;display:flex;flex-direction:column">
     <div class="modal-top" style="flex-shrink:0">+ Add Visit on <span id="av-date-label" style="font-weight:400;color:rgba(255,255,255,.85)">…</span> <button onclick="closeAddVisit()">&#215;</button></div>
@@ -31376,6 +31413,242 @@ function _doDeleteVisit(di,ri){
   refresh(di);
 }
 
+// ── PHASE 10c (per user 2026-05-25): BULK ACTIONS — copy/delete many rows ──
+// Lists every row on the active day as a checkbox, lets the user select
+// some/all, then either copy them to another day or delete them. Copy
+// respects the same Mon-Sun week dedupe added in Phase 9 (if the target is
+// in the same week as the source, the same "already planned this week"
+// warning gates each pasted clinic).
+var _BA_DI = null;  // active source day index
+
+function openBulkActions(di){
+  _BA_DI = (typeof di === 'number') ? di : ((typeof S !== 'undefined' && S.currentDay != null) ? S.currentDay : null);
+  if(_BA_DI == null || !S.days[_BA_DI]){
+    if(typeof showToast === 'function') showToast('Open a day first.');
+    return;
+  }
+  var day = S.days[_BA_DI];
+  // Header label
+  var lblEl = document.getElementById('ba-date-label');
+  if(lblEl && day.date){
+    var d = new Date(day.date + 'T00:00:00');
+    lblEl.textContent = isNaN(d.getTime()) ? day.date : d.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+  }
+  // Render row list
+  _baRenderRows();
+  // Reset copy panel
+  document.getElementById('ba-copy-target').style.display = 'none';
+  document.getElementById('add-visit-modal'); // no-op safety
+  document.getElementById('bulk-actions-modal').style.display = 'flex';
+}
+window.openBulkActions = openBulkActions;
+
+function closeBulkActions(){
+  document.getElementById('bulk-actions-modal').style.display = 'none';
+  _BA_DI = null;
+}
+window.closeBulkActions = closeBulkActions;
+
+function _baRenderRows(){
+  var box = document.getElementById('ba-rows-list');
+  if(!box || _BA_DI == null) return;
+  var rows = S.days[_BA_DI].rows || [];
+  if(rows.length === 0){
+    box.innerHTML = '<div style="padding:12px;text-align:center;color:var(--muted);font-style:italic">No visits on this day.</div>';
+    _baUpdateSummary();
+    return;
+  }
+  var html = rows.map(function(r, ri){
+    if(!r) return '';
+    var name = (r.clinic || '(empty row)').replace(/</g,'&lt;');
+    var member = r.member || '—';
+    var status = r.status || 'Pending';
+    var statusColor = status === 'Completed' ? '#16a34a' : status === 'Canceled' ? '#9ca3af' : status === 'Postponed' ? '#f59e0b' : '#475569';
+    return '<label style="display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:6px;cursor:pointer;background:#fff;border:1px solid #e2e8f0;margin-bottom:4px;font-size:12px" onmouseover="this.style.background=\'#f1f5f9\'" onmouseout="this.style.background=\'#fff\'">'
+      + '<input type="checkbox" class="ba-row-check" data-ri="' + ri + '" onchange="_baUpdateSummary()" style="cursor:pointer;width:16px;height:16px;accent-color:#7030A0">'
+      + '<span style="flex:1;color:#0f172a"><b>' + name + '</b> <span style="color:var(--muted);font-size:11px">· ' + member + '</span></span>'
+      + '<span style="font-size:10px;font-weight:700;color:' + statusColor + '">' + status + '</span>'
+      + '</label>';
+  }).join('');
+  box.innerHTML = html;
+  _baUpdateSummary();
+}
+
+function _baSelectAll(on){
+  var boxes = document.querySelectorAll('.ba-row-check');
+  for(var i=0; i<boxes.length; i++) boxes[i].checked = !!on;
+  _baUpdateSummary();
+}
+window._baSelectAll = _baSelectAll;
+
+function _baSelectedRis(){
+  var ris = [];
+  document.querySelectorAll('.ba-row-check:checked').forEach(function(cb){
+    var v = parseInt(cb.getAttribute('data-ri'), 10);
+    if(!isNaN(v)) ris.push(v);
+  });
+  return ris;
+}
+
+function _baUpdateSummary(){
+  var sel = _baSelectedRis();
+  var el = document.getElementById('ba-summary');
+  if(el) el.textContent = sel.length + ' selected';
+}
+window._baUpdateSummary = _baUpdateSummary;
+
+// COPY: open the date-picker panel, prefill with tomorrow as a sensible default.
+function _baOpenCopy(){
+  var sel = _baSelectedRis();
+  if(sel.length === 0){
+    if(typeof showToast === 'function') showToast('Tick at least one row to copy.');
+    return;
+  }
+  var panel = document.getElementById('ba-copy-target');
+  var dp = document.getElementById('ba-target-date');
+  if(dp){
+    var t = new Date(); t.setDate(t.getDate() + 1);
+    dp.value = t.getFullYear() + '-' + String(t.getMonth()+1).padStart(2,'0') + '-' + String(t.getDate()).padStart(2,'0');
+  }
+  if(panel) panel.style.display = 'block';
+}
+window._baOpenCopy = _baOpenCopy;
+
+function _baCancelCopy(){
+  var panel = document.getElementById('ba-copy-target');
+  if(panel) panel.style.display = 'none';
+}
+window._baCancelCopy = _baCancelCopy;
+
+// Actual copy: deep-clone each selected row onto the target day. Reset status,
+// confirmation flags, and spending so the copy is a fresh "Pending" visit.
+// addedBy is stamped to the current user; the original row stays untouched.
+function _baDoCopy(){
+  var sel = _baSelectedRis();
+  if(sel.length === 0 || _BA_DI == null) return;
+  var dp = document.getElementById('ba-target-date');
+  var targetDate = dp ? dp.value : '';
+  if(!targetDate){ if(typeof showToast === 'function') showToast('Pick a target date.'); return; }
+  // Lock check
+  if(typeof canEditDate === 'function' && !canEditDate(targetDate)){
+    if(typeof showToast === 'function') showToast((typeof lockReason === 'function' ? lockReason(targetDate) : '') || 'Target date is locked.');
+    return;
+  }
+  // Find target day index
+  var targetDi = -1;
+  for(var i=0; i<S.days.length; i++){
+    if(S.days[i] && S.days[i].date === targetDate){ targetDi = i; break; }
+  }
+  if(targetDi < 0){ if(typeof showToast === 'function') showToast('Target date outside planning window (May 2026 – Apr 2027).'); return; }
+  // Phase 9 same-week dedupe: collect names already on the TARGET week
+  var wkSched = (typeof _rpScheduledClinicsForActiveWeek === 'function')
+    ? _rpScheduledClinicsForActiveWeek(targetDate)
+    : {};
+  var me = (CURRENT_USER && CURRENT_USER.name) || '';
+  var isAdminUser = (typeof isAdmin === 'function' && isAdmin());
+  var sourceRows = S.days[_BA_DI].rows || [];
+  if(!Array.isArray(S.days[targetDi].rows)) S.days[targetDi].rows = [];
+  var pushed = 0;
+  var skippedAlreadyScheduled = [];
+  sel.forEach(function(ri){
+    var src = sourceRows[ri];
+    if(!src || !src.clinic) return;
+    // Skip if the same clinic is already on the target week (avoids the
+    // exact "already planned this week" situation Phase 9 guards against).
+    // Outreach is allowed to duplicate (multi-attendee semantics).
+    if(src.bizType !== 'outreach' && wkSched[src.clinic]){
+      skippedAlreadyScheduled.push(src.clinic);
+      return;
+    }
+    var newRow = {
+      clinic: src.clinic,
+      doctor: src.doctor || '',
+      spec:   src.spec   || '',
+      team:   '',
+      city:   src.city || '',
+      last:   null,
+      status: 'Pending',
+      rd: '',
+      member: isAdminUser ? (src.member || '') : me,
+      memberConfirmed: isAdminUser ? !!src.member : !!me,
+      relationship: '',
+      relNotes: '',
+      leadNotes: '',
+      leadType: '',
+      rowConfirmed: false,
+      isRescheduled: false,
+      isMosque: false,
+      isManual: false,
+      editing: false,
+      bizType: src.bizType || '',
+      addedBy: me,
+      addedAt: new Date().toISOString(),
+      copiedFromDate: S.days[_BA_DI].date
+    };
+    S.days[targetDi].rows.push(newRow);
+    // After pushing, this clinic is now scheduled this week — guard duplicates
+    // within the same selection batch as well.
+    wkSched[src.clinic] = { date: targetDate, member: newRow.member };
+    pushed++;
+  });
+  if(typeof _saveS === 'function') _saveS();
+  if(typeof refresh === 'function') refresh(targetDi);
+  closeBulkActions();
+  var msg = '📋 Copied ' + pushed + ' visit' + (pushed===1?'':'s') + ' to ' + targetDate;
+  if(skippedAlreadyScheduled.length){
+    msg += ' (skipped ' + skippedAlreadyScheduled.length + ' already planned this week: ' + skippedAlreadyScheduled.slice(0,3).join(', ') + (skippedAlreadyScheduled.length>3?'…':'') + ')';
+  }
+  if(typeof showToast === 'function') showToast(msg);
+}
+window._baDoCopy = _baDoCopy;
+
+// BULK DELETE: confirm, then splice each selected row from the source day.
+// Iterates ris in descending order so splice indices stay valid.
+function _baBulkDelete(){
+  var sel = _baSelectedRis();
+  if(sel.length === 0 || _BA_DI == null){
+    if(typeof showToast === 'function') showToast('Tick at least one row to delete.');
+    return;
+  }
+  // Lock check on the source day
+  var dayDate = S.days[_BA_DI] && S.days[_BA_DI].date;
+  if(typeof canEditDate === 'function' && !canEditDate(dayDate)){
+    if(typeof showToast === 'function') showToast((typeof lockReason === 'function' ? lockReason(dayDate) : '') || 'Source date is locked.');
+    return;
+  }
+  if(typeof showConfirm !== 'function'){
+    // Fallback to native confirm if showConfirm helper missing
+    if(!window.confirm('Delete ' + sel.length + ' visit(s)? This cannot be undone.')) return;
+    _baPerformBulkDelete(sel);
+    return;
+  }
+  showConfirm({
+    icon: '!',
+    msg: 'Delete ' + sel.length + ' visit' + (sel.length===1?'':'s') + '?',
+    sub: 'This will permanently remove the selected rows from this day. Cannot be undone.',
+    yesLabel: 'Delete',
+    danger: true,
+    onConfirm: function(){ _baPerformBulkDelete(sel); }
+  });
+}
+window._baBulkDelete = _baBulkDelete;
+
+function _baPerformBulkDelete(sel){
+  if(_BA_DI == null) return;
+  // Descending order so splice indices remain valid
+  sel.sort(function(a,b){ return b - a; }).forEach(function(ri){
+    if(S.days[_BA_DI].rows[ri]){
+      S.days[_BA_DI].rows.splice(ri, 1);
+    }
+  });
+  if(typeof _saveS === 'function') _saveS();
+  if(typeof refresh === 'function') refresh(_BA_DI);
+  closeBulkActions();
+  if(typeof showToast === 'function') showToast('🗑 Deleted ' + sel.length + ' visit' + (sel.length===1?'':'s') + '.');
+}
+window._baPerformBulkDelete = _baPerformBulkDelete;
+// ── END BULK ACTIONS MODULE ──────────────────────────────────────────
+
 function confirmRow(di,ri){
   var row=S.days[di].rows[ri];
   if(!row) return;
@@ -32642,7 +32915,13 @@ function renderDayTable(di){
     try { html += rowHTML(row, di, ri); }
     catch(rowErr){ try { console.warn('[renderDayTable] row render failed at ri='+ri, rowErr); } catch(_){} }
   });
-  html+='<tr class="add-visit-row"><td colspan="10"><button class="add-visit-btn" onclick="addVisit('+di+')">&#43; Add Visit</button></td></tr>';
+  html+='<tr class="add-visit-row"><td colspan="10">'
+       + '<button class="add-visit-btn" onclick="addVisit('+di+')">&#43; Add Visit</button>'
+       + ' <button type="button" onclick="openBulkActions('+di+')" '
+       +   'title="Copy or delete multiple visits at once — and copy them to another day" '
+       +   'style="background:#fff;border:1.5px solid #7030A0;color:#7030A0;border-radius:6px;padding:7px 14px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;margin-left:6px">'
+       + '📋 Bulk actions</button>'
+       + '</td></tr>';
   var tbody = document.getElementById('day-tbody');
   if(tbody) tbody.innerHTML = html;
 }
