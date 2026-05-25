@@ -28594,15 +28594,25 @@ function rowHTML(row,di,ri){
   if(row.isManual){
     confirmCell = '';
   } else if(row.rowConfirmed){
-    // Level 3 — fully done. Show ✓ Done + ✎ Edit (unchanged).
+    // Level 3 — fully done. Show ✓ Done + ✎ Edit follow-up.
+    // Per user 2026-05-25: rename Edit -> "Edit follow-up" to mirror the
+    // "Fill follow-up" label used pre-confirm — same dialog opens, just
+    // the wording matches the lifecycle stage. Date-lock (canEditDate)
+    // already enforces "valid only one day after the visit, then locked"
+    // for non-admin via isDateInPast.
     var _canEditHere2 = (typeof canEditVisitRow === 'function') ? canEditVisitRow(row) : true;
     var _dateOpen2    = (typeof canEditDate === 'function') ? canEditDate(day.date) : true;
     var _showEditBtn  = _canEditHere2 && (_dateOpen2 || amAdmin);
+    // Lock badge for non-admin members past the edit window
+    var _lockHint = (!_dateOpen2 && !amAdmin)
+      ? '<div style="font-size:9px;color:var(--muted);font-style:italic;margin-top:2px">🔒 locked — past edit window</div>'
+      : '';
     confirmCell = '<div style="display:flex;flex-direction:column;align-items:center;gap:3px">'
       +'<span style="background:#f0fdf4;color:#166534;border:1px solid #86efac;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px">&#10003; Done</span>'
       +(_showEditBtn
-          ? '<button onclick="openEditVisit('+di+','+ri+')" style="background:var(--purple);color:#fff;border:none;border-radius:6px;padding:3px 10px;font-size:10px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;margin-top:1px" title="Edit this confirmed visit — opens the full edit dialog">&#9998; Edit</button>'
+          ? '<button onclick="openEditVisit('+di+','+ri+')" style="background:var(--purple);color:#fff;border:none;border-radius:6px;padding:3px 10px;font-size:10px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;margin-top:1px;white-space:nowrap" title="Edit follow-up — opens the full dialog. Overrides prior data and all derived counters/charts.">&#9998; Edit follow-up</button>'
           : '')
+      + _lockHint
       +'</div>';
   } else if(!row.memberConfirmed){
     // Level 1 — no member yet OR member set but not confirmed. Big purple
