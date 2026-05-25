@@ -24,7 +24,10 @@ export default async function handler(req, res){
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  res.setHeader('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
+  // Default: do NOT cache responses (errors / REQUEST_DENIED would otherwise
+  // be cached by Vercel CDN for the s-maxage window and block retries). The
+  // success branch overrides this with a proper s-maxage right before sending.
+  res.setHeader('Cache-Control', 'no-store');
 
   if(req.method === 'OPTIONS'){
     res.status(200).end();
@@ -74,6 +77,12 @@ export default async function handler(req, res){
       return;
     }
     const json = await response.json();
+    // Cache ONLY successful Google responses (status: 'OK'). Anything
+    // else (REQUEST_DENIED, OVER_QUERY_LIMIT, etc.) bypasses the CDN so
+    // the user can retry immediately when config changes propagate.
+    if(json && json.status === 'OK'){
+      res.setHeader('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
+    }
     // Pass Google's response through unchanged so existing client code
     // doesn't need to know whether it's hitting Google directly or via
     // this proxy. Same shape, same fields.
