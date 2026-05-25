@@ -2302,6 +2302,27 @@ body.role-front_desk #referrals-view {
 
     <!-- ─── SUB-TAB 1: Visit history (original) ─── -->
     <div id="hist-sub-visits">
+      <!-- Per user 2026-05-25 #100: month nav + view toggle + monthly
+           totals at the top so a member can navigate their own history
+           by date instead of scrolling through pagination. -->
+      <div id="hist-month-bar" style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:12px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <button type="button" id="hist-prev-month" onclick="_histChangeMonth(-1)" style="background:#fff;border:1px solid var(--border);border-radius:6px;width:32px;height:32px;font-size:14px;cursor:pointer;color:#1F3864">‹</button>
+          <div style="min-width:130px;text-align:center;font-weight:700;color:#1F3864;font-size:13px" id="hist-month-label">All time</div>
+          <button type="button" id="hist-next-month" onclick="_histChangeMonth(1)" style="background:#fff;border:1px solid var(--border);border-radius:6px;width:32px;height:32px;font-size:14px;cursor:pointer;color:#1F3864">›</button>
+          <button type="button" onclick="_histGoAllTime()" style="background:transparent;border:none;color:#7030A0;font-size:11px;font-weight:600;cursor:pointer;margin-left:4px">📅 All time</button>
+        </div>
+        <div style="display:flex;align-items:center;gap:14px;font-size:11px;color:#475569" id="hist-month-totals">
+          <!-- Filled by renderHistory: visits + spending totals -->
+        </div>
+        <div style="display:flex;gap:0;border:1px solid var(--border);border-radius:6px;overflow:hidden">
+          <button id="hist-view-list"     onclick="_histSetView('list')"     style="background:#7030A0;color:#fff;border:none;padding:6px 14px;font-size:11px;font-weight:700;cursor:pointer">📋 List</button>
+          <button id="hist-view-calendar" onclick="_histSetView('calendar')" style="background:#fff;color:var(--muted);border:none;padding:6px 14px;font-size:11px;font-weight:700;cursor:pointer">📅 Calendar</button>
+        </div>
+      </div>
+      <!-- Calendar mode container (hidden when in list mode) -->
+      <div id="hist-calendar-pane" style="display:none;background:#fff;border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:12px"></div>
+
       <div class="history-hdr">
         <div class="history-title">Visit History</div>
         <div class="history-meta" id="history-meta"></div>
@@ -33641,17 +33662,202 @@ function renderMemberReferralCounters(name){
 }
 window.renderMemberReferralCounters = renderMemberReferralCounters;
 
+// Per user 2026-05-25 #100: month-filter state. null = all-time, else 'YYYY-MM'.
+window._HIST_MONTH = null;
+window._HIST_VIEW = 'list';   // 'list' | 'calendar'
+
+function _histChangeMonth(delta){
+  // From current state, move +/- delta months. Snap to current month if null.
+  var now;
+  if(window._HIST_MONTH){
+    var p = window._HIST_MONTH.split('-');
+    now = new Date(parseInt(p[0],10), parseInt(p[1],10)-1, 1);
+  } else {
+    now = new Date();
+    now.setDate(1);
+  }
+  now.setMonth(now.getMonth() + delta);
+  window._HIST_MONTH = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
+  window._HIST_DAY = null;   // clear day filter when navigating months
+  memberPage = 1;
+  if(typeof renderHistory === 'function') renderHistory();
+}
+window._histChangeMonth = _histChangeMonth;
+
+function _histGoAllTime(){
+  window._HIST_MONTH = null;
+  window._HIST_DAY = null;
+  memberPage = 1;
+  if(typeof renderHistory === 'function') renderHistory();
+}
+window._histGoAllTime = _histGoAllTime;
+
+function _histSetView(mode){
+  window._HIST_VIEW = (mode === 'calendar') ? 'calendar' : 'list';
+  // Toggle button styles
+  var lBtn = document.getElementById('hist-view-list');
+  var cBtn = document.getElementById('hist-view-calendar');
+  if(lBtn){
+    lBtn.style.background = window._HIST_VIEW === 'list' ? '#7030A0' : '#fff';
+    lBtn.style.color      = window._HIST_VIEW === 'list' ? '#fff'    : 'var(--muted)';
+  }
+  if(cBtn){
+    cBtn.style.background = window._HIST_VIEW === 'calendar' ? '#7030A0' : '#fff';
+    cBtn.style.color      = window._HIST_VIEW === 'calendar' ? '#fff'    : 'var(--muted)';
+  }
+  if(typeof renderHistory === 'function') renderHistory();
+}
+window._histSetView = _histSetView;
+
+// Filter a visits array down to a specific YYYY-MM string. Visits with no
+// .date are silently dropped.
+function _histFilterByMonth(visits, monthKey){
+  if(!monthKey) return visits.slice();
+  return visits.filter(function(v){ return v && v.date && v.date.indexOf(monthKey) === 0; });
+}
+
+// Look up the spending total for a single visit. Visits without spending
+// (e.g. status not Completed) contribute 0.
+function _histVisitSpending(visit){
+  var s = visit && visit.spending;
+  if(!s) return 0;
+  if(s.zeroSpending) return 0;
+  if(typeof s.total === 'number') return s.total;
+  if(Array.isArray(s.items)){
+    return s.items.reduce(function(sum, it){ return sum + (it && it.amount ? it.amount : 0); }, 0);
+  }
+  return 0;
+}
+
+// Build the mini-calendar grid for the current _HIST_MONTH. Each day shows
+// the visit count for that day (small badge) and a dot color encoding
+// completion ratio. Empty days are gray. Click a day to filter the list
+// view to just that day.
+function _histRenderCalendar(visits, monthKey){
+  var pane = document.getElementById('hist-calendar-pane');
+  if(!pane) return;
+  if(!monthKey){
+    pane.innerHTML = '<div style="text-align:center;color:var(--muted);font-size:12px;padding:18px;font-style:italic">Calendar view requires a specific month — use ‹ › to navigate, or pick "All time" for the list view.</div>';
+    return;
+  }
+  var p = monthKey.split('-');
+  var year = parseInt(p[0],10), month = parseInt(p[1],10) - 1;
+  var firstDay = new Date(year, month, 1).getDay();        // 0=Sun
+  var lastDate = new Date(year, month+1, 0).getDate();
+  // Bucket visits by day-of-month
+  var byDay = {};
+  visits.forEach(function(v){
+    if(!v || !v.date) return;
+    if(v.date.indexOf(monthKey) !== 0) return;
+    var d = parseInt(v.date.split('-')[2], 10);
+    if(!byDay[d]) byDay[d] = { count: 0, completed: 0, spending: 0 };
+    byDay[d].count++;
+    if(v.status === 'Completed') byDay[d].completed++;
+    byDay[d].spending += _histVisitSpending(v);
+  });
+  var html = '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px">';
+  // Weekday header
+  ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].forEach(function(d){
+    html += '<div style="text-align:center;font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;padding:4px 0">'+d+'</div>';
+  });
+  // Pad first row
+  for(var pad = 0; pad < firstDay; pad++){
+    html += '<div></div>';
+  }
+  // Days
+  for(var d = 1; d <= lastDate; d++){
+    var info = byDay[d];
+    var hasVisits = info && info.count > 0;
+    var ratio = hasVisits ? (info.completed / info.count) : 0;
+    var bg = !hasVisits ? '#f8fafc'
+           : ratio >= 1   ? '#dcfce7'    // all completed: green
+           : ratio >= 0.5 ? '#fef3c7'    // mostly: yellow
+           : '#fee2e2';                   // mostly pending: red-ish
+    var borderColor = hasVisits ? '#7030A0' : '#e5e7eb';
+    var dayIso = year + '-' + String(month+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+    var cursor = hasVisits ? 'pointer' : 'default';
+    var clickAttr = hasVisits ? ' onclick="_histClickDay(\''+dayIso+'\')"' : '';
+    html += '<div'+clickAttr+' style="background:'+bg+';border:1px solid '+borderColor+';border-radius:6px;padding:6px;min-height:50px;text-align:center;cursor:'+cursor+'">';
+    html += '  <div style="font-size:11px;font-weight:600;color:#0f172a">'+d+'</div>';
+    if(hasVisits){
+      html += '<div style="font-size:9px;color:#7030A0;font-weight:700;margin-top:2px">'+info.count+' visit'+(info.count!==1?'s':'')+'</div>';
+      if(info.spending > 0){
+        html += '<div style="font-size:9px;color:#475569;margin-top:1px">$'+info.spending.toFixed(0)+'</div>';
+      }
+    }
+    html += '</div>';
+  }
+  html += '</div>';
+  // Legend
+  html += '<div style="display:flex;gap:14px;justify-content:center;margin-top:10px;font-size:10px;color:var(--muted)">'
+       +  '  <span><span style="display:inline-block;width:10px;height:10px;background:#dcfce7;border:1px solid #16a34a;border-radius:2px;vertical-align:middle"></span> all completed</span>'
+       +  '  <span><span style="display:inline-block;width:10px;height:10px;background:#fef3c7;border:1px solid #eab308;border-radius:2px;vertical-align:middle"></span> mixed</span>'
+       +  '  <span><span style="display:inline-block;width:10px;height:10px;background:#fee2e2;border:1px solid #ef4444;border-radius:2px;vertical-align:middle"></span> mostly pending</span>'
+       +  '</div>';
+  pane.innerHTML = html;
+}
+
+// Click a calendar day → filter the list to that single day
+function _histClickDay(dayIso){
+  // Set the month and switch to list view filtered to that day
+  window._HIST_MONTH = dayIso.slice(0,7);   // YYYY-MM
+  window._HIST_DAY = dayIso;                 // specific day filter (consumed in renderHistory)
+  window._HIST_VIEW = 'list';
+  _histSetView('list');
+}
+window._histClickDay = _histClickDay;
+
 function renderHistory(){
   if(!currentMember)return;
-  var visits=getMemberVisits(currentMember);
+  var allVisits = getMemberVisits(currentMember);
+  var monthKey = window._HIST_MONTH;
+  var dayKey = window._HIST_DAY || null;
+  // Update month label + total bar
+  var lblEl = document.getElementById('hist-month-label');
+  if(lblEl){
+    if(dayKey){
+      lblEl.textContent = new Date(dayKey+'T00:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});
+    } else if(monthKey){
+      var mp = monthKey.split('-');
+      lblEl.textContent = new Date(parseInt(mp[0],10), parseInt(mp[1],10)-1, 1).toLocaleDateString('en-US',{month:'long',year:'numeric'});
+    } else {
+      lblEl.textContent = 'All time';
+    }
+  }
+  // Compute monthly totals (regardless of view mode)
+  var monthVisits = monthKey ? _histFilterByMonth(allVisits, monthKey) : allVisits;
+  var totalsEl = document.getElementById('hist-month-totals');
+  if(totalsEl){
+    var mCompleted = monthVisits.filter(function(v){ return v.status === 'Completed'; }).length;
+    var mSpending = monthVisits.reduce(function(s, v){ return s + _histVisitSpending(v); }, 0);
+    totalsEl.innerHTML = '🗓 <b style="color:#0f172a">'+monthVisits.length+'</b> visits'
+      + '  ·  ✓ <b style="color:#16a34a">'+mCompleted+'</b> completed'
+      + '  ·  💵 <b style="color:#0f172a">$'+mSpending.toFixed(0)+'</b>';
+  }
+  // Render calendar pane if active
+  var calPane = document.getElementById('hist-calendar-pane');
+  if(calPane){
+    calPane.style.display = (window._HIST_VIEW === 'calendar') ? 'block' : 'none';
+    if(window._HIST_VIEW === 'calendar'){
+      _histRenderCalendar(allVisits, monthKey);
+    }
+  }
+  // Filter visits for the list: day filter (if set) > month filter > all
+  var visits;
+  if(dayKey){
+    visits = allVisits.filter(function(v){ return v && v.date === dayKey; });
+  } else {
+    visits = monthVisits;
+  }
   var total=visits.length;
   var totalPages=Math.max(1,Math.ceil(total/PAGE_SIZE));
   memberPage=Math.min(memberPage,totalPages);
   var start=(memberPage-1)*PAGE_SIZE;
   var page=visits.slice(start,start+PAGE_SIZE);
 
-  document.getElementById('history-meta').textContent=
-    'ALL-TIME · '+total+' total visits · Page '+memberPage+' of '+totalPages;
+  var metaPrefix = dayKey ? 'DAY · ' : (monthKey ? 'MONTH · ' : 'ALL-TIME · ');
+  document.getElementById('history-meta').textContent =
+    metaPrefix + total + ' visit' + (total !== 1 ? 's' : '') + (totalPages > 1 ? ' · Page ' + memberPage + ' of ' + totalPages : '');
 
   var rows='';
   if(page.length===0){
