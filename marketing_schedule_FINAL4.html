@@ -22186,6 +22186,14 @@ function _rpFindCandidates(checkpoint, opts){
   opts = opts || {};
   var limit = opts.limit || 5;
   var minStaleDays = opts.minStaleDays != null ? opts.minStaleDays : 14;
+  // Per user 2026-05-25: treat "Never visited" (gray, days == null) as
+  // FRESH (same bucket as red 0-6d). Rationale: "for the beginning,
+  // consider [Not Visited] like the one that has getting imprints" —
+  // unvisited clinics are cold leads we don't want to chase first; we
+  // focus on warm/overdue relationships (yellow/green) instead. Below,
+  // any sort/filter that historically treated null as "infinite staleness"
+  // now treats it as "freshly imprinted" so it bubbles to the bottom and
+  // gets dropped when minStaleDays >= 7.
   var excludeSet = opts.exclude || {};
   var excludeDeadEnd = opts.includeDeadEnd ? false : true;   // default: exclude
   // Build the candidate pool (clinic + MVA, skip outreach unless opted in)
@@ -22197,7 +22205,8 @@ function _rpFindCandidates(checkpoint, opts){
     var days  = (typeof daysSinceLastVisit === 'function') ? daysSinceLastVisit(name) : null;
     // Recency filter: only include businesses that are stale enough (or
     // never visited). 14d default; user can relax in a future pass.
-    if(days != null && days < minStaleDays) return;
+    // null (never visited) is treated as fresh — only kept when minStaleDays === 0
+    if(minStaleDays > 0 && (days == null || days < minStaleDays)) return;
     // ── Dead-end filter: per user request 2026-05-20, businesses that
     // are confirmed-dead (lead.status === 'dead_end') are NOT eligible
     // for auto-recommendation. The member can still add them by hand
@@ -22244,12 +22253,14 @@ function _rpFindCandidates(checkpoint, opts){
     var within = pool.filter(function(p){ return p.dist <= r; });
     if(within.length >= limit || i === radii.length - 1){
       // ── Sort: longest-since-visited FIRST (per user 2026-05-20).
-      // Treat null (never visited) as Infinity so it bubbles to the top —
-      // semantically "we have no relationship at all, this is the oldest
-      // possible candidate." Ties broken by distance (closer wins).
+      // Per user 2026-05-25: null (never visited) now treated as FRESH
+      // (-1 — bubbles to the bottom, same fate as red 0-6d). Was Infinity
+      // before — "treat unknowns as oldest possible" — but the user wants
+      // to focus on warm/overdue (yellow/green) relationships, not cold
+      // first-contacts. Ties broken by distance (closer wins).
       within.sort(function(a, b){
-        var aDays = (a.days == null) ? Infinity : a.days;
-        var bDays = (b.days == null) ? Infinity : b.days;
+        var aDays = (a.days == null) ? -1 : a.days;
+        var bDays = (b.days == null) ? -1 : b.days;
         if(aDays !== bDays) return bDays - aDays;   // descending (older first)
         return a.dist - b.dist;
       });
@@ -22408,8 +22419,10 @@ function _rpRenderSlots(){
     }
     // If no pick yet, default to the FIRST non-red candidate (or null if
     // mode produced none). Never auto-pick red — red requires confirm.
+    // Per user 2026-05-25: null (never visited) also treated as red, so
+    // excluded from auto-pick — user must consciously add cold-lead clinics.
     if(!pick && cands.length){
-      var firstSafe = cands.find(function(c){ return c.days == null || c.days > 6; }) || null;
+      var firstSafe = cands.find(function(c){ return c.days != null && c.days > 6; }) || null;
       if(firstSafe){ _RP_SLOT_PICKS[k-1] = firstSafe; pick = firstSafe; excludeSet[firstSafe.name] = true; }
     }
     html += _rpRenderSlotRow(k, pick, cands);
@@ -25556,10 +25569,12 @@ function _rpV5FindForLevel(A, B, k, opts){
       if(bigger.length > 0){ cands = bigger; effectiveWidth = w; break; }
     }
   }
-  // Sort: oldest-since-visited first (ripest), then closest to line
+  // Sort: oldest-since-visited first (ripest), then closest to line.
+  // Per user 2026-05-25: null (never visited) treated as FRESH (-1) so
+  // gray pins drop to the bottom instead of bubbling to the top.
   cands.sort(function(a,b){
-    var aD = (a.days == null) ? Infinity : a.days;
-    var bD = (b.days == null) ? Infinity : b.days;
+    var aD = (a.days == null) ? -1 : a.days;
+    var bD = (b.days == null) ? -1 : b.days;
     if(aD !== bD) return bD - aD;   // stalest first
     return a.absPerp - b.absPerp;
   });
