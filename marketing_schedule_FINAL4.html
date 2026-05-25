@@ -28545,11 +28545,10 @@ function rowHTML(row,di,ri){
 
   // Once a member is confirmed on a row, their name chip should jump to their
   // profile when clicked. The .member-link class hooks the global delegate.
-  // Per user 2026-05-21 v2: the ✎ Edit button on a confirmed row is shown
-  // ONLY to admin or to the row's owner. Non-owners can't unlock the
-  // assignment to switch the member.
-  var _canEditMember = (typeof canEditVisitRow === 'function') ? canEditVisitRow(row) : true;
-  var _editBtnHtml = _canEditMember ? '<button class="edit-btn" onclick="editMember('+di+','+ri+')">&#9998;</button>' : '';
+  // Per user 2026-05-25 (Phase 6 follow-up): NO inline member-edit pencil.
+  // Even admin must go through the Fill / Edit Follow-up wizard to change
+  // assignment. The wizard shows the Assigned Member dropdown for admin only.
+  var _editBtnHtml = '';
   // Dropdown is shown to admin always; to members only if they can self-
   // assign (unassigned row) or it's already their row. Otherwise we show
   // a small "Assigned to X (locked)" label.
@@ -28769,15 +28768,28 @@ function rowHTML(row,di,ri){
       confirmCell = '<span class="lead-locked" title="This visit is assigned to ' + (row.member || 'someone else') + '. Ask them or admin to take it.">&#128274; ' + (row.member || 'locked') + '</span>';
     }
   } else {
-    // Level 2 — member confirmed but row not yet finalized. Purple "Fill
-    // follow-up" button opens the full dialog in wizard mode; final ✓
-    // Confirm there also marks rowConfirmed=true in one shot.
+    // Level 2 — member confirmed but row not yet finalized.
+    // Per user 2026-05-25: if the row has ANY data already filled (status
+    // beyond Pending, spending recorded, or lead outcome set), the button
+    // should say "Edit follow-up" — opening it will edit existing data,
+    // not fill blank fields. This catches legacy rows that were filled
+    // inline before the Phase 6 lockdown landed.
+    var _hasFilledData = (row.status && row.status !== 'Pending')
+      || !!row.relationship
+      || !!(row.spending && (row.spending.zeroSpending || (row.spending.items && row.spending.items.length)))
+      || !!(row.leadNotes && row.leadNotes.trim())
+      || !!(row.outreachContacts && row.outreachContacts.total != null);
     var canFillIt = amAdmin || (row.member === me);
     if(canFillIt){
+      var _btnLabel = _hasFilledData ? '✏ Edit follow-up' : '📝 Fill follow-up';
+      var _stepHint = _hasFilledData ? 'Review &amp; confirm' : 'Step 2 of 2';
+      var _btnTitle = _hasFilledData
+        ? 'Open the dialog to review or change status / lead / spending / notes. Final Confirm locks the row.'
+        : 'Step 2 of 2 — open a single dialog to set status, lead and spending, then confirm';
       confirmCell = '<button onclick="openVisitConfirmFlow('+di+','+ri+')" '
-        +'title="Step 2 of 2 — open a single dialog to set status, lead and spending, then confirm" '
-        +'style="background:linear-gradient(135deg,#7030A0,#1F3864);color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;white-space:nowrap;box-shadow:0 2px 6px rgba(31,56,100,.25)">📝 Fill follow-up</button>'
-        +'<div style="font-size:8px;color:var(--muted);text-align:center;margin-top:3px;font-style:italic;text-transform:uppercase;letter-spacing:.04em">Step 2 of 2</div>';
+        +'title="'+_btnTitle+'" '
+        +'style="background:linear-gradient(135deg,#7030A0,#1F3864);color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;white-space:nowrap;box-shadow:0 2px 6px rgba(31,56,100,.25)">' + _btnLabel + '</button>'
+        +'<div style="font-size:8px;color:var(--muted);text-align:center;margin-top:3px;font-style:italic;text-transform:uppercase;letter-spacing:.04em">' + _stepHint + '</div>';
     } else {
       confirmCell = '<span class="lead-locked" title="This visit is assigned to ' + (row.member || 'someone else') + '. Only they (or admin) can fill the follow-up.">&#128274; assigned</span>';
     }
