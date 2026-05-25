@@ -2555,7 +2555,7 @@ body.role-front_desk #referrals-view {
         </div>
       </div>
 
-      <!-- Member assignment (admin-only � non-admins are auto-assigned to themselves).
+      <!-- Member assignment (admin-only � non-admins are auto-assigned to themselves).
            Per user 2026-05-25: members don't need to pick themselves; their identity
            is implicit from their sign-in. This wrapper is hidden when isAdmin() is
            false, and the av-member value is force-set to CURRENT_USER.name in JS. -->
@@ -3168,6 +3168,15 @@ body.role-front_desk #referrals-view {
                   title="Open the route-planner dialog. Fill Start and End by typing (with recency-colored suggestions) or by clicking pins on the map."
                   style="background:linear-gradient(135deg,#7030A0,#9333ea);border:none;color:#fff;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;display:inline-flex;align-items:center;gap:5px;line-height:1.1;box-shadow:0 1px 3px rgba(112,48,160,.3)">
             🧭 Plan a Route
+          </button>
+          <!-- Phase 10b (per user 2026-05-25): one-click export of the day's
+               visits as a Google Maps directions deep link. On phones it
+               opens the Google Maps app directly with the route preloaded;
+               on desktop it opens maps.google.com with the same route. -->
+          <button id="dv-gmaps-export-btn" type="button" onclick="exportDayRouteToGoogleMaps()"
+                  title="Open the day's route in Google Maps for navigation. Builds a deep link with all stops in order; opens the Google Maps app on phone."
+                  style="background:#1e40af;border:none;color:#fff;border-radius:6px;padding:5px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;display:inline-flex;align-items:center;gap:5px;line-height:1.1">
+            🗺️ Open in Google Maps
           </button>
           <!-- Admin-only Map v2 settings opener. Hidden by default; revealed
                by JS in renderDayMap when isAdmin() returns true. Opens the
@@ -20568,7 +20577,7 @@ function addVisit(di){
   var suggestBoxAdd = document.getElementById('av-name-suggest');
   if(suggestBoxAdd){ suggestBoxAdd.style.display = 'none'; suggestBoxAdd.innerHTML = ''; }
   var memSel = document.getElementById('av-member');
-  // Per user 2026-05-25 (Phase 9b): members don't pick themselves � their identity
+  // Per user 2026-05-25 (Phase 9b): members don't pick themselves � their identity
   // is implicit from sign-in. Hide the assignment row for non-admin and force-set
   // the value to CURRENT_USER.name so the row push always lands with a member.
   var _isAdminAv = (typeof isAdmin === 'function' && isAdmin());
@@ -21018,7 +21027,7 @@ window.hasGeminiKey = hasGeminiKey;
 // the project's Microsoft-only stack discipline noted in MEMORY.md.
 //
 // Storage: the GitHub PAT lives in MAPV2_CONFIG.geminiKey. Variable name is
-// kept for backwards compatibility � same storage slot, just a different
+// kept for backwards compatibility � same storage slot, just a different
 // kind of key. UI labels updated separately to say "GitHub Models token".
 //
 // Returns Promise<string> resolving to the model's text output. Throws on
@@ -21026,14 +21035,14 @@ window.hasGeminiKey = hasGeminiKey;
 //
 // opts:
 //   model:       default 'openai/gpt-4o-mini' (small, fast, free-tier-friendly)
-//   temperature: 0.0�2.0, default 0.4
+//   temperature: 0.0�2.0, default 0.4
 //   maxTokens:   default 900
 //   wantJson:    if true, asks model for strict JSON output (response_format).
 function _callAIChat(prompt, opts){
   opts = opts || {};
   return new Promise(function(resolve, reject){
     if(!hasGeminiKey()){
-      reject(new Error('No AI key set � paste your GitHub Models token in ? Map v2 settings.'));
+      reject(new Error('No AI key set � paste your GitHub Models token in ? Map v2 settings.'));
       return;
     }
     var url = 'https://models.github.ai/inference/chat/completions';
@@ -24227,6 +24236,15 @@ function _rpLockInRoute(){
     return;
   }
   if(!Array.isArray(day.rows)) day.rows = [];
+  // Phase 10a (per user 2026-05-25): corridor route was pushing rows with
+  // member: '' which made them invisible under the day-view default filter
+  // ("Just me"). Mirror the same auto-assign-non-admin logic used in
+  // confirmAddVisit (Phase 9b) and _rpRwPushRouteToSchedule (Random Pick).
+  // Admin still gets blank member (lets them assign anyone after the fact);
+  // members get themselves so rows show up immediately under their filter.
+  var _meRP = (typeof CURRENT_USER !== 'undefined' && CURRENT_USER && CURRENT_USER.name) ? CURRENT_USER.name : '';
+  var _isAdminRP = (typeof isAdmin === 'function' && isAdmin());
+  var _autoMember = _isAdminRP ? '' : _meRP;
   picks.forEach(function(p){
     var area = '';
     // Resolve city from the original record
@@ -24250,14 +24268,14 @@ function _rpLockInRoute(){
       last: '',
       status: 'Pending',
       rd: '',
-      member: '',
-      memberConfirmed: false,
+      member: _autoMember,
+      memberConfirmed: !!_autoMember,
       relationship: '', relNotes: '', leadNotes: '',
       rowConfirmed: false,
       rescheduledFrom: null, isRescheduled: false,
       isMosque: false, isManual: false, editing: false,
       bizType: bt,
-      addedBy: (typeof CURRENT_USER !== 'undefined' && CURRENT_USER) ? CURRENT_USER.name : '',
+      addedBy: _meRP,
       addedFromRoutePlanner: true
     });
   });
@@ -24267,6 +24285,78 @@ function _rpLockInRoute(){
   _rpCancelSmart();
 }
 window._rpLockInRoute = _rpLockInRoute;
+
+// ── PHASE 10b: EXPORT DAY'S ROUTE TO GOOGLE MAPS (per user 2026-05-25) ────
+// Builds a Google Maps directions deep link from the active day's visits
+// (in row order) and opens it in a new tab. On phones with the Google Maps
+// app installed, the OS hands the link to the app and the rep gets native
+// turn-by-turn navigation. On desktop it opens maps.google.com.
+//
+// Format: https://www.google.com/maps/dir/?api=1
+//           &origin=lat,lng
+//           &destination=lat,lng
+//           &waypoints=lat,lng|lat,lng|...
+//           &travelmode=driving
+//
+// Limits:
+//   - Google Maps deep-link caps waypoints around 9 (so 10 total stops).
+//     If the day has more, we use the first 10 and toast a warning.
+//   - Canceled rows are skipped (no point routing to them).
+//   - Rows without resolvable coords are skipped (can't deep-link a name only).
+function exportDayRouteToGoogleMaps(){
+  var di = (typeof S !== 'undefined' && S.currentDay != null) ? S.currentDay : null;
+  if(di == null){
+    if(typeof showToast === 'function') showToast('Open a day on the calendar first, then export.');
+    return;
+  }
+  var day = S.days[di];
+  if(!day || !Array.isArray(day.rows) || day.rows.length === 0){
+    if(typeof showToast === 'function') showToast('No visits on this day to export.');
+    return;
+  }
+  // Collect coords in row order (= visit order), only valid visits.
+  var stops = [];
+  day.rows.forEach(function(r){
+    if(!r || !r.clinic) return;
+    if(r.status === 'Canceled') return;
+    var c = (typeof getCoordForBusiness === 'function') ? getCoordForBusiness(r.clinic) : null;
+    if(c && c.lat != null && c.lng != null){
+      stops.push({ name: r.clinic, lat: c.lat, lng: c.lng });
+    }
+  });
+  if(stops.length === 0){
+    if(typeof showToast === 'function') showToast('No stops on this day have known coordinates yet. Add clinic addresses first.');
+    return;
+  }
+  // Single-stop: open the place card instead of directions.
+  if(stops.length === 1){
+    var urlOne = 'https://www.google.com/maps/search/?api=1&query='
+               + encodeURIComponent(stops[0].lat + ',' + stops[0].lng);
+    window.open(urlOne, '_blank', 'noopener');
+    return;
+  }
+  // Cap at 10 stops (Google Maps deep-link practical limit).
+  var truncated = false;
+  if(stops.length > 10){
+    truncated = true;
+    stops = stops.slice(0, 10);
+  }
+  var origin      = stops[0].lat + ',' + stops[0].lng;
+  var destination = stops[stops.length - 1].lat + ',' + stops[stops.length - 1].lng;
+  var waypoints   = stops.slice(1, -1).map(function(s){ return s.lat + ',' + s.lng; }).join('|');
+  var url = 'https://www.google.com/maps/dir/?api=1'
+          + '&origin='      + encodeURIComponent(origin)
+          + '&destination=' + encodeURIComponent(destination)
+          + (waypoints ? '&waypoints=' + encodeURIComponent(waypoints) : '')
+          + '&travelmode=driving';
+  window.open(url, '_blank', 'noopener');
+  if(truncated && typeof showToast === 'function'){
+    showToast('Exported first 10 stops to Google Maps (deep-link limit). Add the rest from the in-app map.');
+  } else if(typeof showToast === 'function'){
+    showToast('🗺️ Opening ' + stops.length + ' stops in Google Maps…');
+  }
+}
+window.exportDayRouteToGoogleMaps = exportDayRouteToGoogleMaps;
 
 // Called from openDay() to refresh the map with this day's visits.
 // ── ETA HELPERS (per user 2026-05-22, no API key needed) ───────────────────
@@ -25245,7 +25335,7 @@ function _rpScheduledClinicsForActiveDay(){
     var day = S.days && S.days[S.currentDay];
     if(!day || !Array.isArray(day.rows)) return set;
     day.rows.forEach(function(r){
-      // Phase 9b: canceled rows are dead � don't count them toward dedupe.
+      // Phase 9b: canceled rows are dead � don't count them toward dedupe.
       // If a member deletes/cancels a visit, the same clinic should be free
       // to add again without the "already this week" warning.
       if(r && r.clinic && r.status !== 'Canceled') set[r.clinic] = true;
@@ -25295,7 +25385,7 @@ function _rpScheduledClinicsForActiveWeek(dateStr){
       if(day.date < monKey || day.date > sunKey) return;
       day.rows.forEach(function(r){
         if(!r || !r.clinic) return;
-        // Phase 9b: skip canceled rows � once canceled/deleted, the same
+        // Phase 9b: skip canceled rows � once canceled/deleted, the same
         // clinic should be re-addable that week without a warning.
         if(r.status === 'Canceled') return;
         if(out[r.clinic]) return;   // first-seen wins (deterministic dedupe info)
@@ -26771,10 +26861,10 @@ function _rpAiCorridorSecondOpinion(){
   // Phase 8b: route through GitHub Models (was Gemini).
   _callAIChat(prompt, { temperature: 0.4, maxTokens: 800, wantJson: true })
   .then(function(text){
-    // Unified error handling moved into the parsing branch below � wrap
+    // Unified error handling moved into the parsing branch below � wrap
     // a fake json envelope so the existing logic continues to work.
     // Helper returned `text` directly. Block below is intentionally never
-    // entered � kept temporarily so existing closing braces line up; the
+    // entered � kept temporarily so existing closing braces line up; the
     // dead path will be removed in a follow-up cleanup.
     if(false){
       var json = null;
@@ -28868,7 +28958,7 @@ function confirmAddVisit(){
   var phone   = (document.getElementById('av-phone').value||'').trim();
   var address = (document.getElementById('av-address').value||'').trim();
   var member  = document.getElementById('av-member').value || '';
-  // Phase 9b: defense in depth � non-admin always lands as themselves even if
+  // Phase 9b: defense in depth � non-admin always lands as themselves even if
   // DOM tampering cleared the field. The Add Visit modal hides the field for
   // non-admin, but if someone reaches this point with an empty member value,
   // auto-assign to the signed-in user. Admin can still leave it blank.
@@ -28984,7 +29074,7 @@ function confirmAddVisit(){
         ? wkMatch.date
         : wkD.toLocaleDateString('en-US', { weekday:'long', month:'short', day:'numeric' });
       showConfirm({
-        icon: '� ',
+        icon: '� ',
         msg: 'Already planned this week',
         sub: '"' + name + '" is already scheduled for <strong>' + wkLabel + '</strong> by ' + byWho + '.\n\n'
            + 'During the Monday 8 PM planning window the team plans the whole week up front, so duplicate clinics within the same week are usually unintentional.\n\n'
