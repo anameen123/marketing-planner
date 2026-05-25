@@ -3258,6 +3258,105 @@ body.role-front_desk #referrals-view {
         <div id="rp-random-picks-list" style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:8px;min-height:60px;font-size:11px"></div>
         <div style="font-size:10px;color:var(--muted);margin-top:4px;font-style:italic">The drawer stays on the right while you work. Double-click any pin on the map — the list above updates live.</div>
       </div>
+
+      <!-- ── RANDOM PICK MODE — GUIDED WIZARD (per user 2026-05-25 Phase 3) ──
+           Replaces the free-form double-click flow with a 4-step wizard.
+           User picks starting location, # visits, time budget, at-stop buffer.
+           Then the algorithm generates 1-3 candidate routes and the user
+           picks one (with up to 50% of stops swappable). Visible only when
+           mode = 'random' AND the new wizard is active (vs. the legacy
+           free-form flow). -->
+      <div id="rp-random-wizard" style="display:none;margin-bottom:10px">
+        <!-- Step progress dots -->
+        <div id="rp-rw-progress" style="display:flex;gap:6px;justify-content:center;margin-bottom:14px"></div>
+
+        <!-- STEP 1: Starting location -->
+        <div id="rp-rw-step-1" class="rp-rw-step" style="display:block">
+          <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:6px">Step 1 — Where do you start?</div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Pick a starting point. If it's a clinic, it counts as your first visit.</div>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;padding:8px;border:1px solid var(--border);border-radius:6px;background:#fff">
+              <input type="radio" name="rp-rw-start-type" value="facility" checked onchange="_rpRwOnStartTypeChange()" style="cursor:pointer">
+              <span><b>🏥 WCG facility</b> <span style="color:var(--muted)">— Frisco, Castle Hills, Plano, or Richardson</span></span>
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;padding:8px;border:1px solid var(--border);border-radius:6px;background:#fff">
+              <input type="radio" name="rp-rw-start-type" value="custom" onchange="_rpRwOnStartTypeChange()" style="cursor:pointer">
+              <span><b>📍 Custom location</b> <span style="color:var(--muted)">— home, hotel, or anywhere</span></span>
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;padding:8px;border:1px solid var(--border);border-radius:6px;background:#fff">
+              <input type="radio" name="rp-rw-start-type" value="clinic" onchange="_rpRwOnStartTypeChange()" style="cursor:pointer">
+              <span><b>🏥 Clinic</b> <span style="color:var(--muted)">— counts as visit #1</span></span>
+            </label>
+          </div>
+          <!-- Per-type input panels (only one visible based on radio) -->
+          <div id="rp-rw-start-facility" style="margin-top:10px">
+            <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Pick facility</label>
+            <select id="rp-rw-facility-select" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-size:12px;background:#fff">
+              <option value="">— Choose —</option>
+              <option value="_facility_frisco_er">Frisco ER</option>
+              <option value="_facility_castle_hills_er">Castle Hills ER</option>
+              <option value="_facility_plano_uc">Urgent Care Plano</option>
+              <option value="_facility_richardson">Richardson</option>
+            </select>
+          </div>
+          <div id="rp-rw-start-custom" style="display:none;margin-top:10px">
+            <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Custom address or label</label>
+            <input id="rp-rw-custom-name" type="text" placeholder="e.g. Home, 123 Main St, Plano" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-size:12px;background:#fff;box-sizing:border-box">
+            <button type="button" onclick="_rpRwStartPickOnMap()" style="margin-top:6px;background:#1F3864;color:#fff;border:none;border-radius:5px;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer">📍 Or pick on map</button>
+            <div style="font-size:10px;color:var(--muted);margin-top:4px;font-style:italic">Custom locations show as a temporary blue pin and don't create a visit row.</div>
+          </div>
+          <div id="rp-rw-start-clinic" style="display:none;margin-top:10px">
+            <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Type to search clinic</label>
+            <input id="rp-rw-clinic-search" type="text" placeholder="Start typing a clinic name…" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-size:12px;background:#fff;box-sizing:border-box">
+            <div id="rp-rw-clinic-suggestions" style="background:#fff;border:1px solid var(--border);border-radius:6px;margin-top:4px;max-height:160px;overflow-y:auto;display:none"></div>
+            <button type="button" onclick="_rpRwStartPickOnMap()" style="margin-top:6px;background:#1F3864;color:#fff;border:none;border-radius:5px;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer">📍 Or pick on map</button>
+          </div>
+          <div id="rp-rw-step-1-summary" style="margin-top:10px;font-size:11px;color:#16a34a;font-weight:600;display:none"></div>
+        </div>
+
+        <!-- STEP 2: Number of visits -->
+        <div id="rp-rw-step-2" class="rp-rw-step" style="display:none">
+          <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:6px">Step 2 — How many visits?</div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:10px">How many clinics / MVAs to visit on this route.</div>
+          <div style="display:flex;align-items:center;gap:8px;max-width:200px">
+            <button type="button" onclick="_rpRwAdjustVisits(-1)" style="background:#e5e7eb;border:none;color:#374151;width:36px;height:42px;border-radius:6px;font-size:18px;font-weight:700;cursor:pointer">−</button>
+            <input id="rp-rw-num-visits" type="number" value="5" min="1" max="12" oninput="_RP_RW.numVisits=parseInt(this.value,10)||5" style="flex:1;border:1px solid var(--border);border-radius:8px;padding:10px;font-size:14px;text-align:center;background:#fff;box-sizing:border-box">
+            <button type="button" onclick="_rpRwAdjustVisits(1)" style="background:#e5e7eb;border:none;color:#374151;width:36px;height:42px;border-radius:6px;font-size:18px;font-weight:700;cursor:pointer">+</button>
+          </div>
+        </div>
+
+        <!-- STEP 3: Total time budget -->
+        <div id="rp-rw-step-3" class="rp-rw-step" style="display:none">
+          <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:6px">Step 3 — How much time?</div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Total time you have for the entire route (drive + stops).</div>
+          <div style="display:flex;align-items:center;gap:6px;max-width:220px">
+            <input id="rp-rw-total-hours" type="number" value="4" min="0.5" max="12" step="0.5" oninput="_RP_RW.totalHours=parseFloat(this.value)||0" style="flex:1;border:1px solid var(--border);border-radius:8px;padding:10px;font-size:14px;text-align:center;background:#fff;box-sizing:border-box">
+            <span style="font-size:12px;color:var(--muted);font-weight:600">hours</span>
+          </div>
+          <div style="font-size:10px;color:var(--muted);margin-top:8px;font-style:italic">e.g. 4 hr = leaving at 9am and back by 1pm.</div>
+        </div>
+
+        <!-- STEP 4: At-stop buffer -->
+        <div id="rp-rw-step-4" class="rp-rw-step" style="display:none">
+          <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:6px">Step 4 — Time at each stop?</div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Average minutes you'll spend at each clinic/MVA (drop-off + small talk).</div>
+          <div style="display:flex;align-items:center;gap:6px;max-width:220px">
+            <input id="rp-rw-stop-minutes" type="number" value="12" min="0" max="60" step="1" oninput="_rpRwUpdateBudgetPreview()" style="flex:1;border:1px solid var(--border);border-radius:8px;padding:10px;font-size:14px;text-align:center;background:#fff;box-sizing:border-box">
+            <span style="font-size:12px;color:var(--muted);font-weight:600">min / stop</span>
+          </div>
+          <div id="rp-rw-budget-preview" style="margin-top:14px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:6px;padding:10px;font-size:11px;color:#0c4a6e">
+            <!-- Filled live by _rpRwUpdateBudgetPreview -->
+          </div>
+        </div>
+
+        <!-- Wizard footer — Back / Continue / Generate buttons -->
+        <div style="display:flex;justify-content:space-between;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
+          <button id="rp-rw-back-btn" type="button" onclick="_rpRwBack()" style="background:#e5e7eb;color:#374151;border:none;border-radius:6px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;display:none">← Back</button>
+          <span style="flex:1"></span>
+          <button id="rp-rw-next-btn" type="button" onclick="_rpRwNext()" style="background:#7030A0;color:#fff;border:none;border-radius:6px;padding:8px 18px;font-size:12px;font-weight:700;cursor:pointer">Continue →</button>
+          <button id="rp-rw-generate-btn" type="button" onclick="_rpRwGenerate()" style="background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;border:none;border-radius:6px;padding:8px 22px;font-size:12px;font-weight:700;cursor:pointer;display:none">⚡ Generate routes</button>
+        </div>
+      </div>
       <!-- Corridor controls (per user 2026-05-22 v5 design).
            - Number of route levels: user-supplied N. Total Start→End distance
              is sliced into N equal depth chunks. Each chunk is one wizard
@@ -24782,6 +24881,236 @@ var _RP_RANDOM_STEP = 'start';
 var _RP_RANDOM_START = null;                  // { name, coord } once set
 var _RP_RANDOM_S_MARKER = null;               // Leaflet marker handle for the S badge
 
+// ════════════════════════════════════════════════════════════════════════════
+// RANDOM PICK WIZARD (Phase 3 per user 2026-05-25)
+// ════════════════════════════════════════════════════════════════════════════
+// User wanted the free-form double-click flow replaced by a guided wizard:
+//   Step 1 — pick starting location (facility / custom / clinic)
+//   Step 2 — # visits
+//   Step 3 — total time budget (hours)
+//   Step 4 — at-stop buffer (min/visit) + budget preview
+//   [Then the algorithm runs and Phase 3d shows candidate routes.]
+// State lives in window._RP_RW so it survives across mode toggles (user
+// can switch to Corridor and back without losing inputs). Wizard step
+// is an int 1-4; defaults to 1 on first open.
+window._RP_RW = window._RP_RW || {
+  step: 1,
+  startType: 'facility',     // 'facility' | 'custom' | 'clinic'
+  start: null,               // { name, coord, isVisit } once chosen — isVisit=true for clinic-as-start
+  numVisits: 5,
+  totalHours: 4,
+  stopMinutes: 12
+};
+
+function _rpRwReset(){
+  window._RP_RW = {
+    step: 1, startType: 'facility', start: null,
+    numVisits: 5, totalHours: 4, stopMinutes: 12
+  };
+}
+window._rpRwReset = _rpRwReset;
+
+// Render the step progress dots (filled = visited, current = bigger).
+function _rpRwRenderProgress(){
+  var box = document.getElementById('rp-rw-progress');
+  if(!box) return;
+  var cur = _RP_RW.step;
+  var html = '';
+  for(var i = 1; i <= 4; i++){
+    var isCur = (i === cur);
+    var isDone = (i < cur);
+    var bg = isCur ? '#7030A0' : isDone ? '#16a34a' : '#cbd5e1';
+    var size = isCur ? '12px' : '10px';
+    html += '<span title="Step '+i+'" style="display:inline-block;width:'+(isCur?'28':'18')+'px;height:'+size+';background:'+bg+';border-radius:6px;'+(isCur?'box-shadow:0 0 0 2px rgba(112,48,160,.25);':'')+'transition:all .2s"></span>';
+  }
+  box.innerHTML = html;
+}
+
+// Show a specific step (1-4). Hides the others. Updates progress + footer.
+function _rpRwGoto(stepN){
+  if(stepN < 1) stepN = 1;
+  if(stepN > 4) stepN = 4;
+  _RP_RW.step = stepN;
+  for(var i = 1; i <= 4; i++){
+    var el = document.getElementById('rp-rw-step-' + i);
+    if(el) el.style.display = (i === stepN) ? 'block' : 'none';
+  }
+  _rpRwRenderProgress();
+  // Footer buttons: Back hidden on step 1, Next on steps 1-3, Generate on step 4
+  var backBtn = document.getElementById('rp-rw-back-btn');
+  var nextBtn = document.getElementById('rp-rw-next-btn');
+  var genBtn  = document.getElementById('rp-rw-generate-btn');
+  if(backBtn) backBtn.style.display = (stepN > 1) ? '' : 'none';
+  if(nextBtn) nextBtn.style.display = (stepN < 4) ? '' : 'none';
+  if(genBtn)  genBtn.style.display  = (stepN === 4) ? '' : 'none';
+  // Step 4 — refresh the budget preview every time we land on it
+  if(stepN === 4 && typeof _rpRwUpdateBudgetPreview === 'function'){
+    _rpRwUpdateBudgetPreview();
+  }
+}
+window._rpRwGoto = _rpRwGoto;
+
+// Next-step validator. Each step has its own gate before advancing.
+function _rpRwNext(){
+  var s = _RP_RW.step;
+  // Step 1 gate — must have a resolved start
+  if(s === 1){
+    if(!_RP_RW.start){
+      // Try to resolve from current input state
+      if(typeof _rpRwTryResolveStart === 'function' && !_rpRwTryResolveStart()){
+        if(typeof showToast === 'function') showToast('Pick your starting location first.');
+        return;
+      }
+    }
+  }
+  // Step 2 gate — # visits must be 1-12
+  if(s === 2){
+    var n = parseInt((document.getElementById('rp-rw-num-visits') || {}).value, 10);
+    if(!n || n < 1){ if(typeof showToast === 'function') showToast('At least 1 visit.'); return; }
+    if(n > 12){ if(typeof showToast === 'function') showToast('Max 12 visits per route.'); return; }
+    _RP_RW.numVisits = n;
+  }
+  // Step 3 gate — total hours must be 0.5-12
+  if(s === 3){
+    var h = parseFloat((document.getElementById('rp-rw-total-hours') || {}).value);
+    if(!h || h < 0.5){ if(typeof showToast === 'function') showToast('At least 30 min total.'); return; }
+    if(h > 12){ if(typeof showToast === 'function') showToast('Max 12 hours.'); return; }
+    _RP_RW.totalHours = h;
+  }
+  _rpRwGoto(s + 1);
+}
+window._rpRwNext = _rpRwNext;
+
+function _rpRwBack(){
+  _rpRwGoto(_RP_RW.step - 1);
+}
+window._rpRwBack = _rpRwBack;
+
+// Step 1 — radio change handler. Swaps visible input panel by start type.
+function _rpRwOnStartTypeChange(){
+  var radios = document.getElementsByName('rp-rw-start-type');
+  for(var i = 0; i < radios.length; i++){
+    if(radios[i].checked){ _RP_RW.startType = radios[i].value; break; }
+  }
+  ['facility','custom','clinic'].forEach(function(t){
+    var el = document.getElementById('rp-rw-start-' + t);
+    if(el) el.style.display = (t === _RP_RW.startType) ? 'block' : 'none';
+  });
+  // Clear any prior resolved start since we changed type
+  _RP_RW.start = null;
+  var sum = document.getElementById('rp-rw-step-1-summary');
+  if(sum){ sum.style.display = 'none'; sum.innerHTML = ''; }
+}
+window._rpRwOnStartTypeChange = _rpRwOnStartTypeChange;
+
+// Try to lock in the start from current step-1 input state. Returns true on success.
+function _rpRwTryResolveStart(){
+  if(_RP_RW.startType === 'facility'){
+    var sel = document.getElementById('rp-rw-facility-select');
+    var key = sel ? sel.value : '';
+    if(!key || !ROUTE_COORDS[key]) return false;
+    var f = ROUTE_COORDS[key];
+    _RP_RW.start = { name: f.label, coord: { lat: f.lat, lng: f.lng }, isVisit: false, kind: 'facility' };
+  } else if(_RP_RW.startType === 'custom'){
+    var inp = document.getElementById('rp-rw-custom-name');
+    var name = inp ? inp.value.trim() : '';
+    if(!name) return false;
+    // Without geocoding, we can't pin a coord yet. Map-pick handler sets
+    // _RP_RW.start.coord. If user only typed without picking, we accept it
+    // but warn — the algorithm needs coords.
+    if(!_RP_RW.start || _RP_RW.start.name !== name){
+      // Still no coord — block until they pick on map
+      if(typeof showToast === 'function'){
+        showToast('Click "Pick on map" to set this location on the map.');
+      }
+      return false;
+    }
+  } else if(_RP_RW.startType === 'clinic'){
+    // Either typed + selected from suggestion (sets _RP_RW.start) or picked from map
+    if(!_RP_RW.start){
+      if(typeof showToast === 'function'){
+        showToast('Type a clinic name and click a suggestion, or use "Pick on map".');
+      }
+      return false;
+    }
+  }
+  // Render success summary on step 1
+  var sum = document.getElementById('rp-rw-step-1-summary');
+  if(sum && _RP_RW.start){
+    sum.style.display = 'block';
+    sum.innerHTML = '✓ Start: <b>' + _RP_RW.start.name + '</b>'
+      + (_RP_RW.start.isVisit ? ' <span style="color:#7c2d12">(counts as visit #1)</span>' : '');
+  }
+  return true;
+}
+window._rpRwTryResolveStart = _rpRwTryResolveStart;
+
+// Step 2 — adjust # visits via +/- buttons.
+function _rpRwAdjustVisits(delta){
+  var inp = document.getElementById('rp-rw-num-visits');
+  if(!inp) return;
+  var v = (parseInt(inp.value, 10) || 5) + delta;
+  if(v < 1) v = 1;
+  if(v > 12) v = 12;
+  inp.value = v;
+  _RP_RW.numVisits = v;
+}
+window._rpRwAdjustVisits = _rpRwAdjustVisits;
+
+// Step 4 — live budget preview. Computes available drive minutes.
+function _rpRwUpdateBudgetPreview(){
+  var totalH = parseFloat((document.getElementById('rp-rw-total-hours') || {}).value) || 0;
+  var stopM  = parseInt((document.getElementById('rp-rw-stop-minutes') || {}).value, 10);
+  if(isNaN(stopM)) stopM = 12;
+  _RP_RW.totalHours = totalH;
+  _RP_RW.stopMinutes = stopM;
+  var n = _RP_RW.numVisits;
+  var totalMin = totalH * 60;
+  var stopTotal = n * stopM;
+  var driveBudget = totalMin - stopTotal;
+  var feasible = driveBudget > 0;
+  var box = document.getElementById('rp-rw-budget-preview');
+  if(!box) return;
+  if(feasible){
+    box.style.background = '#f0f9ff';
+    box.style.borderColor = '#bae6fd';
+    box.style.color = '#0c4a6e';
+    box.innerHTML = '<b>Budget breakdown</b><br>'
+      + '⏱ Total: ' + totalMin + ' min<br>'
+      + '⏸ At stops (' + n + ' × ' + stopM + ' min): ' + stopTotal + ' min<br>'
+      + '🚗 Drive budget: <b>' + driveBudget + ' min</b> (≈ ' + (driveBudget/60).toFixed(1) + ' hr)';
+  } else {
+    box.style.background = '#fef2f2';
+    box.style.borderColor = '#fecaca';
+    box.style.color = '#991b1b';
+    box.innerHTML = '<b>⚠️ Not feasible</b><br>'
+      + n + ' visits × ' + stopM + ' min/stop = ' + stopTotal + ' min at stops alone, '
+      + 'but you only have ' + totalMin + ' min total. '
+      + 'Reduce visits or increase time.';
+  }
+}
+window._rpRwUpdateBudgetPreview = _rpRwUpdateBudgetPreview;
+
+// Map-pick handler — called when user clicks "Pick on map" in step 1.
+// Closes the planner temporarily, lets them double-click a pin, then reopens.
+// (Phase 3b will fill this in fully; for 3a it's a stub.)
+function _rpRwStartPickOnMap(){
+  if(typeof showToast === 'function'){
+    showToast('Map picker coming in Phase 3b — for now, pick a facility or type a clinic name.');
+  }
+}
+window._rpRwStartPickOnMap = _rpRwStartPickOnMap;
+
+// Phase 3c — Generate. For 3a this is a placeholder.
+function _rpRwGenerate(){
+  if(typeof showToast === 'function'){
+    showToast('Algorithm coming in Phase 3c. Inputs locked: '
+      + _RP_RW.numVisits + ' visits, ' + _RP_RW.totalHours + ' hr, '
+      + _RP_RW.stopMinutes + ' min/stop, start: ' + (_RP_RW.start ? _RP_RW.start.name : '?'));
+  }
+}
+window._rpRwGenerate = _rpRwGenerate;
+
 // Set the planner mode. Toggles section visibility + resets results.
 function _rpSetMode(mode){
   if(mode !== 'corridor' && mode !== 'random') return;
@@ -24801,9 +25130,16 @@ function _rpSetMode(mode){
     rBtn.style.color = on ? '#fff' : 'var(--muted)';
     rBtn.style.boxShadow = on ? '0 2px 6px rgba(112,48,160,.22)' : 'none';
   }
-  // Show/hide sections per mode
+  // Show/hide sections per mode.
+  // Per user 2026-05-25 Phase 3: Random Pick now uses the guided wizard
+  // (#rp-random-wizard). The legacy free-form picks list (rp-random-picks-wrap)
+  // is hidden in random mode — wizard supersedes it. Corridor's hidden in
+  // both modes when in random (no Start/End text inputs needed since the
+  // wizard captures the start itself).
   var corridorOnly = ['rp-mode-corridor-blurb','rp-end-wrap','rp-corridor-controls','rp-corridor-filters','rp-results'];
-  var randomOnly   = ['rp-mode-random-blurb','rp-random-picks-wrap','rp-random-results'];
+  var randomOnly   = ['rp-mode-random-blurb','rp-random-wizard','rp-random-results'];
+  // Also hide the legacy free-form picks list — wizard replaces it
+  var randomHideAlways = ['rp-random-picks-wrap'];
   corridorOnly.forEach(function(id){
     var el = document.getElementById(id);
     if(el) el.style.display = (mode === 'corridor') ? '' : 'none';
@@ -24812,6 +25148,22 @@ function _rpSetMode(mode){
     var el = document.getElementById(id);
     if(el) el.style.display = (mode === 'random') ? '' : 'none';
   });
+  randomHideAlways.forEach(function(id){
+    var el = document.getElementById(id);
+    if(el) el.style.display = 'none';
+  });
+  // Random mode: also hide the Start input row (wizard owns the start now)
+  // and snap the wizard to step 1 on first entry per session.
+  try {
+    var startRow = document.querySelector('#rp-start-search')
+      ? document.querySelector('#rp-start-search').closest('.kpi-input-row')
+      : null;
+    if(startRow) startRow.style.display = (mode === 'random') ? 'none' : '';
+    if(mode === 'random' && typeof _rpRwGoto === 'function'){
+      // Initialize wizard view (don't reset state — user might toggle back)
+      _rpRwGoto(_RP_RW.step || 1);
+    }
+  } catch(_){}
   // Update the Start label/placeholder hint per mode. In Random mode we
   // also rename the input label from "Starting clinic / MVA / facility" to
   // "Starting location" since the start doesn't have to be a clinic anymore.
@@ -24841,32 +25193,27 @@ function _rpSetMode(mode){
       }
     }
   } catch(_){}
-  // Update the footer button labels
+  // Update the footer button labels / visibility.
+  // Per user 2026-05-25 Phase 3: Random mode no longer uses the legacy
+  // footer buttons — the wizard has its own Continue/Back/Generate.
+  // Hide them entirely when in random mode to keep the footer uncluttered.
   var findBtn = document.getElementById('rp-run-btn');
   var genBtn  = document.getElementById('rp-v4-generate-btn');
   if(findBtn){
-    // In Random mode the map is auto-armed on mode-switch — the button just
-    // re-arms in case the user accidentally clicked away and wants to refresh.
-    findBtn.textContent = (mode === 'random') ? '🔁 Re-arm map' : '🔍 Find candidates';
+    findBtn.style.display = (mode === 'random') ? 'none' : '';
+    findBtn.textContent = '🔍 Find candidates';
   }
   if(genBtn){
-    genBtn.textContent = (mode === 'random') ? 'Optimize route →' : 'Generate route →';
+    genBtn.style.display = (mode === 'random') ? 'none' : '';
+    genBtn.textContent = 'Generate route →';
   }
-  // Per user 2026-05-23: when switching INTO random mode, auto-arm the map
-  // for double-click picking and queue the "select your start" step (unless
-  // a start is already set, in which case we resume on stops).
+  // Random mode: don't auto-arm the map for double-click - the wizard
+  // controls when the map picker activates (only when user clicks "Pick
+  // on map" in step 1). Always disarm on mode switch.
   if(mode === 'random'){
-    _rpRenderRandomPicksList();
-    if(!_RP_RANDOM_START){
-      _RP_RANDOM_STEP = 'start';
-    } else {
-      _RP_RANDOM_STEP = 'stops';
-    }
-    _rpArmRandomMap();
-    _rpRefreshRandomStatus();
+    if(typeof _rpDisarmRandomMap === 'function') _rpDisarmRandomMap();
   } else {
-    // Leaving random mode — disarm + drop the S marker if present
-    _rpDisarmRandomMap();
+    if(typeof _rpDisarmRandomMap === 'function') _rpDisarmRandomMap();
   }
 }
 window._rpSetMode = _rpSetMode;
