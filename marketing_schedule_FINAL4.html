@@ -23146,6 +23146,18 @@ function _rpRenderReviewPane(legs, pending, routingFailed, source){
     +   '<div style="display:flex;justify-content:space-between;padding-top:10px;margin-top:6px;border-top:1px solid var(--border);font-size:13px;font-weight:700;color:#1F3864"><div>Total drive · on-site</div><div style="font-family:DM Mono,monospace">' + totalDist.toFixed(1) + ' mi · ~' + Math.round(totalDriveMin) + ' min drive + ' + (intermediateStops * stopOnSite) + ' min on-site = ~' + Math.round(totalElapsedMin) + ' min</div></div>'
     + '</div>'
     + statusHtml
+    // Per user 2026-05-24: Gemini AI explanation slot — only shown when
+    // the route is fully resolved (not pending or failed). Hidden empty
+    // div for output + a button that triggers explainRouteWithGemini.
+    + (pending || routingFailed ? '' :
+        '<div style="margin-bottom:10px">'
+      +   '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:6px">'
+      +     '<div style="font-size:11px;color:var(--muted)"><span id="rp-gemini-status"></span></div>'
+      +     '<button id="rp-gemini-btn" onclick="explainRouteWithGemini()" style="background:linear-gradient(135deg,#7030A0,#5b21b6);color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">🤖 Explain this route with AI</button>'
+      +   '</div>'
+      +   '<div id="rp-gemini-output"></div>'
+      + '</div>'
+      )
     + '<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">'
     +   '<button onclick="_rpBuildSmartPanel()" style="background:#fff;border:1px solid var(--border);color:#1F3864;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">← Edit</button>'
     +   '<button onclick="_rpLockInRoute()" style="background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">✓ Lock in route &amp; add visits to schedule</button>'
@@ -23170,6 +23182,135 @@ function _rpReRenderReview(){
   _rpRenderReviewPane(a.legs, a.pending, a.routingFailed, a.source);
 }
 window._rpReRenderReview = _rpReRenderReview;
+
+// ═══════════════════════════════════════════════════════════════════════
+// GEMINI "EXPLAIN THIS ROUTE" (per user 2026-05-24)
+// Sends the current route summary (stops + drive times) to Gemini 2.0
+// Flash and renders a short natural-language explanation underneath the
+// review pane. Free-tier safe: reuses MAPV2_CONFIG.geminiKey + the
+// existing _bumpMapV2Quota daily cap. ~50 tokens out, well under any
+// quota concern at marketing-team scale.
+// ═══════════════════════════════════════════════════════════════════════
+function _rpBuildRouteSummaryForLlm(){
+  // Pulls the most-recently-rendered route — whichever mode is active.
+  // Random Pick takes precedence when its result box is visible; else
+  // Corridor's smart panel.
+  var randomBox = document.getElementById('rp-random-results');
+  if(_RP_LAST_RANDOM_ARGS && randomBox && randomBox.style.display !== 'none'){
+    var ra = _RP_LAST_RANDOM_ARGS;
+    var stops = (ra.legs || []).map(function(l){ return l.to.name; });
+    var totalMi = (ra.legs || []).reduce(function(s, l){ return s + l.dist; }, 0);
+    var totalMin = (ra.legs || []).reduce(function(s, l){
+      return s + (l.durMin != null ? l.durMin : l.dist / 28 * 60);
+    }, 0);
+    return {
+      mode: 'random',
+      start: ra.startName,
+      stops: stops,
+      totalMiles: totalMi,
+      totalDriveMin: totalMin,
+      source: ra.source || 'estimated'
+    };
+  }
+  if(_RP_LAST_REVIEW_ARGS && _RP_LAST_REVIEW_ARGS.legs){
+    var ca = _RP_LAST_REVIEW_ARGS;
+    var legs = ca.legs;
+    var stops = legs.slice(0, legs.length - 1).map(function(l){ return l.to.name; });
+    var startName = legs[0] && legs[0].from ? legs[0].from.name : '';
+    var endName = legs[legs.length - 1] && legs[legs.length - 1].to ? legs[legs.length - 1].to.name : '';
+    var totalMi = legs.reduce(function(s, l){ return s + l.dist; }, 0);
+    var totalMin = legs.reduce(function(s, l){
+      return s + (l.durMin != null ? l.durMin : l.dist / 28 * 60);
+    }, 0);
+    return {
+      mode: 'corridor',
+      start: startName,
+      end: endName,
+      stops: stops,
+      totalMiles: totalMi,
+      totalDriveMin: totalMin,
+      source: ca.source || 'estimated'
+    };
+  }
+  return null;
+}
+
+function explainRouteWithGemini(){
+  var statusEl = document.getElementById('rp-gemini-status');
+  var outEl    = document.getElementById('rp-gemini-output');
+  var btn      = document.getElementById('rp-gemini-btn');
+  if(!outEl || !statusEl){ return; }
+  if(typeof hasGeminiKey !== 'function' || !hasGeminiKey()){
+    outEl.innerHTML = '<div style="color:#92400e;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:10px 14px;font-size:12px">⚠ No Gemini API key configured. Admin → ⚙ Map v2 settings → paste your free <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style="color:#7030A0;text-decoration:underline">Google AI Studio key</a> to enable AI route explanations.</div>';
+    return;
+  }
+  if(typeof _bumpMapV2Quota === 'function' && !_bumpMapV2Quota('gemini')){
+    outEl.innerHTML = '<div style="color:#92400e;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:10px 14px;font-size:12px">⚠ Daily Gemini quota reached (' + (MAPV2_CONFIG.maxGeminiCallsPerDay || '?') + ' calls/day). Resets at midnight.</div>';
+    return;
+  }
+  var summary = _rpBuildRouteSummaryForLlm();
+  if(!summary){
+    outEl.innerHTML = '<div style="color:var(--muted);font-style:italic;padding:6px 0">Build a route first — then I can explain it.</div>';
+    return;
+  }
+  // Build the prompt — short, structured. Limited token budget keeps cost
+  // tiny and response snappy. Asks for 3 sentences max + 2 practical tips.
+  var stopsList = summary.stops.map(function(n, i){ return (i + 1) + '. ' + n; }).join('\n');
+  var prompt = 'You are helping a marketing rep at WCG Immediate Care plan their day driving to clinics in the Dallas-Fort Worth area.\n\n'
+    + 'Route summary:\n'
+    + 'Starting from: ' + (summary.start || 'Office') + '\n'
+    + (summary.end ? 'Ending at: ' + summary.end + '\n' : '')
+    + 'Stops in order:\n' + stopsList + '\n'
+    + 'Total drive distance: ' + summary.totalMiles.toFixed(1) + ' miles\n'
+    + 'Total drive time: ' + Math.round(summary.totalDriveMin) + ' minutes (' + summary.source + ')\n\n'
+    + 'Write a friendly, conversational 3-sentence explanation of this route for the marketing rep — '
+    + 'why this order makes sense geographically (mention areas/neighborhoods if you recognize the clinic names), '
+    + 'and 2 practical tips for the day (e.g. timing, traffic, what to bring, when to take lunch). '
+    + 'Use plain text, no markdown, no bullet symbols, no headers. Be concise — under 100 words total.';
+
+  btn.disabled = true;
+  btn.style.opacity = '.6';
+  statusEl.textContent = '⏳ Asking Gemini for a strategy…';
+  outEl.innerHTML = '';
+
+  var url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key='
+    + encodeURIComponent(MAPV2_CONFIG.geminiKey);
+  fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [ { parts: [ { text: prompt } ] } ],
+      generationConfig: { temperature: 0.4, maxOutputTokens: 300 }
+    })
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(json){
+    btn.disabled = false;
+    btn.style.opacity = '1';
+    statusEl.textContent = '';
+    if(json.error){
+      outEl.innerHTML = '<div style="color:#991b1b;background:#fee2e2;border:1px solid #fca5a5;border-radius:8px;padding:10px 14px;font-size:12px">✗ ' + (json.error.message || 'Gemini error').replace(/</g, '&lt;') + '</div>';
+      return;
+    }
+    var text = '';
+    try { text = json.candidates[0].content.parts.map(function(p){ return p.text || ''; }).join(''); }
+    catch(_){ text = ''; }
+    text = (text || '').trim();
+    if(!text){
+      outEl.innerHTML = '<div style="color:var(--muted);font-style:italic;padding:6px 0">Gemini returned an empty response. Try again in a moment.</div>';
+      return;
+    }
+    // Render the explanation
+    outEl.innerHTML = '<div style="background:linear-gradient(135deg,#faf5ff,#eef2ff);border:1px solid #c4b5fd;border-radius:10px;padding:12px 16px;font-size:13px;line-height:1.55;color:#3730a3"><div style="font-size:10px;font-weight:800;color:#5b21b6;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;display:flex;align-items:center;gap:6px">🤖 Gemini · route strategy</div>' + text.replace(/</g, '&lt;').replace(/\n/g, '<br>') + '</div>';
+  })
+  .catch(function(err){
+    btn.disabled = false;
+    btn.style.opacity = '1';
+    statusEl.textContent = '';
+    outEl.innerHTML = '<div style="color:#991b1b;background:#fee2e2;border:1px solid #fca5a5;border-radius:8px;padding:10px 14px;font-size:12px">✗ Network error: ' + String(err.message || err).replace(/</g, '&lt;') + '</div>';
+  });
+}
+window.explainRouteWithGemini = explainRouteWithGemini;
 window._rpRenderReviewPane = _rpRenderReviewPane;
 
 // Lock-in: add each picked visit to today's schedule, in order.
@@ -24852,6 +24993,17 @@ function _rpRenderRandomResultPane(legs, startName, pending, failed, source){
     + '</div>'
     + '<ol style="margin:0;padding-left:20px">' + rowsHtml + '</ol>'
     + statusHtml
+    // Per user 2026-05-24: Gemini AI explanation slot — only shown when
+    // the route is fully resolved (not pending or failed).
+    + (pending || failed ? '' :
+        '<div style="margin-top:12px">'
+      +   '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:6px">'
+      +     '<div style="font-size:11px;color:var(--muted)"><span id="rp-gemini-status"></span></div>'
+      +     '<button id="rp-gemini-btn" onclick="explainRouteWithGemini()" style="background:linear-gradient(135deg,#7030A0,#5b21b6);color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">🤖 Explain this route with AI</button>'
+      +   '</div>'
+      +   '<div id="rp-gemini-output"></div>'
+      + '</div>'
+      )
     + '<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">'
     +   '<button onclick="_rpRandomInsertIntoDay()" style="background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;border:none;border-radius:8px;padding:9px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">📅 Insert into today\'s schedule</button>'
     +   '<button onclick="_rpRandomReset()" style="background:#e5e7eb;color:#374151;border:none;border-radius:8px;padding:9px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:DM Sans,sans-serif">Reset picks</button>'
