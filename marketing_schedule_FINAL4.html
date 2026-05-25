@@ -21702,6 +21702,15 @@ var _AV_MAP_PICK_MODE = false;
 var _PIN_POPUP_SEQ = 0;   // unique id per popup so we can selectively show buttons
 
 function _avStartMapPick(){
+  // Per user 2026-05-25: don't allow the Add Visit pick-from-map flow
+  // to start while the Route Planner is open — those two map flows
+  // would step on each other. User must close the planner first.
+  if(typeof _isRoutePlannerOpen === 'function' && _isRoutePlannerOpen()){
+    if(typeof showToast === 'function'){
+      showToast('Close the Route Planner first to pick a visit from the map.');
+    }
+    return;
+  }
   _AV_MAP_PICK_MODE = true;
   // Hide the Add Visit modal so the map is visible
   var modal = document.getElementById('add-visit-modal');
@@ -21895,6 +21904,17 @@ window.renderAllBusinessPins = renderAllBusinessPins;
 // while browsing the map.
 function _addVisitFromMapPin(name, bizType){
   if(!name) return;
+  // Per user 2026-05-25: when the Route Planner drawer is open, the map's
+  // Add Visit flow is locked - user said "everything should be only
+  // focused on this function on the map." They have to close the planner
+  // before adding visits manually. Short-circuit + clear toast.
+  if(typeof _isRoutePlannerOpen === 'function' && _isRoutePlannerOpen()){
+    if(typeof showToast === 'function'){
+      showToast('Close the Route Planner first to add a visit manually.');
+    }
+    try { if(_DV_MAP && typeof _DV_MAP.closePopup === 'function') _DV_MAP.closePopup(); } catch(_){}
+    return;
+  }
   // Close any open Leaflet popup first so the modal isn't half-hidden behind it
   try { if(_DV_MAP && typeof _DV_MAP.closePopup === 'function') _DV_MAP.closePopup(); } catch(_){}
   // Look up additional context (city, doctor, spec) if we have it in the bank
@@ -23916,8 +23936,27 @@ function openRoutePlanner(){
   if(res){ res.style.display = 'none'; res.innerHTML = ''; }
 
   document.getElementById('route-planner-modal').style.display = 'flex';
+  // Per user 2026-05-25: when the planner is open, the rest of the map
+  // is locked - no Add Visit popups, no pick-from-map for the visit
+  // modal, no accidental clicks on other map functions. User explicitly
+  // said: "everything should be only focused on this function on the
+  // map. They cannot do that. If they wanna do that, they wanna cancel
+  // the whole thing." Setting the flag here; _isRoutePlannerOpen() is
+  // the canonical gate used by other handlers.
+  window._RP_LOCKED = true;
 }
 window.openRoutePlanner = openRoutePlanner;
+// Canonical check used by other map functions to decide whether to
+// short-circuit. Anything that would mutate the schedule, add a visit,
+// or open another picker must check this and toast back if locked.
+function _isRoutePlannerOpen(){
+  if(window._RP_LOCKED) return true;
+  // Defense in depth: also check the actual DOM in case _RP_LOCKED ever
+  // gets out of sync (e.g. browser back-button hides the modal).
+  var rpm = document.getElementById('route-planner-modal');
+  return !!(rpm && rpm.style.display !== 'none' && rpm.style.display !== '');
+}
+window._isRoutePlannerOpen = _isRoutePlannerOpen;
 
 // ── ROUTE-PLANNER ENDPOINT AUTOCOMPLETE (per user 2026-05-19) ───────────
 // When the user changes the area dropdown, clear the search input + hidden
@@ -24075,6 +24114,9 @@ function closeRoutePlanner(){
   if(typeof _rpDisarmRandomMap === 'function') _rpDisarmRandomMap();
   if(typeof _rpClearStartMarker === 'function') _rpClearStartMarker();
   document.getElementById('route-planner-modal').style.display = 'none';
+  // Per user 2026-05-25: release the map-function lock so Add Visit
+  // popups and other handlers work again.
+  window._RP_LOCKED = false;
 }
 window.closeRoutePlanner = closeRoutePlanner;
 
