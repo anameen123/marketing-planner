@@ -19878,8 +19878,12 @@ function _evRenderLeadSummary(row){
 // boxes refresh automatically because they read from the row's live state.
 function _evOpenSpendingFromEdit(){
   if(_evDi == null || _evRi == null) return;
-  if(typeof openSpendingModal === 'function'){
-    openSpendingModal(_evDi, _evRi);
+  // Per user 2026-05-25: previous code looked for `openSpendingModal`
+  // which never existed - the actual function is `openSpending`. Fix
+  // the lookup. (Bug surfaced during Fill & Confirm dialog test:
+  // clicking Change next to Spending toasted "unavailable in this build".)
+  if(typeof openSpending === 'function'){
+    openSpending(_evDi, _evRi);
   } else if(typeof showToast === 'function'){
     showToast('Spending editor is unavailable in this build.');
   }
@@ -45435,7 +45439,7 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
 
 
 <!-- Lead Status Modal -->
-<div id="lead-status-modal" style="display:none" class="modal-ov">
+<div id="lead-status-modal" style="display:none;z-index:9700" class="modal-ov">
   <div class="modal-box" style="width:560px;max-width:95vw">
     <div class="modal-top">📊 Update Lead Status <button onclick="closeLeadStatusModal()">&#215;</button></div>
     <div class="modal-body">
@@ -45468,7 +45472,7 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
        • Consent confirmed that those people agreed to be contacted.
      Notes go into the existing row.leadNotes field so they still show
      in the calendar's "Notes" column. ─────────────────────────────────── -->
-<div id="outreach-engagement-modal" style="display:none" class="modal-ov" tabindex="-1">
+<div id="outreach-engagement-modal" style="display:none;z-index:9700" class="modal-ov" tabindex="-1">
   <div class="modal-box" style="width:480px;max-width:95vw">
     <div class="modal-top" style="background:linear-gradient(135deg,#7030A0,#5b21b6);color:#fff">🏘 Outreach Engagement <button onclick="closeOutreachEngagementModal()" style="background:rgba(255,255,255,.18);color:#fff;border:none">&#215;</button></div>
     <div class="modal-body" style="padding:18px 22px">
