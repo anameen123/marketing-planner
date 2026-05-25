@@ -13686,6 +13686,13 @@ window.switchReferralSubtab = switchReferralSubtab;
 // State: which month is being viewed
 var RL_CAL_MONTH = null;       // { y: 2026, m: 4 (May) } — m is 0-indexed
 var RL_CAL_SELECTED_DATE = ''; // YYYY-MM-DD or empty
+// Per user 2026-05-24: multi-day select mode for the patient log calendar.
+// When ON, clicking a day toggles it in/out of RL_CAL_MULTI_DATES instead
+// of switching to single-day view. The detail panel then aggregates all
+// selected days. Switching OFF returns to single-day mode at whichever
+// day was last clicked (or the first multi-selected day if none).
+var RL_CAL_MULTI_MODE = false;
+var RL_CAL_MULTI_DATES = {};   // map iso → true
 window.RL_CAL_MONTH = RL_CAL_MONTH;
 
 // Navigate the calendar. delta=-1 prev, +1 next, 0 reset to today's month.
@@ -13850,7 +13857,16 @@ function _rlBuildCalDayCell(iso, day, isToday){
   else                                          { bg='#f0f9ff'; border='#bfdbfe'; }
 
   var todayMark = isToday ? 'box-shadow:0 0 0 2px #7030A0;' : '';
-  var selectedMark = (iso === RL_CAL_SELECTED_DATE) ? 'box-shadow:0 0 0 2px #1F3864;' : '';
+  // Per user 2026-05-24: highlight multi-selected days with the same ring,
+  // plus a small ✓ tick at top-right so it's obvious they're in the set.
+  var selectedMark = '';
+  if(RL_CAL_MULTI_MODE && RL_CAL_MULTI_DATES[iso]){
+    selectedMark = 'box-shadow:0 0 0 2px #7030A0;';
+  } else if(!RL_CAL_MULTI_MODE && iso === RL_CAL_SELECTED_DATE){
+    selectedMark = 'box-shadow:0 0 0 2px #1F3864;';
+  }
+  var multiTick = (RL_CAL_MULTI_MODE && RL_CAL_MULTI_DATES[iso])
+    ? '<div style="position:absolute;top:3px;right:3px;background:#7030A0;color:#fff;width:14px;height:14px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800">✓</div>' : '';
 
   // Day-total badge (the headline number) — shows TOTAL patients across all
   // facilities on this date. Replaces the old capture-rate %.
@@ -13873,13 +13889,23 @@ function _rlBuildCalDayCell(iso, day, isToday){
             + '</div>';
   });
 
-  return '<div onclick="_rlSelectCalDay(\'' + iso + '\')" style="min-height:80px;background:' + bg + ';border:1px solid ' + border + ';border-radius:8px;padding:6px 7px;cursor:pointer;transition:transform .08s;' + todayMark + selectedMark + '" onmouseover="this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.transform=\'\'">'
+  return '<div onclick="_rlSelectCalDay(\'' + iso + '\')" style="position:relative;min-height:80px;background:' + bg + ';border:1px solid ' + border + ';border-radius:8px;padding:6px 7px;cursor:pointer;transition:transform .08s;' + todayMark + selectedMark + '" onmouseover="this.style.transform=\'translateY(-1px)\'" onmouseout="this.style.transform=\'\'">'
+       + multiTick
        + content
        + '</div>';
 }
 
-// Click handler: select a day and show its detail panel
+// Click handler: select a day and show its detail panel.
+// Per user 2026-05-24: in multi-mode, click TOGGLES the day in the set
+// instead of switching to single-day view.
 function _rlSelectCalDay(iso){
+  if(RL_CAL_MULTI_MODE){
+    if(RL_CAL_MULTI_DATES[iso]) delete RL_CAL_MULTI_DATES[iso];
+    else RL_CAL_MULTI_DATES[iso] = true;
+    renderReferralCalendar();
+    _rlRenderMultiDayDetail();
+    return;
+  }
   RL_CAL_SELECTED_DATE = iso;
   renderReferralCalendar();      // re-render to highlight the new selection
   _rlRenderCalDayDetail(iso);
@@ -13888,6 +13914,117 @@ function _rlSelectCalDay(iso){
   if(det && det.scrollIntoView) det.scrollIntoView({ behavior:'smooth', block:'nearest' });
 }
 window._rlSelectCalDay = _rlSelectCalDay;
+
+// Toggle multi-day mode. Carries the current single-day selection into
+// the multi set if any, then re-renders. Switching OFF clears the multi
+// set and falls back to the most-recent single-day view.
+function _rlToggleMultiMode(){
+  RL_CAL_MULTI_MODE = !RL_CAL_MULTI_MODE;
+  if(RL_CAL_MULTI_MODE){
+    if(RL_CAL_SELECTED_DATE) RL_CAL_MULTI_DATES[RL_CAL_SELECTED_DATE] = true;
+  } else {
+    var keys = Object.keys(RL_CAL_MULTI_DATES);
+    RL_CAL_MULTI_DATES = {};
+    if(keys.length && !RL_CAL_SELECTED_DATE) RL_CAL_SELECTED_DATE = keys[0];
+  }
+  // Style the toggle button to reflect state
+  var btn = document.getElementById('rl-multi-toggle-btn');
+  if(btn){
+    if(RL_CAL_MULTI_MODE){
+      btn.style.background = '#7030A0';
+      btn.style.color = '#fff';
+      btn.style.border = '1px solid #7030A0';
+      btn.textContent = '✓ Multi-day ON';
+    } else {
+      btn.style.background = '#f1f5f9';
+      btn.style.color = 'var(--muted)';
+      btn.style.border = '1px solid var(--border)';
+      btn.textContent = '📌 Select more than one';
+    }
+  }
+  renderReferralCalendar();
+  if(RL_CAL_MULTI_MODE) _rlRenderMultiDayDetail();
+  else if(RL_CAL_SELECTED_DATE) _rlRenderCalDayDetail(RL_CAL_SELECTED_DATE);
+}
+window._rlToggleMultiMode = _rlToggleMultiMode;
+
+function _rlClearMultiDates(){
+  RL_CAL_MULTI_DATES = {};
+  renderReferralCalendar();
+  _rlRenderMultiDayDetail();
+}
+window._rlClearMultiDates = _rlClearMultiDates;
+
+// Aggregate detail for the multi-day set. Reuses the breakdown logic
+// from getReferralBreakdownForFacilityDate to sum totals across the
+// selected dates. Pure read-only — doesn't touch state.
+function _rlRenderMultiDayDetail(){
+  var det = document.getElementById('rl-cal-day-detail');
+  if(!det) return;
+  var isoList = Object.keys(RL_CAL_MULTI_DATES).sort();
+  if(isoList.length === 0){
+    det.style.display = 'none';
+    return;
+  }
+  det.style.display = '';
+  // Tally per facility across all selected dates
+  var teamTotal = 0, teamRef = 0, teamNS = 0;
+  var perFac = {};
+  if(typeof REFERRAL_FACILITIES !== 'undefined'){
+    REFERRAL_FACILITIES.forEach(function(f){ perFac[f.key] = { total:0, referral:0, noSurvey:0, label:f.label, short:f.short }; });
+  }
+  isoList.forEach(function(iso){
+    if(typeof REFERRAL_FACILITIES !== 'undefined'){
+      REFERRAL_FACILITIES.forEach(function(f){
+        var brk = (typeof getReferralBreakdownForFacilityDate === 'function')
+          ? getReferralBreakdownForFacilityDate(f.key, iso)
+          : { total:0, referral:0, noSurvey:0 };
+        perFac[f.key].total    += brk.total;
+        perFac[f.key].referral += brk.referral;
+        perFac[f.key].noSurvey += brk.noSurvey;
+        teamTotal += brk.total;
+        teamRef   += brk.referral;
+        teamNS    += brk.noSurvey;
+      });
+    }
+  });
+  // Render
+  function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+  var dayChips = isoList.map(function(iso){
+    var d = new Date(iso+'T12:00:00');
+    var lbl = d.toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' });
+    return '<span style="display:inline-flex;align-items:center;gap:5px;background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe;border-radius:8px;padding:3px 9px;font-size:11px;font-weight:700">'
+      + esc(lbl)
+      + '<button onclick="_rlSelectCalDay(\'' + iso + '\')" title="Remove this day" style="background:none;border:none;color:#1e40af;cursor:pointer;font-size:13px;padding:0 0 0 4px;line-height:1">×</button>'
+      + '</span>';
+  }).join('');
+  var facHtml = '';
+  Object.keys(perFac).forEach(function(k){
+    var f = perFac[k];
+    facHtml += '<div style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:10px 12px">'
+      + '<div style="font-size:11px;font-weight:700;color:var(--text)">🏥 ' + esc(f.label) + '</div>'
+      + '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:6px;gap:6px">'
+      +   '<div><div style="font-size:9px;color:var(--muted);text-transform:uppercase">Total</div><div style="font-size:18px;font-weight:800;font-family:DM Mono,monospace;color:#1F3864">' + f.total + '</div></div>'
+      +   '<div><div style="font-size:9px;color:#166534;text-transform:uppercase">📋 Ref</div><div style="font-size:18px;font-weight:800;font-family:DM Mono,monospace;color:#166534">' + f.referral + '</div></div>'
+      +   '<div><div style="font-size:9px;color:#d97706;text-transform:uppercase">⚪ NS</div><div style="font-size:18px;font-weight:800;font-family:DM Mono,monospace;color:#d97706">' + f.noSurvey + '</div></div>'
+      + '</div>'
+      + '</div>';
+  });
+  det.innerHTML =
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">'
+    +   '<div><div style="font-size:15px;font-weight:700;color:var(--text)">📅 ' + isoList.length + ' days selected</div></div>'
+    +   '<button onclick="_rlClearMultiDates()" style="background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer">Clear selection</button>'
+    + '</div>'
+    + '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px">' + dayChips + '</div>'
+    + '<div style="background:#1F3864;color:#fff;border-radius:10px;padding:14px 18px;margin-bottom:14px;display:flex;align-items:baseline;gap:24px;flex-wrap:wrap">'
+    +   '<div><div style="font-size:34px;font-weight:800;font-family:DM Mono,monospace">' + teamTotal + '</div><div style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;opacity:.8">Total patients</div></div>'
+    +   '<div><div style="font-size:24px;font-weight:800;font-family:DM Mono,monospace;color:#86efac">' + teamRef + '</div><div style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;opacity:.8">📋 Referrals (full survey)</div></div>'
+    +   '<div><div style="font-size:24px;font-weight:800;font-family:DM Mono,monospace;color:#fcd34d">' + teamNS + '</div><div style="font-size:10px;text-transform:uppercase;letter-spacing:.05em;opacity:.8">⚪ No-survey</div></div>'
+    + '</div>'
+    + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-bottom:14px">' + facHtml + '</div>'
+    + '<div style="font-size:11px;color:var(--muted);font-style:italic">Click another day on the calendar to add it. Click a selected day to remove it. Click "Clear selection" to reset, or toggle multi-day mode off above the calendar.</div>';
+}
+window._rlRenderMultiDayDetail = _rlRenderMultiDayDetail;
 
 // Render the drill-down panel: shift totals + logged entries for the date.
 function _rlRenderCalDayDetail(iso){
@@ -42038,6 +42175,10 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
         <div id="rl-cal-month-label" style="font-size:16px;font-weight:700;color:var(--text);min-width:170px;text-align:center"></div>
         <button onclick="navReferralCalendar(1)"  style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:13px;font-weight:700;cursor:pointer;color:#1F3864">▶</button>
         <button onclick="navReferralCalendar(0)"  style="background:#f1f5f9;border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:11px;font-weight:600;cursor:pointer;color:var(--muted);margin-left:6px">Today</button>
+        <!-- Per user 2026-05-24: multi-day select toggle. When ON, clicking
+             days TOGGLES them in/out of a set instead of single-day view.
+             Detail panel below aggregates the selected days. -->
+        <button id="rl-multi-toggle-btn" onclick="_rlToggleMultiMode()" style="background:#f1f5f9;border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer;color:var(--muted);margin-left:6px" title="Pick multiple days to combine their totals">📌 Select more than one</button>
       </div>
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:10px;color:var(--muted)">
         <span style="display:inline-flex;align-items:center;gap:4px"><span style="display:inline-block;width:10px;height:10px;background:#dcfce7;border:1px solid #86efac;border-radius:3px"></span>All with survey</span>
