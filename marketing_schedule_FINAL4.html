@@ -12026,8 +12026,103 @@ function logAdminVisitChange(action, row, dayDate, summary, before, after){
   if(orig && CURRENT_USER && orig === CURRENT_USER.name) return;
   var label = (row.clinic || 'a visit') + (dayDate ? ' on ' + dayDate : '');
   logAdminAction(action, label, orig, summary, before, after);
+  // Per user 2026-05-25: ALSO append a PERSISTENT entry to the row's own
+  // audit log. The transient ADMIN_NOTIFICATIONS feed purges after 7 days,
+  // but row.auditLog stays forever — that's the member's evidence in case
+  // of dispute. "Admin cannot quietly do something that will violate their
+  // rights."
+  if(!Array.isArray(row.auditLog)) row.auditLog = [];
+  row.auditLog.push({
+    ts: new Date().toISOString(),
+    admin: (CURRENT_USER && CURRENT_USER.name) || 'Admin',
+    action: action || 'Changed',
+    summary: summary || '',
+    before: before == null ? null : String(before),
+    after:  after  == null ? null : String(after),
+    originalAuthor: orig || ''
+  });
 }
 window.logAdminVisitChange = logAdminVisitChange;
+
+// Format an audit-log entry as a readable line. Used by the badge tooltip
+// and the row's expanded audit panel.
+function _formatAuditEntry(e){
+  var when = e.ts ? new Date(e.ts).toLocaleString() : '';
+  var who  = e.admin || 'Admin';
+  var act  = e.action || 'Changed';
+  var diff = '';
+  if(e.before != null && e.after != null && e.before !== e.after){
+    diff = ' (' + e.before + ' → ' + e.after + ')';
+  }
+  return when + ' · ' + who + ' · ' + act + diff;
+}
+window._formatAuditEntry = _formatAuditEntry;
+
+// Build the inline audit badge HTML for a row. Empty string if no entries.
+// Hover/click reveals the full log so members can see exactly what admin
+// changed and when.
+function _renderRowAuditBadge(row){
+  if(!row || !Array.isArray(row.auditLog) || row.auditLog.length === 0) return '';
+  var count = row.auditLog.length;
+  var lines = row.auditLog.map(_formatAuditEntry).join('\n');
+  // Title attr for hover tooltip (plain text). Click handler opens a modal
+  // with the same data but better formatting.
+  var safeTitle = lines.replace(/"/g, '&quot;').replace(/'/g, "&#39;");
+  return '<span class="row-audit-badge" '
+    +    'title="' + safeTitle + '" '
+    +    'onclick="event.stopPropagation();_showRowAuditLog(this.dataset.audit)" '
+    +    'data-audit="' + encodeURIComponent(JSON.stringify(row.auditLog)) + '" '
+    +    'style="display:inline-flex;align-items:center;gap:3px;background:#fef3c7;color:#92400e;border:1px solid #fcd34d;border-radius:10px;padding:1px 7px;font-size:9px;font-weight:700;cursor:pointer;margin-left:5px;vertical-align:middle">'
+    +    '✏ Modified by Admin' + (count > 1 ? ' (' + count + ')' : '')
+    +  '</span>';
+}
+window._renderRowAuditBadge = _renderRowAuditBadge;
+
+// Open a modal-style overlay showing the full audit log for a row. The log
+// is append-only on the row data itself — admin cannot wipe past entries
+// without editing the underlying JSON (which is admin-only access anyway).
+function _showRowAuditLog(encoded){
+  if(!encoded) return;
+  var entries;
+  try { entries = JSON.parse(decodeURIComponent(encoded)); }
+  catch(_){ entries = []; }
+  if(!entries || !entries.length) return;
+  // Build a minimal modal — uses the same backdrop pattern as other modals
+  var ov = document.createElement('div');
+  ov.className = 'modal-ov';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:9990;display:flex;align-items:center;justify-content:center;padding:20px';
+  ov.onclick = function(e){ if(e.target === ov) document.body.removeChild(ov); };
+  var box = document.createElement('div');
+  box.style.cssText = 'background:#fff;border-radius:10px;max-width:520px;width:100%;max-height:80vh;overflow:auto;box-shadow:0 16px 40px rgba(0,0,0,.25);font-family:DM Sans,sans-serif';
+  var header =
+      '<div style="background:linear-gradient(135deg,#92400e,#b45309);color:#fff;padding:14px 20px;display:flex;justify-content:space-between;align-items:center">'
+    + '  <div style="font-weight:700;font-size:14px">✏ Admin override history</div>'
+    + '  <button onclick="this.closest(\'.modal-ov\').remove()" style="background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.4);color:#fff;border-radius:5px;padding:3px 10px;font-size:13px;cursor:pointer;font-family:inherit">×</button>'
+    + '</div>';
+  var introBlurb =
+      '<div style="padding:10px 20px;background:#fef3c7;border-bottom:1px solid #fcd34d;color:#78350f;font-size:11px;line-height:1.5">'
+    + '  This is the <b>permanent</b> log of admin actions on this row. Append-only — admin cannot delete past entries. '
+    + '  Use this as your evidence if a change is disputed.'
+    + '</div>';
+  var listHtml = entries.map(function(e){
+    var when = e.ts ? new Date(e.ts).toLocaleString() : '';
+    var diff = '';
+    if(e.before != null && e.after != null && e.before !== e.after){
+      diff = '<div style="font-size:11px;color:#475569;margin-top:4px"><b>Before:</b> ' + String(e.before).replace(/</g,'&lt;')
+           + ' → <b>After:</b> ' + String(e.after).replace(/</g,'&lt;') + '</div>';
+    }
+    return '<div style="padding:10px 14px;border-bottom:1px solid #f1f5f9">'
+      +    '  <div style="font-size:12px;color:#0f172a"><b>' + (e.admin || 'Admin').replace(/</g,'&lt;') + '</b> · ' + (e.action || 'Changed').replace(/</g,'&lt;') + '</div>'
+      +    '  <div style="font-size:10px;color:var(--muted);margin-top:2px">' + when + (e.originalAuthor ? ' · originally by ' + e.originalAuthor.replace(/</g,'&lt;') : '') + '</div>'
+      +    (e.summary ? '<div style="font-size:11px;color:#475569;margin-top:4px;font-style:italic">' + e.summary.replace(/</g,'&lt;') + '</div>' : '')
+      +    diff
+      +  '</div>';
+  }).join('');
+  box.innerHTML = header + introBlurb + '<div>' + listHtml + '</div>';
+  ov.appendChild(box);
+  document.body.appendChild(ov);
+}
+window._showRowAuditLog = _showRowAuditLog;
 
 // ══════════════════════════════════════════════════════════════════════════════
 // ADMIN-ACTION NOTIFICATION FEED
@@ -28016,6 +28111,11 @@ function rowHTML(row,di,ri){
   var badges='';
   if(row.isMosque)badges='<div class="mosque-badge">&#128331; Jummah</div>';
   if(row.isRescheduled&&row.rescheduledFrom)badges+='<div class="resched-badge">&#8629; From '+fd(row.rescheduledFrom)+'</div>';
+  // Per user 2026-05-25: row-level admin-override audit badge. Persistent
+  // (never purged) so the member always has a record of what admin changed.
+  if(typeof _renderRowAuditBadge === 'function'){
+    badges += _renderRowAuditBadge(row);
+  }
   var num=row.isRescheduled?'<span style="color:#f59e0b;font-size:9px">&#8629;</span>':'<span style="color:var(--muted)">'+(ri+1)+'</span>';
 
   // -- AREA CELL --
