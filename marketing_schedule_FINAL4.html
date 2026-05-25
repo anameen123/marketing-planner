@@ -25740,17 +25740,221 @@ function _rpRwRestart(){
 }
 window._rpRwRestart = _rpRwRestart;
 
-// User clicked "Use this route" - push the route to today's schedule.
-// Per user 2026-05-25: reorder existing rows freely, insert new ones in
-// TSP order, preserve all existing data (status, member, spending, etc.).
+// User clicked "Use this route" - open the swap editor (Phase 3e) so they
+// can refine individual visits before confirming.
 function _rpRwPickRoute(idx){
   var result = window._RP_RW_LAST_RESULT;
   if(!result || !result.routes || !result.routes[idx]){
     if(typeof showToast === 'function') showToast('Route not found - try regenerating.');
     return;
   }
-  var route = result.routes[idx];
-  // Confirm over-budget proceed-anyway
+  // Deep clone so swaps don't mutate the source
+  var picked = JSON.parse(JSON.stringify(result.routes[idx]));
+  window._RP_RW_EDITING = {
+    route: picked,
+    swapsUsed: 0,
+    maxSwaps: Math.floor(picked.orderedStops.length / 2)   // 50% cap
+  };
+  _rpRwRenderSwapEditor();
+}
+window._rpRwPickRoute = _rpRwPickRoute;
+
+// ════════════════════════════════════════════════════════════════════════════
+// PHASE 3e — Swap visit editor (50% cap + live ETA)
+// ════════════════════════════════════════════════════════════════════════════
+function _rpRwRenderSwapEditor(){
+  var ed = window._RP_RW_EDITING;
+  if(!ed) return;
+  var box = document.getElementById('rp-random-results');
+  if(!box) return;
+  var route = ed.route;
+  var totalMin = _RP_RW.totalHours * 60;
+  var fits = route.fitsBudget ? '#16a34a' : '#f59e0b';
+  var stopsHtml = route.orderedStops.map(function(s, idx){
+    var d = (typeof daysSinceLastVisit === 'function') ? daysSinceLastVisit(s.name) : null;
+    var dotColor = (d == null || d >= 21) ? '#16a34a' : (d >= 14) ? '#eab308' : '#ef4444';
+    var dStr = (d == null) ? 'new' : (d + 'd');
+    var existingBadge = s.isExisting ? ' <span style="background:#7030A0;color:#fff;padding:1px 5px;border-radius:3px;font-size:9px;font-weight:700">EXISTING</span>' : '';
+    var swapBadge = s.wasSwapped ? ' <span style="background:#f59e0b;color:#fff;padding:1px 5px;border-radius:3px;font-size:9px;font-weight:700">SWAPPED</span>' : '';
+    // Can't swap existing visits (they're locked to today's schedule)
+    var canSwap = !s.isExisting && (ed.swapsUsed < ed.maxSwaps || s.wasSwapped);
+    var swapBtn = canSwap
+      ? '<button onclick="_rpRwOpenSwapPanel(' + idx + ')" style="background:#fff;border:1px solid #7030A0;color:#7030A0;border-radius:4px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer">⇄ Swap</button>'
+      : (s.isExisting
+          ? '<span style="font-size:9px;color:var(--muted);font-style:italic">locked</span>'
+          : '<span style="font-size:9px;color:var(--muted);font-style:italic">cap reached</span>');
+    return '<div id="rp-rw-stop-' + idx + '" style="display:flex;align-items:center;gap:6px;padding:6px 4px;font-size:11px;border-bottom:1px solid #f1f5f9">'
+      +   '<span style="display:inline-block;width:22px;height:22px;background:#1F3864;color:#fff;border-radius:50%;text-align:center;line-height:22px;font-size:11px;font-weight:700">' + (idx+1) + '</span>'
+      +   '<span style="display:inline-block;width:10px;height:10px;background:' + dotColor + ';border-radius:50%"></span>'
+      +   '<span style="flex:1;color:#0f172a">' + s.name.replace(/</g,'&lt;') + existingBadge + swapBadge + '</span>'
+      +   '<span style="color:var(--muted);font-size:10px;margin-right:4px">' + dStr + '</span>'
+      +   swapBtn
+      + '</div>'
+      + '<div id="rp-rw-swap-panel-' + idx + '" style="display:none"></div>';
+  }).join('');
+  box.innerHTML =
+      '<div style="background:#fff;border:2px solid #7030A0;border-radius:8px;padding:14px;margin-bottom:10px">'
+    + '  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
+    + '    <div style="font-weight:700;color:#1F3864;font-size:13px">⇄ Refine your route</div>'
+    + '    <div style="font-size:11px;color:var(--muted)">Swaps used: <b style="color:#7030A0">' + ed.swapsUsed + '/' + ed.maxSwaps + '</b></div>'
+    + '  </div>'
+    + '  <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:11px;margin-bottom:10px;color:#475569">'
+    + '    <span>🚗 <b id="rp-rw-edit-drive">' + Math.round(route.totalDriveMin) + '</b> min drive</span>'
+    + '    <span>⏱ <b id="rp-rw-edit-total" style="color:' + fits + '">' + route.totalRouteMin + '</b> / ' + totalMin + ' min</span>'
+    + '    <span>📏 <b id="rp-rw-edit-miles">' + route.totalMiles.toFixed(1) + '</b> mi</span>'
+    + '    <span>🟢 <span id="rp-rw-edit-mix">' + route.mix.green + ' · 🟡 ' + route.mix.yellow + (route.mix.red ? ' · 🔴 ' + route.mix.red : '') + '</span></span>'
+    + '  </div>'
+    + (route.fitsBudget ? '' :
+        '  <div id="rp-rw-edit-warn" style="background:#fef3c7;border:1px solid #fcd34d;border-radius:6px;padding:8px;margin-bottom:8px;color:#92400e;font-size:11px">'
+      + '    <b>⚠️ Over budget</b> — you can still proceed but expect to finish over time.'
+      + '  </div>')
+    + '  <div style="background:#f8fafc;border-radius:6px;padding:6px 8px">' + stopsHtml + '</div>'
+    + '  <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">'
+    + '    <button onclick="_rpRwBackToRoutes()" style="background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:7px 12px;font-size:11px;font-weight:600;cursor:pointer">← Back to routes</button>'
+    + '    <button onclick="_rpRwConfirmRoute()" style="background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;border:none;border-radius:6px;padding:8px 22px;font-size:12px;font-weight:700;cursor:pointer">✓ Confirm + push to schedule</button>'
+    + '  </div>'
+    + '</div>';
+}
+window._rpRwRenderSwapEditor = _rpRwRenderSwapEditor;
+
+// Open the inline swap panel for visit at `idx`. Shows up to 5 alternatives
+// (green priority, then yellow, then red as last resort), each with the
+// recency dot + distance from the current position in the route.
+function _rpRwOpenSwapPanel(idx){
+  var ed = window._RP_RW_EDITING;
+  if(!ed) return;
+  var route = ed.route;
+  var stop = route.orderedStops[idx];
+  if(!stop || stop.isExisting) return;   // safety
+  // Build a pool excluding: start + all current stops in route
+  var excludeSet = {};
+  excludeSet[_RP_RW.start.name] = true;
+  route.orderedStops.forEach(function(s){ excludeSet[s.name] = true; });
+  // Score from the CURRENT stop's coord (find nearby alternates)
+  var pool = _rpRwBuildCandidatePool(stop.coord, excludeSet);
+  // Bucket by recency, take top 2-3 green, then yellow, then red - cap at 5 total
+  var green = pool.filter(function(c){ return c.recencyScore === 300; }).slice(0, 3);
+  var yellow = pool.filter(function(c){ return c.recencyScore === 200; }).slice(0, 2);
+  var red = pool.filter(function(c){ return c.recencyScore === 100; }).slice(0, 1);
+  var alternates = green.concat(yellow).concat(red).slice(0, 5);
+  var panel = document.getElementById('rp-rw-swap-panel-' + idx);
+  if(!panel) return;
+  if(alternates.length === 0){
+    panel.style.display = 'block';
+    panel.innerHTML = '<div style="background:#fef3c7;padding:8px;border-radius:6px;font-size:11px;color:#92400e">No nearby alternatives found.</div>';
+    return;
+  }
+  var html = '<div style="background:#fff;border:1px solid #7030A0;border-radius:6px;padding:8px;margin:4px 0">'
+    + '  <div style="font-size:10px;font-weight:700;color:#7030A0;margin-bottom:6px">Nearby alternatives (green first)</div>';
+  alternates.forEach(function(a){
+    var dotColor = a.recencyScore === 300 ? '#16a34a' : a.recencyScore === 200 ? '#eab308' : '#ef4444';
+    var dStr = (a.days == null) ? 'new' : (a.days + 'd');
+    var safeName = a.name.replace(/'/g, "&#39;").replace(/</g, '&lt;');
+    html += '<div style="display:flex;align-items:center;gap:6px;padding:4px 4px;font-size:11px;border-bottom:1px solid #f1f5f9;cursor:pointer" onclick="_rpRwDoSwap(' + idx + ',\'' + safeName + '\')" onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'\'">'
+      + '<span style="display:inline-block;width:8px;height:8px;background:' + dotColor + ';border-radius:50%"></span>'
+      + '<span style="flex:1;color:#0f172a">' + safeName + '</span>'
+      + '<span style="color:var(--muted);font-size:10px;margin-right:4px">' + a.miles.toFixed(1) + ' mi · ' + dStr + '</span>'
+      + '<button onclick="event.stopPropagation();_rpRwDoSwap(' + idx + ',\'' + safeName + '\')" style="background:#16a34a;color:#fff;border:none;border-radius:4px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer">Use</button>'
+      + '</div>';
+  });
+  html += '<div style="text-align:right;margin-top:4px"><button onclick="_rpRwCloseSwapPanel(' + idx + ')" style="background:transparent;border:none;color:var(--muted);font-size:10px;cursor:pointer">Cancel</button></div>';
+  html += '</div>';
+  panel.style.display = 'block';
+  panel.innerHTML = html;
+}
+window._rpRwOpenSwapPanel = _rpRwOpenSwapPanel;
+
+function _rpRwCloseSwapPanel(idx){
+  var panel = document.getElementById('rp-rw-swap-panel-' + idx);
+  if(panel){ panel.style.display = 'none'; panel.innerHTML = ''; }
+}
+window._rpRwCloseSwapPanel = _rpRwCloseSwapPanel;
+
+// Execute the swap, recompute ETA via Google Directions, re-render editor.
+function _rpRwDoSwap(idx, newName){
+  var ed = window._RP_RW_EDITING;
+  if(!ed) return;
+  var route = ed.route;
+  var stop = route.orderedStops[idx];
+  if(!stop || stop.isExisting) return;
+  // Build the new stop object
+  var newCoord = (typeof getCoordForBusiness === 'function') ? getCoordForBusiness(newName) : null;
+  if(!newCoord){
+    if(typeof showToast === 'function') showToast('No coords for ' + newName);
+    return;
+  }
+  // Increment swaps used IF this stop wasn't already swapped
+  if(!stop.wasSwapped) ed.swapsUsed++;
+  // Replace the stop
+  route.orderedStops[idx] = {
+    name: newName, coord: newCoord,
+    bizType: stop.bizType,
+    isExisting: false, wasSwapped: true
+  };
+  // Recompute drive time via Google Directions (or haversine fallback)
+  var waypoints = [_RP_RW.start.coord].concat(route.orderedStops.map(function(s){ return s.coord; })).concat([_RP_RW.start.coord]);
+  var googleAvailable = (typeof hasMapsKey === 'function') && hasMapsKey();
+  function applyResult(legs, source){
+    var totalDriveMin = legs.reduce(function(s, l){ return s + l.durMin; }, 0);
+    var totalMiles = legs.reduce(function(s, l){ return s + l.distMi; }, 0);
+    route.totalDriveMin = totalDriveMin;
+    route.totalMiles = totalMiles;
+    route.legs = legs;
+    route.source = source;
+    var stopTotal = _RP_RW.numVisits * _RP_RW.stopMinutes;
+    route.totalRouteMin = Math.round(totalDriveMin + stopTotal);
+    route.fitsBudget = (route.totalRouteMin <= _RP_RW.totalHours * 60);
+    // Recompute mix
+    var greenN = 0, yellowN = 0, redN = 0;
+    route.orderedStops.forEach(function(s){
+      var d = (typeof daysSinceLastVisit === 'function') ? daysSinceLastVisit(s.name) : null;
+      if(d == null || d >= 21) greenN++;
+      else if(d >= 14) yellowN++;
+      else redN++;
+    });
+    route.mix = { green: greenN, yellow: yellowN, red: redN };
+    _rpRwRenderSwapEditor();
+    if(typeof showToast === 'function') showToast('Swapped → ' + newName + '. ETA updated.');
+  }
+  if(googleAvailable){
+    _rpFetchGoogleRoute(waypoints).then(function(res){
+      if(res && res.legs){
+        applyResult(res.legs, 'google');
+      } else {
+        // Fallback to haversine on Google failure
+        var legs = [];
+        for(var i = 0; i < waypoints.length - 1; i++){
+          var miles = _rpHaversineMiles(waypoints[i], waypoints[i+1]);
+          legs.push({ distMi: miles, durMin: (miles * 1.4 / 30) * 60 });
+        }
+        applyResult(legs, 'haversine-fallback');
+      }
+    });
+  } else {
+    var legs = [];
+    for(var i = 0; i < waypoints.length - 1; i++){
+      var miles = _rpHaversineMiles(waypoints[i], waypoints[i+1]);
+      legs.push({ distMi: miles, durMin: (miles * 1.4 / 30) * 60 });
+    }
+    applyResult(legs, 'haversine');
+  }
+}
+window._rpRwDoSwap = _rpRwDoSwap;
+
+function _rpRwBackToRoutes(){
+  window._RP_RW_EDITING = null;
+  // Re-render the last result if we still have it
+  if(window._RP_RW_LAST_RESULT && typeof _rpRwRenderRoutes === 'function'){
+    _rpRwRenderRoutes(window._RP_RW_LAST_RESULT, window._RP_RW_BATCH === 2);
+  }
+}
+window._rpRwBackToRoutes = _rpRwBackToRoutes;
+
+// Final confirmation - push the (possibly swap-edited) route to the schedule.
+function _rpRwConfirmRoute(){
+  var ed = window._RP_RW_EDITING;
+  if(!ed) return;
+  var route = ed.route;
   if(!route.fitsBudget){
     var over = route.totalRouteMin - (_RP_RW.totalHours * 60);
     var ok = window.confirm('⚠️ This route is ' + over + ' min over your time budget.\n\n'
@@ -25758,10 +25962,10 @@ function _rpRwPickRoute(idx){
       + 'Proceed anyway?');
     if(!ok) return;
   }
-  // Push to schedule (Phase 3e will offer a swap editor first; for now go direct)
   _rpRwPushRouteToSchedule(route);
+  window._RP_RW_EDITING = null;
 }
-window._rpRwPickRoute = _rpRwPickRoute;
+window._rpRwConfirmRoute = _rpRwConfirmRoute;
 
 // Push a finalized route into today's S.days[di].rows. Preserves data for
 // existing rows by matching on clinic name. New stops get fresh rows.
