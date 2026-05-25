@@ -22839,7 +22839,8 @@ function _rpFetchGoogleRoute(waypoints){
     .then(function(r){ clearTimeout(to); return r.ok ? r.json() : null; })
     .then(function(j){
       if(!j || j.status !== 'OK' || !j.routes || !j.routes[0]) return null;
-      var legs = j.routes[0].legs.map(function(l){
+      var route = j.routes[0];
+      var legs = route.legs.map(function(l){
         // duration_in_traffic when available (live), else plain duration
         var dur = (l.duration_in_traffic && l.duration_in_traffic.value) || (l.duration && l.duration.value) || 0;
         return {
@@ -22849,7 +22850,14 @@ function _rpFetchGoogleRoute(waypoints){
       });
       var totalDistMi = legs.reduce(function(s, l){ return s + l.distMi; }, 0);
       var totalDurMin = legs.reduce(function(s, l){ return s + l.durMin; }, 0);
-      var result = { legs:legs, totalDistMi:totalDistMi, totalDurMin:totalDurMin, source:'google' };
+      // Per user 2026-05-24: decode the overview_polyline so we can draw
+      // the ACTUAL road-following path on the map (curves through roads
+      // and intersections) instead of straight lines between waypoints.
+      var path = [];
+      if(route.overview_polyline && route.overview_polyline.points && typeof decodePolyline === 'function'){
+        try { path = decodePolyline(route.overview_polyline.points); } catch(_){ path = []; }
+      }
+      var result = { legs:legs, totalDistMi:totalDistMi, totalDurMin:totalDurMin, path:path, source:'google' };
       _RP_GOOGLE_CACHE[cacheKey] = result;
       return result;
     })
@@ -22866,8 +22874,11 @@ function _rpFetchOsrmRoute(waypoints){
   if(_RP_OSRM_CACHE[cacheKey]) return Promise.resolve(_RP_OSRM_CACHE[cacheKey]);
   // OSRM expects lng,lat (NOT lat,lng — common pitfall)
   var coordsParam = waypoints.map(function(w){ return w.lng + ',' + w.lat; }).join(';');
+  // Per user 2026-05-24: ask OSRM for the polyline geometry so we can
+  // draw the real road path. overview=simplified gives us a manageable
+  // ~100-300 point path (the full = "full" mode would balloon to 1000+).
   var url = 'https://router.project-osrm.org/route/v1/driving/' + coordsParam
-          + '?overview=false&steps=false&annotations=false';
+          + '?overview=simplified&steps=false&annotations=false&geometries=polyline';
   // 8-second timeout — public demo can be slow under load. If it doesn't
   // respond by then, we fall back gracefully.
   var ctrl = new AbortController();
@@ -22876,7 +22887,8 @@ function _rpFetchOsrmRoute(waypoints){
     .then(function(r){ clearTimeout(to); return r.ok ? r.json() : null; })
     .then(function(j){
       if(!j || !j.routes || !j.routes[0] || !j.routes[0].legs) return null;
-      var legs = j.routes[0].legs.map(function(l){
+      var route = j.routes[0];
+      var legs = route.legs.map(function(l){
         return {
           distMi: (l.distance || 0) / 1609.344,
           durMin: (l.duration || 0) / 60
@@ -22884,7 +22896,13 @@ function _rpFetchOsrmRoute(waypoints){
       });
       var totalDistMi = legs.reduce(function(s, l){ return s + l.distMi; }, 0);
       var totalDurMin = legs.reduce(function(s, l){ return s + l.durMin; }, 0);
-      var result = { legs:legs, totalDistMi:totalDistMi, totalDurMin:totalDurMin, source:'osrm' };
+      // Per user 2026-05-24: OSRM returns an encoded polyline same format
+      // as Google. Decode + return so the caller can draw the real path.
+      var path = [];
+      if(route.geometry && typeof decodePolyline === 'function'){
+        try { path = decodePolyline(route.geometry); } catch(_){ path = []; }
+      }
+      var result = { legs:legs, totalDistMi:totalDistMi, totalDurMin:totalDurMin, path:path, source:'osrm' };
       _RP_OSRM_CACHE[cacheKey] = result;
       return result;
     })
@@ -22930,6 +22948,27 @@ function _rpFinalizeSmart(){
       }
     });
     _rpRenderReviewPane(legs, /*pending*/ false, /*routingFailed*/ false, /*source*/ res.source);
+    // Per user 2026-05-24: replace the straight-line dashed purple polyline
+    // with the actual Google/OSRM road-following path so the map shows the
+    // real driving route.
+    if(res.path && res.path.length >= 2 && _DV_MAP && typeof L !== 'undefined'){
+      try {
+        if(_DV_ROUTELINE){ _DV_MAP.removeLayer(_DV_ROUTELINE); }
+        var pathPts = res.path.map(function(p){ return [p.lat, p.lng]; });
+        _DV_ROUTELINE = L.polyline(pathPts, {
+          color: '#7030A0',
+          weight: 5,
+          opacity: 0.9,
+          lineJoin: 'round',
+          lineCap: 'round'
+        }).addTo(_DV_MAP);
+        // Re-fit so the full real path is visible (it may extend slightly
+        // beyond the straight-line bbox).
+        var b = L.latLngBounds(pathPts);
+        if(_DV_CORRIDOR) b.extend(_DV_CORRIDOR.getBounds());
+        _DV_MAP.fitBounds(b.pad(0.08), { maxZoom: 13 });
+      } catch(_){}
+    }
   });
 }
 window._rpFinalizeSmart = _rpFinalizeSmart;
@@ -24623,7 +24662,7 @@ function _rpRandomGenerateRoute(){
   });
   // Render quick — pending = true so the user sees "fetching..."
   _rpRenderRandomResultPane(legs, startName, /*pending*/ true);
-  // Draw the polyline on the map immediately
+  // Draw the polyline on the map immediately (straight lines as a stand-in)
   _rpRandomDrawOnMap(coords, order, startName);
   // Fetch real driving distances + traffic-aware durations from Google
   // (with OSRM fallback). Same router the Corridor mode uses.
@@ -24641,6 +24680,12 @@ function _rpRandomGenerateRoute(){
         }
       });
       _rpRenderRandomResultPane(legs, startName, /*pending*/ false, /*failed*/ false, res.source);
+      // Per user 2026-05-24: redraw the polyline with the REAL road path
+      // returned by Google/OSRM — solid blue line that follows actual roads
+      // instead of straight lines between stops.
+      if(res.path && res.path.length >= 2){
+        _rpRandomDrawOnMap(coords, order, startName, res.path);
+      }
     });
   } else {
     _rpRenderRandomResultPane(legs, startName, /*pending*/ false, /*failed*/ true);
@@ -24720,15 +24765,28 @@ window._rpRenderRandomResultPane = _rpRenderRandomResultPane;
 
 // Draw the optimized route on the day map as a blue dashed polyline with
 // numbered markers showing visit order.
-function _rpRandomDrawOnMap(coords, order, startName){
+function _rpRandomDrawOnMap(coords, order, startName, realPath){
   if(!_DV_MAP || typeof L === 'undefined') return;
   if(_DV_ROUTELINE){ _DV_MAP.removeLayer(_DV_ROUTELINE); _DV_ROUTELINE = null; }
   if(_RP_HIGHLIGHTS) _RP_HIGHLIGHTS.clearLayers();
-  // Build polyline points in route order
+  // Waypoint list in route order — used for markers + as the straight-line
+  // fallback path when Google's geometry isn't available yet.
   var pts = order.map(function(idx){ return [coords[idx].lat, coords[idx].lng]; });
-  _DV_ROUTELINE = L.polyline(pts, {
-    color: '#3b82f6', weight: 4, opacity: 0.85,
-    dashArray: '8, 6', lineJoin: 'round', lineCap: 'round'
+  // Per user 2026-05-24: if we got the actual road-network polyline from
+  // Google (or OSRM), draw THAT instead of straight lines between stops.
+  // Solid blue line that hugs real roads. Falls back to dashed-straight
+  // when realPath is empty (during the initial render before fetch resolves).
+  var hasRealPath = Array.isArray(realPath) && realPath.length >= 2;
+  var pathPts = hasRealPath
+    ? realPath.map(function(p){ return [p.lat, p.lng]; })
+    : pts;
+  _DV_ROUTELINE = L.polyline(pathPts, {
+    color: '#3b82f6',
+    weight: hasRealPath ? 5 : 4,
+    opacity: 0.9,
+    dashArray: hasRealPath ? null : '8, 6',
+    lineJoin: 'round',
+    lineCap: 'round'
   }).addTo(_DV_MAP);
   // Drop numbered markers at each stop (S for start, then 1, 2, 3...)
   for(var i = 0; i < order.length; i++){
@@ -24748,8 +24806,12 @@ function _rpRandomDrawOnMap(coords, order, startName){
       _RP_HIGHLIGHTS.addLayer(marker);
     }
   }
-  // Fit map to the route
-  try { _DV_MAP.fitBounds(L.latLngBounds(pts).pad(0.15), { maxZoom: 13 }); } catch(_){}
+  // Fit map to the broader of the two: real path bounds if we have them,
+  // otherwise the stop-waypoint bounds.
+  try {
+    var fitTo = hasRealPath ? pathPts : pts;
+    _DV_MAP.fitBounds(L.latLngBounds(fitTo).pad(0.15), { maxZoom: 13 });
+  } catch(_){}
 }
 window._rpRandomDrawOnMap = _rpRandomDrawOnMap;
 
