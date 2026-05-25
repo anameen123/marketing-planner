@@ -20919,10 +20919,15 @@ var MAPV2_QUOTA_LS_KEY  = 'wcg_mapv2_quota_v1';
 // rotate it in Google Cloud — old key dies instantly, new key drops in
 // here on next deploy.
 var MAPV2_DEFAULT_CONFIG = {
-  mapsKey:         'AIzaSyBeVvay_-N4DfWHeqBqfOT17DJ1-zVgUmY',     // wcg-planner-key — referrer-restricted
+  mapsKey:         'AIzaSyBeVvay_-N4DfWHeqBqfOT17DJ1-zVgUmY',     // client-side legacy key (not used by /api/directions proxy)
   geminiKey:       '',     // Google AI Studio Gemini key — admin pastes via ⚙ Map v2 settings (still per-browser)
-  // Hard daily caps — JS-side enforcement on top of Google billing alerts.
-  maxMapsCallsPerDay:    500,
+  // Hard daily caps — JS-side enforcement. Per user 2026-05-25: lowered
+  // from 500 to 250 so monthly cap is 7,500 (250 × 30), comfortably under
+  // both the Google Cloud Free Trial threshold (10K/SKU/mo, never charged)
+  // and the hard Google quota of 9,000/mo we set on the Directions API.
+  // Three layers of safety: planner cap → Google API quota → trial mode
+  // (charges literally impossible without manual upgrade to paid).
+  maxMapsCallsPerDay:    250,
   maxGeminiCallsPerDay:  100,
   // Master kill switch — admin can disable Map v2 entirely without removing keys.
   enabled:         true
