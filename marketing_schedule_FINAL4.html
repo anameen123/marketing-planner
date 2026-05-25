@@ -31533,6 +31533,21 @@ function switchTab(tab, opts){
     return;
   }
   window.scrollTo(0,0);
+  // ── AUTO-CLOSE STICKY DIALOGS ON TAB SWITCH (per user 2026-05-25) ────
+  // The Route Planner is a right-anchored drawer (pointer-events:none on
+  // the wrapper), so clicking another sidebar tab does NOT pass through
+  // any backdrop and the drawer just hangs there over the new tab. User
+  // complaint: "I can actually click on any other tab, and it's still
+  // gonna be there. Fix this, man." Close any sticky dialog before the
+  // tab swap so we land on a clean page. modal-ov modals get the dirty
+  // guard above; this branch is for the non-overlay drawers that bypass
+  // it.
+  try {
+    var rpm = document.getElementById('route-planner-modal');
+    if(rpm && rpm.style.display !== 'none' && typeof closeRoutePlanner === 'function'){
+      closeRoutePlanner();
+    }
+  } catch(_){}
   // ── PULL-ON-NAV (per user 2026-05-20 prototype-feel fix) ─────────────
   // Every tab/page switch fires a cheap tick check. If the tick file moved,
   // the tick poller cascades into a full re-fetch of changed keys. This
@@ -44234,8 +44249,17 @@ window.addEventListener('resize', function(){
   }
 });
 // Escape key closes the drawer too
+// Per user 2026-05-25: also close the Route Planner drawer (right-anchored
+// pointer-events:none wrapper means clicks fall through, so Esc is the
+// quick exit). Order matters — close the route planner first so a single
+// Esc doesn't have to be hit twice.
 document.addEventListener('keydown', function(e){
   if(e.key === 'Escape'){
+    var rpm = document.getElementById('route-planner-modal');
+    if(rpm && rpm.style.display !== 'none' && typeof closeRoutePlanner === 'function'){
+      closeRoutePlanner();
+      return;
+    }
     var d = document.getElementById('member-drawer');
     if(d && d.classList.contains('is-open')) toggleMemberDrawer(false);
   }
