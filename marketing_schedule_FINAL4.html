@@ -2555,13 +2555,16 @@ body.role-front_desk #referrals-view {
         </div>
       </div>
 
-      <!-- Member assignment (OPTIONAL) -->
-      <div class="kpi-input-row" style="margin-top:14px;padding:10px 12px;background:#f0f4ff;border:1px solid #c7d2fe;border-radius:8px">
-        <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Assign to Member (optional)</label>
+      <!-- Member assignment (admin-only — non-admins are auto-assigned to themselves).
+           Per user 2026-05-25: members don't need to pick themselves; their identity
+           is implicit from their sign-in. This wrapper is hidden when isAdmin() is
+           false, and the av-member value is force-set to CURRENT_USER.name in JS. -->
+      <div id="av-member-row" class="kpi-input-row" style="margin-top:14px;padding:10px 12px;background:#f0f4ff;border:1px solid #c7d2fe;border-radius:8px">
+        <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Assign to Member (admin only)</label>
         <select id="av-member" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;outline:none;background:#fff;box-sizing:border-box">
           <option value="">-- Leave unassigned (assign later from the schedule) --</option>
         </select>
-        <div style="font-size:10px;color:var(--muted);margin-top:4px;font-style:italic">No need to pick a member now â€” anyone can self-assign later</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:4px;font-style:italic">Admin only. Members are auto-assigned to themselves.</div>
       </div>
 
       <!-- Notes -->
@@ -19204,7 +19207,11 @@ function findExistingVisitOnDay(di, clinicName){
   var rows = S.days[di].rows;
   for(var i = 0; i < rows.length; i++){
     var r = rows[i];
-    if(r && r.clinic && r.clinic.toLowerCase() === lower) return { di: di, ri: i, row: r };
+    // Phase 9b: skip canceled rows. A canceled visit doesn't block adding the
+    // same clinic again on the same day (matches the new same-week behavior).
+    if(r && r.clinic && r.status !== 'Canceled' && r.clinic.toLowerCase() === lower){
+      return { di: di, ri: i, row: r };
+    }
   }
   return null;
 }
@@ -20561,7 +20568,28 @@ function addVisit(di){
   var suggestBoxAdd = document.getElementById('av-name-suggest');
   if(suggestBoxAdd){ suggestBoxAdd.style.display = 'none'; suggestBoxAdd.innerHTML = ''; }
   var memSel = document.getElementById('av-member');
-  if(memSel) memSel.value = '';
+  // Per user 2026-05-25 (Phase 9b): members don't pick themselves — their identity
+  // is implicit from sign-in. Hide the assignment row for non-admin and force-set
+  // the value to CURRENT_USER.name so the row push always lands with a member.
+  var _isAdminAv = (typeof isAdmin === 'function' && isAdmin());
+  var memRow = document.getElementById('av-member-row');
+  if(memRow) memRow.style.display = _isAdminAv ? 'block' : 'none';
+  if(!_isAdminAv && memSel && CURRENT_USER && CURRENT_USER.name){
+    // Ensure the option for the current user exists before selecting it.
+    var _hasMyOpt = false;
+    for(var _mi = 0; _mi < memSel.options.length; _mi++){
+      if(memSel.options[_mi].value === CURRENT_USER.name){ _hasMyOpt = true; break; }
+    }
+    if(!_hasMyOpt){
+      var _myOpt = document.createElement('option');
+      _myOpt.value = CURRENT_USER.name;
+      _myOpt.textContent = CURRENT_USER.name;
+      memSel.appendChild(_myOpt);
+    }
+    memSel.value = CURRENT_USER.name;
+  } else if(memSel){
+    memSel.value = '';
+  }
   // Default type = clinic
   var def = document.querySelector('input[name="av-type"][value="clinic"]');
   if(def) def.checked = true;
@@ -25217,7 +25245,10 @@ function _rpScheduledClinicsForActiveDay(){
     var day = S.days && S.days[S.currentDay];
     if(!day || !Array.isArray(day.rows)) return set;
     day.rows.forEach(function(r){
-      if(r && r.clinic) set[r.clinic] = true;
+      // Phase 9b: canceled rows are dead — don't count them toward dedupe.
+      // If a member deletes/cancels a visit, the same clinic should be free
+      // to add again without the "already this week" warning.
+      if(r && r.clinic && r.status !== 'Canceled') set[r.clinic] = true;
     });
   } catch(_){}
   return set;
@@ -25264,6 +25295,9 @@ function _rpScheduledClinicsForActiveWeek(dateStr){
       if(day.date < monKey || day.date > sunKey) return;
       day.rows.forEach(function(r){
         if(!r || !r.clinic) return;
+        // Phase 9b: skip canceled rows — once canceled/deleted, the same
+        // clinic should be re-addable that week without a warning.
+        if(r.status === 'Canceled') return;
         if(out[r.clinic]) return;   // first-seen wins (deterministic dedupe info)
         out[r.clinic] = { date: day.date, member: r.member || '' };
       });
@@ -28834,6 +28868,13 @@ function confirmAddVisit(){
   var phone   = (document.getElementById('av-phone').value||'').trim();
   var address = (document.getElementById('av-address').value||'').trim();
   var member  = document.getElementById('av-member').value || '';
+  // Phase 9b: defense in depth — non-admin always lands as themselves even if
+  // DOM tampering cleared the field. The Add Visit modal hides the field for
+  // non-admin, but if someone reaches this point with an empty member value,
+  // auto-assign to the signed-in user. Admin can still leave it blank.
+  if(typeof isAdmin === 'function' && !isAdmin() && !member && CURRENT_USER && CURRENT_USER.name){
+    member = CURRENT_USER.name;
+  }
   var notes   = (document.getElementById('av-notes').value||'').trim();
   // â”€â”€ ADDRESS-DRIVEN AREA (per user 2026-05-19) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // The Area dropdown is hidden. Derive the area from the address text.
