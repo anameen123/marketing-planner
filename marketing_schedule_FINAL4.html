@@ -20278,9 +20278,24 @@ var MAPV2_CONFIG_LS_KEY = 'wcg_mapv2_config_v1';
 var MAPV2_QUOTA_LS_KEY  = 'wcg_mapv2_quota_v1';
 
 // Default config — admin can override the caps via the settings panel.
+// Per user 2026-05-25: hardcode the Maps key here so every team member
+// gets Map v2 (Google Directions + traffic-aware ETA) automatically on
+// first sign-in. This is the standard pattern for client-side Maps keys
+// because the HTTP referrer restriction (on the Google Cloud key itself)
+// is the real security boundary — a stolen key value can't be used from
+// any origin other than the allowed list, so committing the key to the
+// repo is safe. See https://developers.google.com/maps/api-security-best-practices
+// Allowed referrers (configured on the wcg-planner-key in Google Cloud):
+//   http://localhost:3000/*  (local dev)
+//   https://*.vercel.app/*   (all Vercel deployments incl. previews)
+//   https://marketing-planner-zeta.vercel.app/*  (prod)
+//   https://anameen123.github.io/*  (legacy GitHub Pages, kept for now)
+// If the key is ever leaked/abused outside the allowed referrers, just
+// rotate it in Google Cloud — old key dies instantly, new key drops in
+// here on next deploy.
 var MAPV2_DEFAULT_CONFIG = {
-  mapsKey:         '',     // Google Cloud Maps Platform key (Maps JS + Routes + Geocoding)
-  geminiKey:       '',     // Google AI Studio Gemini key
+  mapsKey:         'AIzaSyBeVvay_-N4DfWHeqBqfOT17DJ1-zVgUmY',     // wcg-planner-key — referrer-restricted
+  geminiKey:       '',     // Google AI Studio Gemini key — admin pastes via ⚙ Map v2 settings (still per-browser)
   // Hard daily caps — JS-side enforcement on top of Google billing alerts.
   maxMapsCallsPerDay:    500,
   maxGeminiCallsPerDay:  100,
