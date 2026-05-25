@@ -15816,6 +15816,9 @@ window._rlSourceTypeChanged = _rlSourceTypeChanged;
 function closeReferralForm(){
   var modal = document.getElementById('referral-form-modal');
   if(modal) modal.style.display = 'none';
+  // Phase 11c: clear the approving-referral flag so a later un-related
+  // save doesn't accidentally flip a different referral to 'approved'.
+  window._crApprovingReferralId = null;
 }
 window.closeReferralForm = closeReferralForm;
 
