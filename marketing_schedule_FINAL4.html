@@ -23948,6 +23948,33 @@ function _rpPickEndpoint(which, idx){
   if(hid) hid.value = p.value;
   var box = document.getElementById('rp-'+which+'-suggest');
   if(box) box.style.display = 'none';
+  // Per user 2026-05-24: update the route-planner globals + the map.
+  // Without this, picking from the search dropdown only wrote the hidden
+  // value — the map never zoomed to show the corridor between Start and
+  // End so users couldn't see where the candidates would come from.
+  if(which === 'start'){
+    _RP_START_NAME = p.value || p.name;
+  } else if(which === 'end'){
+    _RP_END_NAME = p.value || p.name;
+  }
+  // Visual: refresh start/end highlights on the map.
+  if(typeof _rpRefreshHighlights === 'function') _rpRefreshHighlights();
+  if(typeof _rpUpdateStatus === 'function') _rpUpdateStatus();
+  // If both ends are now set, build the smart panel (also draws the
+  // corridor + fitBounds on the map).
+  if(_RP_START_NAME && _RP_END_NAME){
+    if(typeof _rpBuildSmartPanel === 'function') _rpBuildSmartPanel();
+  } else if(_RP_START_NAME || _RP_END_NAME){
+    // Only one endpoint chosen — pan/zoom the map to it so the user sees
+    // where they just picked and can visually plan the other end.
+    try {
+      var name = _RP_START_NAME || _RP_END_NAME;
+      var c = (typeof _rpResolveCoord === 'function') ? _rpResolveCoord(name) : null;
+      if(c && _DV_MAP && typeof L !== 'undefined'){
+        _DV_MAP.setView([c.lat, c.lng], 12, { animate: true });
+      }
+    } catch(_){}
+  }
 }
 window._rpPickEndpoint = _rpPickEndpoint;
 
@@ -23958,6 +23985,15 @@ function _rpPickSame(){
   if(hid) hid.value = '__same__';
   var box = document.getElementById('rp-end-suggest');
   if(box) box.style.display = 'none';
+  // Per user 2026-05-24: round-trip means End = Start. Mirror the start
+  // name into the end global so the map zoom + smart panel build behave
+  // identically to picking the same endpoint twice.
+  if(_RP_START_NAME){
+    _RP_END_NAME = _RP_START_NAME;
+    if(typeof _rpRefreshHighlights === 'function') _rpRefreshHighlights();
+    if(typeof _rpUpdateStatus === 'function') _rpUpdateStatus();
+    if(typeof _rpBuildSmartPanel === 'function') _rpBuildSmartPanel();
+  }
 }
 window._rpPickSame = _rpPickSame;
 
