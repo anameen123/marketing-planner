@@ -23722,14 +23722,15 @@ window._rpSetTimeOnSite = _rpSetTimeOnSite;
 // fails, fall back to OSRM public demo (free, no key). Same return shape
 // either way so caller doesn't care which source answered.
 function _rpFetchRoute(waypoints){
-  // Per user 2026-05-25 (revised): OSRM is now PRIMARY. Equivalent road
-  // network data to Google for our DFW coverage area, free forever, no
-  // card, no API key. User disabled Google billing to make any future
-  // charge structurally impossible. Google branch kept as fallback ONLY
-  // in case OSRM's public demo server is briefly unavailable.
-  return _rpFetchOsrmRoute(waypoints).then(function(r){
+  // Per user 2026-05-25 (re-revised): Google PRIMARY during the 90-day
+  // trial — user wants to test Google's data (especially tolls + traffic)
+  // for the trial period. OSRM is the fallback for when Google is
+  // unreachable. After ~Aug 23 the user plans to disable Google billing;
+  // at that point the Google branch silently fails and OSRM takes over
+  // automatically. No code change needed at that handoff.
+  return _rpFetchGoogleRoute(waypoints).then(function(r){
     if(r) return r;
-    return _rpFetchGoogleRoute(waypoints);
+    return _rpFetchOsrmRoute(waypoints);
   });
 }
 window._rpFetchRoute = _rpFetchRoute;
