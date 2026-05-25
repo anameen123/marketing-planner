@@ -25202,6 +25202,55 @@ function _rpScheduledClinicsForActiveDay(){
 }
 window._rpScheduledClinicsForActiveDay = _rpScheduledClinicsForActiveDay;
 
+// Per user 2026-05-25 (Phase 9): cross-day, cross-member dedupe.
+// Members plan the whole Mon-Sun week up front during the Monday 8 PM
+// planning window. Recommending a clinic on Wednesday when it's already
+// on Monday's plan (by anyone) is the same noise as recommending one
+// already on TODAY's schedule â€” just scoped to the week instead of the
+// day. Returns an object map { 'clinic name': { date, member } } so the
+// confirmation modal can show WHO planned it WHEN. Includes ALL members
+// (cross-member dedupe) and ALL statuses. dateStr defaults to the active
+// day's date, or today if no day is open.
+function _rpScheduledClinicsForActiveWeek(dateStr){
+  var out = {};
+  try {
+    if(typeof S === 'undefined' || !Array.isArray(S.days)) return out;
+    // Resolve the reference date for "this week"
+    var refDate = null;
+    if(dateStr){
+      refDate = new Date(dateStr + 'T00:00:00');
+    } else if(S.currentDay != null && S.days[S.currentDay] && S.days[S.currentDay].date){
+      refDate = new Date(S.days[S.currentDay].date + 'T00:00:00');
+    } else {
+      refDate = new Date();
+    }
+    if(!refDate || isNaN(refDate.getTime())) return out;
+    // Find Monday of refDate's week (matches getWeekKey + isWeekHardLocked logic).
+    var dow = refDate.getDay();
+    var back = (dow + 6) % 7;
+    var mon = new Date(refDate.getFullYear(), refDate.getMonth(), refDate.getDate() - back);
+    mon.setHours(0,0,0,0);
+    var sun = new Date(mon);
+    sun.setDate(mon.getDate() + 6);
+    function _ymd(d){
+      return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+    }
+    var monKey = _ymd(mon);
+    var sunKey = _ymd(sun);
+    S.days.forEach(function(day){
+      if(!day || !day.date || !Array.isArray(day.rows)) return;
+      if(day.date < monKey || day.date > sunKey) return;
+      day.rows.forEach(function(r){
+        if(!r || !r.clinic) return;
+        if(out[r.clinic]) return;   // first-seen wins (deterministic dedupe info)
+        out[r.clinic] = { date: day.date, member: r.member || '' };
+      });
+    });
+  } catch(_){}
+  return out;
+}
+window._rpScheduledClinicsForActiveWeek = _rpScheduledClinicsForActiveWeek;
+
 // Find ALL candidates whose perpendicular distance to Aâ†’B is â‰¤ halfWidth,
 // grouped by recency bucket. Respects spec filter + skip-already-visited.
 function _rpV4Collect(A, B, halfWidth, opts){
@@ -25210,6 +25259,14 @@ function _rpV4Collect(A, B, halfWidth, opts){
   var skipVisited = !!opts.skipVisited;
   var includeRed  = !!opts.includeRed;
   var scheduled = _rpScheduledClinicsForActiveDay();
+  // Per user 2026-05-25 (Phase 9): also exclude clinics scheduled ANYWHERE
+  // in the active Mon-Sun week (any member, any day). Members plan the whole
+  // week up front so a clinic already on Tuesday's plan shouldn't recommend
+  // again when planning Thursday. Members can still add it manually via the
+  // Add Visit modal â€” that path shows a confirmation gate.
+  var weekScheduled = (typeof _rpScheduledClinicsForActiveWeek === 'function')
+    ? _rpScheduledClinicsForActiveWeek()
+    : {};
   // Per user 2026-05-25: 3 buckets only. 'warm' and 'never' kept as empty
   // arrays for backwards compatibility with any code that still references
   // them, but recencyBucket no longer emits those keys.
@@ -25220,6 +25277,8 @@ function _rpV4Collect(A, B, halfWidth, opts){
     // Per user 2026-05-24: skip clinics already on the current day's
     // schedule â€” recommending a clinic that's already booked is just noise.
     if(scheduled[name]) return;
+    // Phase 9: skip clinics already planned anywhere in this Mon-Sun week.
+    if(weekScheduled[name]) return;
     var coord = (typeof getCoordForBusiness === 'function') ? getCoordForBusiness(name) : null;
     if(!coord) return;
     var perp = _rpV4PerpMiles(coord, A, B);
@@ -26104,10 +26163,18 @@ function _rpRwBuildRoutes(){
       });
       return;
     }
-    // 4. Build excluded set (start + locked stops + nothing else)
+    // 4. Build excluded set (start + locked stops + week-scheduled clinics)
     var excludeSet = {};
     excludeSet[start.name] = true;
     locked.forEach(function(l){ excludeSet[l.name] = true; });
+    // Phase 9 (per user 2026-05-25): cross-day, cross-member dedupe. Any
+    // clinic already planned anywhere in this Mon-Sun week is excluded from
+    // recommendations. Members can still manually add via Add Visit (which
+    // shows a confirmation gate) if they really want to duplicate.
+    if(typeof _rpScheduledClinicsForActiveWeek === 'function'){
+      var _wkSched = _rpScheduledClinicsForActiveWeek();
+      Object.keys(_wkSched).forEach(function(n){ excludeSet[n] = true; });
+    }
     // 5. Build pool (already excludes scheduled clinics if they're in S.days)
     var pool = (needNew > 0) ? _rpRwBuildCandidatePool(start.coord, excludeSet) : [];
     if(needNew > 0 && pool.length === 0){
@@ -28850,6 +28917,46 @@ function confirmAddVisit(){
     }
     // Override flag was set â€” fall through to allow the duplicate
   }
+  // â”€â”€ PHASE 9: SAME-WEEK DEDUPE (per user 2026-05-25) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // After the same-day check above, also check whether this clinic is on
+  // any OTHER day of the active Mon-Sun week (by any member). The route
+  // planners already exclude these from recommendations; the manual Add
+  // Visit path requires explicit confirmation. Override flag reuses the
+  // same _addVisitOverrideDupe pattern as the same-day branch above.
+  // Skipped for outreach (multi-attendee semantics handled below) and
+  // when the override flag is already set from a same-day re-entry.
+  if(type !== 'outreach' && !window._addVisitOverrideDupe && typeof _rpScheduledClinicsForActiveWeek === 'function'){
+    var targetDate = (S.days[di] && S.days[di].date) || '';
+    var weekMap = _rpScheduledClinicsForActiveWeek(targetDate);
+    var wkMatch = weekMap && weekMap[name];
+    if(wkMatch && wkMatch.date !== targetDate){
+      var meName2 = (CURRENT_USER && CURRENT_USER.name) || '';
+      var otherMember = wkMatch.member || '(unassigned)';
+      var byWho = (meName2 && otherMember === meName2)
+        ? '<strong>you</strong>'
+        : '<strong>' + otherMember + '</strong>';
+      // Format the date as a readable weekday + date
+      var wkD = new Date(wkMatch.date + 'T00:00:00');
+      var wkLabel = isNaN(wkD.getTime())
+        ? wkMatch.date
+        : wkD.toLocaleDateString('en-US', { weekday:'long', month:'short', day:'numeric' });
+      showConfirm({
+        icon: 'âš ',
+        msg: 'Already planned this week',
+        sub: '"' + name + '" is already scheduled for <strong>' + wkLabel + '</strong> by ' + byWho + '.\n\n'
+           + 'During the Monday 8 PM planning window the team plans the whole week up front, so duplicate clinics within the same week are usually unintentional.\n\n'
+           + 'Add it anyway for a second visit this week?',
+        yesLabel: 'Yes, add anyway',
+        danger: true,
+        onConfirm: function(){
+          window._addVisitOverrideDupe = true;
+          try { confirmAddVisit(); } finally { window._addVisitOverrideDupe = false; }
+        }
+      });
+      return;
+    }
+  }
+
   if(dupCheck && type === 'outreach'){
     // Per user 2026-05-22 (revised approach): for community outreach, DON'T
     // merge the new member into the existing row as a co-attendee. Instead
