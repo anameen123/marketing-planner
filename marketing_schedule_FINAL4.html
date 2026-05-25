@@ -23717,13 +23717,16 @@ window._rpSetTimeOnSite = _rpSetTimeOnSite;
 // fails, fall back to OSRM public demo (free, no key). Same return shape
 // either way so caller doesn't care which source answered.
 function _rpFetchRoute(waypoints){
-  if(typeof hasMapsKey === 'function' && hasMapsKey()){
-    return _rpFetchGoogleRoute(waypoints).then(function(r){
-      if(r) return r;
-      return _rpFetchOsrmRoute(waypoints);   // graceful fallback
-    });
-  }
-  return _rpFetchOsrmRoute(waypoints);
+  // Per user 2026-05-25: always try Google first via the /api/directions
+  // Vercel serverless proxy. The proxy reads the key from process.env on
+  // the server, so the client no longer needs hasMapsKey() to gate this.
+  // If the server returns an error (env var missing, Google quota hit,
+  // etc.), the catch in _rpFetchGoogleRoute resolves to null and OSRM
+  // takes over.
+  return _rpFetchGoogleRoute(waypoints).then(function(r){
+    if(r) return r;
+    return _rpFetchOsrmRoute(waypoints);
+  });
 }
 window._rpFetchRoute = _rpFetchRoute;
 
@@ -23734,7 +23737,6 @@ window._rpFetchRoute = _rpFetchRoute;
 var _RP_GOOGLE_CACHE = {};
 function _rpFetchGoogleRoute(waypoints){
   if(!waypoints || waypoints.length < 2) return Promise.resolve(null);
-  if(typeof hasMapsKey !== 'function' || !hasMapsKey()) return Promise.resolve(null);
   var cacheKey = waypoints.map(function(w){
     return w.lat.toFixed(4) + ',' + w.lng.toFixed(4);
   }).join('|');
@@ -23743,20 +23745,20 @@ function _rpFetchGoogleRoute(waypoints){
   if(typeof _bumpQuota === 'function' && !_bumpQuota('maps')){
     return Promise.resolve(null);
   }
-  // Build the Directions API URL. Origin = first, destination = last,
-  // waypoints = everything in between (in order, no optimization since
-  // user has already picked the order).
+  // Per user 2026-05-25: call our /api/directions Vercel serverless function
+  // instead of Google's REST API directly. Google Directions doesn't support
+  // CORS for browser fetches; the serverless function proxies the call
+  // server-to-server and adds the CORS headers we need. The Google Maps API
+  // key lives in Vercel env var GOOGLE_MAPS_KEY — NEVER ships to the
+  // browser. This is the "Option C" architecture per user choice.
   var origin = waypoints[0];
   var dest   = waypoints[waypoints.length - 1];
   var middle = waypoints.slice(1, -1);
   var waypointParam = middle.map(function(w){ return w.lat + ',' + w.lng; }).join('|');
-  var url = 'https://maps.googleapis.com/maps/api/directions/json'
+  var url = '/api/directions'
           + '?origin=' + origin.lat + ',' + origin.lng
           + '&destination=' + dest.lat + ',' + dest.lng
-          + (waypointParam ? '&waypoints=' + encodeURIComponent(waypointParam) : '')
-          + '&departure_time=now'      // traffic-aware
-          + '&mode=driving'
-          + '&key=' + encodeURIComponent(MAPV2_CONFIG.mapsKey);
+          + (waypointParam ? '&waypoints=' + encodeURIComponent(waypointParam) : '');
   var ctrl = new AbortController();
   var to = setTimeout(function(){ ctrl.abort(); }, 8000);
   return fetch(url, { signal: ctrl.signal })
@@ -24381,12 +24383,11 @@ function renderDayMap(di){
     } catch(_){}
     if(typeof _rpFetchRoute === 'function'){
       var waypoints = routeLine.map(function(p){ return { lat: p[0], lng: p[1] }; });
-      // Use _rpFetchRoute (smart router: Google → OSRM fallback) instead of
-      // _rpFetchGoogleRoute directly. Google Directions REST API doesn't
-      // ship CORS headers, so direct browser fetches fail with "Failed to
-      // fetch" — _rpFetchRoute catches that and falls back to OSRM which
-      // is CORS-friendly + still road-following. We get a real polyline
-      // either way (Google numbers when available, OSRM as backup).
+      // Use _rpFetchRoute (smart router: Google via /api/directions proxy →
+      // OSRM fallback). Per user 2026-05-25: Google Directions now flows
+      // through Vercel serverless function /api/directions so we get real
+      // Google traffic-aware ETAs (not OSRM's speed-limit averages).
+      // The proxy is server-to-server so no CORS issues.
       _rpFetchRoute(waypoints).then(function(res){
         if(!res || !res.path || res.path.length < 2){
           // Both routers failed — show advisory, no line on map.
