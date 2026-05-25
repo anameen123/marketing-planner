@@ -28472,49 +28472,29 @@ function rowHTML(row,di,ri){
   if(row.clinic && typeof OUTREACH !== 'undefined' && OUTREACH){
     _rowIsOutreach = OUTREACH.some(function(o){ return o && o.name === row.clinic; });
   }
+  // Per user 2026-05-25 (Phase 6): ALL row cells are READ-ONLY now. The
+  // only way to edit any field on the row is via the Fill/Edit Follow-up
+  // wizard. This prevents accidental edits to the wrong visit and ensures
+  // every change goes through confirmation. Pre-confirm cells show "Not
+  // determined" placeholders. Post-confirm cells show the saved value.
   if(!isComp){
-    leadsCell = '<span class="lead-locked">&#128274; Only when Completed</span>';
+    // Status isn't Completed yet → lead doesn't apply
+    leadsCell = '<span style="font-size:10px;color:var(--muted);font-style:italic" title="Lead outcome is set via Fill / Edit Follow-up after status = Completed.">Not determined</span>';
   } else if(_rowIsOutreach){
     // ── OUTREACH BRANCH ────────────────────────────────────────────────
-    // Show the engagement badge if data exists; otherwise the Log Engagement
-    // button. No lead status, no L1/L2/L3.
-    var _safeOutName = (row.clinic||'').replace(/'/g,"\\'").replace(/"/g,'&quot;');
-    var _safeOutMember = (row.member||'').replace(/'/g,"\\'");
     var _engagementSet = !!(row.outreachContacts && (row.outreachContacts.total != null));
     if(!_engagementSet){
-      if(canEditDate(day.date)){
-        leadsCell = '<button onclick="openOutreachEngagementModal(\''+_safeOutName+'\', \''+_safeOutMember+'\', '+di+', '+ri+')" '
-          +'style="background:#7030A0;color:#fff;border:none;border-radius:5px;padding:4px 9px;font-size:10px;font-weight:600;cursor:pointer;font-family:DM Sans,sans-serif;white-space:nowrap" '
-          +'title="Log how many people you talked to and how many gave contact info">🏘 Log engagement</button>';
-      } else {
-        leadsCell = '<span style="font-size:9px;color:var(--muted);font-style:italic">&#128274; locked</span>';
-      }
+      leadsCell = '<span style="font-size:10px;color:var(--muted);font-style:italic">Not logged · use Fill follow-up</span>';
     } else {
-      var _badge = _outreachEngagementBadgeHTML(row);
-      var _editAffordance = '';
-      if(row.rowConfirmed){
-        _editAffordance = '<span style="font-size:9px;color:#16a34a;font-style:italic" title="Row confirmed — open ✎ Edit to change.">&#128274;</span>';
-      } else if(canEditDate(day.date)){
-        _editAffordance = '<button onclick="openOutreachEngagementModal(\''+_safeOutName+'\', \''+_safeOutMember+'\', '+di+', '+ri+')" style="background:none;border:1px solid var(--border);border-radius:4px;padding:1px 6px;font-size:9px;color:var(--muted);cursor:pointer;font-family:inherit" title="Edit engagement">&#9998;</button>';
-      }
-      leadsCell = '<div style="display:inline-flex;align-items:center;gap:4px;flex-wrap:wrap">' + _badge + _editAffordance + '</div>';
+      // Read-only badge
+      leadsCell = _outreachEngagementBadgeHTML(row);
     }
   } else {
     var lead = (typeof getClinicLead === 'function' && row.clinic) ? getClinicLead(row.clinic) : {status:'not_visited',level:0};
-    var safeName = (row.clinic||'').replace(/'/g,"\\'").replace(/"/g,'&quot;');
-    var safeMember = (row.member||'').replace(/'/g,"\\'");
     if(!rowOutcomeSet){
-      // No outcome saved yet — show the Set/Update Lead Status button
-      var btnLabel = (lead.status === 'not_visited') ? 'Set Lead Status' : 'Update Lead Status';
-      if(canEditDate(day.date)){
-        leadsCell = '<button onclick="openLeadStatusModal(\''+safeName+'\', \''+safeMember+'\', '+di+', '+ri+')" '
-          +'style="background:var(--purple);color:#fff;border:none;border-radius:5px;padding:4px 9px;font-size:10px;font-weight:600;cursor:pointer;font-family:DM Sans,sans-serif;white-space:nowrap" '
-          +'title="Confirm the outcome of this visit">&#9881;&#65039; '+btnLabel+'</button>';
-      } else {
-        leadsCell = '<span style="font-size:9px;color:var(--muted);font-style:italic">&#128274; locked</span>';
-      }
+      leadsCell = '<span style="font-size:10px;color:var(--muted);font-style:italic">Not determined · use Fill follow-up</span>';
     } else {
-      // Outcome saved — show the current badge (bizType-aware level label)
+      // Read-only badge (no edit button — wizard is the only path)
       var st2 = LEAD_STATUSES[lead.status] || LEAD_STATUSES['not_visited'];
       var _bt = (typeof getBizTypeForName === 'function') ? getBizTypeForName(row.clinic) : '';
       var _lvObj = (lead.status === 'established' && lead.level && typeof getEstablishedLevel === 'function') ? getEstablishedLevel(lead.level, _bt) : null;
@@ -28525,23 +28505,20 @@ function rowHTML(row,di,ri){
         var lvColor = (_lvObj && _lvObj.color) || (ESTABLISHED_LEVELS[lead.level] && ESTABLISHED_LEVELS[lead.level].color) || '#16a34a';
         badgeHtml += '<span style="font-size:9px;font-weight:700;background:'+lvColor+';color:#fff;padding:1px 5px;border-radius:3px">'+levelLabel+'</span>';
       }
-      // EDIT affordance: only if the row is NOT yet confirmed AND the date is editable.
-      // Once row.rowConfirmed is true, lock the lead — user must click "undo" on the
-      // row Confirm button to unlock it.
-      if(row.rowConfirmed){
-        badgeHtml += '<span style="font-size:9px;color:#16a34a;font-style:italic" title="Row confirmed. Click undo on the row to edit the lead.">&#128274; Confirmed</span>';
-      } else if(canEditDate(day.date)){
-        badgeHtml += '<button onclick="openLeadStatusModal(\''+safeName+'\', \''+safeMember+'\', '+di+', '+ri+')" style="background:none;border:1px solid var(--border);border-radius:4px;padding:1px 6px;font-size:9px;color:var(--muted);cursor:pointer;font-family:inherit" title="Edit outcome">&#9998; Edit</button>';
-      } else {
-        badgeHtml += '<span style="font-size:9px;color:var(--muted);font-style:italic">&#128274; locked</span>';
-      }
       badgeHtml += '</div>';
       leadsCell = badgeHtml;
     }
   }
-  var notesCell=isComp
-    ?'<textarea class="rnotes" rows="2" placeholder="Additional notes (visible to you in your Members tab)..." onchange="setLeadNotes('+di+','+ri+',this.value)" oninput="setLeadNotes('+di+','+ri+',this.value)">'+(row.leadNotes||'')+'</textarea>'
-    :'<span class="lead-locked">&#128274; Only when Completed</span>';
+  // Notes: read-only text display. Edits via Fill/Edit Follow-up wizard.
+  var notesCell;
+  if(!isComp){
+    notesCell = '<span style="font-size:10px;color:var(--muted);font-style:italic">Only when Completed</span>';
+  } else if(row.leadNotes && row.leadNotes.trim()){
+    var _safeNotes = String(row.leadNotes).replace(/</g,'&lt;').replace(/\n/g,'<br>');
+    notesCell = '<div style="font-size:11px;color:#1e293b;line-height:1.4;max-height:60px;overflow-y:auto;padding:2px 4px">' + _safeNotes + '</div>';
+  } else {
+    notesCell = '<span style="font-size:10px;color:var(--muted);font-style:italic">No notes</span>';
+  }
 
   // ⋮ Edit/Delete menu — shown to admin (any visit) and to the row's own
   // member (their own visits, any status). Admin can delete completed visits
@@ -28579,8 +28556,29 @@ function rowHTML(row,di,ri){
   // To keep the row visually clean we show the full lock message ONCE (in the Status cell) and
   // a subtle dash in the other 4 locked cells.
   var LOCK_DASH = '<span class="lead-locked" title="Assign and confirm a member first">&mdash;</span>';
-  var statusCell    = assignmentLocked ? ASSIGN_LOCK_PH : '<select class="ssel s-'+st+'" onchange="setSt('+di+','+ri+',this.value)">'+stOpts+'</select>';
-  var rescheduleCell= assignmentLocked ? LOCK_DASH      : '<button class="dbtn '+bc+'"'+(dateUnlocked?' onclick="openPopup('+di+','+ri+')"':'')+' '+(dateUnlocked?'':'disabled')+'>'+bt+'</button>';
+  // Per user 2026-05-25 (Phase 6): Status + Reschedule cells are READ-ONLY.
+  // No inline dropdown / button — edits go through Fill / Edit Follow-up.
+  // Status pill styling matches the .ssel s-<status> CSS so the visual is
+  // identical to the prior dropdown, just non-interactive.
+  var _statusLabel = st || 'Pending';
+  var statusCell;
+  if(assignmentLocked){
+    statusCell = ASSIGN_LOCK_PH;
+  } else if(!row.rowConfirmed && _statusLabel === 'Pending'){
+    statusCell = '<span style="font-size:10px;color:var(--muted);font-style:italic" title="Status is set via Fill follow-up">Not determined</span>';
+  } else {
+    statusCell = '<span class="ssel s-'+_statusLabel+'" style="display:inline-block;font-size:11px;font-weight:600;padding:3px 9px;border-radius:14px;cursor:default" title="Edit status via Fill / Edit Follow-up">'+_statusLabel+'</span>';
+  }
+  // Reschedule cell: read-only date display (or dash). The date is set via
+  // the Fill / Edit Follow-up wizard when status = Postponed.
+  var rescheduleCell;
+  if(assignmentLocked){
+    rescheduleCell = LOCK_DASH;
+  } else if(row.rd){
+    rescheduleCell = '<span class="dbtn '+bc+'" style="display:inline-block;padding:3px 8px;font-size:10px;font-weight:600;border-radius:6px;cursor:default" title="Reschedule date — change via Edit follow-up">'+bt+'</span>';
+  } else {
+    rescheduleCell = '<span style="font-size:10px;color:var(--muted)">—</span>';
+  }
   var leadsCellOut  = assignmentLocked ? LOCK_DASH      : leadsCell;
   var notesCellOut  = assignmentLocked ? LOCK_DASH      : notesCell;
   // Per user 2026-05-23: replace the cell-by-cell confirmation with a single
@@ -28677,14 +28675,11 @@ function _buildSpendingCell(di, ri, row, assignmentLocked){
   var windowClosed = (typeof isSpendingEditOpen === 'function') && !isSpendingEditOpen(dayDate);
 
   // Empty state — no spending object OR an object that's neither items nor zero-flag
+  // Per user 2026-05-25 (Phase 6): NO inline edit button. All spending
+  // changes go through Fill / Edit Follow-up wizard.
   var hasSavedEntry = !!(sp && (sp.zeroSpending || (sp.items && sp.items.length)));
   if(!hasSavedEntry){
-    if(!canEdit){
-      return '<span style="font-size:9px;color:var(--muted);font-style:italic">🔒 No spending · admin only</span>';
-    }
-    return '<button onclick="openSpending('+di+','+ri+')" '
-      + 'style="background:#fff7ed;color:#92400e;border:1px dashed #fcd34d;border-radius:6px;padding:5px 10px;font-size:10px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;white-space:nowrap" '
-      + 'title="Record what you bought / spent on this visit">+ Add spending</button>';
+    return '<span style="font-size:10px;color:var(--muted);font-style:italic" title="Set spending via Fill follow-up">Not filled</span>';
   }
 
   var zero = !!sp.zeroSpending;
@@ -28710,19 +28705,9 @@ function _buildSpendingCell(di, ri, row, assignmentLocked){
       : 'Saved within tier ' + tName + ' cap of $' + (sp.limitAtSave||0);
   var labelText = zero ? '$0 No spending' : '$' + sp.total.toFixed(2);
 
-  // Bottom hint depends on the lock state
-  var bottom;
-  if(canEdit){
-    bottom = '<button onclick="openSpending('+di+','+ri+')" style="font-size:9px;color:var(--muted);background:none;border:none;cursor:pointer;font-family:DM Sans,sans-serif;text-decoration:underline">edit</button>';
-  } else if(windowClosed && adm){
-    bottom = '<button onclick="openSpending('+di+','+ri+')" style="font-size:9px;color:#7030A0;background:none;border:none;cursor:pointer;font-family:DM Sans,sans-serif;text-decoration:underline" title="Edit window closed for members — admin override">edit (admin)</button>';
-  } else {
-    bottom = '<span style="font-size:9px;color:var(--muted);font-style:italic" title="Spending edit window has closed — admin only">🔒 admin only</span>';
-  }
-  return '<div style="display:flex;flex-direction:column;align-items:flex-start;gap:3px">'
-    +   '<span title="'+tip+'" style="background:'+bg+';color:'+fg+';border:1px solid '+bd+';font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;font-family:DM Sans,sans-serif;white-space:nowrap">'+icon+' '+labelText+'</span>'
-    +   bottom
-    + '</div>';
+  // Per user 2026-05-25 (Phase 6): READ-ONLY badge only. No edit button —
+  // user goes through Fill / Edit Follow-up wizard to change spending.
+  return '<span title="'+tip+'" style="display:inline-block;background:'+bg+';color:'+fg+';border:1px solid '+bd+';font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;font-family:DM Sans,sans-serif;white-space:nowrap;cursor:default">'+icon+' '+labelText+'</span>';
 }
 window._buildSpendingCell = _buildSpendingCell;
 
