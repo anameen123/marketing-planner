@@ -20759,6 +20759,32 @@ function setSt(di,ri,val){
       return;
     }
   }
+  // RULE 2 (per user 2026-05-26): cannot mark Completed without BOTH spending
+  // logged AND lead status set. Caught a member marking visits Completed with
+  // neither — silently broke counters + reporting. Admin can override (audit
+  // note will be stamped on the row when they do).
+  if(val === 'Completed' && row.status !== 'Completed'){
+    var hasSpending = !!(row.spending && (row.spending.total != null || (row.spending.items && row.spending.items.length)));
+    var hasLeadStatus = !!(row.relationship && String(row.relationship).trim());
+    var isAdminOverride = (typeof isAdmin === 'function') && isAdmin();
+    if((!hasSpending || !hasLeadStatus) && !isAdminOverride){
+      var missing = [];
+      if(!hasSpending)   missing.push('💰 spending');
+      if(!hasLeadStatus) missing.push('🎯 lead status');
+      showToast('Cannot mark Completed — add ' + missing.join(' + ') + ' first.');
+      refresh(di);
+      return;
+    }
+    // Admin override path — flag the row so the override audit note renders
+    if((!hasSpending || !hasLeadStatus) && isAdminOverride){
+      row.completedOverride = {
+        adminName: (CURRENT_USER && CURRENT_USER.name) || 'admin',
+        at: new Date().toISOString(),
+        missing: missing || (function(){ var m=[]; if(!hasSpending)m.push('spending'); if(!hasLeadStatus)m.push('lead status'); return m; })(),
+        originalActor: row.member || 'member'
+      };
+    }
+  }
   // If undoing Completed, clear ALL downstream state from the prior completion
   // so the row returns to a clean "uncompleted" state. Per user 2026-05-19:
   // "if I set something to be completed... and put it on as postponed, it's
