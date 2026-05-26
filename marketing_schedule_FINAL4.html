@@ -28,8 +28,11 @@
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root{
-  --navy:#1F3864;--purple:#7030A0;--surface:#f7f8fc;--card:#fff;--border:#e4e7ef;
+  --navy:#1F3864;--purple:#7030A0;--surface:#dbeafe;--card:#fff;--border:#cbd5e1;
   --text:#1a2233;--muted:#6b7a99;
+  /* Per user 2026-05-26: baby-blue page background. */
+  --page-bg-1:#dbeafe;  /* Tailwind blue-100 — soft baby blue */
+  --page-bg-2:#bfdbfe;  /* Tailwind blue-200 — slightly deeper for gradient bottom */
 }
 *{box-sizing:border-box;margin:0;padding:0}
 /* Per user 2026-05-22: background = WAVES of color levels across the full
@@ -41,18 +44,11 @@
 html{overflow-x:hidden}
 body{
   font-family:'DM Sans',sans-serif;
-  background:
-    /* Bottom wave (deepest purple-magenta) — sits at ~85vh */
-    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 200' preserveAspectRatio='none'><path fill='%23581e7a' d='M0,120 C240,40 480,180 720,100 C960,40 1200,160 1440,80 L1440,200 L0,200 Z'/></svg>") center 85% / 100% 30vh no-repeat fixed,
-    /* Mid wave (mid purple) — sits at ~65vh */
-    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 200' preserveAspectRatio='none'><path fill='%2348247a' d='M0,100 C300,180 700,40 1100,120 C1300,150 1380,80 1440,120 L1440,200 L0,200 Z'/></svg>") center 65% / 100% 30vh no-repeat fixed,
-    /* Upper wave (deep blue-purple) — sits at ~42vh */
-    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 200' preserveAspectRatio='none'><path fill='%23362874' d='M0,80 C320,140 720,30 1080,80 C1260,100 1380,140 1440,90 L1440,200 L0,200 Z'/></svg>") center 42% / 100% 28vh no-repeat fixed,
-    /* Top wave (slate-navy) — near top */
-    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 200' preserveAspectRatio='none'><path fill='%23253473' d='M0,80 C300,160 700,40 1440,100 L1440,200 L0,200 Z'/></svg>") center 20% / 100% 26vh no-repeat fixed,
-    /* Base color stops behind the waves */
-    linear-gradient(180deg, #1F3864 0%, #283278 50%, #5b21b6 100%) fixed,
-    var(--surface);
+  /* Per user 2026-05-26: baby-blue page background app-wide. Soft vertical
+     gradient from blue-100 (top) → blue-200 (bottom) for subtle depth
+     without losing readability of cards/text. Old dark-wave background
+     removed. */
+  background: linear-gradient(180deg, var(--page-bg-1) 0%, var(--page-bg-2) 100%) fixed, var(--surface);
   color:var(--text);
   min-height:100vh;
   overflow-x:hidden;
@@ -1814,6 +1810,36 @@ body.role-front_desk #referrals-view {
          the old position here was hidden by `body.member-view .main-nav{display:none}`.) -->
   </div>
 
+  <!-- Per user 2026-05-26 (#48): Quick-access "Recent pages" strip — shows
+       the last 3 tabs visited (excluding current). Like Windows recent files.
+       Rendered live by _renderRecentTabsStrip on every switchTab call.
+       Per user 2026-05-26 (#46/#47): also hosts the master search trigger. -->
+  <div id="recent-tabs-strip-wrap" style="display:flex;align-items:center;gap:8px;padding:6px 36px;background:rgba(31,56,100,.06);border-bottom:1px solid var(--border);font-size:11px;flex-wrap:wrap">
+    <button type="button" onclick="_openMasterSearch()" title="Search everything — clinics, MVAs, patients, referrals, sections (Ctrl+K)" style="background:#fff;border:1px solid var(--border);color:#1F3864;border-radius:14px;padding:4px 13px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;display:inline-flex;align-items:center;gap:5px">🔍 Search… <span style="background:#f1f5f9;color:#64748b;border-radius:3px;padding:1px 5px;font-size:9px;font-weight:600">Ctrl K</span></button>
+    <span style="color:var(--border);font-weight:700">|</span>
+    <span style="color:var(--muted);font-weight:700;letter-spacing:.04em;text-transform:uppercase">⏱ Recent:</span>
+    <div id="recent-tabs-strip" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+  </div>
+
+  <!-- Master search modal (per user 2026-05-26 #46/#47). Covers lists AND
+       dashboard sections in one palette. Triggered by Ctrl+K or the chip. -->
+  <div id="master-search-modal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.62);z-index:90000;align-items:flex-start;justify-content:center;padding-top:80px;font-family:DM Sans,sans-serif" onclick="if(event.target===this)_closeMasterSearch()">
+    <div style="background:#fff;border-radius:14px;max-width:640px;width:92%;max-height:75vh;display:flex;flex-direction:column;box-shadow:0 24px 60px rgba(0,0,0,.45)">
+      <div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">
+        <span style="font-size:22px">🔍</span>
+        <input id="master-search-input" type="text" placeholder="Search clinics, MVAs, patients, referrals, sections…" oninput="_runMasterSearch()" style="flex:1;border:none;outline:none;font-size:15px;font-family:DM Sans,sans-serif;color:#1F3864;background:transparent">
+        <button onclick="_closeMasterSearch()" style="background:none;border:none;font-size:20px;color:#94a3b8;cursor:pointer">×</button>
+      </div>
+      <div id="master-search-results" style="overflow-y:auto;padding:8px 0;flex:1">
+        <div style="padding:20px;text-align:center;color:var(--muted);font-size:12px">Start typing — searches across all banks + dashboard sections.</div>
+      </div>
+      <div style="padding:8px 18px;border-top:1px solid var(--border);font-size:10px;color:var(--muted);display:flex;justify-content:space-between">
+        <span>Press <b>Ctrl+K</b> anywhere · <b>Esc</b> closes · click result to jump</span>
+        <span id="master-search-count"></span>
+      </div>
+    </div>
+  </div>
+
   <!-- ── ANNOUNCEMENT BAR — sits ABOVE the motivation ticker; sticky with header ─────
        Red "📢 ANNOUNCEMENT" label pinned to the LEFT. The middle area is a
        horizontal-scroll viewport — the announcement title + date slide slowly
@@ -2224,13 +2250,13 @@ body.role-front_desk #referrals-view {
     </div>
   </div>
 
-  <!-- Monthly Completion Rate -->
+  <!-- Monthly Completion Ratio -->
   <div id="monthly-completion-wrap" style="display:none;background:var(--card);border-radius:14px;border:1px solid var(--border);padding:20px;margin-bottom:18px;box-shadow:0 2px 12px rgba(31,56,100,.05)">
     <!-- Header (period buttons isolated from the bar-toggle click via stopPropagation) -->
     <div class="mc-bar-clickable" id="mc-bar-clickable" onclick="toggleMonthlyCompletionTrend(event)">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">
         <div>
-          <div style="font-size:13px;font-weight:700;color:var(--text)">Monthly Completion Rate</div>
+          <div style="font-size:13px;font-weight:700;color:var(--text)">Monthly Completion Ratio</div>
           <div style="font-size:11px;color:var(--muted);margin-top:2px">Completed vs assigned visits per month · click bar for trend</div>
         </div>
         <div style="display:flex;gap:6px" onclick="event.stopPropagation()">
@@ -2279,20 +2305,20 @@ body.role-front_desk #referrals-view {
     <!-- Counter row removed — those numbers already appear in the Overview KPI cards above. -->
     <div class="perf-chart-block">
       <div class="perf-chart-header">
-        <div class="perf-chart-title">📈 Monthly Completion Rate — Line Chart</div>
+        <div class="perf-chart-title">📈 Monthly Completion Ratio — Line Chart</div>
         <select class="perf-period-sel" id="perf-line-period" onchange="renderPerfCharts()">
           <option value="3">Last 3 Months</option>
           <option value="6">Last 6 Months</option>
         </select>
       </div>
-      <div style="font-size:10px;color:var(--muted);margin-bottom:6px;font-style:italic">Completion rate (% of assigned visits marked Completed) per month · last point = <strong>live current month</strong>, updates as visits get confirmed.</div>
+      <div style="font-size:10px;color:var(--muted);margin-bottom:6px;font-style:italic">Completion ratio (% of assigned visits marked Completed) per month · last point = <strong>live current month</strong>, updates as visits get confirmed.</div>
       <div style="background:#fafbfc;border-radius:8px;padding:10px;border:1px solid var(--border)">
         <svg id="perf-line-svg" width="100%" height="160" style="display:block;overflow:visible"></svg>
       </div>
     </div>
     <div class="perf-chart-block">
       <div class="perf-chart-header">
-        <div class="perf-chart-title">📊 Monthly Completion Rate — Bar Chart</div>
+        <div class="perf-chart-title">📊 Monthly Completion Ratio — Bar Chart</div>
         <select class="perf-period-sel" id="perf-bar-period" onchange="renderPerfCharts()">
           <option value="3">Last 3 Months</option>
           <option value="6">Last 6 Months</option>
@@ -2840,7 +2866,7 @@ body.role-front_desk #referrals-view {
         <div class="hint">How many Established leads per full schedule period?</div>
       </div>
       <div class="kpi-input-row">
-        <label>Visit completion rate % (target)</label>
+        <label>Visit completion ratio % (target)</label>
         <input type="number" id="kpi-rate" min="1" max="100" placeholder="e.g. 80">
         <div class="hint">Minimum % of assigned visits that should be Completed.</div>
       </div>
@@ -16920,7 +16946,7 @@ function renderPendingReferrals(){
   wrap.style.display = 'block';
   // Filter
   var statusSel = document.getElementById('pr-status-filter');
-  var statusFilter = (statusSel && statusSel.value) || 'pending';
+  var statusFilter = (statusSel && statusSel.value) || 'all';
   var items = (PENDING_REFERRALS || []).slice();
   // Scope: front-desk users only see referrals destined for their facility
   if(isFD && CURRENT_USER.facilityKey){
@@ -38329,6 +38355,185 @@ var KPI_TARGETS={
   areaTarget: null
 };
 
+// ── PHASE 19h — MASTER SEARCH PALETTE (per user 2026-05-26 #46+#47) ─────────
+// One palette covering ALL lists + dashboard sections. Ctrl+K to open.
+// Live-search across CLINIC_BANK, MVA_ATTORNEYS, OUTREACH, REFERRAL_LOG
+// (patients), PENDING_REFERRALS, MEMBERS, plus a hardcoded list of dashboard
+// section names (jumps to the right tab).
+var DASHBOARD_SECTIONS = [
+  { label: 'Home',         icon: '🏠', tab: 'home' },
+  { label: 'Dashboard / Schedule', icon: '📅', tab: 'schedule' },
+  { label: 'Team / Members', icon: '👥', tab: 'members' },
+  { label: 'Bank (Clinics + MVAs + Outreach)', icon: '🏢', tab: 'bank' },
+  { label: 'Referrals',     icon: '📋', tab: 'referrals' },
+  { label: 'Finances / Spending', icon: '💰', tab: 'finances' },
+  { label: 'Reports',       icon: '📋', tab: 'reports' },
+  { label: 'Activity Feed', icon: '📡', tab: 'feed' },
+  { label: 'Profile',       icon: '🪪', tab: 'profile' }
+];
+function _openMasterSearch(){
+  var m = document.getElementById('master-search-modal');
+  if(!m) return;
+  m.style.display = 'flex';
+  var inp = document.getElementById('master-search-input');
+  if(inp){ inp.value = ''; setTimeout(function(){ inp.focus(); }, 50); }
+  _runMasterSearch();
+}
+window._openMasterSearch = _openMasterSearch;
+function _closeMasterSearch(){
+  var m = document.getElementById('master-search-modal');
+  if(m) m.style.display = 'none';
+}
+window._closeMasterSearch = _closeMasterSearch;
+function _runMasterSearch(){
+  var inp = document.getElementById('master-search-input');
+  var box = document.getElementById('master-search-results');
+  var cnt = document.getElementById('master-search-count');
+  if(!inp || !box) return;
+  var q = (inp.value || '').toLowerCase().trim();
+  if(!q){
+    box.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted);font-size:12px">Start typing — searches across all banks + dashboard sections.</div>';
+    if(cnt) cnt.textContent = '';
+    return;
+  }
+  function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function group(title, items){
+    if(!items.length) return '';
+    return '<div style="padding:6px 16px;font-size:9px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.06em;background:#f8fafc">' + esc(title) + ' · ' + items.length + '</div>'
+      + items.map(function(it){
+          return '<div onclick="' + it.onclick + '" style="padding:9px 16px;cursor:pointer;display:flex;align-items:center;gap:9px;font-size:12px;border-bottom:1px solid #f1f5f9" onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'#fff\'">'
+            + '<span style="font-size:15px">' + it.icon + '</span>'
+            + '<div style="flex:1;min-width:0">'
+            +   '<div style="font-weight:700;color:#1F3864">' + esc(it.title) + '</div>'
+            +   (it.sub ? '<div style="font-size:10px;color:var(--muted)">' + esc(it.sub) + '</div>' : '')
+            + '</div>'
+            + '</div>';
+        }).join('');
+  }
+  var sections = [];
+  // Dashboard sections
+  var sec = DASHBOARD_SECTIONS.filter(function(s){ return s.label.toLowerCase().includes(q); })
+    .slice(0, 5).map(function(s){
+      return { icon: s.icon, title: s.label, sub: 'Tab: ' + s.tab, onclick: 'switchTab(\'' + s.tab + '\');_closeMasterSearch()' };
+    });
+  sections.push(group('Sections', sec));
+  // Clinics
+  var clinics = (typeof CLINIC_BANK !== 'undefined' ? CLINIC_BANK : [])
+    .filter(function(c){ return c && (((c.n||'').toLowerCase().includes(q)) || ((c.c||'').toLowerCase().includes(q)) || ((c.d||'').toLowerCase().includes(q))); })
+    .slice(0, 8).map(function(c){
+      return { icon: '🏥', title: c.n, sub: (c.c||'?') + (c.d?' · ' + c.d:'') + (c.s?' · '+c.s:''), onclick: 'switchTab(\'bank\');setTimeout(function(){var i=document.querySelector(\'[data-clinic-name=\\\'' + (c.n||'').replace(/[\\\\\']/g,'') + '\\\']\');if(i)i.scrollIntoView({behavior:\'smooth\',block:\'center\'})},250);_closeMasterSearch()' };
+    });
+  sections.push(group('Clinics', clinics));
+  // MVAs
+  var mvas = (typeof MVA_ATTORNEYS !== 'undefined' ? MVA_ATTORNEYS : [])
+    .filter(function(m){ return m && (((m.firm||'').toLowerCase().includes(q)) || ((m.city||'').toLowerCase().includes(q)) || ((m.attorney||'').toLowerCase().includes(q))); })
+    .slice(0, 5).map(function(m){
+      return { icon: '⚖', title: m.firm, sub: (m.city||'?') + (m.attorney?' · ' + m.attorney:''), onclick: 'switchTab(\'bank\');_closeMasterSearch()' };
+    });
+  sections.push(group('MVA Attorneys', mvas));
+  // Outreach
+  var outr = (typeof OUTREACH !== 'undefined' ? OUTREACH : [])
+    .filter(function(o){ return o && (((o.name||'').toLowerCase().includes(q)) || ((o.city||'').toLowerCase().includes(q))); })
+    .slice(0, 5).map(function(o){
+      return { icon: '🏘', title: o.name, sub: (o.city||'?'), onclick: 'switchTab(\'bank\');_closeMasterSearch()' };
+    });
+  sections.push(group('Outreach', outr));
+  // Members
+  var mems = (typeof MEMBERS !== 'undefined' ? MEMBERS : [])
+    .filter(function(m){ return m && String(m).toLowerCase().includes(q); })
+    .slice(0, 5).map(function(m){
+      return { icon: '👤', title: m, sub: 'Marketing member', onclick: 'switchTab(\'members\');setTimeout(function(){if(typeof loadMemberProfile===\'function\')loadMemberProfile(\'' + String(m).replace(/'/g,"\\'") + '\')},250);_closeMasterSearch()' };
+    });
+  sections.push(group('Members', mems));
+  // Referral patients (logged + pending)
+  var refs = [];
+  if(typeof REFERRAL_LOG !== 'undefined' && Array.isArray(REFERRAL_LOG)){
+    REFERRAL_LOG.filter(function(e){ return e && (((e.sourceBusiness||'').toLowerCase().includes(q)) || ((e.memberName||'').toLowerCase().includes(q)) || ((e.chiefComplaint||'').toLowerCase().includes(q))); })
+      .slice(0, 5).forEach(function(e){
+        refs.push({ icon: '📋', title: (e.sourceBusiness || 'Patient'), sub: (e.entryDate||'?') + ' · ' + (e.memberName||'no member') + (e.chiefComplaint?' · '+e.chiefComplaint:''), onclick: 'switchTab(\'referrals\');_closeMasterSearch()' });
+      });
+  }
+  if(typeof PENDING_REFERRALS !== 'undefined' && Array.isArray(PENDING_REFERRALS)){
+    PENDING_REFERRALS.filter(function(r){ return r && (((r.patientName||'').toLowerCase().includes(q)) || ((r.sourceName||'').toLowerCase().includes(q))); })
+      .slice(0, 5).forEach(function(r){
+        refs.push({ icon: '⏳', title: (r.patientName || 'Pending patient'), sub: (r.sourceName||'?') + ' → ' + (r.destinationFacility||'?') + ' · ' + (r.status||'pending'), onclick: 'switchTab(\'referrals\');_closeMasterSearch()' });
+      });
+  }
+  sections.push(group('Patients / Referrals', refs));
+  var html = sections.filter(Boolean).join('');
+  if(!html){
+    box.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted);font-size:12px">No matches for <b>"' + esc(q) + '"</b>.</div>';
+    if(cnt) cnt.textContent = '';
+    return;
+  }
+  box.innerHTML = html;
+  var total = sec.length + clinics.length + mvas.length + outr.length + mems.length + refs.length;
+  if(cnt) cnt.textContent = total + ' result' + (total===1?'':'s');
+}
+window._runMasterSearch = _runMasterSearch;
+// Ctrl+K (or Cmd+K) opens the search palette globally; Esc closes it.
+document.addEventListener('keydown', function(e){
+  if((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')){
+    e.preventDefault();
+    _openMasterSearch();
+  } else if(e.key === 'Escape'){
+    var m = document.getElementById('master-search-modal');
+    if(m && m.style.display !== 'none') _closeMasterSearch();
+  }
+});
+
+// ── PHASE 19g — RECENT-TABS WIDGET (per user 2026-05-26 #48) ────────────────
+// Tracks the last 5 tabs visited (we keep extra in case the user comes back
+// to the same one quickly — visible strip shows top 3 excluding current).
+// Persisted in localStorage so it survives reload.
+var _RECENT_TABS_LS_KEY = 'wcg_recent_tabs_v1';
+var TAB_DISPLAY_INFO = {
+  home:      { icon: '🏠', label: 'Home' },
+  schedule:  { icon: '📅', label: 'Dashboard' },
+  members:   { icon: '👥', label: 'Team' },
+  bank:      { icon: '🏢', label: 'Businesses' },
+  referrals: { icon: '📋', label: 'Referrals' },
+  finances:  { icon: '💰', label: 'Finances' },
+  reports:   { icon: '📋', label: 'Reports' },
+  feed:      { icon: '📡', label: 'Activity' },
+  profile:   { icon: '🪪', label: 'Profile' },
+  help:      { icon: '❓', label: 'Help' },
+  chat:      { icon: '💬', label: 'Chat' }
+};
+function _recordRecentTab(tab){
+  if(!tab || !TAB_DISPLAY_INFO[tab]) return;
+  try {
+    var existing = JSON.parse(localStorage.getItem(_RECENT_TABS_LS_KEY) || '[]');
+    if(!Array.isArray(existing)) existing = [];
+    // Remove if already present, then unshift to front
+    existing = existing.filter(function(t){ return t !== tab; });
+    existing.unshift(tab);
+    if(existing.length > 5) existing = existing.slice(0, 5);
+    localStorage.setItem(_RECENT_TABS_LS_KEY, JSON.stringify(existing));
+  } catch(_){}
+}
+function _renderRecentTabsStrip(currentTab){
+  var strip = document.getElementById('recent-tabs-strip');
+  var wrap  = document.getElementById('recent-tabs-strip-wrap');
+  if(!strip) return;
+  var recent = [];
+  try { recent = JSON.parse(localStorage.getItem(_RECENT_TABS_LS_KEY) || '[]'); } catch(_){}
+  if(!Array.isArray(recent)) recent = [];
+  // Exclude the current tab, show top 3 of the rest
+  var others = recent.filter(function(t){ return t !== currentTab && TAB_DISPLAY_INFO[t]; }).slice(0, 3);
+  if(others.length === 0){
+    if(wrap) wrap.style.display = 'none';
+    return;
+  }
+  if(wrap) wrap.style.display = 'flex';
+  strip.innerHTML = others.map(function(t){
+    var info = TAB_DISPLAY_INFO[t];
+    return '<button type="button" onclick="switchTab(\'' + t + '\')" style="background:#fff;border:1px solid var(--border);color:#1F3864;border-radius:14px;padding:3px 11px;font-size:11px;font-weight:600;cursor:pointer;font-family:DM Sans,sans-serif;display:inline-flex;align-items:center;gap:4px">' + info.icon + ' ' + info.label + '</button>';
+  }).join('');
+}
+window._renderRecentTabsStrip = _renderRecentTabsStrip;
+window._recordRecentTab = _recordRecentTab;
+
 function switchTab(tab, opts){
   // Per user 2026-05-23 v4: warn before navigating away from a dirty modal.
   // The opts.skipDirtyGuard flag lets internal callers (e.g. the discard
@@ -41828,7 +42033,7 @@ function renderKPICards(name){
   var sm=msMonth[name]||{comp:0,post:0,canc:0,pend:0,leads:0,total:0};
   var weekData=getWeeklyCompletions(name);
   var areaData=getAreaCoverage(name);
-  // Completion rate = monthly
+  // Completion ratio = monthly
   var compRate=sm.total>0?Math.round((sm.comp/sm.total)*100):0;
   // Per user 2026-05-22: live monthly spending for this member.
   var monthSpending = (typeof getMemberSpendingForMonth === 'function')
@@ -41865,18 +42070,44 @@ function renderKPICards(name){
     +(KPI_TARGETS.leadsPerPeriod?'<div class="progress-bar"><div class="progress-fill" style="width:'+Math.min(100,Math.round((leadsMonth/(KPI_TARGETS.leadsPerPeriod||1))*100))+'%;background:'+(lColor==='green'?'#22c55e':lColor==='yellow'?'#f59e0b':'#ef4444')+'"></div></div>':'')
     // Per user 2026-05-24 dedupe T1: dropped the "X completed visits · Y%
     // lead rate" subtitle — completed count already shows on the avatar
-    // strip + the Completion Rate card right below.
+    // strip + the Completion Ratio card right below.
     +'</div>';
-  // 3. Visit completion rate — ALL-TIME (since the member started)
+  // 3. Visit completion ratio — ALL-TIME (since the member started)
   var compRateAllTime = s.total>0 ? Math.round((s.comp/s.total)*100) : 0;
   var rateColor = compRateAllTime>=80 ? '#16a34a' : compRateAllTime>=50 ? '#f59e0b' : '#ef4444';
-  cards+='<div class="kpi-card" title="Career completion rate = '+s.comp+' completed &divide; '+s.total+' assigned &times; 100">'
-    +'<div class="kpi-card-top"><div class="kpi-label">Completion Rate</div>'
+  cards+='<div class="kpi-card" title="Career completion ratio = '+s.comp+' completed &divide; '+s.total+' assigned &times; 100">'
+    +'<div class="kpi-card-top"><div class="kpi-label">Completion Ratio</div>'
     +'<span class="kpi-badge badge-grey" style="font-weight:700">ALL-TIME</span></div>'
     +'<div class="kpi-nums"><div class="kpi-actual" style="color:'+rateColor+'">'+compRateAllTime+'%</div></div>'
     // Per user 2026-05-24 dedupe T1: dropped subtitle "X completed of Y
     // assigned" — that pair already lives on the avatar strip above.
     +'</div>';
+  // 3b. Monthly Visit Rate — per user 2026-05-26 (#30): "rate" = how many
+  // per period, NOT a percentage. This is the FOCUS metric — visits this
+  // member completed this month. Weekly rate (this-week count) only shows
+  // in the progress section, not as its own card.
+  var monthlyRateColor = sm.comp >= 20 ? '#16a34a' : sm.comp >= 10 ? '#f59e0b' : '#ef4444';
+  var weekCompletedThis = 0;
+  try {
+    if(weekData && Array.isArray(weekData) && weekData.length){
+      weekCompletedThis = weekData[weekData.length - 1] && weekData[weekData.length - 1].comp || 0;
+    }
+  } catch(_){}
+  var weeklyTarget = KPI_TARGETS && KPI_TARGETS.completedPerPeriod ? KPI_TARGETS.completedPerPeriod : 0;
+  var weeklyPct = weeklyTarget ? Math.min(100, Math.round((weekCompletedThis / weeklyTarget) * 100)) : 0;
+  cards += '<div class="kpi-card" title="Monthly visit rate = completed visits in the current view month. Headline frequency metric.">'
+    + '<div class="kpi-card-top"><div class="kpi-label">📈 Monthly Visit Rate</div>'
+    + '<span class="kpi-badge badge-grey" style="font-weight:700">PER MONTH</span></div>'
+    + '<div class="kpi-nums"><div class="kpi-actual" style="color:' + monthlyRateColor + '">' + sm.comp + '</div>'
+    + '<div style="font-size:11px;color:var(--muted);margin-left:8px">visit' + (sm.comp !== 1 ? 's' : '') + ' completed this month</div></div>'
+    + (weeklyTarget ? (
+        '<div style="margin-top:8px">'
+        + '<div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px">Weekly progress</div>'
+        + '<div class="progress-bar"><div class="progress-fill" style="width:' + weeklyPct + '%;background:' + (weeklyPct>=100?'#22c55e':weeklyPct>=70?'#f59e0b':'#ef4444') + '"></div></div>'
+        + '<div style="font-size:10px;color:var(--muted);margin-top:3px">' + weekCompletedThis + ' / ' + weeklyTarget + ' this week</div>'
+        + '</div>'
+      ) : '')
+    + '</div>';
   // 4. Visits per Area — interactive dropdown showing per-area count (ALL-TIME)
   // Build the per-area visit count map for this member.
   var areaCounts = {};
@@ -41919,7 +42150,7 @@ function renderKPICards(name){
     +'<span class="kpi-badge badge-grey" style="font-weight:700">' + spendLabel.toUpperCase() + '</span></div>'
     +'<div class="kpi-nums"><div class="kpi-actual" style="color:#16a34a">' + spendFormatted + '</div></div>'
     // Per user 2026-05-24 dedupe T1: dropped "X completed visits" subtitle
-    // — same number already on the avatar strip + Completion Rate card.
+    // — same number already on the avatar strip + Completion Ratio card.
     // Kept just the live-update hint as a small footer.
     +'<div class="kpi-sub" style="opacity:.7">updates live as visits complete</div>'
     +'</div>';
@@ -42450,7 +42681,7 @@ function renderProgressReport(){
   var kpiHtml = '<div class="pr-section" style="padding:24px 36px;border-bottom:1px solid var(--border)">'
     + '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:14px">'
     +   '<div class="pr-kpi-card" style="background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:14px"><div style="font-size:30px;font-weight:800;color:#166534;font-family:DM Mono,monospace">' + stats.totals.completed + '</div><div style="font-size:10px;color:#166534;font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-top:4px">Completed visits</div></div>'
-    +   '<div class="pr-kpi-card" style="background:#eff6ff;border:1px solid #93c5fd;border-radius:10px;padding:14px"><div style="font-size:30px;font-weight:800;color:#1d4ed8;font-family:DM Mono,monospace">' + compRate + '%</div><div style="font-size:10px;color:#1e40af;font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-top:4px">Completion rate</div></div>'
+    +   '<div class="pr-kpi-card" style="background:#eff6ff;border:1px solid #93c5fd;border-radius:10px;padding:14px"><div style="font-size:30px;font-weight:800;color:#1d4ed8;font-family:DM Mono,monospace">' + compRate + '%</div><div style="font-size:10px;color:#1e40af;font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-top:4px">Completion ratio</div></div>'
     +   '<div class="pr-kpi-card" style="background:#fef3c7;border:1px solid #fcd34d;border-radius:10px;padding:14px"><div style="font-size:30px;font-weight:800;color:#92400e;font-family:DM Mono,monospace">' + stats.totals.leads + '</div><div style="font-size:10px;color:#92400e;font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-top:4px">Leads established</div></div>'
     +   '<div class="pr-kpi-card" style="background:#fef2f2;border:1px solid #fca5a5;border-radius:10px;padding:14px"><div style="font-size:30px;font-weight:800;color:#b91c1c;font-family:DM Mono,monospace">$' + stats.totals.spending.toFixed(0) + '</div><div style="font-size:10px;color:#991b1b;font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-top:4px">Total spending</div></div>'
     +   '<div class="pr-kpi-card" style="background:#f5f3ff;border:1px solid #c4b5fd;border-radius:10px;padding:14px"><div style="font-size:30px;font-weight:800;color:#6d28d9;font-family:DM Mono,monospace">' + refs.total + '</div><div style="font-size:10px;color:#5b21b6;font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-top:4px">Patients referred</div></div>'
@@ -49544,7 +49775,23 @@ window.confirmAddLead=confirmAddLead;
 window.openEditLead=openEditLead;window.closeEditLeadModal=closeEditLeadModal;
 window.saveEditLead=saveEditLead;window.deleteLead=deleteLead;
 
-window.switchTab=switchTab;window.loadMemberProfile=loadMemberProfile;window.gotoPage=gotoPage;
+// Per Phase 19g #48: wrap switchTab to also record the visit + refresh
+// the recent-tabs strip. Done by wrapper so we don't need to modify the
+// huge switchTab function body.
+(function _wrapSwitchTabForRecent(){
+  var orig = switchTab;
+  window.switchTab = function(tab, opts){
+    var result = orig.apply(this, arguments);
+    try {
+      if(tab && typeof _recordRecentTab === 'function') _recordRecentTab(tab);
+      if(typeof _renderRecentTabsStrip === 'function') _renderRecentTabsStrip(tab);
+    } catch(_){}
+    return result;
+  };
+})();
+window.loadMemberProfile=loadMemberProfile;window.gotoPage=gotoPage;
+// Render the strip on initial boot so it appears for the default 'home' tab
+try { setTimeout(function(){ if(typeof _renderRecentTabsStrip === 'function') _renderRecentTabsStrip('home'); }, 100); } catch(_){}
 
 window.navMonth=navMonth;window.openDay=openDay;window.showLanding=showLanding;
 window.setSt=setSt;window.setMember=setMember;window.confirmMember=confirmMember;
@@ -49625,9 +49872,12 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
         <div style="font-size:11px;color:var(--muted);margin-top:3px">Two-stage flow — marketing creates → facility approves on patient arrival → auto-creates a patient log.</div>
       </div>
       <div style="display:flex;gap:6px;align-items:center">
+        <!-- Per user 2026-05-26 (#29): default to All so approved /
+             declined / incomplete referrals stay visible without
+             toggling. The persistent record matters as much as pending. -->
         <select id="pr-status-filter" onchange="renderPendingReferrals()" style="border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:11px;font-family:'DM Sans',sans-serif;background:#fff">
+          <option value="all" selected>All statuses</option>
           <option value="pending">⏳ Pending only</option>
-          <option value="all">All statuses</option>
           <option value="approved">✓ Approved</option>
           <option value="declined">✗ Declined</option>
           <option value="incomplete">⏰ Incomplete (auto-expired)</option>
