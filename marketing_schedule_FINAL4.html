@@ -3310,7 +3310,7 @@ body.role-front_desk #referrals-view {
                by JS in renderDayMap when isAdmin() returns true. Opens the
                existing settings modal where the Google Maps + Gemini keys
                + daily quota caps are configured. -->
-          <button id="dv-mapv2-settings-btn" type="button" onclick="openMapV2Settings()" title="Map v2 settings — paste Google Maps API key for real driving directions, traffic-aware ETA, and AI auto-fill" style="display:none;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);color:#fff;border-radius:6px;padding:5px 9px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">⚙ Map v2</button>
+          <button id="dv-mapv2-settings-btn" type="button" onclick="openMapV2Settings()" title="Map v2 settings — paste Google Maps API key for real driving directions, traffic-aware ETA, and AI auto-fill" style="display:inline-flex;align-items:center;gap:4px;background:#7030A0;border:1px solid #fff;color:#fff;border-radius:6px;padding:5px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;line-height:1.1">⚙ Map v2</button>
           <button id="dv-map-expand-btn" type="button" onclick="toggleDayMapExpanded()"
                   title="Expand the map to full height — easier to see the route"
                   style="background:#1F3864;border:none;color:#fff;border-radius:6px;padding:5px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;display:inline-flex;align-items:center;gap:5px;line-height:1.1">
@@ -3411,17 +3411,20 @@ body.role-front_desk #referrals-view {
         </div>
         <input type="hidden" id="rp-start">
         <div style="font-size:10px;color:var(--muted);margin-top:3px;font-style:italic">Type to search, or tap <b>📍 Map</b> to pick a pin on the map.</div>
+        <div id="rp-start-err" style="font-size:10px;color:#ef4444;margin-top:4px;display:none;font-weight:600">Pick a Start point before running Find candidates.</div>
       </div>
 
-      <!-- End picker — only visible in CORRIDOR mode (per user 2026-05-22) -->
+      <!-- End picker — only visible in CORRIDOR mode (per user 2026-05-22).
+           Per user 2026-05-26: End is required. Either pick a destination OR
+           tick "Round trip" — Find candidates is gated on this. -->
       <div id="rp-end-wrap" class="kpi-input-row" style="margin-bottom:10px">
-        <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Ending clinic / MVA / facility</label>
+        <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Ending clinic / MVA / facility <span style="color:#ef4444">*</span></label>
         <div style="display:grid;grid-template-columns:120px 1fr auto;gap:6px">
           <select id="rp-end-area" onchange="_rpAreaChanged('end')" style="border:1px solid var(--border);border-radius:8px;padding:9px 10px;font-size:12px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box">
             <option value="">All areas</option>
           </select>
           <div style="position:relative">
-            <input type="text" id="rp-end-search" placeholder='Type a name, or leave blank for "Same as start"'
+            <input type="text" id="rp-end-search" placeholder="Type a clinic, MVA or facility name…"
                    autocomplete="off"
                    oninput="_rpSearchSuggest('end')" onfocus="_rpSearchSuggest('end')"
                    onblur="setTimeout(function(){var b=document.getElementById('rp-end-suggest');if(b)b.style.display='none';},180)"
@@ -3430,8 +3433,12 @@ body.role-front_desk #referrals-view {
           </div>
           <button type="button" onclick="rpPickFromMapMode('end')" title="Close this dialog and pick the End by clicking a pin on the map" style="background:#1F3864;color:#fff;border:none;border-radius:8px;padding:9px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;white-space:nowrap">📍 Map</button>
         </div>
-        <input type="hidden" id="rp-end" value="__same__">
-        <div style="font-size:10px;color:var(--muted);margin-top:3px;font-style:italic">Leave the name blank for a round-trip back to Start. Or tap <b>📍 Map</b> to pick on the map.</div>
+        <input type="hidden" id="rp-end" value="">
+        <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text);margin-top:6px;cursor:pointer">
+          <input type="checkbox" id="rp-round-trip" onchange="_rpToggleRoundTrip()" style="cursor:pointer">
+          <span><b>Round trip</b> — return to the Start (skips the End picker)</span>
+        </label>
+        <div id="rp-end-err" style="font-size:10px;color:#ef4444;margin-top:4px;display:none;font-weight:600">Pick an End — or tick <b>Round trip</b> to return to Start.</div>
       </div>
 
       <!-- ── RANDOM PICK MODE — Picked stops list (per user 2026-05-22) ──
@@ -3545,13 +3552,14 @@ body.role-front_desk #referrals-view {
           <button id="rp-rw-generate-btn" type="button" onclick="_rpRwGenerate()" style="background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;border:none;border-radius:6px;padding:8px 22px;font-size:12px;font-weight:700;cursor:pointer;display:none">⚡ Generate routes</button>
         </div>
       </div>
-      <!-- Corridor controls (per user 2026-05-22 v5 design).
+      <!-- Corridor controls (per user 2026-05-22 v5 design; revised 2026-05-26).
            - Number of route levels: user-supplied N. Total Start→End distance
              is sliced into N equal depth chunks. Each chunk is one wizard
              "Level" the user walks through sequentially.
            - Corridor half-width: perpendicular miles each side of the
-             Start→End line. Auto-expands per level up to 12 mi if empty. -->
-      <div id="rp-corridor-controls" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px">
+             Start→End line. Per user 2026-05-26: NO auto-expand. Each empty
+             level gets per-level "+1 mi" / "+2 mi" buttons (capped at base+2). -->
+      <div id="rp-corridor-controls" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
         <div>
           <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Number of route levels <span style="color:var(--muted);font-weight:400">(visits to plan)</span></label>
           <div style="display:flex;align-items:center;gap:5px">
@@ -3568,13 +3576,9 @@ body.role-front_desk #referrals-view {
             <button type="button" onclick="_rpV4AdjustWidth(1)" style="background:#e5e7eb;border:none;color:#374151;width:30px;height:36px;border-radius:6px;font-size:14px;font-weight:700;cursor:pointer">+</button>
           </div>
         </div>
-        <div>
-          <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">If empty…</label>
-          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:11px;color:var(--text);background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:9px 10px;height:36px;box-sizing:border-box">
-            <input type="checkbox" id="rp-auto-expand" checked onchange="_rpV4OnWidthChange()" style="cursor:pointer">
-            <span>Auto-expand (12 mi)</span>
-          </label>
-        </div>
+      </div>
+      <div style="font-size:10px;color:var(--muted);margin:-4px 0 10px 0;font-style:italic;line-height:1.4">
+        If a level has no candidates at <b>±<span id="rp-base-width-hint">3</span> mi</b>, you'll see <b>+1 mi</b> / <b>+2 mi</b> buttons on that level only — no auto-expand.
       </div>
       <div id="rp-corridor-filters">
         <div class="kpi-input-row" style="margin-bottom:10px">
@@ -25411,19 +25415,23 @@ function renderDayMap(di){
         ? 'Planning is for today or future days only — this day is in the past.'
         : 'Pick a Start and End pin on the map — get a corridor of clinics to visit between them, ranked by longest-since-visited.';
     }
-    // Admin-only Map v2 settings button — visible only for admin so members
-    // can't see (or accidentally trash) the API-key config.
+    // Map v2 settings button — always visible (admins manage keys, non-admins
+    // get an "Only admin can change" toast on click, so it's safe to show).
+    // Green dot indicates a Maps key is configured (admin only — non-admin
+    // doesn't need to know whether the key is set).
     var mv2Btn = document.getElementById('dv-mapv2-settings-btn');
     if(mv2Btn){
+      mv2Btn.style.display = 'inline-flex';
       var canSeeKeys = (typeof isAdmin === 'function') && isAdmin();
-      mv2Btn.style.display = canSeeKeys ? 'inline-flex' : 'none';
-      // Indicate active state via a small dot if a key is configured
       if(canSeeKeys){
         var keyActive = (typeof hasMapsKey === 'function') && hasMapsKey();
         mv2Btn.innerHTML = '⚙ Map v2' + (keyActive ? ' <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#22c55e;margin-left:3px"></span>' : '');
         mv2Btn.title = keyActive
           ? 'Map v2 active — Google driving directions + traffic-aware ETA. Click to manage keys + quota.'
           : 'Map v2 settings — paste your Google Maps API key for real driving directions + traffic-aware ETA.';
+      } else {
+        mv2Btn.innerHTML = '⚙ Map v2';
+        mv2Btn.title = 'Map v2 settings — admin only.';
       }
     }
   } catch(_){}
@@ -26586,6 +26594,12 @@ window._rpV4AdjustWidth = _rpV4AdjustWidth;
 // finder so results stay in sync. Debounced lightly to avoid flicker.
 var _rpV4Timer = null;
 function _rpV4OnWidthChange(){
+  // Live-update the "If a level has no candidates at ±N mi" hint
+  try {
+    var w = parseFloat((document.getElementById('rp-corridor') || {}).value) || 3;
+    var hint = document.getElementById('rp-base-width-hint');
+    if(hint) hint.textContent = String(w);
+  } catch(_){}
   if(_rpV4Timer) clearTimeout(_rpV4Timer);
   _rpV4Timer = setTimeout(function(){
     if(_RP_V4_LAST) runRoutePlannerV4();
@@ -29204,6 +29218,66 @@ function _rpV5AdjustN(delta){
 }
 window._rpV5AdjustN = _rpV5AdjustN;
 
+// Round-trip toggle — when ticked, End picker is dimmed/disabled and the
+// hidden rp-end is set to __same__. When un-ticked, End becomes required.
+// Per user 2026-05-26: Find candidates is gated on Start+End (or round-trip).
+function _rpToggleRoundTrip(){
+  var chk    = document.getElementById('rp-round-trip');
+  var endHid = document.getElementById('rp-end');
+  var endInp = document.getElementById('rp-end-search');
+  var endSel = document.getElementById('rp-end-area');
+  var errEl  = document.getElementById('rp-end-err');
+  if(!chk) return;
+  if(chk.checked){
+    if(endHid) endHid.value = '__same__';
+    if(endInp){ endInp.value = ''; endInp.disabled = true; endInp.style.background = '#f1f5f9'; endInp.style.cursor = 'not-allowed'; endInp.placeholder = 'Round trip — returning to Start'; }
+    if(endSel){ endSel.disabled = true; endSel.style.background = '#f1f5f9'; }
+    if(errEl) errEl.style.display = 'none';
+  } else {
+    if(endHid) endHid.value = '';
+    if(endInp){ endInp.disabled = false; endInp.style.background = '#fff'; endInp.style.cursor = ''; endInp.placeholder = 'Type a clinic, MVA or facility name…'; }
+    if(endSel){ endSel.disabled = false; endSel.style.background = '#fff'; }
+  }
+}
+window._rpToggleRoundTrip = _rpToggleRoundTrip;
+
+// Validate Start + End before running corridor wizard. Returns true if OK,
+// false (with red outline + helper text) if either is missing.
+function _rpValidateCorridorInputs(){
+  var ok = true;
+  var startHid = document.getElementById('rp-start');
+  var startInp = document.getElementById('rp-start-search');
+  var startErr = document.getElementById('rp-start-err');
+  var endHid   = document.getElementById('rp-end');
+  var endInp   = document.getElementById('rp-end-search');
+  var endErr   = document.getElementById('rp-end-err');
+  var roundTrip= !!(document.getElementById('rp-round-trip') && document.getElementById('rp-round-trip').checked);
+  // Clear stale state
+  if(startInp) startInp.style.borderColor = '';
+  if(endInp)   endInp.style.borderColor   = '';
+  if(startErr) startErr.style.display = 'none';
+  if(endErr)   endErr.style.display = 'none';
+  // Start required
+  if(!startHid || !startHid.value){
+    if(startInp) startInp.style.borderColor = '#ef4444';
+    if(startErr) startErr.style.display = 'block';
+    if(startInp) try { startInp.focus(); } catch(_){}
+    ok = false;
+  }
+  // End required unless round-trip
+  if(!roundTrip){
+    var endVal = endHid && endHid.value;
+    if(!endVal || endVal === '__same__'){
+      if(endInp) endInp.style.borderColor = '#ef4444';
+      if(endErr) endErr.style.display = 'block';
+      if(ok && endInp) try { endInp.focus(); } catch(_){}
+      ok = false;
+    }
+  }
+  return ok;
+}
+window._rpValidateCorridorInputs = _rpValidateCorridorInputs;
+
 // Signed perpendicular distance from point P to line A→B (miles).
 // Positive value = P is on the "left" side of the A→B direction (looking
 // from A toward B); negative = "right" side. Used to warn when picks span
@@ -29281,14 +29355,14 @@ function _rpV5FindForLevel(A, B, k, opts){
     if(typeof MVA_ATTORNEYS !== 'undefined') MVA_ATTORNEYS.forEach(function(m){ if(m && m.firm) consider(m.firm, 'mva', 'MVA'); });
     return out;
   }
-  var cands = collect(halfWidth);
-  var effectiveWidth = halfWidth;
-  if(autoExpand && cands.length === 0){
-    for(var w = halfWidth + 1; w <= 12; w++){
-      var bigger = collect(w);
-      if(bigger.length > 0){ cands = bigger; effectiveWidth = w; break; }
-    }
-  }
+  // Per user 2026-05-26: NO auto-expand to 12 mi. Empty levels stay empty
+  // unless the user explicitly clicks +1mi / +2mi on that level (handled in
+  // _rpV5WidenLevel). The collect-at-larger-width path here is now only used
+  // by the per-level widen buttons via opts.widenTo.
+  var width = (opts.widenTo && opts.widenTo > halfWidth) ? opts.widenTo : halfWidth;
+  var cands = collect(width);
+  var effectiveWidth = width;
+  // (autoExpand kept on the opts contract for back-compat but is a no-op.)
   // Sort: oldest-since-visited first (ripest), then closest to line.
   // Per user 2026-05-25 (revised): null (never visited) treated as RIPE
   // (Infinity) — cold leads are top recommendation priority.
@@ -29303,15 +29377,20 @@ function _rpV5FindForLevel(A, B, k, opts){
 
 // Entry — called by "Find candidates" in corridor mode. Replaces v4.
 function _rpV5Start(){
+  // Gate: Start required; End required unless Round-trip ticked.
+  if(typeof _rpValidateCorridorInputs === 'function' && !_rpValidateCorridorInputs()){
+    if(typeof showToast === 'function') showToast('Fill the required fields before finding candidates.');
+    return;
+  }
   // Resolve Start + End
   var startKey = (document.getElementById('rp-start') || {}).value || '';
   var endKey   = (document.getElementById('rp-end')   || {}).value || '';
   var A = (typeof getRouteCoord === 'function') ? getRouteCoord(startKey) : null;
-  if(!A){ if(typeof showToast === 'function') showToast('Pick a Start point first.'); return; }
+  if(!A){ if(typeof showToast === 'function') showToast('Start point not resolvable on the map — re-pick from suggestions.'); return; }
   var B;
-  if(endKey === '__same__' || !endKey){ B = A; }
+  if(endKey === '__same__'){ B = A; }
   else { B = (typeof getRouteCoord === 'function') ? getRouteCoord(endKey) : null; }
-  if(!B){ if(typeof showToast === 'function') showToast('Pick an End point (or leave blank for round trip).'); return; }
+  if(!B){ if(typeof showToast === 'function') showToast('End point not resolvable on the map — re-pick from suggestions.'); return; }
   // Read params
   var N = parseInt((document.getElementById('rp-level-count') || {}).value, 10) || 5;
   if(N < 1) N = 1; if(N > 12) N = 12;
@@ -29319,10 +29398,11 @@ function _rpV5Start(){
   var autoExpand = !!(document.getElementById('rp-auto-expand') && document.getElementById('rp-auto-expand').checked);
   var specFilter = (document.getElementById('rp-specialty') || {}).value || '';
   var skipVisited = !!(document.getElementById('rp-skip-visited') && document.getElementById('rp-skip-visited').checked);
-  // Reset wizard state
+  // Reset wizard state — fresh run clears edit-mode + originals
   _RP_V5_N = N;
   _RP_V5_STEP = 1;
   _RP_V5_PICKS = {};
+  _RP_V5_EDIT_MODE = false;
   // Build all levels up front (cached so navigation is instant)
   var totalMi = _rpHaversineMiles(A, B);
   var slices = [];
@@ -29357,23 +29437,61 @@ function _rpV5ShowLevel(k){
     var color = isCurrent ? '#7030A0' : (hasPicks ? '#16a34a' : '#cbd5e1');
     dots += '<span style="display:inline-block;width:24px;height:8px;background:'+color+';border-radius:4px;'+(isCurrent?'box-shadow:0 0 0 2px rgba(112,48,160,.25);':'')+'"></span>';
   }
-  // Header
-  var widthNote = (slice.effectiveWidth > _RP_V5_LAST.baseWidth)
-    ? ' · <span style="color:#9a3412;font-weight:600">expanded to ±'+slice.effectiveWidth+' mi (no candidates at ±'+_RP_V5_LAST.baseWidth+' mi)</span>'
-    : ' · within ±'+_RP_V5_LAST.baseWidth+' mi';
+  // Header — show current per-level effective width and (if widened) the delta
+  var base = _RP_V5_LAST.baseWidth;
+  var widenedBy = (slice.effectiveWidth || base) - base;
+  var widthNote = (widenedBy > 0)
+    ? ' · <span style="color:#9a3412;font-weight:600">widened to ±'+slice.effectiveWidth+' mi (+'+widenedBy+' from base ±'+base+' mi)</span>'
+    : ' · within ±'+base+' mi';
+  // Per-level widen buttons — only show if we still have room (capped at +2 mi)
+  var widenBtns = '';
+  if(widenedBy < 2){
+    widenBtns = '<div style="display:flex;align-items:center;gap:6px;margin-top:6px;flex-wrap:wrap">'
+      + '<span style="font-size:10px;color:var(--muted);font-weight:600">Need more?</span>';
+    if(widenedBy < 1){
+      widenBtns += '<button type="button" onclick="_rpV5WidenLevel('+k+',1)" style="background:#fff;border:1px solid #7030A0;color:#7030A0;border-radius:6px;padding:3px 9px;font-size:10px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">+1 mi (this level only)</button>';
+    }
+    widenBtns += '<button type="button" onclick="_rpV5WidenLevel('+k+',2)" style="background:#fff;border:1px solid #7030A0;color:#7030A0;border-radius:6px;padding:3px 9px;font-size:10px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">+2 mi (this level only)</button>'
+      + '</div>';
+  }
+  // Edit-mode delta header — only shown when re-visiting levels after a
+  // Generate. Live-updates as the user toggles picks so they see the
+  // distance/ETA impact of each change vs the originally locked-in route.
+  var editBlock = '';
+  if(_RP_V5_EDIT_MODE && _RP_V5_LAST.originalTotalMi){
+    var cur = _rpV5ComputeCurrentTotal();
+    var dMi  = cur.mi  - _RP_V5_LAST.originalTotalMi;
+    var dMin = cur.min - _RP_V5_LAST.originalTotalMin;
+    var sMi  = dMi  >= 0 ? '+' : '−';
+    var sMin = dMin >= 0 ? '+' : '−';
+    var dColor = dMi >= 0 ? '#dc2626' : '#16a34a';
+    editBlock = '<div style="background:#fff7ed;border:1px solid #fed7aa;border-left:3px solid #f59e0b;border-radius:8px;padding:8px 12px;font-size:11px;color:#7c2d12;margin-bottom:10px;line-height:1.5">'
+      + '<strong>✏ Editing route picks</strong> · '
+      + 'Was <b>'+_RP_V5_LAST.originalTotalMi.toFixed(1)+' mi</b> · <b>'+_RP_V5_LAST.originalTotalMin+' min</b>  →  '
+      + 'Now <b>'+cur.mi.toFixed(1)+' mi</b> · <b>'+cur.min+' min</b>  '
+      + '<span style="color:'+dColor+';font-weight:800">('+sMi+Math.abs(dMi).toFixed(1)+' mi · '+sMin+Math.abs(dMin)+' min)</span>'
+      + '</div>';
+  }
   var html = '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px">'
-    + '<div style="font-size:14px;font-weight:700;color:var(--text)">📍 Level '+k+' of '+N+'</div>'
+    + '<div style="font-size:14px;font-weight:700;color:var(--text)">📍 Level '+k+' of '+N+(_RP_V5_EDIT_MODE?' <span style="font-size:10px;color:#9a3412;background:#fff7ed;border:1px solid #fed7aa;border-radius:6px;padding:1px 6px;margin-left:6px;vertical-align:middle">EDIT MODE</span>':'')+'</div>'
     + '<div style="display:flex;gap:3px">'+dots+'</div>'
     + '</div>'
+    + editBlock
     + '<div style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:11px;color:var(--text);margin-bottom:10px;line-height:1.45">'
     +   '<strong>This slice:</strong> miles '+sliceStart.toFixed(1)+' to '+sliceEnd.toFixed(1)+' from Start'+widthNote
     +   ' · <span style="color:var(--muted)">'+slice.candidates.length+' candidate'+(slice.candidates.length===1?'':'s')+' found · sorted longest-not-visited first</span>'
+    +   widenBtns
     + '</div>';
   // Candidate list
   if(slice.candidates.length === 0){
-    html += '<div style="padding:14px;background:#fafbfc;border:1px dashed var(--border);border-radius:8px;font-size:12px;color:var(--muted);font-style:italic;text-align:center">No candidates in this depth slice — even after expanding the corridor to 12 mi. Skip this level (click Next →) or widen the corridor and re-run.</div>';
+    html += '<div style="padding:14px;background:#fafbfc;border:1px dashed var(--border);border-radius:8px;font-size:12px;color:var(--muted);font-style:italic;text-align:center">No candidates in this slice at ±'+(slice.effectiveWidth||base)+' mi.'
+      + (widenedBy < 2 ? ' Try the <b>+'+(widenedBy<1?'1':'2')+' mi</b> button above for this level only, or skip and click <b>Next →</b>.' : ' This level is at the +2 mi cap — skip it with <b>Next →</b>.')
+      + '</div>';
   } else {
     var emoji = { fresh:'🔴', warm:'🟠', yellow:'🟡', ripe:'🟢', never:'⚪' };
+    // Same-side rule: once a level has a pick, candidates on the opposite
+    // side are visually dimmed so the user sees they can't be added.
+    var lockedSide = picks.length > 0 ? (picks[0].perp >= 0 ? '+' : '-') : null;
     html += slice.candidates.map(function(c, i){
       var checked = picks.some(function(p){ return p.name === c.name; }) ? 'checked' : '';
       var safeName = String(c.name).replace(/'/g,"\\'").replace(/"/g,'&quot;');
@@ -29384,13 +29502,23 @@ function _rpV5ShowLevel(k){
       var sideSign = c.perp >= 0 ? '+' : '−';
       var sideColor = c.perp >= 0 ? '#3b82f6' : '#ef4444';
       var perpStr = sideSign + Math.abs(c.perp).toFixed(1) + ' mi';
-      return '<label style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid #f1f5f9;border-radius:8px;cursor:pointer;background:#fff;margin-bottom:4px;transition:background .12s" onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'#fff\'">'
-        + '<input type="checkbox" '+checked+' onchange="_rpV5ToggleCheck('+k+',\''+safeName+'\',this.checked)" style="cursor:pointer;flex-shrink:0">'
+      var thisSide = c.perp >= 0 ? '+' : '-';
+      var isLocked = (lockedSide && thisSide !== lockedSide && !checked);
+      var rowStyle = isLocked
+        ? 'display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px dashed #fecaca;border-radius:8px;cursor:not-allowed;background:#fef2f2;margin-bottom:4px;opacity:.55'
+        : 'display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid #f1f5f9;border-radius:8px;cursor:pointer;background:#fff;margin-bottom:4px;transition:background .12s';
+      var hover = isLocked ? '' : ' onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'#fff\'"';
+      var lockTitle = isLocked ? ' title="Opposite side from existing pick in this level — uncheck the other one first, or pick this in a different level."' : '';
+      return '<label style="'+rowStyle+'"'+hover+lockTitle+'>'
+        + '<input type="checkbox" '+checked+(isLocked?' disabled':'')+' onchange="_rpV5ToggleCheck('+k+',\''+safeName+'\',this.checked)" style="cursor:'+(isLocked?'not-allowed':'pointer')+';flex-shrink:0">'
         + '<span style="font-size:13px">'+dot+' '+typeIcon+'</span>'
         + '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><strong>'+c.name.replace(/</g,'&lt;')+'</strong> <span style="color:var(--muted);font-size:10px">· '+typeLbl+' · '+staleLbl+'</span></span>'
         + '<span title="Deroute from the Start→End line: '+(c.perp>=0?'positive':'negative')+' side · '+Math.abs(c.perp).toFixed(2)+' miles perpendicular" style="font-size:9px;color:#fff;background:'+sideColor+';border-radius:8px;padding:2px 7px;font-weight:700;flex-shrink:0">'+perpStr+'</span>'
         + '</label>';
     }).join('');
+    if(lockedSide){
+      html += '<div style="font-size:10px;color:#7c2d12;background:#fff7ed;border:1px solid #fed7aa;border-radius:6px;padding:5px 8px;margin-top:4px;font-style:italic">🔒 Same-side rule: this level is locked to the <b>'+lockedSide+' side</b>. Opposite-side rows are dimmed.</div>';
+    }
   }
   // Navigation buttons
   html += '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:14px;padding-top:10px;border-top:1px solid var(--border)">'
@@ -29405,6 +29533,34 @@ function _rpV5ShowLevel(k){
 }
 window._rpV5ShowLevel = _rpV5ShowLevel;
 
+// Per-level widen — user clicks +1 mi or +2 mi on an empty level to look
+// for candidates a bit further from the Start→End line. Capped at base+2 mi
+// (user 2026-05-26: "they should not reach twelve miles … just one, two
+// miles" per level). Recomputes ONLY that slice and re-renders.
+function _rpV5WidenLevel(k, deltaMi){
+  if(!_RP_V5_LAST) return;
+  var base = _RP_V5_LAST.baseWidth || 3;
+  var newWidth = base + deltaMi;
+  if(newWidth > base + 2){
+    if(typeof showToast === 'function') showToast('Per-level widen is capped at +2 mi from the base corridor.');
+    return;
+  }
+  var specFilter = (document.getElementById('rp-specialty') || {}).value || '';
+  var skipVisited = !!(document.getElementById('rp-skip-visited') && document.getElementById('rp-skip-visited').checked);
+  var lvl = _rpV5FindForLevel(_RP_V5_LAST.A, _RP_V5_LAST.B, k, {
+    N: _RP_V5_N, halfWidth: base, autoExpand: false,
+    specFilter: specFilter, skipVisited: skipVisited,
+    widenTo: newWidth
+  });
+  // Preserve tLo/tHi (they don't change with width) and stash the widen
+  _RP_V5_LAST.slices[k - 1] = lvl;
+  // Drop any picks from this level that are now outside the (still same) slice
+  // — width doesn't change which clinics belong to the slice, just expands
+  // perpendicular tolerance, so existing picks are still valid.
+  _rpV5ShowLevel(k);
+}
+window._rpV5WidenLevel = _rpV5WidenLevel;
+
 function _rpV5ToggleCheck(k, name, on){
   var key = 'level' + k;
   if(!_RP_V5_PICKS[key]) _RP_V5_PICKS[key] = [];
@@ -29412,7 +29568,23 @@ function _rpV5ToggleCheck(k, name, on){
     // Find the candidate object in the cached level data
     var slice = _RP_V5_LAST && _RP_V5_LAST.slices[k - 1];
     var c = slice && slice.candidates.find(function(x){ return x.name === name; });
-    if(c && !_RP_V5_PICKS[key].some(function(p){ return p.name === name; })){
+    if(!c){ _rpV5ShowLevel(k); return; }
+    // Same-side rule (user 2026-05-26): within ONE level, all picks must be
+    // on the same side of the Start→End line. Crossing sides per-level adds
+    // zigzag without buying coverage in a different depth slice.
+    var existing = _RP_V5_PICKS[key];
+    if(existing.length > 0){
+      var existingSide = existing[0].perp >= 0 ? '+' : '-';
+      var newSide      = c.perp        >= 0 ? '+' : '-';
+      if(existingSide !== newSide){
+        if(typeof showToast === 'function'){
+          showToast('Same level can only hold stops on one side of the Start→End line. Uncheck the existing pick first, or pick this one in a different level.');
+        }
+        _rpV5ShowLevel(k);   // re-render keeps the checkbox un-ticked
+        return;
+      }
+    }
+    if(!existing.some(function(p){ return p.name === name; })){
       _RP_V5_PICKS[key].push(c);
     }
   } else {
@@ -29459,9 +29631,30 @@ function _rpV5ShowSummary(){
   if(allPicks.length === 0){
     html += '<div style="padding:16px;background:#fff7ed;border:1px solid #fed7aa;border-left:3px solid #f59e0b;border-radius:8px;font-size:12px;color:#7c2d12">No stops picked across any level. Go back and check a few candidates, or pick a different Start/End / corridor width.</div>';
   } else {
+    // Total route estimate — Start → picks (in t order) → End, straight-line
+    // haversine × 1.4 urban factor, @ 30 mph average. Same model used by the
+    // existing route-planner summary so the numbers are consistent.
+    var orderedPicks = allPicks.slice().sort(function(a, b){ return a.t - b.t; });
+    var totalMi = 0;
+    var prev = _RP_V5_LAST.A;
+    orderedPicks.forEach(function(p){
+      totalMi += _rpHaversineMiles(prev, p.coord);
+      prev = p.coord;
+    });
+    totalMi += _rpHaversineMiles(prev, _RP_V5_LAST.B);
+    var totalDrivingMi = totalMi * 1.4;
+    var totalMin = Math.round((totalDrivingMi / 30) * 60);
+    // Stash on _RP_V5_LAST so edit-mode can show before→after deltas
+    _RP_V5_LAST.lastTotalMi  = totalDrivingMi;
+    _RP_V5_LAST.lastTotalMin = totalMin;
+    html += '<div style="background:linear-gradient(135deg,#1F3864,#7030A0);border-radius:10px;padding:14px 16px;margin-bottom:12px;color:#fff;display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px">'
+      + '<div><div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;opacity:.8">Total distance</div><div style="font-size:22px;font-weight:800">'+totalDrivingMi.toFixed(1)+' mi</div></div>'
+      + '<div><div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;opacity:.8">Est. drive time</div><div style="font-size:22px;font-weight:800">'+totalMin+' min</div></div>'
+      + '<div><div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;opacity:.8">Stops</div><div style="font-size:22px;font-weight:800">'+allPicks.length+'</div></div>'
+      + '</div>';
     if(hasCrossSide){
       html += '<div style="background:#fff7ed;border:1px solid #fed7aa;border-left:3px solid #f59e0b;border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:#7c2d12;line-height:1.45">'
-        + '<strong>⚠ Cross-side deroute:</strong> '+posCount+' pick'+(posCount===1?'':'s')+' on the <span style="color:#3b82f6;font-weight:700">+ side</span> and '+negCount+' on the <span style="color:#ef4444;font-weight:700">− side</span> of the Start→End line. The car will zigzag perpendicular each time, adding roughly <strong>'+derouteMi.toFixed(1)+' mi · ~'+derouteMin+' min</strong> to your drive.'
+        + '<strong>⚠ Cross-side deroute (between levels):</strong> '+posCount+' pick'+(posCount===1?'':'s')+' on the <span style="color:#3b82f6;font-weight:700">+ side</span> and '+negCount+' on the <span style="color:#ef4444;font-weight:700">− side</span> of the Start→End line. Total already includes this — the deroute portion is roughly <strong>'+derouteMi.toFixed(1)+' mi · ~'+derouteMin+' min</strong>.'
         + '</div>';
     }
     html += '<div style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:var(--text)">'
@@ -29498,6 +29691,10 @@ window._rpV5ShowSummary = _rpV5ShowSummary;
 // Compile picks across all levels, order them along the Start→End line,
 // and run the existing finalize flow which sets up _RP_SLOT_PICKS and
 // triggers the OSRM review pane.
+//
+// Per user 2026-05-26: after Generate, keep the planner open with a
+// "✅ Locked in" summary so the user can click "✏ Edit picks" to tweak
+// per-level. Edit mode shows was→became distance/ETA deltas.
 function _rpV5GenerateRoute(){
   if(!_RP_V5_LAST){ if(typeof showToast === 'function') showToast('Run "Find candidates" first.'); return; }
   var allPicks = [];
@@ -29511,6 +29708,22 @@ function _rpV5GenerateRoute(){
   }
   // Sort by t (position along route, Start → End)
   allPicks.sort(function(a, b){ return a.t - b.t; });
+  // Compute fresh total for this generation
+  var prev = _RP_V5_LAST.A;
+  var rawMi = 0;
+  allPicks.forEach(function(p){ rawMi += _rpHaversineMiles(prev, p.coord); prev = p.coord; });
+  rawMi += _rpHaversineMiles(prev, _RP_V5_LAST.B);
+  var totalMi = rawMi * 1.4;
+  var totalMin = Math.round((totalMi / 30) * 60);
+  // Snapshot the "before edit" baseline. On the FIRST Generate (not an edit
+  // re-generate) we set originalTotalMi/Min so future edits show the delta
+  // against the originally locked-in plan.
+  if(!_RP_V5_LAST.originalTotalMi){
+    _RP_V5_LAST.originalTotalMi  = totalMi;
+    _RP_V5_LAST.originalTotalMin = totalMin;
+  }
+  _RP_V5_LAST.lastTotalMi  = totalMi;
+  _RP_V5_LAST.lastTotalMin = totalMin;
   // Resolve start/end names for the finalize flow
   var startName = (document.getElementById('rp-start-search') || {}).value || 'Start';
   var endName   = (document.getElementById('rp-end-search')   || {}).value || '';
@@ -29535,12 +29748,85 @@ function _rpV5GenerateRoute(){
       leadStatus: 'not_visited', leadLevel: 0
     };
   });
-  if(typeof closeRoutePlanner === 'function') closeRoutePlanner();
   if(typeof _rpRefreshHighlights === 'function') _rpRefreshHighlights();
   if(typeof _rpUpdateStatus === 'function') _rpUpdateStatus();
   if(typeof _rpFinalizeSmart === 'function') _rpFinalizeSmart();
+  // Keep the planner open with a "locked in" view so the user can edit.
+  // (Old behavior was closeRoutePlanner() here — now deferred to the
+  // explicit "Done" button in _rpV5ShowLocked.)
+  _RP_V5_EDIT_MODE = false;   // not yet in edit mode; viewing the lock
+  _rpV5ShowLocked();
 }
 window._rpV5GenerateRoute = _rpV5GenerateRoute;
+
+// Edit-mode state — true when the user is re-visiting levels to tweak picks
+// after an initial Generate. Drives the was→became delta header in
+// _rpV5ShowLevel and the second-summary delta in _rpV5ShowSummary.
+var _RP_V5_EDIT_MODE = false;
+
+// "Route locked in" screen — shown after _rpV5GenerateRoute finalizes.
+// Gives the user a clear stopping point with two paths: edit picks (per
+// level, with deltas) or Done (close planner).
+function _rpV5ShowLocked(){
+  if(!_RP_V5_LAST) return;
+  var box = document.getElementById('rp-results');
+  if(!box) return;
+  var mi  = _RP_V5_LAST.lastTotalMi  || 0;
+  var min = _RP_V5_LAST.lastTotalMin || 0;
+  var origMi  = _RP_V5_LAST.originalTotalMi  || mi;
+  var origMin = _RP_V5_LAST.originalTotalMin || min;
+  var dMi  = mi  - origMi;
+  var dMin = min - origMin;
+  var hasDelta = (Math.abs(dMi) > 0.05 || Math.abs(dMin) >= 1);
+  var deltaBlock = '';
+  if(hasDelta){
+    var sMi  = (dMi  >= 0 ? '+' : '−');
+    var sMin = (dMin >= 0 ? '+' : '−');
+    var dColor = (dMi >= 0) ? '#dc2626' : '#16a34a';
+    deltaBlock = '<div style="font-size:11px;color:'+dColor+';font-weight:700;margin-top:4px">'
+      + 'Was '+origMi.toFixed(1)+' mi · '+origMin+' min  →  Now '+mi.toFixed(1)+' mi · '+min+' min  ('+sMi+Math.abs(dMi).toFixed(1)+' mi · '+sMin+Math.abs(dMin)+' min)'
+      + '</div>';
+  }
+  var html = '<div style="background:linear-gradient(135deg,#15803d,#16a34a);border-radius:10px;padding:16px;color:#fff;margin-bottom:12px">'
+    + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">'
+    +   '<div><div style="font-size:13px;font-weight:800">✅ Route locked into the day</div>'
+    +     '<div style="font-size:11px;opacity:.9;margin-top:2px">Stops added in order along Start → End.</div>'+deltaBlock+'</div>'
+    +   '<div style="text-align:right">'
+    +     '<div style="font-size:20px;font-weight:800">'+mi.toFixed(1)+' mi · '+min+' min</div>'
+    +     '<div style="font-size:10px;opacity:.85">'+(_RP_SLOT_PICKS ? _RP_SLOT_PICKS.length : 0)+' stops · estimated</div>'
+    +   '</div>'
+    + '</div>'
+    + '</div>'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">'
+    +   '<button type="button" onclick="_rpV5EditPicks()" style="background:#fff;color:#1F3864;border:1px solid var(--border);border-radius:8px;padding:9px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">✏ Edit picks per level</button>'
+    +   '<button type="button" onclick="closeRoutePlanner()" style="background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;border:none;border-radius:8px;padding:9px 22px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">Done →</button>'
+    + '</div>';
+  box.innerHTML = html;
+}
+window._rpV5ShowLocked = _rpV5ShowLocked;
+
+function _rpV5EditPicks(){
+  _RP_V5_EDIT_MODE = true;
+  _rpV5ShowLevel(1);
+}
+window._rpV5EditPicks = _rpV5EditPicks;
+
+// Compute the current total based on whatever is in _RP_V5_PICKS right now.
+// Used by edit-mode delta header in _rpV5ShowLevel.
+function _rpV5ComputeCurrentTotal(){
+  if(!_RP_V5_LAST) return { mi: 0, min: 0 };
+  var all = [];
+  for(var k = 1; k <= _RP_V5_N; k++){
+    (_RP_V5_PICKS['level' + k] || []).forEach(function(p){ all.push(p); });
+  }
+  all.sort(function(a, b){ return a.t - b.t; });
+  var prev = _RP_V5_LAST.A;
+  var rawMi = 0;
+  all.forEach(function(p){ rawMi += _rpHaversineMiles(prev, p.coord); prev = p.coord; });
+  rawMi += _rpHaversineMiles(prev, _RP_V5_LAST.B);
+  var mi = rawMi * 1.4;
+  return { mi: mi, min: Math.round((mi / 30) * 60) };
+}
 
 // Override the corridor mode's "Find candidates" handler to start the v5
 // wizard instead of the old v4 all-levels-at-once view.
