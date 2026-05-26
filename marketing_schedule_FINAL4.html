@@ -32539,34 +32539,32 @@ function confirmAddVisit(){
   // For outreach, we offer to add the user as a co-attendee on the existing row.
   var dupCheck = findExistingVisitOnDay(di, name);
   if(dupCheck && type !== 'outreach'){
-    // Per user 2026-05-22: if ANOTHER member already added this clinic
-    // today (live-sync conflict), show a confirmation instead of a hard
-    // block — the second member might genuinely intend to also visit it
-    // (e.g. team meeting, follow-up). Same-user duplicate stays a hard
-    // block (no value).
+    // Per user 2026-05-26 (HARDENED): same-day duplicate is a HARD BLOCK
+    // for members — no "Add anyway" confirm. Two members can't both visit
+    // the same clinic on the same day. Outreach is the only exception
+    // (handled in the separate branch below). Admin retains override
+    // capability via the confirm dialog (audit-noted).
     var meName = (CURRENT_USER && CURRENT_USER.name) || '';
-    var existingMember = (dupCheck.row && (dupCheck.row.member || dupCheck.row.addedBy)) || '';
-    if(meName && existingMember && existingMember !== meName){
+    var existingMember = (dupCheck.row && (dupCheck.row.member || dupCheck.row.addedBy)) || '(unassigned)';
+    var isAdminUser_dup = (typeof isAdmin === 'function') && isAdmin();
+    if(!isAdminUser_dup && !window._addVisitOverrideDupe){
+      showToast('"' + name + '" is already on the schedule for ' + (S.days[di] && S.days[di].date) + ' (by ' + existingMember + '). One visit per clinic per day — pick a different date.');
+      return;
+    }
+    // Admin path: allow override with explicit confirm + audit flag
+    if(isAdminUser_dup && existingMember && existingMember !== meName && !window._addVisitOverrideDupe){
       showConfirm({
         icon: '⚠',
-        msg: 'Already added by another member',
-        sub: '<strong>' + existingMember + '</strong> already added "' + name + '" for this date.\n\n'
-           + 'Add it anyway for <strong>' + meName + '</strong>? Two members will end up with the same clinic on the same day.\n\n'
-           + 'If you just want to join their visit, click Cancel here and ask them — for community outreach we let you co-attend; for clinics/MVAs each visit is solo.',
-        yesLabel: 'Yes, add for me too',
+        msg: 'Admin override — duplicate same-day visit',
+        sub: '<strong>' + existingMember + '</strong> already added "' + name + '" for this date.<br><br>'
+           + 'As admin you can override and add a second copy. The new row will be flagged with an admin-override audit note.',
+        yesLabel: 'Yes, override',
         danger: true,
         onConfirm: function(){
-          // Mark a hint that the dupe check has been overridden, then
-          // re-invoke confirmAddVisit. We use a closure flag so the
-          // re-entry skips this dupCheck branch.
           window._addVisitOverrideDupe = true;
           try { confirmAddVisit(); } finally { window._addVisitOverrideDupe = false; }
         }
       });
-      return;
-    }
-    if(!window._addVisitOverrideDupe){
-      showToast('"'+name+'" is already on the schedule for that date. Pick a different date or facility.');
       return;
     }
     // Override flag was set — fall through to allow the duplicate
@@ -32586,21 +32584,25 @@ function confirmAddVisit(){
     if(wkMatch && wkMatch.date !== targetDate){
       var meName2 = (CURRENT_USER && CURRENT_USER.name) || '';
       var otherMember = wkMatch.member || '(unassigned)';
-      var byWho = (meName2 && otherMember === meName2)
-        ? '<strong>you</strong>'
-        : '<strong>' + otherMember + '</strong>';
-      // Format the date as a readable weekday + date
       var wkD = new Date(wkMatch.date + 'T00:00:00');
       var wkLabel = isNaN(wkD.getTime())
         ? wkMatch.date
         : wkD.toLocaleDateString('en-US', { weekday:'long', month:'short', day:'numeric' });
+      // Per user 2026-05-26 (HARDENED): same-week duplicate is a HARD BLOCK
+      // for members. No "Add anyway" confirm. Each clinic gets one visit
+      // per week. Admin can override (audit-noted).
+      var isAdminUser_wk = (typeof isAdmin === 'function') && isAdmin();
+      if(!isAdminUser_wk){
+        showToast('"' + name + '" is already scheduled this week on ' + wkLabel + ' by ' + otherMember + '. One visit per clinic per week — pick a different clinic or wait until next week.');
+        return;
+      }
+      // Admin override path
       showConfirm({
-        icon: '� ',
-        msg: 'Already planned this week',
-        sub: '"' + name + '" is already scheduled for <strong>' + wkLabel + '</strong> by ' + byWho + '.\n\n'
-           + 'During the Monday 8 PM planning window the team plans the whole week up front, so duplicate clinics within the same week are usually unintentional.\n\n'
-           + 'Add it anyway for a second visit this week?',
-        yesLabel: 'Yes, add anyway',
+        icon: '⚠',
+        msg: 'Admin override — duplicate same-week visit',
+        sub: '"' + name + '" is already scheduled for <strong>' + wkLabel + '</strong> by <strong>' + otherMember + '</strong>.<br><br>'
+           + 'As admin you can override the one-visit-per-week rule. The new row will be flagged with an admin-override audit note.',
+        yesLabel: 'Yes, override',
         danger: true,
         onConfirm: function(){
           window._addVisitOverrideDupe = true;
