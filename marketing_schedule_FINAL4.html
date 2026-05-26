@@ -9527,18 +9527,37 @@ window.setReferralCount    = setReferralCount;
 function _buildReferralCounterBlock(name){
   if(!name) return null;
   var type = (typeof getBizTypeForName === 'function') ? getBizTypeForName(name) : 'clinic';
-  var rec  = BUSINESS_REFERRALS[name];
-  var count = rec ? (rec.currentCount || 0) : 0;
-  // Tier comes from the previous-period snapshot OR running count (per option A rule)
+  // Phase 11d (per user 2026-05-25): switch the live counter from the
+  // legacy BUSINESS_REFERRALS.currentCount (which is a vague "running
+  // count, manually resettable") to a precise CURRENT-PERIOD count
+  // computed from REFERRAL_LOG via getReferralHistoryForBusiness.
+  //   - Clinics + MVAs  → current CALENDAR QUARTER (Q1 Jan-Mar, etc.)
+  //   - Outreach events → current MONTH (per user spec)
+  // History click still shows full per-month + per-quarter breakdown.
+  var now = new Date();
+  var curQKey = now.getFullYear() + '-Q' + (Math.floor(now.getMonth()/3) + 1);
+  var curMKey = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
+  var hist = (typeof getReferralHistoryForBusiness === 'function')
+    ? getReferralHistoryForBusiness(name)
+    : { byMonth:{}, byQuarter:{}, total:0 };
+  var count, periodLabel;
+  if(type === 'outreach'){
+    count = (hist.byMonth && hist.byMonth[curMKey]) || 0;
+    periodLabel = now.toLocaleDateString('en-US', { month:'short', year:'numeric' });   // e.g. "May 2026"
+  } else {
+    count = (hist.byQuarter && hist.byQuarter[curQKey]) || 0;
+    periodLabel = curQKey.replace('-Q', ' · Q');                                          // e.g. "2026 · Q2"
+    periodLabel = curQKey.slice(5) + ' ' + curQKey.slice(0,4);                            // e.g. "Q2 2026"
+  }
+  // Tier still uses the historic carry-forward count (option A rule) so
+  // tier doesn't shift mid-quarter. Independent of the current-period
+  // display number above.
   var historicCount = getReferralCountForTier(name);
   var tierKey = (type === 'mva' || type === 'outreach') ? type : 'clinic';
   var tier = getTierForReferralCount(tierKey, historicCount);
-  // Medal palette — see getTierStyle (centralized).
   var tierStyle = getTierStyle(tierKey, tier.id);
-  var tierColor = tierStyle.solid;   // legacy callers expecting a single color
-  var tierBg    = tierStyle.bg;       // gradient for badge fill
-  var tierFg    = tierStyle.fg;       // text color on badge
-  var canAdjust = (typeof isReferralEditor === 'function') && isReferralEditor();
+  var tierBg = tierStyle.bg;
+  var tierFg = tierStyle.fg;
   var wrap = document.createElement('div');
   wrap.style.cssText = 'background:#fff;border:1px solid var(--border);border-radius:8px;padding:8px 10px;display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:4px';
   var safeName = String(name).replace(/'/g,"\\'").replace(/"/g,'&quot;');
@@ -9548,16 +9567,12 @@ function _buildReferralCounterBlock(name){
     +     '<div style="font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Patient referrals</div>'
     +     '<div style="display:flex;align-items:center;gap:6px;margin-top:1px">'
     +       '<strong style="font-size:14px;font-family:DM Mono,monospace;color:var(--text)">'+count+'</strong>'
-    +       '<span style="font-size:10px;color:var(--muted)">this period</span>'
+    +       '<span style="font-size:10px;color:var(--muted)">' + periodLabel + '</span>'
     +       '<span style="background:'+tierBg+';color:'+tierFg+';font-size:9px;font-weight:800;padding:2px 7px;border-radius:8px;letter-spacing:.04em;border:1px solid '+tierStyle.border+';box-shadow:0 1px 2px '+tierStyle.glow+'">Tier '+(tier.name||'?')+'</span>'
     +     '</div>'
     +   '</div>'
     + '</div>'
-    // 2026-05-15: Manual "Adjust" UI removed — referral counts are now
-    // auto-computed from the Patient Referral Log (📋 Referrals tab).
-    // Click the count to see full per-month / per-quarter history.
     + '<span onclick="event.stopPropagation();openReferralHistory(\''+safeName+'\')" style="font-size:9px;color:#7030A0;font-style:italic;flex-shrink:0;text-align:right;line-height:1.3;cursor:pointer;text-decoration:underline;text-decoration-style:dotted">📊 History</span>';
-  // Stop card-level click handler from firing when adjust is clicked
   var btn = wrap.querySelector('button');
   if(btn){ btn.addEventListener('click', function(e){ e.stopPropagation(); }); }
   return wrap;
@@ -15063,6 +15078,11 @@ function openReferralHistory(name){
   if(hist.trend === 'up')        trendBadge = '<span style="background:#dcfce7;color:#166534;font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;border:1px solid #86efac">📈 Trending up</span>';
   else if(hist.trend === 'down') trendBadge = '<span style="background:#fee2e2;color:#991b1b;font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;border:1px solid #fca5a5">📉 Trending down — visit soon!</span>';
   else                            trendBadge = '<span style="background:#f1f5f9;color:#475569;font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;border:1px solid #cbd5e1">→ Steady</span>';
+  // Phase 11d: highlight the current quarter + current month so the user
+  // sees their "live" period at a glance vs the archived historical ones.
+  var nowDate = new Date();
+  var curQKey = nowDate.getFullYear() + '-Q' + (Math.floor(nowDate.getMonth()/3) + 1);
+  var curMKey = nowDate.getFullYear() + '-' + String(nowDate.getMonth()+1).padStart(2,'0');
   var monthHtml = '';
   if(months.length === 0){
     monthHtml = '<div style="font-size:11px;color:var(--muted);font-style:italic;padding:14px;text-align:center">No referrals logged yet for this business.</div>';
@@ -15074,16 +15094,24 @@ function openReferralHistory(name){
       var pct = maxCount > 0 ? (c / maxCount) * 100 : 0;
       var labelDate = new Date(m + '-01');
       var label = labelDate.toLocaleDateString('en-US',{month:'short',year:'2-digit'});
-      monthHtml += '<div style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:8px 10px;position:relative;overflow:hidden">'
+      var isCurMonth = (m === curMKey);
+      var cardBg = isCurMonth ? 'linear-gradient(135deg,#faf5ff,#fdf4ff)' : '#f8fafc';
+      var cardBorder = isCurMonth ? '#a855f7' : 'var(--border)';
+      var liveBadge = isCurMonth ? ' <span style="background:#7c3aed;color:#fff;font-size:8px;font-weight:700;padding:1px 5px;border-radius:6px;margin-left:3px;vertical-align:middle">LIVE</span>' : '';
+      monthHtml += '<div style="background:' + cardBg + ';border:1px solid ' + cardBorder + ';border-radius:8px;padding:8px 10px;position:relative;overflow:hidden">'
                  + '<div style="position:absolute;bottom:0;left:0;width:' + pct.toFixed(0) + '%;height:3px;background:linear-gradient(90deg,#7030A0,#1F3864)"></div>'
-                 + '<div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em">' + label + '</div>'
+                 + '<div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em">' + label + liveBadge + '</div>'
                  + '<div style="font-size:18px;font-weight:800;font-family:DM Mono,monospace;color:#1F3864;margin-top:2px">' + c + '</div>'
                  + '</div>';
     });
     monthHtml += '</div>';
   }
   var qHtml = quarters.map(function(q){
-    return '<div style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;font-size:12px"><span style="color:var(--muted)">📅 ' + q + '</span><strong style="font-family:DM Mono,monospace;color:#1F3864;font-size:14px">' + hist.byQuarter[q] + '</strong></div>';
+    var isCurQ = (q === curQKey);
+    var bg = isCurQ ? 'linear-gradient(135deg,#faf5ff,#fdf4ff)' : '#fff';
+    var border = isCurQ ? '#a855f7' : 'var(--border)';
+    var liveBadge = isCurQ ? ' <span style="background:#7c3aed;color:#fff;font-size:8px;font-weight:700;padding:1px 5px;border-radius:6px;margin-left:4px">LIVE</span>' : '';
+    return '<div style="background:' + bg + ';border:1px solid ' + border + ';border-radius:8px;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;font-size:12px"><span style="color:var(--muted)">📅 ' + q + liveBadge + '</span><strong style="font-family:DM Mono,monospace;color:#1F3864;font-size:14px">' + hist.byQuarter[q] + '</strong></div>';
   }).join('');
   if(!qHtml) qHtml = '<div style="font-size:11px;color:var(--muted);font-style:italic">No quarters tracked yet.</div>';
 
