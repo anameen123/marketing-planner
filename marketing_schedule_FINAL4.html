@@ -25172,64 +25172,23 @@ window._rpRenderReviewPane = _rpRenderReviewPane;
 function _rpLockInRoute(){
   var picks = _RP_SLOT_PICKS.filter(function(p){ return p && p.name; });
   if(picks.length === 0) return;
-  var di = (typeof S !== 'undefined' && S && typeof S.currentDay === 'number') ? S.currentDay : null;
-  if(di == null){
-    if(typeof showToast === 'function') showToast('Open a day in the schedule first, then lock in a route.');
-    return;
-  }
-  var day = S.days[di];
-  if(!day){
-    if(typeof showToast === 'function') showToast('Day not found.');
-    return;
-  }
-  if(!Array.isArray(day.rows)) day.rows = [];
-  // Phase 10a (per user 2026-05-25): corridor route was pushing rows with
-  // member: '' which made them invisible under the day-view default filter
-  // ("Just me"). Mirror the same auto-assign-non-admin logic used in
-  // confirmAddVisit (Phase 9b) and _rpRwPushRouteToSchedule (Random Pick).
-  // Admin still gets blank member (lets them assign anyone after the fact);
-  // members get themselves so rows show up immediately under their filter.
-  var _meRP = (typeof CURRENT_USER !== 'undefined' && CURRENT_USER && CURRENT_USER.name) ? CURRENT_USER.name : '';
-  var _isAdminRP = (typeof isAdmin === 'function' && isAdmin());
-  var _autoMember = _isAdminRP ? '' : _meRP;
-  picks.forEach(function(p){
-    var area = '';
-    // Resolve city from the original record
-    var bt = p.bizType || (typeof getBizTypeForName === 'function' ? getBizTypeForName(p.name) : 'clinic');
-    if(bt === 'mva' && typeof MVA_ATTORNEYS !== 'undefined'){
-      var m = MVA_ATTORNEYS.find(function(x){ return x.firm === p.name; });
-      if(m) area = m.city || '';
-    } else if(bt === 'outreach' && typeof OUTREACH !== 'undefined'){
-      var o = OUTREACH.find(function(x){ return x.name === p.name; });
-      if(o) area = o.city || '';
-    } else if(typeof CLINIC_BANK !== 'undefined'){
-      var c = CLINIC_BANK.find(function(x){ return x.n === p.name; });
-      if(c) area = c.c || '';
-    }
-    day.rows.push({
-      clinic: p.name,
-      doctor: '',
-      spec: '',
-      team: '',
-      city: area || (day.focus || ''),
-      last: '',
-      status: 'Pending',
-      rd: '',
-      member: _autoMember,
-      memberConfirmed: !!_autoMember,
-      relationship: '', relNotes: '', leadNotes: '',
-      rowConfirmed: false,
-      rescheduledFrom: null, isRescheduled: false,
-      isMosque: false, isManual: false, editing: false,
-      bizType: bt,
-      addedBy: _meRP,
-      addedFromRoutePlanner: true
-    });
+  // Per user 2026-05-26: route through the unified commit flow so existing
+  // rows get the dedupe + reorder + orphan-handling treatment. The flow
+  // also handles "no day open" / "day not found" itself.
+  var startName = _RP_START_NAME || '';
+  var endName   = _RP_END_NAME   || '';
+  var startIsVisit = startName && !_rpIsFacilityName(startName);
+  var spec = {
+    orderedNames: picks.map(function(p){ return p.name; }),
+    startNameIfVisit: startIsVisit ? startName : null,
+    startName: startName,
+    endName: endName,
+    source: 'corridor'
+  };
+  _rpStartCommitFlow(spec, function(){
+    // After commit, clean up the smart-plan UI.
+    if(typeof _rpCancelSmart === 'function') _rpCancelSmart();
   });
-  if(typeof _saveS === 'function') _saveS();
-  if(typeof refresh === 'function') refresh(di);
-  if(typeof showToast === 'function') showToast('✓ Added ' + picks.length + ' stops to today\'s schedule');
-  _rpCancelSmart();
 }
 window._rpLockInRoute = _rpLockInRoute;
 
@@ -28608,8 +28567,23 @@ function _rpRwConfirmRoute(){
       + 'Proceed anyway?');
     if(!ok) return;
   }
-  _rpRwPushRouteToSchedule(route);
-  window._RP_RW_EDITING = null;
+  // Per user 2026-05-26: route through the unified commit flow so orphans get
+  // the AI-assisted insertion offer + duplicates get deduped + reordered.
+  var startName = (_RP_RW.start && _RP_RW.start.name) || '';
+  var startIsVisit = !!(_RP_RW.start && _RP_RW.start.isVisit);
+  var orderedNames = (route.orderedStops || []).map(function(s){ return s.name; });
+  var spec = {
+    orderedNames: orderedNames,
+    startNameIfVisit: startIsVisit ? startName : null,
+    startName: startName,
+    endName: startName,   // random pick is always round-trip
+    source: 'random'
+  };
+  _rpStartCommitFlow(spec, function(){
+    window._RP_RW_EDITING = null;
+    if(typeof closeRoutePlanner === 'function') closeRoutePlanner();
+    if(typeof _rpRwRestart === 'function') _rpRwRestart();
+  });
 }
 window._rpRwConfirmRoute = _rpRwConfirmRoute;
 
@@ -28677,6 +28651,413 @@ function _rpRwPushRouteToSchedule(route){
   }
 }
 window._rpRwPushRouteToSchedule = _rpRwPushRouteToSchedule;
+
+// ════════════════════════════════════════════════════════════════════════════
+// ░░ PHASE 14 — UNIFIED COMMIT FLOW + ORPHAN HANDLING (per user 2026-05-26) ░░
+// ════════════════════════════════════════════════════════════════════════════
+// When the user confirms a route from EITHER Corridor (_rpLockInRoute) OR
+// Random Pick (_rpRwConfirmRoute), the day already on the calendar may have
+// pre-existing visits. Two cases:
+//   1. DUPLICATE: pre-existing row's clinic IS in the new route → reuse the
+//      row's data (preserve notes etc.) in the new ordered position.
+//   2. ORPHAN: pre-existing row's clinic is NOT in the new route → ask the
+//      user per orphan: 🤖 "Include via AI insertion" OR 📌 "Keep separate".
+//      AI insertion runs as ONE batch call (cheaper). User double-confirms
+//      the resulting merged order before it's applied.
+//
+// Both modes call _rpStartCommitFlow(spec, onComplete). spec is:
+//   { orderedNames: [n1, n2, ...],      // intermediate stops in route order
+//     startNameIfVisit: name|null,       // if start is a clinic-as-visit-1
+//     source: 'corridor'|'random' }
+// ────────────────────────────────────────────────────────────────────────────
+
+// True if `name` matches a WCG facility (not a real visit). Facilities are
+// the rep's home base, not stops to log.
+function _rpIsFacilityName(name){
+  if(!name) return false;
+  if(typeof FACILITIES === 'undefined' || !FACILITIES) return false;
+  for(var i = 0; i < FACILITIES.length; i++){
+    if(FACILITIES[i] && FACILITIES[i].name === name) return true;
+  }
+  return false;
+}
+window._rpIsFacilityName = _rpIsFacilityName;
+
+function _rpResolveCityForName(name){
+  if(!name) return '';
+  var bt = (typeof getBizTypeForName === 'function') ? getBizTypeForName(name) : '';
+  if(bt === 'mva' && typeof MVA_ATTORNEYS !== 'undefined'){
+    var m = MVA_ATTORNEYS.find(function(x){ return x.firm === name; });
+    if(m) return m.city || '';
+  } else if(bt === 'outreach' && typeof OUTREACH !== 'undefined'){
+    var o = OUTREACH.find(function(x){ return x.name === name; });
+    if(o) return o.city || '';
+  } else if(typeof CLINIC_BANK !== 'undefined'){
+    var c = CLINIC_BANK.find(function(x){ return x.n === name; });
+    if(c) return c.c || '';
+  }
+  return '';
+}
+
+// Entry point — both modes route through here. Classifies, modals if needed,
+// commits when ready.
+function _rpStartCommitFlow(spec, onComplete){
+  var di = (typeof S !== 'undefined' && S.currentDay != null) ? S.currentDay : null;
+  if(di == null){
+    if(typeof showToast === 'function') showToast('Open a day on the calendar first.');
+    return;
+  }
+  var day = (typeof S !== 'undefined' && S.days) ? S.days[di] : null;
+  if(!day){
+    if(typeof showToast === 'function') showToast('Active day not found.');
+    return;
+  }
+  if(!Array.isArray(day.rows)) day.rows = [];
+  // Build set of route names (incl start-if-visit)
+  var routeSet = {};
+  if(spec.startNameIfVisit) routeSet[spec.startNameIfVisit] = true;
+  spec.orderedNames.forEach(function(n){ routeSet[n] = true; });
+  // Classify pre-existing rows
+  var orphans = [];
+  day.rows.forEach(function(r){
+    if(!r || !r.clinic) return;
+    if(!routeSet[r.clinic]) orphans.push(r);
+  });
+  // No orphans → commit directly (duplicates handled by merge helper)
+  if(orphans.length === 0){
+    _rpFinalApplyMerge(spec, [], {}, di);
+    if(typeof onComplete === 'function') onComplete();
+    return;
+  }
+  // Orphans exist → show diff modal
+  _rpShowOrphanDiffModal(orphans, spec, di, onComplete);
+}
+window._rpStartCommitFlow = _rpStartCommitFlow;
+
+// Stash for modal handlers (the modal is DOM-only; can't pass refs in onclick)
+window._RP_ORPHAN_CTX = null;
+
+function _rpShowOrphanDiffModal(orphans, spec, di, onComplete){
+  var existing = document.getElementById('rp-orphan-modal');
+  if(existing) existing.remove();
+  var aiAvailable = !!(window._RP_AI && _RP_AI.enabled) && (typeof hasGeminiKey === 'function') && hasGeminiKey();
+  var modal = document.createElement('div');
+  modal.id = 'rp-orphan-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.62);z-index:90000;display:flex;align-items:center;justify-content:center;padding:20px;font-family:DM Sans,sans-serif';
+  var orphanCards = orphans.map(function(r, i){
+    var safeName = String(r.clinic).replace(/</g,'&lt;');
+    var city = (r.city || '').replace(/</g,'&lt;');
+    var member = (r.member || '').replace(/</g,'&lt;');
+    var meta = [city, member].filter(Boolean).join(' · ');
+    return '<div style="border:1px solid #e2e8f0;border-radius:8px;padding:11px 13px;margin-bottom:8px;background:#fafbfc">'
+      + '<div style="font-weight:700;font-size:12px;color:#1F3864">🏥 ' + safeName + '</div>'
+      + (meta ? '<div style="font-size:10px;color:#64748b;margin-top:2px">' + meta + '</div>' : '')
+      + '<div style="margin-top:9px;display:flex;flex-direction:column;gap:5px">'
+      +   '<label style="display:flex;align-items:flex-start;gap:7px;font-size:11px;cursor:'+(aiAvailable?'pointer':'not-allowed')+';color:'+(aiAvailable?'#1F3864':'#94a3b8')+'">'
+      +     '<input type="radio" name="rp-orphan-' + i + '" value="include"' + (aiAvailable?'':' disabled') + ' style="cursor:'+(aiAvailable?'pointer':'not-allowed')+';margin-top:2px">'
+      +     '<span><b>🤖 Include on route</b> — AI picks the best position (before start, after end, or between stops)' + (aiAvailable?'':' <span style="color:#dc2626">[needs AI toggle ON + token]</span>') + '</span>'
+      +   '</label>'
+      +   '<label style="display:flex;align-items:flex-start;gap:7px;font-size:11px;cursor:pointer;color:#1F3864">'
+      +     '<input type="radio" name="rp-orphan-' + i + '" value="keep" checked style="cursor:pointer;margin-top:2px">'
+      +     '<span><b>📌 Keep separate</b> — leave it above the route in the day list</span>'
+      +   '</label>'
+      + '</div>'
+      + '</div>';
+  }).join('');
+  modal.innerHTML = '<div style="background:#fff;border-radius:12px;max-width:580px;width:100%;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 20px 50px rgba(0,0,0,.4)">'
+    + '<div style="padding:16px 22px;border-bottom:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:flex-start;gap:10px">'
+    +   '<div><div style="font-size:14px;font-weight:800;color:#1F3864">⚠ Existing visits on this day</div>'
+    +     '<div style="font-size:11px;color:#64748b;margin-top:3px;line-height:1.45">Your new route has <b>' + spec.orderedNames.length + '</b> stop' + (spec.orderedNames.length===1?'':'s') + '. The day already has <b>' + orphans.length + '</b> visit' + (orphans.length===1?'':'s') + ' not in the new route — what should I do with ' + (orphans.length===1?'it':'them') + '?</div></div>'
+    +   '<button onclick="_rpCloseOrphanModal()" style="background:none;border:none;font-size:22px;color:#94a3b8;cursor:pointer;line-height:1;padding:0 4px">×</button>'
+    + '</div>'
+    + '<div id="rp-orphan-list" style="padding:14px 22px;overflow-y:auto;flex:1">' + orphanCards + '</div>'
+    + '<div style="padding:12px 22px;border-top:1px solid #e2e8f0;display:flex;justify-content:space-between;gap:8px">'
+    +   '<button onclick="_rpCloseOrphanModal()" style="background:#e5e7eb;color:#374151;border:none;border-radius:8px;padding:9px 16px;font-size:12px;font-weight:600;cursor:pointer;font-family:DM Sans,sans-serif">Cancel (keep all separate)</button>'
+    +   '<button onclick="_rpSubmitOrphanChoices()" style="background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;border:none;border-radius:8px;padding:9px 22px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">Continue →</button>'
+    + '</div>'
+    + '</div>';
+  document.body.appendChild(modal);
+  window._RP_ORPHAN_CTX = { orphans: orphans, spec: spec, di: di, onComplete: onComplete };
+}
+window._rpShowOrphanDiffModal = _rpShowOrphanDiffModal;
+
+// ✕ Cancel → safe default: commit with ALL orphans kept separate above route.
+function _rpCloseOrphanModal(){
+  var modal = document.getElementById('rp-orphan-modal');
+  if(modal) modal.remove();
+  var ctx = window._RP_ORPHAN_CTX;
+  if(!ctx) return;
+  _rpFinalApplyMerge(ctx.spec, ctx.orphans, {}, ctx.di);
+  if(typeof ctx.onComplete === 'function') ctx.onComplete();
+  window._RP_ORPHAN_CTX = null;
+}
+window._rpCloseOrphanModal = _rpCloseOrphanModal;
+
+// Continue → read radios, split include vs keep, run AI batch if any include.
+function _rpSubmitOrphanChoices(){
+  var modal = document.getElementById('rp-orphan-modal');
+  if(!modal) return;
+  var ctx = window._RP_ORPHAN_CTX;
+  if(!ctx) return;
+  var includeOrphans = [], separateOrphans = [];
+  ctx.orphans.forEach(function(r, i){
+    var radio = modal.querySelector('input[name="rp-orphan-' + i + '"]:checked');
+    var val = radio ? radio.value : 'keep';
+    if(val === 'include') includeOrphans.push(r);
+    else separateOrphans.push(r);
+  });
+  if(includeOrphans.length === 0){
+    modal.remove();
+    _rpFinalApplyMerge(ctx.spec, separateOrphans, {}, ctx.di);
+    if(typeof ctx.onComplete === 'function') ctx.onComplete();
+    window._RP_ORPHAN_CTX = null;
+    return;
+  }
+  // Swap modal body to AI loading state
+  var list = modal.querySelector('#rp-orphan-list');
+  if(list){
+    list.innerHTML = '<div style="padding:36px 20px;text-align:center;color:#7c3aed">'
+      + '<div style="font-size:34px;margin-bottom:10px">🤖</div>'
+      + '<div style="font-size:13px;font-weight:700">Asking AI for the best insertion position' + (includeOrphans.length===1?'':'s') + '…</div>'
+      + '<div style="font-size:11px;color:#64748b;margin-top:6px">Sending ' + includeOrphans.length + ' orphan' + (includeOrphans.length===1?'':'s') + ' + the route geometry. ~2 seconds.</div>'
+      + '</div>';
+  }
+  _rpAiInsertOrphans(includeOrphans, separateOrphans, ctx.spec, ctx.di, ctx.onComplete);
+}
+window._rpSubmitOrphanChoices = _rpSubmitOrphanChoices;
+
+// One batch AI call: route order + orphans → returns insertion positions.
+function _rpAiInsertOrphans(includeOrphans, separateOrphans, spec, di, onComplete){
+  // Build route sequence with coords for the prompt
+  var seq = [];
+  if(spec.startNameIfVisit){
+    var sc = (typeof getRouteCoord === 'function') ? getRouteCoord(spec.startNameIfVisit) : null;
+    seq.push({ name: spec.startNameIfVisit, role: 'start-visit', coord: sc });
+  } else if(spec.startName){
+    var fc = (typeof getRouteCoord === 'function') ? getRouteCoord(spec.startName) : null;
+    seq.push({ name: spec.startName, role: 'start-facility', coord: fc });
+  }
+  spec.orderedNames.forEach(function(n){
+    var c = (typeof getRouteCoord === 'function') ? getRouteCoord(n) : null;
+    seq.push({ name: n, role: 'stop', coord: c });
+  });
+  if(spec.endName && spec.endName !== spec.startName){
+    var ec = (typeof getRouteCoord === 'function') ? getRouteCoord(spec.endName) : null;
+    seq.push({ name: spec.endName, role: 'end', coord: ec });
+  }
+  var orphPayload = includeOrphans.map(function(r){
+    var c = (typeof getRouteCoord === 'function') ? getRouteCoord(r.clinic) : null;
+    return { name: r.clinic, coord: c };
+  });
+  // Position semantics for the prompt: 0 = before sequence[0], len = after sequence[len-1]
+  var prompt = 'You are inserting orphan visits into a planned route. Pick the position for EACH orphan that minimizes the total drive detour.\n\n'
+    + 'ROUTE SEQUENCE (in current order):\n'
+    + seq.map(function(s, i){
+        var pos = '(' + (s.coord ? s.coord.lat.toFixed(4) + ', ' + s.coord.lng.toFixed(4) : 'unknown') + ')';
+        return '  [' + i + '] ' + s.role + ': ' + s.name + ' ' + pos;
+      }).join('\n') + '\n\n'
+    + 'POSITION SEMANTICS:\n'
+    + '  position = 0  → insert BEFORE [0]\n'
+    + '  position = k  → insert BETWEEN [k-1] and [k]\n'
+    + '  position = ' + seq.length + ' → insert AFTER [' + (seq.length-1) + ']\n\n'
+    + 'ORPHANS to place:\n'
+    + orphPayload.map(function(o){
+        return '  - ' + o.name + ' ' + (o.coord ? '(' + o.coord.lat.toFixed(4) + ', ' + o.coord.lng.toFixed(4) + ')' : '(no coords — pick reasonable position by name)');
+      }).join('\n') + '\n\n'
+    + 'OUTPUT (JSON only, no markdown, no prose outside the object):\n'
+    + '{\n'
+    + '  "insertions": [\n'
+    + '    { "name": "<exact orphan name>", "position": <integer 0-' + seq.length + '>, "reasoning": "<short why>" }\n'
+    + '  ]\n'
+    + '}\n\n'
+    + 'CRITICAL: include one entry per orphan. Positions are integers in [0, ' + seq.length + '].';
+  _callAIChat(prompt, { temperature: 0.3, maxTokens: 500, wantJson: true })
+    .then(function(text){
+      var parsed = null;
+      try { parsed = JSON.parse(text); }
+      catch(_){ var m = String(text||'').match(/\{[\s\S]*\}/); if(m){ try { parsed = JSON.parse(m[0]); } catch(_2){} } }
+      var insertions = {};   // { name: position }
+      var reasoningByName = {};
+      if(parsed && Array.isArray(parsed.insertions)){
+        parsed.insertions.forEach(function(ins){
+          if(!ins || !ins.name) return;
+          var pos = parseInt(ins.position, 10);
+          if(isNaN(pos)) pos = seq.length;   // default: after end
+          pos = Math.max(0, Math.min(seq.length, pos));
+          insertions[ins.name] = pos;
+          if(ins.reasoning) reasoningByName[ins.name] = String(ins.reasoning);
+        });
+      }
+      // Fallback: any orphan AI didn't include → default to after-end position
+      includeOrphans.forEach(function(r){
+        if(insertions[r.clinic] == null) insertions[r.clinic] = seq.length;
+      });
+      _rpShowMergePreview(includeOrphans, separateOrphans, spec, di, insertions, reasoningByName, onComplete);
+    })
+    .catch(function(err){
+      var modal = document.getElementById('rp-orphan-modal');
+      var list = modal && modal.querySelector('#rp-orphan-list');
+      if(list){
+        list.innerHTML = '<div style="padding:20px;color:#b91c1c;font-size:12px"><b>⚠ AI error:</b> ' + String(err && err.message || err).replace(/</g,'&lt;') + '<br><br>Falling back: orphans will be kept separate above route.</div>';
+      }
+      setTimeout(function(){
+        if(modal) modal.remove();
+        _rpFinalApplyMerge(spec, includeOrphans.concat(separateOrphans), {}, di);
+        if(typeof onComplete === 'function') onComplete();
+        window._RP_ORPHAN_CTX = null;
+      }, 1800);
+    });
+}
+window._rpAiInsertOrphans = _rpAiInsertOrphans;
+
+function _rpShowMergePreview(includeOrphans, separateOrphans, spec, di, insertions, reasoningByName, onComplete){
+  var modal = document.getElementById('rp-orphan-modal');
+  if(!modal) return;
+  // Build the projected route order with inserted orphans
+  var routeOrder = spec.startNameIfVisit ? [spec.startNameIfVisit].concat(spec.orderedNames) : spec.orderedNames.slice();
+  if(spec.endName && spec.endName !== spec.startName){
+    routeOrder.push('__END__:' + spec.endName);   // marker for end label
+  }
+  // Sort orphan insert ops desc so later inserts don't shift earlier ones
+  var ops = Object.keys(insertions).map(function(name){ return { name: name, pos: insertions[name] }; });
+  ops.sort(function(a, b){ return b.pos - a.pos; });
+  ops.forEach(function(op){
+    var pos = Math.max(0, Math.min(routeOrder.length, op.pos));
+    routeOrder.splice(pos, 0, '__INSERT__:' + op.name);
+  });
+  // Render preview
+  var rowsHtml = routeOrder.map(function(n, idx){
+    var isInsert = n.indexOf('__INSERT__:') === 0;
+    var isEnd    = n.indexOf('__END__:') === 0;
+    var display = isInsert ? n.slice(11) : (isEnd ? n.slice(8) : n);
+    var safeDisplay = String(display).replace(/</g,'&lt;');
+    var role = isEnd ? 'End' : (idx === 0 && spec.startNameIfVisit ? 'Start' : null);
+    var roleBadge = role ? ' <span style="background:#1F3864;color:#fff;font-size:9px;font-weight:700;padding:1px 6px;border-radius:8px;letter-spacing:.04em;margin-left:6px">'+role.toUpperCase()+'</span>' : '';
+    var insertBadge = isInsert ? ' <span style="background:#7c3aed;color:#fff;font-size:9px;font-weight:700;padding:1px 6px;border-radius:8px;letter-spacing:.04em;margin-left:6px">🤖 INSERTED</span>' : '';
+    var reason = isInsert && reasoningByName[display] ? '<div style="font-size:10px;color:#7c3aed;margin-top:3px;font-style:italic;padding-left:24px">' + String(reasoningByName[display]).replace(/</g,'&lt;') + '</div>' : '';
+    var bg = isInsert ? '#faf5ff' : (isEnd ? '#f1f5f9' : '#fff');
+    var border = isInsert ? '1px solid #c4b5fd' : '1px solid #e2e8f0';
+    return '<div style="background:'+bg+';border:'+border+';border-radius:6px;padding:8px 12px;margin-bottom:5px">'
+      + '<div style="display:flex;align-items:center;gap:6px;font-size:12px"><span style="color:#64748b;font-weight:700">' + (idx+1) + '.</span> <b style="color:#1F3864">' + safeDisplay + '</b>' + roleBadge + insertBadge + '</div>'
+      + reason
+      + '</div>';
+  }).join('');
+  var sepHtml = separateOrphans.length === 0 ? '' :
+    '<div style="margin-bottom:14px"><div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">📌 Keep separate (above route)</div>'
+    + separateOrphans.map(function(r){
+        return '<div style="background:#f8fafc;border:1px dashed #cbd5e1;border-radius:6px;padding:6px 12px;margin-bottom:4px;font-size:11px;color:#475569">🏥 ' + String(r.clinic).replace(/</g,'&lt;') + '</div>';
+      }).join('') + '</div>';
+  var list = modal.querySelector('#rp-orphan-list');
+  if(list){
+    list.innerHTML = '<div style="font-size:11px;color:#64748b;margin-bottom:10px;font-style:italic">Review the final order, then click Apply to commit. AI inserted ' + includeOrphans.length + ' orphan' + (includeOrphans.length===1?'':'s') + ' at the highlighted position' + (includeOrphans.length===1?'':'s') + '.</div>'
+      + sepHtml
+      + '<div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">📋 Route (final order)</div>'
+      + rowsHtml;
+  }
+  // Swap footer to Back / Apply
+  var footer = modal.querySelector('div[style*="border-top:1px solid"]');
+  if(footer){
+    footer.innerHTML = '<button onclick="_rpReturnToOrphanChoices()" style="background:#e5e7eb;color:#374151;border:none;border-radius:8px;padding:9px 16px;font-size:12px;font-weight:600;cursor:pointer;font-family:DM Sans,sans-serif">← Back to choices</button>'
+      + '<button onclick="_rpApplyMergedRoute()" style="background:linear-gradient(135deg,#15803d,#16a34a);color:#fff;border:none;border-radius:8px;padding:9px 22px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">✓ Apply this order</button>';
+  }
+  // Stash final-apply state
+  window._RP_ORPHAN_CTX.preview = {
+    includeOrphans: includeOrphans,
+    separateOrphans: separateOrphans,
+    insertions: insertions
+  };
+}
+window._rpShowMergePreview = _rpShowMergePreview;
+
+function _rpReturnToOrphanChoices(){
+  var modal = document.getElementById('rp-orphan-modal');
+  var ctx = window._RP_ORPHAN_CTX;
+  if(modal) modal.remove();
+  if(ctx) _rpShowOrphanDiffModal(ctx.orphans, ctx.spec, ctx.di, ctx.onComplete);
+}
+window._rpReturnToOrphanChoices = _rpReturnToOrphanChoices;
+
+function _rpApplyMergedRoute(){
+  var modal = document.getElementById('rp-orphan-modal');
+  var ctx = window._RP_ORPHAN_CTX;
+  if(!ctx || !ctx.preview){ return; }
+  var p = ctx.preview;
+  if(modal) modal.remove();
+  _rpFinalApplyMerge(ctx.spec, p.separateOrphans, p.insertions, ctx.di);
+  if(typeof ctx.onComplete === 'function') ctx.onComplete();
+  window._RP_ORPHAN_CTX = null;
+}
+window._rpApplyMergedRoute = _rpApplyMergedRoute;
+
+// The actual mutation. Final state of day.rows:
+//   [ ...separateOrphans (preserved data),
+//     ...routeOrder (existing rows reused where dupes, new rows otherwise,
+//                    orphans inserted at AI positions) ]
+function _rpFinalApplyMerge(spec, separateOrphans, insertions, di){
+  var day = (typeof S !== 'undefined' && S.days) ? S.days[di] : null;
+  if(!day) return;
+  if(!Array.isArray(day.rows)) day.rows = [];
+  // Build the route order: start-if-visit + ordered names
+  var routeOrder = spec.startNameIfVisit ? [spec.startNameIfVisit].concat(spec.orderedNames) : spec.orderedNames.slice();
+  // Apply orphan insertions (desc by position so later inserts don't shift earlier)
+  var ops = Object.keys(insertions || {}).map(function(name){ return { name: name, pos: insertions[name] }; });
+  ops.sort(function(a, b){ return b.pos - a.pos; });
+  ops.forEach(function(op){
+    var pos = Math.max(0, Math.min(routeOrder.length, op.pos));
+    routeOrder.splice(pos, 0, op.name);
+  });
+  // Index existing rows so duplicates reuse their data
+  var existingByName = {};
+  day.rows.forEach(function(r){ if(r && r.clinic && !existingByName[r.clinic]) existingByName[r.clinic] = r; });
+  var me = (typeof CURRENT_USER !== 'undefined' && CURRENT_USER && CURRENT_USER.name) ? CURRENT_USER.name : '';
+  var isAdminRP = (typeof isAdmin === 'function') && isAdmin();
+  var autoMember = isAdminRP ? '' : me;
+  function makeNewRow(name){
+    var area = _rpResolveCityForName(name) || (day.focus || '');
+    var bt = (typeof getBizTypeForName === 'function') ? getBizTypeForName(name) : 'clinic';
+    return {
+      clinic: name, doctor: '', spec: '', team: '',
+      city: area, last: '', status: 'Pending', rd: '',
+      member: autoMember, memberConfirmed: !!autoMember,
+      relationship: '', relNotes: '', leadNotes: '',
+      rowConfirmed: false,
+      rescheduledFrom: null, isRescheduled: false,
+      isMosque: false, isManual: false, editing: false,
+      bizType: bt,
+      addedBy: me, addedFromRoutePlanner: true
+    };
+  }
+  var newRows = [];
+  // 1. Separate orphans at top (preserve data)
+  separateOrphans.forEach(function(r){
+    newRows.push(r);
+    delete existingByName[r.clinic];
+  });
+  // 2. Route order — reuse existing rows for dupes, create new for the rest
+  routeOrder.forEach(function(name){
+    if(existingByName[name]){
+      newRows.push(existingByName[name]);
+      delete existingByName[name];
+    } else {
+      newRows.push(makeNewRow(name));
+    }
+  });
+  // 3. Safety: append any leftover existing rows we didn't classify
+  Object.keys(existingByName).forEach(function(k){
+    if(existingByName[k]) newRows.push(existingByName[k]);
+  });
+  day.rows = newRows;
+  if(typeof _saveS === 'function') _saveS();
+  if(typeof refresh === 'function') refresh(di);
+  if(typeof showToast === 'function'){
+    var insertCount = Object.keys(insertions || {}).length;
+    var msg = '✓ Route committed — ' + routeOrder.length + ' stops in order';
+    if(insertCount > 0) msg += ', ' + insertCount + ' 🤖 AI-inserted';
+    if(separateOrphans.length > 0) msg += ', ' + separateOrphans.length + ' kept separate above';
+    showToast(msg + '.');
+  }
+}
+window._rpFinalApplyMerge = _rpFinalApplyMerge;
 
 // Set the planner mode. Toggles section visibility + resets results.
 function _rpSetMode(mode){
