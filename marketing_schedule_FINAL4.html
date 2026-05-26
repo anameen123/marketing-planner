@@ -10335,6 +10335,9 @@ function _finishLogin(){
   // Load the patient referral log + recompute derived counters from it
   if(typeof _loadReferralLog === 'function') _loadReferralLog();
   if(typeof _loadPendingReferrals === 'function') _loadPendingReferrals();
+  // Per user 2026-05-26: sweep expired pending referrals on boot so stale
+  // ones from earlier sessions auto-flip to 'incomplete' before render.
+  if(typeof _crSweepExpiredReferrals === 'function') _crSweepExpiredReferrals();
   if(typeof _recomputeReferralCountsFromLog === 'function') _recomputeReferralCountsFromLog();
   // Load shift-total reconciliation data
   if(typeof _loadShiftTotals === 'function') _loadShiftTotals();
@@ -13005,6 +13008,61 @@ function _savePendingReferrals(){
 window._loadPendingReferrals = _loadPendingReferrals;
 window._savePendingReferrals = _savePendingReferrals;
 
+// ── PHASE 16e — AUTO-EXPIRE PENDING REFERRALS (per user 2026-05-26) ─────────
+// A pending referral that's not approved by 23:59:59 of the day AFTER it was
+// created auto-flips to status:'incomplete' with autoExpired:true. Reasoning:
+// the patient was a no-show — should disappear from the top Pending panel
+// but stay visible in the calendar day-detail of its creation date for the
+// historical record. Triggers ZERO counters (no patient log is created).
+//
+// Sweep runs:
+//   1. On page load (right after _loadPendingReferrals)
+//   2. Every 5 minutes via setInterval (keeps the UI honest if the page is
+//      left open across the day boundary)
+//   3. At the start of renderPendingReferrals (so opening the panel always
+//      shows the freshest state)
+function _crIsReferralExpired(ref){
+  if(!ref || ref.status !== 'pending' || !ref.createdAt) return false;
+  var created = new Date(ref.createdAt);
+  if(isNaN(created.getTime())) return false;
+  // End of the day AFTER creation (local time). Example: created Mon 11pm
+  // → expiration = Tue 23:59:59.999 local.
+  var exp = new Date(created.getFullYear(), created.getMonth(), created.getDate() + 1, 23, 59, 59, 999);
+  return Date.now() > exp.getTime();
+}
+window._crIsReferralExpired = _crIsReferralExpired;
+
+function _crSweepExpiredReferrals(){
+  if(!Array.isArray(PENDING_REFERRALS)) return 0;
+  var n = 0;
+  var nowIso = new Date().toISOString();
+  PENDING_REFERRALS.forEach(function(r){
+    if(_crIsReferralExpired(r)){
+      r.status = 'incomplete';
+      r.incompletedAt = nowIso;
+      r.autoExpired = true;
+      n++;
+    }
+  });
+  if(n > 0){
+    if(typeof _savePendingReferrals === 'function') _savePendingReferrals();
+  }
+  return n;
+}
+window._crSweepExpiredReferrals = _crSweepExpiredReferrals;
+
+// Kick off the periodic sweep (5 min) — guarded so we only register one
+// interval per session.
+if(!window._CR_SWEEP_TIMER_REGISTERED){
+  window._CR_SWEEP_TIMER_REGISTERED = true;
+  setInterval(function(){
+    try {
+      var n = _crSweepExpiredReferrals();
+      if(n > 0 && typeof renderPendingReferrals === 'function') renderPendingReferrals();
+    } catch(_){}
+  }, 5 * 60 * 1000);
+}
+
 // ── REFERRAL LOG: CRUD ────────────────────────────────────────────────
 // Insert a new entry. Returns the entry on success, or { error:'...' }.
 //
@@ -14905,9 +14963,9 @@ function _rlRenderCalDayDetail(iso){
     refsToday.forEach(function(r){
       var fac = REFERRAL_FACILITIES.find(function(f){ return f.key === r.destinationFacility; });
       var typeIcon = r.sourceType === 'mva' ? '⚖' : r.sourceType === 'wcg_facility' ? '🏥' : '🏥';
-      var statusColor = r.status === 'pending' ? '#f59e0b' : r.status === 'approved' ? '#16a34a' : r.status === 'declined' ? '#9ca3af' : '#64748b';
-      var statusBg = r.status === 'pending' ? '#fffbeb' : r.status === 'approved' ? '#f0fdf4' : '#f8fafc';
-      var statusLabel = r.status === 'pending' ? '⏳ Pending' : r.status === 'approved' ? '✓ Approved' : r.status === 'declined' ? '✗ Declined' : '↩ Retracted';
+      var statusColor = r.status === 'pending' ? '#f59e0b' : r.status === 'approved' ? '#16a34a' : r.status === 'declined' ? '#9ca3af' : r.status === 'incomplete' ? '#dc2626' : '#64748b';
+      var statusBg = r.status === 'pending' ? '#fffbeb' : r.status === 'approved' ? '#f0fdf4' : r.status === 'incomplete' ? '#fef2f2' : '#f8fafc';
+      var statusLabel = r.status === 'pending' ? '⏳ Pending' : r.status === 'approved' ? '✓ Approved' : r.status === 'declined' ? '✗ Declined' : r.status === 'incomplete' ? '⏰ Incomplete (no-show)' : '↩ Retracted';
       var expDt = r.expectedAt ? new Date(r.expectedAt) : null;
       var expTime = (expDt && !isNaN(expDt.getTime())) ? expDt.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}) : '—';
       var creatorLbl = r.creatorRole === 'uc_plano_fd' ? ('🏥 UC Plano · ' + (r.createdBy || '?')) : ('👥 ' + (r.createdBy || '—'));
@@ -16043,6 +16101,9 @@ window._crSaveReferral = _crSaveReferral;
 //   - Front-desk → see only referrals destined for their facility
 //   - Status filter dropdown narrows further (default = pending only)
 function renderPendingReferrals(){
+  // Per user 2026-05-26: sweep auto-expirations before rendering so the
+  // panel never shows a stale 'pending' row past its 23:59-of-day+1 cutoff.
+  if(typeof _crSweepExpiredReferrals === 'function') _crSweepExpiredReferrals();
   var wrap = document.getElementById('pending-referrals-wrap');
   var list = document.getElementById('pr-list');
   var badge = document.getElementById('pr-count-badge');
@@ -16085,9 +16146,9 @@ function renderPendingReferrals(){
   list.innerHTML = items.map(function(r){
     var facLabel = (REFERRAL_FACILITIES.find(function(f){ return f.key === r.destinationFacility; }) || {}).label || r.destinationFacility;
     var typeIcon = r.sourceType === 'mva' ? '⚖' : '🏥';
-    var statusColor = r.status === 'pending' ? '#f59e0b' : r.status === 'approved' ? '#16a34a' : r.status === 'declined' ? '#9ca3af' : '#64748b';
-    var statusBg = r.status === 'pending' ? '#fffbeb' : r.status === 'approved' ? '#f0fdf4' : '#f8fafc';
-    var statusLabel = r.status === 'pending' ? '⏳ Pending' : r.status === 'approved' ? '✓ Approved' : r.status === 'declined' ? '✗ Declined' : '↩ Retracted';
+    var statusColor = r.status === 'pending' ? '#f59e0b' : r.status === 'approved' ? '#16a34a' : r.status === 'declined' ? '#9ca3af' : r.status === 'incomplete' ? '#dc2626' : '#64748b';
+    var statusBg = r.status === 'pending' ? '#fffbeb' : r.status === 'approved' ? '#f0fdf4' : r.status === 'incomplete' ? '#fef2f2' : '#f8fafc';
+    var statusLabel = r.status === 'pending' ? '⏳ Pending' : r.status === 'approved' ? '✓ Approved' : r.status === 'declined' ? '✗ Declined' : r.status === 'incomplete' ? '⏰ Incomplete (no-show)' : '↩ Retracted';
     var expDt = r.expectedAt ? new Date(r.expectedAt) : null;
     var expStr = (expDt && !isNaN(expDt.getTime())) ? expDt.toLocaleString('en-US',{weekday:'short',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) : '—';
     var creatorLbl = r.creatorRole === 'uc_plano_fd' ? ('UC Plano FD · ' + (r.createdBy || '?')) : (r.createdBy || '—');
@@ -47956,6 +48017,7 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
           <option value="all">All statuses</option>
           <option value="approved">✓ Approved</option>
           <option value="declined">✗ Declined</option>
+          <option value="incomplete">⏰ Incomplete (auto-expired)</option>
           <option value="retracted">↩ Retracted</option>
         </select>
       </div>
