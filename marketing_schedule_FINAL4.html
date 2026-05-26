@@ -35393,7 +35393,159 @@ var LOGIN_QUOTES = [
     try { if(pair[1]) pair[1](); }
     catch(e){ try { console.warn('[boot-render] '+pair[0]+' failed (continuing):', e); } catch(_){} }
   });
+  // Per user 2026-05-26 retro-validation: auto-open the audit modal once
+  // per admin session if there are existing Completed rows missing spending
+  // or lead status (rows created BEFORE the Phase 19 gate landed).
+  try {
+    if(typeof isAdmin === 'function' && isAdmin() && typeof _showCompletedRowsAuditIfNeeded === 'function'){
+      _showCompletedRowsAuditIfNeeded();
+    }
+  } catch(_e){}
 })();
+
+// ── PHASE 19 — RETRO-AUDIT FOR COMPLETED ROWS (per user 2026-05-26) ─────────
+// One-time admin audit that finds existing Completed visit rows missing
+// spending OR lead status (predate the Phase 19 gate). Modal lists each one
+// with [Open day to fix] / [Revert to Pending] / [Mark reviewed] actions.
+// Rows already marked completedReviewedAt or completedOverride are excluded
+// (admin has already acknowledged them).
+function _auditCompletedRows(){
+  var offenders = [];
+  if(typeof S === 'undefined' || !S.days || !Array.isArray(S.days)) return offenders;
+  S.days.forEach(function(day, di){
+    if(!day || !Array.isArray(day.rows)) return;
+    day.rows.forEach(function(row, ri){
+      if(!row || row.status !== 'Completed') return;
+      if(row.completedReviewedAt) return;          // admin already saw + accepted
+      if(row.completedOverride)    return;          // admin already overrode at status change time
+      var hasSpending = !!(row.spending && (row.spending.total != null || (row.spending.items && row.spending.items.length)));
+      var hasLeadStatus = !!(row.relationship && String(row.relationship).trim());
+      if(hasSpending && hasLeadStatus) return;
+      var missing = [];
+      if(!hasSpending)   missing.push('💰 spending');
+      if(!hasLeadStatus) missing.push('🎯 lead status');
+      offenders.push({
+        di: di, ri: ri, row: row,
+        date: day.date,
+        clinic: row.clinic || '(unnamed)',
+        member: row.member || '(unassigned)',
+        missing: missing
+      });
+    });
+  });
+  return offenders;
+}
+window._auditCompletedRows = _auditCompletedRows;
+
+// Sessionstorage key — modal auto-opens once per session, then user can
+// re-open via console / button if they want.
+var _RETRO_AUDIT_SESSION_KEY = 'wcg_retro_audit_shown_v1';
+function _showCompletedRowsAuditIfNeeded(){
+  try {
+    if(sessionStorage.getItem(_RETRO_AUDIT_SESSION_KEY)) return;
+  } catch(_){}
+  var offenders = _auditCompletedRows();
+  if(offenders.length === 0){
+    try { sessionStorage.setItem(_RETRO_AUDIT_SESSION_KEY, '1'); } catch(_){}
+    return;
+  }
+  // Defer slightly so the rest of the boot can settle first
+  setTimeout(function(){ _renderCompletedRowsAuditModal(offenders); }, 800);
+}
+window._showCompletedRowsAuditIfNeeded = _showCompletedRowsAuditIfNeeded;
+
+// Public re-open (for a button or for repeated checks after fixing rows)
+function runCompletedRowsAudit(){
+  var offenders = _auditCompletedRows();
+  if(offenders.length === 0){
+    if(typeof showToast === 'function') showToast('✓ All Completed rows have spending + lead status.');
+    return;
+  }
+  _renderCompletedRowsAuditModal(offenders);
+}
+window.runCompletedRowsAudit = runCompletedRowsAudit;
+
+function _renderCompletedRowsAuditModal(offenders){
+  var existing = document.getElementById('retro-audit-modal');
+  if(existing) existing.remove();
+  var modal = document.createElement('div');
+  modal.id = 'retro-audit-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.62);z-index:90000;display:flex;align-items:center;justify-content:center;padding:20px;font-family:DM Sans,sans-serif';
+  function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function fmtDate(iso){
+    try { var d = new Date(iso + 'T12:00:00'); return d.toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' }); }
+    catch(_){ return iso; }
+  }
+  var rowsHtml = offenders.map(function(o, idx){
+    return '<div data-idx="' + idx + '" style="border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;margin-bottom:8px;background:#fafbfc">'
+      + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap">'
+      +   '<div style="flex:1;min-width:0">'
+      +     '<div style="font-weight:700;font-size:12px;color:#1F3864">🏥 ' + esc(o.clinic) + '</div>'
+      +     '<div style="font-size:10px;color:#64748b;margin-top:2px">' + esc(fmtDate(o.date)) + ' · ' + esc(o.member) + '</div>'
+      +     '<div style="font-size:11px;color:#dc2626;font-weight:700;margin-top:4px">Missing: ' + o.missing.join(' + ') + '</div>'
+      +   '</div>'
+      + '</div>'
+      + '<div style="display:flex;gap:6px;margin-top:9px;flex-wrap:wrap">'
+      +   '<button onclick="_retroAuditOpenDay(' + o.di + ')" style="background:#1F3864;color:#fff;border:none;border-radius:5px;padding:5px 11px;font-size:10px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">📅 Open day to fix</button>'
+      +   '<button onclick="_retroAuditRevert(' + o.di + ',' + o.ri + ')" style="background:#fff;color:#b91c1c;border:1px solid #fca5a5;border-radius:5px;padding:5px 11px;font-size:10px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">↩ Revert to Pending</button>'
+      +   '<button onclick="_retroAuditMarkReviewed(' + o.di + ',' + o.ri + ')" style="background:#fff;color:#374151;border:1px solid #cbd5e1;border-radius:5px;padding:5px 11px;font-size:10px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">✓ Mark reviewed (keep as Completed)</button>'
+      + '</div>'
+      + '</div>';
+  }).join('');
+  modal.innerHTML = '<div style="background:#fff;border-radius:12px;max-width:640px;width:100%;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 20px 50px rgba(0,0,0,.4)">'
+    + '<div style="padding:16px 22px;border-bottom:1px solid #e2e8f0;background:linear-gradient(135deg,#dc2626,#b91c1c);color:#fff;border-radius:12px 12px 0 0">'
+    +   '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">'
+    +     '<div><div style="font-size:14px;font-weight:800">⚠ Retro-audit: ' + offenders.length + ' Completed visit' + (offenders.length===1?'':'s') + ' missing data</div>'
+    +       '<div style="font-size:11px;opacity:.9;margin-top:3px;line-height:1.45">These rows were marked Completed before the validation rule landed. They\'re still counted in reports but are missing spending or lead-status data. Fix each one OR mark reviewed to dismiss.</div></div>'
+    +     '<button onclick="_retroAuditClose()" style="background:rgba(255,255,255,.18);border:none;color:#fff;font-size:22px;cursor:pointer;line-height:1;padding:0 6px;border-radius:5px">×</button>'
+    +   '</div>'
+    + '</div>'
+    + '<div style="padding:14px 22px;overflow-y:auto;flex:1" id="retro-audit-list">' + rowsHtml + '</div>'
+    + '<div style="padding:12px 22px;border-top:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">'
+    +   '<span style="font-size:10px;color:#64748b;font-style:italic">You can re-open this from the console: <code>runCompletedRowsAudit()</code></span>'
+    +   '<button onclick="_retroAuditClose()" style="background:#1F3864;color:#fff;border:none;border-radius:8px;padding:9px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">Close</button>'
+    + '</div>'
+    + '</div>';
+  document.body.appendChild(modal);
+  try { sessionStorage.setItem(_RETRO_AUDIT_SESSION_KEY, '1'); } catch(_){}
+}
+function _retroAuditClose(){
+  var m = document.getElementById('retro-audit-modal');
+  if(m) m.remove();
+}
+window._retroAuditClose = _retroAuditClose;
+function _retroAuditOpenDay(di){
+  _retroAuditClose();
+  if(typeof openDay === 'function') openDay(di);
+}
+window._retroAuditOpenDay = _retroAuditOpenDay;
+function _retroAuditRevert(di, ri){
+  if(!S || !S.days || !S.days[di] || !S.days[di].rows[ri]) return;
+  var row = S.days[di].rows[ri];
+  row.status = 'Pending';
+  row.rowConfirmed = false;
+  if(typeof _saveS === 'function') _saveS();
+  if(typeof showToast === 'function') showToast('Reverted to Pending — fix it from the day view.');
+  // Re-render the audit list (offender list shrinks)
+  var offenders = _auditCompletedRows();
+  if(offenders.length === 0){ _retroAuditClose(); return; }
+  _retroAuditClose();
+  _renderCompletedRowsAuditModal(offenders);
+}
+window._retroAuditRevert = _retroAuditRevert;
+function _retroAuditMarkReviewed(di, ri){
+  if(!S || !S.days || !S.days[di] || !S.days[di].rows[ri]) return;
+  var row = S.days[di].rows[ri];
+  row.completedReviewedAt = new Date().toISOString();
+  row.completedReviewedBy = (CURRENT_USER && CURRENT_USER.name) || 'admin';
+  if(typeof _saveS === 'function') _saveS();
+  if(typeof showToast === 'function') showToast('Marked reviewed — won\'t show up again.');
+  var offenders = _auditCompletedRows();
+  if(offenders.length === 0){ _retroAuditClose(); return; }
+  _retroAuditClose();
+  _renderCompletedRowsAuditModal(offenders);
+}
+window._retroAuditMarkReviewed = _retroAuditMarkReviewed;
 function refresh(di){
   // Per user 2026-05-21: wrap every subcall in try/catch so one render
   // throwing (e.g. an undefined helper like getMonthCompleted) can't
