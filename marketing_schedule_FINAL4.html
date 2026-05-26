@@ -15232,6 +15232,17 @@ function openReferralForm(editId){
   // so the form starts in the normal full-record state. When editing an
   // existing record, also 'have' (anonymous entries don't open this dialog).
   if(typeof _rlResetMode === 'function') _rlResetMode();
+  // Per user 2026-05-26: pick initial tab based on context. If we're here
+  // because the front desk clicked Approve on a pending referral, default
+  // to the From Referral tab (which will be locked by approvePendingReferral
+  // after this function returns). Otherwise default to Other Channel.
+  if(typeof _rlSetTab === 'function'){
+    var fromApproval = !!window._crApprovingReferralId;
+    // Start in 'other' first so unlock helpers can clear stale lock state
+    // from any previous session, then approvePendingReferral switches to
+    // 'referral' after it sets source/dest/member values.
+    _rlSetTab(fromApproval ? 'other' : 'other');
+  }
   // Populate member dropdown. Per user 2026-05-22: includes a "None" option
   // for patients who never saw any marketing rep — those still count toward
   // the facility's overall referral counter but don't credit any team member.
@@ -15446,6 +15457,146 @@ window._rlPickInsurance = _rlPickInsurance;
 // - Community outreach event (showsEvent)   → event picker, NO member field
 // - Other (showsSpecify)                    → free-text specify, NO member field
 // - All other non-referral channels         → no source, no event, NO member field
+// ── PHASE 16 — LOG PATIENT TABS (per user 2026-05-26) ──────────────────────
+// Two big tabs at the top of the Log Patient modal:
+//   referral → source/destination/member LOCKED from approved referral
+//   other    → free-form, default for manual logging
+// Auto-selected based on whether _crApprovingReferralId is set at open time.
+function _rlSetTab(tab){
+  if(tab !== 'referral' && tab !== 'other') tab = 'other';
+  window._rlActiveTab = tab;
+  var tRef = document.getElementById('rl-tab-referral');
+  var tOth = document.getElementById('rl-tab-other');
+  function styleActive(b){ if(b){ b.style.background='#fff'; b.style.color='#1F3864'; b.style.boxShadow='0 1px 3px rgba(31,56,100,.15)'; }}
+  function styleIdle(b){   if(b){ b.style.background='transparent'; b.style.color='#64748b'; b.style.boxShadow='none'; }}
+  if(tab === 'referral'){ styleActive(tRef); styleIdle(tOth); }
+  else                  { styleActive(tOth); styleIdle(tRef); }
+  // Banner — only on Referral tab
+  var bnr = document.getElementById('rl-tab-referral-banner');
+  if(bnr) bnr.style.display = (tab === 'referral') ? 'block' : 'none';
+  // Channel dropdown: hidden when from referral (channel is implicitly member_direct)
+  var chSel = document.getElementById('rl-channel');
+  if(chSel){
+    var chWrap = chSel.closest('.kpi-input-row');
+    if(chWrap) chWrap.style.display = (tab === 'referral') ? 'none' : '';
+  }
+  // Apply lock state
+  if(tab === 'referral') _rlLockReferralFields();
+  else _rlUnlockReferralFields();
+}
+window._rlSetTab = _rlSetTab;
+
+// Lock fields that came from the approved referral. Greys them out, adds
+// 🔒 to their label, sets readonly/disabled. Inputs that should ALWAYS be
+// editable (patient details, complaint, payment, insurance, notes, logger
+// name) are NOT touched.
+function _rlLockReferralFields(){
+  // Source-type radios — disable all (the right one is pre-checked by the
+  // approve flow before this function runs).
+  document.querySelectorAll('input[name="rl-source-type"]').forEach(function(r){
+    r.disabled = true;
+    var label = r.closest('label');
+    if(label){
+      label.style.opacity = '0.7';
+      label.style.cursor = 'not-allowed';
+      if(r.checked){ label.style.background = '#eef2ff'; label.style.borderColor = '#a5b4fc'; }
+    }
+  });
+  // Source name input — readonly
+  var srcInp = document.getElementById('rl-source');
+  if(srcInp){
+    srcInp.readOnly = true;
+    srcInp.disabled = false;   // not disabled so the value submits
+    srcInp.style.background = '#f1f5f9';
+    srcInp.style.cursor = 'not-allowed';
+    srcInp.style.color = '#475569';
+  }
+  // Destination radios — disable all except the pre-checked one
+  document.querySelectorAll('input[name="rl-dest"]').forEach(function(r){
+    r.disabled = true;
+    var label = r.closest('label');
+    if(label){
+      label.style.opacity = r.checked ? '1' : '0.45';
+      label.style.cursor = 'not-allowed';
+      if(r.checked){ label.style.background = '#eef2ff'; label.style.borderColor = '#a5b4fc'; }
+    }
+  });
+  // Member select — disable
+  var mSel = document.getElementById('rl-member');
+  if(mSel){
+    mSel.disabled = true;
+    mSel.style.background = '#f1f5f9';
+    mSel.style.cursor = 'not-allowed';
+    mSel.style.color = '#475569';
+  }
+  // Add 🔒 marker to the source/dest/member section labels (idempotent)
+  _rlAddLockMarker('rl-source-name-label');
+  _rlAddLockMarker('rl-destination-row', /*labelTarget*/ 'prev');
+  _rlAddLockMarker('rl-member', /*labelTarget*/ 'prev');
+}
+window._rlLockReferralFields = _rlLockReferralFields;
+
+function _rlUnlockReferralFields(){
+  document.querySelectorAll('input[name="rl-source-type"]').forEach(function(r){
+    r.disabled = false;
+    var label = r.closest('label');
+    if(label){ label.style.opacity = ''; label.style.cursor = 'pointer'; label.style.background = ''; label.style.borderColor = ''; }
+  });
+  var srcInp = document.getElementById('rl-source');
+  if(srcInp){
+    srcInp.readOnly = false;
+    srcInp.style.background = '#fff';
+    srcInp.style.cursor = '';
+    srcInp.style.color = '';
+  }
+  // Destination radios — restore the openReferralForm defaults (FD lock still applies)
+  // Easiest: re-run _rlChannelChanged which the form already calls; for FD users
+  // the disabled state for non-matching facilities is handled by openReferralForm.
+  document.querySelectorAll('input[name="rl-dest"]').forEach(function(r){
+    var label = r.closest('label');
+    if(label){ label.style.opacity = ''; label.style.cursor = ''; label.style.background = ''; label.style.borderColor = ''; }
+    // Don't blanket re-enable — FD lock still applies. openReferralForm sets disabled
+    // correctly when called. For non-FD users, re-enable all.
+    if(!(window.CURRENT_USER && CURRENT_USER.role === 'front_desk')){
+      r.disabled = false;
+    }
+  });
+  var mSel = document.getElementById('rl-member');
+  if(mSel){
+    mSel.disabled = false;
+    mSel.style.background = '#fff';
+    mSel.style.cursor = '';
+    mSel.style.color = '';
+  }
+  _rlRemoveLockMarker('rl-source-name-label');
+  _rlRemoveLockMarker('rl-destination-row', 'prev');
+  _rlRemoveLockMarker('rl-member', 'prev');
+}
+window._rlUnlockReferralFields = _rlUnlockReferralFields;
+
+function _rlAddLockMarker(id, labelTarget){
+  var el = document.getElementById(id);
+  if(!el) return;
+  var target = (labelTarget === 'prev') ? el.previousElementSibling : el;
+  if(!target) return;
+  // labelTarget 'prev' assumes preceding element is the label
+  if(target.querySelector && target.querySelector('.rl-lock-mark')) return;
+  var s = document.createElement('span');
+  s.className = 'rl-lock-mark';
+  s.title = 'Locked — copied from approved referral';
+  s.style.cssText = 'margin-left:5px;font-size:11px';
+  s.textContent = '🔒';
+  target.appendChild(s);
+}
+function _rlRemoveLockMarker(id, labelTarget){
+  var el = document.getElementById(id);
+  if(!el) return;
+  var target = (labelTarget === 'prev') ? el.previousElementSibling : el;
+  if(!target || !target.querySelector) return;
+  var m = target.querySelector('.rl-lock-mark');
+  if(m) m.remove();
+}
+
 function _rlChannelChanged(){
   var ch  = document.getElementById('rl-channel');
   var srcWrap     = document.getElementById('rl-source-wrap');
@@ -15953,6 +16104,13 @@ function approvePendingReferral(id){
       noticeBar.style.color = '#065f46';
       noticeBar.textContent = '📥 Approving referral from ' + ref.sourceName + '. Fill in the patient details below + your name, then Save to confirm.';
     }
+    // Per user 2026-05-26: pre-pick the destination radio from the referral
+    // (matches the FD user's facility already, but make it explicit).
+    var destRadio = document.querySelector('input[name="rl-dest"][value="' + ref.destinationFacility + '"]');
+    if(destRadio) destRadio.checked = true;
+    // Switch to the From Referral tab AFTER source/dest/member are set —
+    // _rlSetTab will lock the now-checked values into place.
+    if(typeof _rlSetTab === 'function') _rlSetTab('referral');
   }, 80);
 }
 window.approvePendingReferral = approvePendingReferral;
@@ -48036,6 +48194,23 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
           </label>
         </div>
         <div id="rl-mode-hint" style="font-size:10px;color:#1e40af;margin-top:6px;font-style:italic">Full record with referral source. Counts toward member &amp; source stats.</div>
+      </div>
+
+      <!-- ── TAB ROW (per user 2026-05-26) ──────────────────────────────
+           Two big tabs at the top split the form into:
+             📥 From Referral — auto-active when opened via approval flow.
+               Source clinic/MVA, destination, and credited member are
+               LOCKED — they were committed when the referral was created.
+             📞 Other Channel — default for manual logging. Free-form
+               channel picker + editable source/destination/member.
+           The tab JS lives in _rlSetTab (toggles visibility + lock state).
+      -->
+      <div id="rl-tab-row" style="display:flex;gap:6px;margin-bottom:14px;background:#f1f5f9;padding:5px;border-radius:10px">
+        <button id="rl-tab-referral" type="button" onclick="_rlSetTab('referral')" style="flex:1;background:transparent;color:#64748b;border:none;padding:11px 14px;font-size:12px;font-weight:700;cursor:pointer;border-radius:7px;font-family:'DM Sans',sans-serif;display:flex;align-items:center;justify-content:center;gap:6px">📥 <span>From Referral</span></button>
+        <button id="rl-tab-other"    type="button" onclick="_rlSetTab('other')"    style="flex:1;background:#fff;color:#1F3864;border:none;padding:11px 14px;font-size:12px;font-weight:700;cursor:pointer;border-radius:7px;font-family:'DM Sans',sans-serif;display:flex;align-items:center;justify-content:center;gap:6px;box-shadow:0 1px 3px rgba(31,56,100,.15)">📞 <span>Other Channel</span></button>
+      </div>
+      <div id="rl-tab-referral-banner" style="display:none;background:#ecfdf5;border:1px solid #6ee7b7;border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:11px;color:#065f46;line-height:1.55">
+        📥 <b>Approving referral.</b> Source clinic/MVA, destination, and credited member are <b>locked</b> — they were set when the referral was created. Fill in the patient details + your name + payment, then Save to confirm.
       </div>
 
       <!-- Wrapper around the rest of the form — gets dimmed + locked when mode='skip' -->
