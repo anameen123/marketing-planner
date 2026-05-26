@@ -25615,26 +25615,29 @@ function exportDayRouteToGoogleMaps(){
   function _addressFor(name){
     if(!name) return null;
     var low = String(name).toLowerCase();
+    // Per address enrichment 2026-05-26: only use the bank's address field
+    // when addressVerified===true (i.e. it's a real research-confirmed street
+    // address). For unverified entries (city-level placeholders like
+    // "Frisco, TX 75034"), fall back to "Clinic Name, City, TX" so Google
+    // Maps still searches for the named business — not a bare city centroid.
+    function pickAddress(entry, nameField, cityField){
+      if(!entry) return null;
+      var hasReal = entry.address && entry.address.trim() && entry.address !== 'TBD';
+      if(hasReal && entry.addressVerified === true) return entry.address;
+      // Name + city fallback — works regardless of placeholder
+      return (entry[nameField] + (entry[cityField] ? ', ' + entry[cityField] : '') + ', TX').trim();
+    }
     if(typeof CLINIC_BANK !== 'undefined'){
       var c = CLINIC_BANK.find(function(x){ return (x.n || '').toLowerCase() === low; });
-      if(c){
-        if(c.address && c.address.trim() && c.address !== 'TBD') return c.address;
-        return (c.n + (c.c ? ', ' + c.c : '') + ', TX').trim();
-      }
+      if(c) return pickAddress(c, 'n', 'c');
     }
     if(typeof MVA_ATTORNEYS !== 'undefined'){
       var m = MVA_ATTORNEYS.find(function(x){ return (x.firm || '').toLowerCase() === low; });
-      if(m){
-        if(m.address && m.address.trim() && m.address !== 'TBD') return m.address;
-        return (m.firm + (m.city ? ', ' + m.city : '') + ', TX').trim();
-      }
+      if(m) return pickAddress(m, 'firm', 'city');
     }
     if(typeof OUTREACH !== 'undefined'){
       var o = OUTREACH.find(function(x){ return (x.name || '').toLowerCase() === low; });
-      if(o){
-        if(o.address && o.address.trim() && o.address !== 'TBD') return o.address;
-        return (o.name + (o.city ? ', ' + o.city : '') + ', TX').trim();
-      }
+      if(o) return pickAddress(o, 'name', 'city');
     }
     return null;
   }
@@ -41987,35 +41990,40 @@ var CLINIC_BANK = [
     "s": "PCP",
     "d": "Cudjoe, MD",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "8000 Preston Rd Ste 401, Frisco, TX 75034"
   },
   {
     "n": "Passion Health",
     "s": "PCP",
     "d": "Purushotham Arani, MD",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "8195 Custer Rd Ste 110, Frisco, TX 75035"
   },
   {
     "n": "ATA Healthcare and Wellness",
     "s": "PCP",
     "d": "Mona Alhezayen, Jolene Aden-Else",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "8501 Wade Blvd Ste 1160, Frisco, TX 75034"
   },
   {
     "n": "North Dallas Primary Care",
     "s": "PCP",
     "d": "Dr.Suchitra, Dr Arun Amaram",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "8795 Preston Trace Blvd Ste 100, Frisco, TX 75033"
   },
   {
     "n": "Southern Medical Associates",
     "s": "PCP",
     "d": "Dr. Latha Yedlapalli, Dr. Sri Venkat Yedlapalli, Babita John",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "9300 John Hickman Pkwy, Frisco, TX 75035"
   },
   {
     "n": "Care Now",
@@ -42026,7 +42034,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "301 Main St, Frisco, TX 75034",
     "notes": ""
   },
   {
@@ -42034,21 +42042,24 @@ var CLINIC_BANK = [
     "s": "PCP",
     "d": "Dr. Hoffman, MD.",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "6380 Preston Rd, Frisco, TX 75035"
   },
   {
     "n": "little Lantern",
     "s": "Primary",
     "d": "Biju Lukose",
     "c": "Carrollton",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "4541 N Josey Ln Ste 110C, Carrollton, TX 75010"
   },
   {
     "n": "St Marys",
     "s": "Primary",
     "d": "Remi",
     "c": "Carrollton",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "3730 N Josey Ln Ste 120, Carrollton, TX 75007"
   },
   {
     "n": "Collin County Physicians",
@@ -42059,7 +42070,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "5860 Collin McKinney Pkwy Ste 602, McKinney, TX 75070",
     "notes": ""
   },
   {
@@ -42067,28 +42078,32 @@ var CLINIC_BANK = [
     "s": "Primary",
     "d": "Dr. Brian.C.Procter, Dr Peter A. McCullough",
     "c": "McKinney",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "7692 Eldorado Pkwy, McKinney, TX 75070"
   },
   {
     "n": "Wellness medicine",
     "s": "",
     "d": "DR. Sunila Philips",
     "c": "McKinney",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "3120 Hudson Crossing Ste B2, McKinney, TX 75070"
   },
   {
     "n": "Cardiac Center of Texas",
     "s": "PCP, CCM",
     "d": "Dr. Ambreen Ashfaque, Dr Muhammad Akram Khan",
     "c": "McKinney",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "4201 Medical Center Dr Ste 380, McKinney, TX 75069"
   },
   {
     "n": "Texas Health Family and Sports Care",
     "s": "PCP",
     "d": "Dr.Shaun McMurtry",
     "c": "McKinney",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "6210 Virginia Pkwy, McKinney, TX 75071"
   },
   {
     "n": "Meridian Primary Care",
@@ -42099,7 +42114,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "280 Adriatic Pkwy, McKinney, TX 75070",
     "notes": ""
   },
   {
@@ -42107,98 +42122,112 @@ var CLINIC_BANK = [
     "s": "PCP",
     "d": "Dr.Kavitha Moolamalla",
     "c": "McKinney",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "8080 State Hwy 121 Ste 300, McKinney, TX 75070"
   },
   {
     "n": "McKinney Ranch Medical Care & Wellness",
     "s": "PCP",
     "d": "Dr. Janet Lin",
     "c": "McKinney",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "3950 S Ridge Rd Ste 100, McKinney, TX 75070"
   },
   {
     "n": "Premier Independent Physicians of McKinney",
     "s": "PCP",
     "d": "Dr.Zahid Zafar",
     "c": "McKinney",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "1820 N Lake Forest Dr Ste 300, McKinney, TX 75071"
   },
   {
     "n": "Direct Orthopedic Care",
     "s": "Orthopedics",
     "d": "Dr.Diana Ayala PT, DPT",
     "c": "McKinney",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "4600 Eldorado Pkwy Ste 600, McKinney, TX 75070"
   },
   {
     "n": "Alpha Orthopedics & Sports Medicine",
     "s": "Orthopedics",
     "d": "Dr. John Thompson",
     "c": "McKinney",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "6850 TPC Dr Ste 116, McKinney, TX 75070"
   },
   {
     "n": "Texas Renal Care",
     "s": "",
     "d": "Dr.Mohammad N. Sadeddin",
     "c": "McKinney",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "7300 W Eldorado Pkwy Ste 125, McKinney, TX 75070"
   },
   {
     "n": "Boring Family Medicine",
     "s": "",
     "d": "Dr.Taylor Richardson",
     "c": "McKinney",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "1441 Redbud Blvd Ste 111, McKinney, TX 75069"
   },
   {
     "n": "The Heartbeat Clinic",
     "s": "",
     "d": "Dr. Suleman",
     "c": "McKinney",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "4541 Medical Center Dr Ste 800, McKinney, TX 75069"
   },
   {
     "n": "Sierra Health Direct Primary care",
     "s": "",
     "d": "Dr.Katherine Hurley,",
     "c": "McKinney",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "1400 N Coit Rd Ste 302, McKinney, TX 75071"
   },
   {
     "n": "Craig Ranch Pediatrics",
     "s": "",
     "d": "Dr. Salem",
     "c": "McKinney",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "6850 TPC Dr Ste 100, McKinney, TX 75070"
   },
   {
     "n": "Family Health Center of Lake Forest",
     "s": "",
     "d": "Dr. William Dodge",
     "c": "McKinney",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "4987 W University Dr Ste 150, McKinney, TX 75071"
   },
   {
     "n": "Synder Hopkins Family Medicine",
     "s": "",
     "d": "Dr. Ann Snyder",
     "c": "McKinney",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "4561 Medical Center Dr, McKinney, TX 75069"
   },
   {
     "n": "Eldarado Family Medicine",
     "s": "",
     "d": "Dr. Haris Lin",
     "c": "McKinney",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "7701 Eldorado Pkwy Ste 300, McKinney, TX 75070"
   },
   {
     "n": "Thuan Huynh, MD",
     "s": "",
     "d": "Dr. Thuan Huynh",
     "c": "Carrollton",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "1809 Golden Trail Ct Ste 130, Carrollton, TX 75010"
   },
   {
     "n": "Care Plus Family Clinic",
@@ -42209,7 +42238,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "1933 E Frankford Rd Ste 100, Carrollton, TX 75007",
     "notes": ""
   },
   {
@@ -42221,7 +42250,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "4325 N Josey Ln Ste 300, Carrollton, TX 75010",
     "notes": ""
   },
   {
@@ -42229,14 +42258,16 @@ var CLINIC_BANK = [
     "s": "",
     "d": "Dr. Anis A. Ansari",
     "c": "Carrollton",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "1948 E Hebron Pkwy Ste 110, Carrollton, TX 75007"
   },
   {
     "n": "Fairway Family Medicine",
     "s": "",
     "d": "Dr.HONG XIAO",
     "c": "Carrollton",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "4100 Fairway Dr Ste 320, Carrollton, TX 75010"
   },
   {
     "n": "Complete Family Wellness",
@@ -42247,7 +42278,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "4125 Fairway Dr Ste 190, Carrollton, TX 75010",
     "notes": ""
   },
   {
@@ -42255,42 +42286,48 @@ var CLINIC_BANK = [
     "s": "",
     "d": "Dr.Muhammad Ali Mirza",
     "c": "Carrollton",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "4300 N Josey Ln Ste 110, Carrollton, TX 75010"
   },
   {
     "n": "Giometti Ronald MD",
     "s": "",
     "d": "Dr.Ronald P Giometti Jr",
     "c": "Carrollton",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "4325 N Josey Ln Ste 105, Carrollton, TX 75010"
   },
   {
     "n": "Woven health",
     "s": "",
     "d": "Dr. Leesa Condry",
     "c": "Carrollton",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "1 Medical Pkwy Ste 149, Dallas, TX 75234"
   },
   {
     "n": "BloomMed,LLC:stephanie Cudjoe, MD",
     "s": "",
     "d": "Dr Stephanie Cudjoe",
     "c": "McKinney",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "8951 Collin McKinney Pkwy Ste 502, McKinney, TX 75070"
   },
   {
     "n": "Healthcare Associates of Texas",
     "s": "",
     "d": "Karla Maltez Salvador, MD",
     "c": "McKinney",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "8080 State Hwy 121 Ste 300, McKinney, TX 75070"
   },
   {
     "n": "Mummadi Internel Medicine",
     "s": "",
     "d": "Dr. Vijaya Mummadi",
     "c": "McKinney",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "8951 Collin McKinney Pkwy Ste 301, McKinney, TX 75070"
   },
   {
     "n": "NTX Medical Clinic",
@@ -42301,7 +42338,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "1400 N Coit Rd Ste 2502, McKinney, TX 75071",
     "notes": ""
   },
   {
@@ -42309,42 +42346,48 @@ var CLINIC_BANK = [
     "s": "",
     "d": "",
     "c": "McKinney",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "6150 Eldorado Pkwy Ste 140, McKinney, TX 75070"
   },
   {
     "n": "Family Health Center on Virginia",
     "s": "",
     "d": "Dr.Brock Pierce",
     "c": "McKinney",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "1620 W Virginia St, McKinney, TX 75069"
   },
   {
     "n": "Tu Clinica Hispana Familiar",
     "s": "",
     "d": "",
     "c": "McKinney",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "811 N McDonald St, McKinney, TX 75069"
   },
   {
     "n": "Progressive Health Family Medicine",
     "s": "",
     "d": "Dr.Hema Haridas",
     "c": "McKinney",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "8901 Virginia Pkwy, McKinney, TX 75071"
   },
   {
     "n": "Dr. Daniel James Chartrand",
     "s": "",
     "d": "Dr. Daniel J. Chartrand",
     "c": "McKinney",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "302 S Tennessee St, McKinney, TX 75069"
   },
   {
     "n": "Apollo Medical Associates",
     "s": "",
     "d": "DR. MYERS, HEATHER",
     "c": "McKinney",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "431 Stacy Rd, McKinney, TX 75069"
   },
   {
     "n": "Healing Care Pediatrics",
@@ -42355,7 +42398,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "12530 Lebanon Road Suite 203, Frisco, TX 75035",
     "notes": ""
   },
   {
@@ -42363,77 +42406,88 @@ var CLINIC_BANK = [
     "s": "",
     "d": "Dr. Jonathan Chow",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "11875 Coit Rd Suite 100, Frisco, TX"
   },
   {
     "n": "Carrollton Family Physicians",
     "s": "",
     "d": "Dr. Joey L. Hamilton",
     "c": "Carrollton",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "4333 N Josey Ln Ste 302, Carrollton, TX 75010"
   },
   {
     "n": "Medical Clinic Of North Texas",
     "s": "",
     "d": "Dr.Dr. Stephen Bryce Johnston",
     "c": "Carrollton",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "1601 W Hebron Pkwy Ste 100, Carrollton, TX 75010"
   },
   {
     "n": "USMD Carrollton Clinic",
     "s": "",
     "d": "Dr.Van Lam",
     "c": "Carrollton",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "1601 W Hebron Pkwy Ste 100, Carrollton, TX 75010"
   },
   {
     "n": "Jose Burbano De Lara, MD",
     "s": "",
     "d": "Dr.Jose Burbano De Lara",
     "c": "Carrollton",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "3020 E Hebron Pkwy Ste 100, Carrollton, TX 75010"
   },
   {
     "n": "Cook Children's Pediatrics West Frisco",
     "s": "",
     "d": "Dr.Harry Stellman IV",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "255 W Lebanon Rd Ste 104, Frisco, TX 75036"
   },
   {
     "n": "Joy & Crown Pediatric Specialists",
     "s": "",
     "d": "Dr.MaryEllen Cavalier",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "7002 Lebanon Rd Ste 103, Frisco, TX 75034"
   },
   {
     "n": "Jacob's Ladder Developmental Pediatrics",
     "s": "",
     "d": "Dr. Julie Jacob",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "8501 Wade Blvd Ste 330, Frisco, TX 75034"
   },
   {
     "n": "Frisco Family Ent",
     "s": "",
     "d": "Dr.Patti Huang",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "5520 Independence Pkwy Ste 202, Frisco, TX 75035"
   },
   {
     "n": "Dr. Megha Patel-Banker",
     "s": "",
     "d": "Dr. Smitha Rudraraju",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "8501 Wade Blvd, Frisco, TX 75035"
   },
   {
     "n": "Elite Internel",
     "s": "",
     "d": "Dr Krishna C. Tatineni",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "14660 State Hwy 121 Bldg B Ste 200, Frisco, TX 75035"
   },
   {
     "n": "Heal 360",
@@ -42444,7 +42498,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "9229 Lebanon Rd, Frisco, TX 75035",
     "notes": ""
   },
   {
@@ -42452,14 +42506,16 @@ var CLINIC_BANK = [
     "s": "",
     "d": "Dr.Xiaohui Lu",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "4525 Ohio Dr Ste 300, Frisco, TX 75035"
   },
   {
     "n": "Dr. Vani Ramesh",
     "s": "",
     "d": "Dr. Vani Ramesh",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "4670 McDermott Rd Ste 202, Plano, TX 75024"
   },
   {
     "n": "Nest Family Medicine",
@@ -42470,7 +42526,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "4920 McDermott Rd Ste 200, Plano, TX 75024",
     "notes": ""
   },
   {
@@ -42482,7 +42538,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "4020 Hedgcoxe Rd Ste 700, Plano, TX 75024",
     "notes": ""
   },
   {
@@ -42490,21 +42546,24 @@ var CLINIC_BANK = [
     "s": "",
     "d": "Dr. Chong Liu",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "7712 San Jacinto Pl Ste 100, Plano, TX 75024"
   },
   {
     "n": "Nisha Satish,MD",
     "s": "",
     "d": "Dr. Nisha Satish",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "7170 Preston Rd Ste 200, Plano, TX 75024"
   },
   {
     "n": "Harini Meda",
     "s": "",
     "d": "Dr. Harinineeraja Meda, MD",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "4508 Legacy Dr Ste 400, Plano, TX 75024"
   },
   {
     "n": "Plano Family Medicine",
@@ -42515,7 +42574,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "1220 Coit Rd Ste 105, Plano, TX 75075",
     "notes": ""
   },
   {
@@ -42523,21 +42582,24 @@ var CLINIC_BANK = [
     "s": "",
     "d": "Dr.Kalpana Thakur",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "1600 Coit Rd, Plano, TX 75075"
   },
   {
     "n": "Adriatica Womens health",
     "s": "",
     "d": "Dr.Tracey A. Banks",
     "c": "McKinney",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "6609 Virginia Pkwy, McKinney, TX 75071"
   },
   {
     "n": "Children Choice Pediatrics",
     "s": "",
     "d": "Dr.Stacie Hunsaker",
     "c": "McKinney",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "6587 Virginia Pkwy, McKinney, TX 75071"
   },
   {
     "n": "Pediatrics People PLLC",
@@ -42555,7 +42617,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "2517 Virginia Pkwy Ste 102, McKinney, TX 75071",
     "notes": ""
   },
   {
@@ -42567,7 +42629,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "5531 Virginia Pkwy Ste 100, McKinney, TX 75071",
     "notes": ""
   },
   {
@@ -42575,14 +42637,16 @@ var CLINIC_BANK = [
     "s": "NEUR",
     "d": "Dr.M. Viktor Silver",
     "c": "McKinney",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "7300 Eldorado Pkwy Ste 200, McKinney, TX 75070"
   },
   {
     "n": "Dr. Angela Tseng",
     "s": "GI",
     "d": "Dr. Angela Tseng",
     "c": "McKinney",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "6850 TPC Dr Ste 102, McKinney, TX 75070"
   },
   {
     "n": "Texas Diabetes & Endocrinology",
@@ -42610,28 +42674,32 @@ var CLINIC_BANK = [
     "s": "GS",
     "d": "Dr.Steve Duffy",
     "c": "McKinney",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "8080 State Hwy 121 Ste 120, McKinney, TX 75070"
   },
   {
     "n": "Laurie Novosad, M.D., FASCRS",
     "s": "GS",
     "d": "Dr.Laurie S. Novosad",
     "c": "McKinney",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "5236 W University Dr Ste 4300, McKinney, TX 75071"
   },
   {
     "n": "Francy Y Shu",
     "s": "NEUR",
     "d": "Dr. Francy Shu",
     "c": "McKinney",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "5236 W University Dr Ste 3700, McKinney, TX 75071"
   },
   {
     "n": "North Texas Brain and Spine Specialists",
     "s": "NEUR",
     "d": "Dr.Brite John Chalunkal",
     "c": "McKinney",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "8000 Eldorado Pkwy Bldg E Ste A, McKinney, TX 75070"
   },
   {
     "n": "Sanders Barry Md",
@@ -42645,14 +42713,16 @@ var CLINIC_BANK = [
     "s": "GI",
     "d": "Dr.Elizabeth Samuel",
     "c": "Carrollton",
-    "t": "Duaa & Zuhab"
+    "t": "Duaa & Zuhab",
+    "address": "4325 N Josey Ln Plaza III Ste 211, Carrollton, TX 75010"
   },
   {
     "n": "Axis Diabetes & Endocrinology",
     "s": "Endocrinologist",
     "d": "Dr. Neeraja Boddu",
     "c": "Carrollton",
-    "t": "Duaa & Zuhab"
+    "t": "Duaa & Zuhab",
+    "address": "4333 N Josey Ln Ste 204, Carrollton, TX 75010"
   },
   {
     "n": "MR. DOUGLAS CONNER",
@@ -42670,7 +42740,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "5881 Virginia Pkwy Ste 300, McKinney, TX 75071",
     "notes": ""
   },
   {
@@ -42678,49 +42748,56 @@ var CLINIC_BANK = [
     "s": "Gastroenterologist",
     "d": "Dr.Murali Alloju",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "11330 Legacy Dr Ste 205, Frisco, TX 75033"
   },
   {
     "n": "Dr.Stefanie Lynn Addington",
     "s": "Endocrinologist",
     "d": "Dr.Stefanie L. addington",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "8350 Dallas Pkwy Ste 300, Frisco, TX 75034"
   },
   {
     "n": "Preston Surgery Center",
     "s": "GS",
     "d": "DR. MOHAMMAD TARIQ",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "7589 Preston Rd Ste 100, Frisco, TX 75034"
   },
   {
     "n": "Christopher A. Kowalski",
     "s": "Orthopedics",
     "d": "Dr. Justin M. Kane",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "5575 Warren Pkwy, Frisco, TX 75034"
   },
   {
     "n": "Nutritional Blessings",
     "s": "Endocrinologist",
     "d": "",
     "c": "McKinney",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "503 N Kentucky St, McKinney, TX 75069"
   },
   {
     "n": "Spine Vue",
     "s": "Spine Surgeon",
     "d": "Dr.Dr. Sean M. Jones",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "3800 Gaylord Pkwy Ste 820, Frisco, TX 75034"
   },
   {
     "n": "Preformance Ortho & Sports Medicine",
     "s": "Orthopedics",
     "d": "Dr. Troy Diehl",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "14660 State Hwy 121 Ste 100, Frisco, TX 75035"
   },
   {
     "n": "North Texas Endocrinology",
@@ -42731,7 +42808,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "14725 Lebanon Rd Ste 100, Frisco, TX 75035",
     "notes": ""
   },
   {
@@ -42739,42 +42816,48 @@ var CLINIC_BANK = [
     "s": "Orthopedist",
     "d": "Dr. Felix Segovia",
     "c": "Carrollton",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "1810 S Josey Ln, Carrollton, TX 75006"
   },
   {
     "n": "Core Vasculaar Services",
     "s": "GS",
     "d": "Dr. Timothy C. Pringle",
     "c": "Carrollton",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "4541 N Josey Ln Ste 140, Carrollton, TX 75010"
   },
   {
     "n": "Ortho Texas Orthopedics and sports medicine",
     "s": "Orthopedist",
     "d": "Dr.Christopher D. Allmon",
     "c": "Carrollton",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "4780 N Josey Ln, Carrollton, TX 75010"
   },
   {
     "n": "Dr. Biju Lukose",
     "s": "GS",
     "d": "Dr. Biju Lukose",
     "c": "Carrollton",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "4541 N Josey Ln Ste 110C, Carrollton, TX 75010"
   },
   {
     "n": "Affinity NEUROCARE",
     "s": "NEUR",
     "d": "Dr.Nnamdi C. Dike",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "8350 Dallas Pkwy Ste 300, Frisco, TX 75034"
   },
   {
     "n": "Margaret Mike, Md",
     "s": "NEUR",
     "d": "Dr Margaret Mike",
     "c": "Carrollton",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "4325 N Josey Ln Ste 100, Carrollton, TX 75010"
   },
   {
     "n": "Neurology & Sleep Clinic",
@@ -42785,7 +42868,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "4217 Marsh Ridge Rd Ste 120, Carrollton, TX 75010",
     "notes": ""
   },
   {
@@ -42793,119 +42876,136 @@ var CLINIC_BANK = [
     "s": "GI",
     "d": "Dr.Adnan Nadir",
     "c": "Carrollton",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "4221 Medical Pkwy Ste 150, Carrollton, TX 75010"
   },
   {
     "n": "Lisa R. Reznick, MD",
     "s": "",
     "d": "Dr.Lisa R. Reznick",
     "c": "Carrollton",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "4100 Fairway Dr Ste 120, Carrollton, TX 75010"
   },
   {
     "n": "David Tietze, M.D",
     "s": "GS",
     "d": "David Tietze, M.D",
     "c": "Carrollton",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "1735 Keller Springs Rd Ste 100, Carrollton, TX 75006"
   },
   {
     "n": "Dr. Louis Montanaro",
     "s": "",
     "d": "Dr. Louis Montanaro",
     "c": "Carrollton",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "4300 N Josey Ln Ste 106, Carrollton, TX 75010"
   },
   {
     "n": "MD medical group",
     "s": "",
     "d": "Dr. Neha Manikonda",
     "c": "Carrollton",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "3044 Old Denton Rd Ste 138, Carrollton, TX 75007"
   },
   {
     "n": "Bent Tree Family Physicians",
     "s": "",
     "d": "Dr. Tariq Khan",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "3550 Parkwood Blvd Ste 600, Frisco, TX 75034"
   },
   {
     "n": "Dr. Vani Ramesh, MD",
     "s": "",
     "d": "Dr. Vani Ramesh",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "4670 McDermott Rd Ste 202, Plano, TX 75024"
   },
   {
     "n": "Dr. Hina Rizvi, MD",
     "s": "",
     "d": "Dr Hina Rizvi",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "7709 San Jacinto Pl Ste 100, Plano, TX 75024"
   },
   {
     "n": "Medina Primary Care",
     "s": "",
     "d": "Dr. Mir. M Ali",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "4013 14th St Ste 401, Plano, TX 75074"
   },
   {
     "n": "Centennial Primary Care",
     "s": "",
     "d": "Dr. Nuzhat Ahmed",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "9925 Gillespie Dr Ste 3400, Plano, TX 75025"
   },
   {
     "n": "Dr. John Chuang",
     "s": "",
     "d": "Dr. John Chuang",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "1524 Independence Pkwy Ste A1, Plano, TX 75075"
   },
   {
     "n": "Dr. Farid F. Taie",
     "s": "",
     "d": "Dr. Farid F. Taie",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "1409 Shiloh Rd Ste 150, Plano, TX 75074"
   },
   {
     "n": "Dr. Hanh Dieu T. Nguyen",
     "s": "",
     "d": "Dr. Hanh Dieu T. Nguyen",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "6513A Chase Oaks Blvd, Plano, TX 75023"
   },
   {
     "n": "Elpis Primary Care",
     "s": "",
     "d": "Dr. Saquib Ibrahim",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "4116 W Spring Creek Pkwy Ste 400, Plano, TX 75024"
   },
   {
     "n": "Shiva Medical Center",
     "s": "",
     "d": "Vani Ramesh, M.D.",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "4670 McDermott Rd Ste 202, Plano, TX 75024"
   },
   {
     "n": "Omni Medical Center",
     "s": "",
     "d": "Dr. Yang Li",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "4666 McDermott Rd Ste 100, Plano, TX 75024"
   },
   {
     "n": "Plano Primary Care",
     "s": "",
     "d": "Kalpana Thakur, M.D",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "1600 Coit Rd, Plano, TX 75075"
   },
   {
     "n": "Dr.Sherryl Shipes",
@@ -42919,28 +43019,32 @@ var CLINIC_BANK = [
     "s": "Endocrinologist",
     "d": "Camille Folkard, MD",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "10260 N Central Expy Ste 100N, Dallas, TX 75231"
   },
   {
     "n": "Balance Diabetes and Endrocrinology",
     "s": "Endocrinologist",
     "d": "",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "6533 Preston Rd Ste 100, Plano, TX 75024"
   },
   {
     "n": "Dr. Qing Jia",
     "s": "Endocrinologist",
     "d": "Dr. Qing Jia",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "7705 San Jacinto Pl Ste 100, Plano, TX 75024"
   },
   {
     "n": "Elizabeth M Papaila",
     "s": "GS",
     "d": "Dr Elizabeth M Papaila",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "4708 Alliance Blvd Ste 270, Plano, TX 75093"
   },
   {
     "n": "TEXAS CHILD NEUROLOGY, LLP",
@@ -42951,7 +43055,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "4032 McDermott Rd Ste 100, Plano, TX 75024",
     "notes": ""
   },
   {
@@ -42959,42 +43063,48 @@ var CLINIC_BANK = [
     "s": "",
     "d": "Dr. Abdul Baker",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "555 Republic Dr Ste 100, Plano, TX 75074"
   },
   {
     "n": "Back to Health Clinic",
     "s": "Chiropractor",
     "d": "",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "2301 Ohio Dr Ste 245, Plano, TX 75093"
   },
   {
     "n": "Lewis Pain & Physical Medicine",
     "s": "Pain Management",
     "d": "Dr. Jerry Lewis",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "11500 State Hwy 121, Frisco, TX 75035"
   },
   {
     "n": "Spine & Joint Physicians of Frisco",
     "s": "Pain Management",
     "d": "S.. Justin Badiyan, MD",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "11500 Hwy 121 Ste 1010, Frisco, TX 75035"
   },
   {
     "n": "OmniSpine Pain Management",
     "s": "Pain Management",
     "d": "Dr Ashley A Joseph",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "8380 Warren Pkwy Ste 100, Frisco, TX 75034"
   },
   {
     "n": "Pain Management of North Dallas, PA",
     "s": "Pain Management",
     "d": "Dr. Craig Neleson, MD",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "3550 Parkwood Blvd, Frisco, TX 75034"
   },
   {
     "n": "Precision Spine Care",
@@ -43008,35 +43118,40 @@ var CLINIC_BANK = [
     "s": "Pain Management",
     "d": "Rodolfo Herrera, MD",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "7589 Preston Rd Ste 500, Frisco, TX 75035"
   },
   {
     "n": "Pain and spine physicans",
     "s": "Pain Management",
     "d": "Dr. Irfan Ali",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "13080 Dallas Pkwy Bldg 300 Ste 310, Frisco, TX 75034"
   },
   {
     "n": "Dr. Sameer Ali Syed",
     "s": "Pain Management",
     "d": "Dr. Sameer Ali Syed",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "9456 State Highway 121 Ste 100, Frisco, TX 75035"
   },
   {
     "n": "Comprehensive Pain Solutions of Texas: Bryan Aduddell, M.D",
     "s": "Pain Management",
     "d": "Bryan Aduddell, M.D",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "1300 Medical Ave Ste 102, Plano, TX 75075"
   },
   {
     "n": "ReGen Pain Management: Jonathan Koning, MD",
     "s": "Pain Management",
     "d": "Dr. Jonathan Koning",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "6020 W Parker Rd Ste 300, Plano, TX 75093"
   },
   {
     "n": "Texas Star Pain & Spine",
@@ -43050,21 +43165,24 @@ var CLINIC_BANK = [
     "s": "Pain Management",
     "d": "Meet Dr. Spicer",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "5375 Coit Rd Ste 100, Frisco, TX 75035"
   },
   {
     "n": "Pain Specialists of Frisco",
     "s": "Pain Management",
     "d": "Dr Mahesh Mohan",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "13052 Dallas Pkwy Ste 220A, Frisco, TX 75033"
   },
   {
     "n": "Texas Spine Consultants",
     "s": "Pain Management",
     "d": "Robert G. Viere, M.D.",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "5757 Warren Pkwy POB II Ste 180, Frisco, TX 75034"
   },
   {
     "n": "Comprehensive OB/GYN",
@@ -43075,7 +43193,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "1700 N Lake Forest Dr, McKinney, TX 75071",
     "notes": ""
   },
   {
@@ -43087,7 +43205,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "2107 Eldorado Pkwy Ste 106, McKinney, TX 75070",
     "notes": ""
   },
   {
@@ -43099,7 +43217,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "1740 W Virginia St Ste 400, McKinney, TX 75069",
     "notes": ""
   },
   {
@@ -43119,21 +43237,24 @@ var CLINIC_BANK = [
     "s": "",
     "d": "",
     "c": "Carrollton",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "3044 Old Denton Rd Ste 138, Carrollton, TX 75007"
   },
   {
     "n": "Highlands Medical and Wellness Primary Care",
     "s": "",
     "d": "Dr VAN TRAN",
     "c": "Carrollton",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "1000 E Beltline Rd Ste 112, Carrollton, TX 75006"
   },
   {
     "n": "Dr. Hardeep S. Rai",
     "s": "",
     "d": "Dr. Hardeep S. Rai",
     "c": "Carrollton",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "1913 Walnut Plz, Carrollton, TX 75006"
   },
   {
     "n": "WellMed at Carrollton",
@@ -43144,7 +43265,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "1601 W Hebron Pkwy Ste 100, Carrollton, TX 75010",
     "notes": ""
   },
   {
@@ -43156,7 +43277,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "3020 E Hebron Pkwy Ste 300, Carrollton, TX 75010",
     "notes": ""
   },
   {
@@ -43168,7 +43289,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "3020 E Hebron Pkwy Ste A100, Carrollton, TX 75010",
     "notes": ""
   },
   {
@@ -43176,7 +43297,8 @@ var CLINIC_BANK = [
     "s": "",
     "d": "Dr. Kyle K. Carter",
     "c": "Carrollton",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "1428 W Hebron Pkwy Ste 110, Carrollton, TX 75010"
   },
   {
     "n": "Pathway Direct  Primary care",
@@ -43187,7 +43309,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "1930 E Rosemeade Pkwy Ste 104, Carrollton, TX 75007",
     "notes": ""
   },
   {
@@ -43195,7 +43317,8 @@ var CLINIC_BANK = [
     "s": "",
     "d": "Dr. Hong Xiao",
     "c": "Carrollton",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "4100 Fairway Dr Ste 320, Carrollton, TX 75010"
   },
   {
     "n": "Immanuel Family Clinic",
@@ -43206,7 +43329,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "2760 E Trinity Mill Rd Ste 115, Carrollton, TX 75006",
     "notes": ""
   },
   {
@@ -43214,112 +43337,128 @@ var CLINIC_BANK = [
     "s": "",
     "d": "jh",
     "c": "Carrollton",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "4217 Marsh Ridge Rd Ste 110, Carrollton, TX 75010"
   },
   {
     "n": "Josey Medical Clinic",
     "s": "",
     "d": "Dr. Yoosun Jeong",
     "c": "Carrollton",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "1212 N Josey Ln Ste 110, Carrollton, TX 75006"
   },
   {
     "n": "Precision Family mediine",
     "s": "",
     "d": "Dr. John Bailey",
     "c": "Carrollton",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "1428 W Hebron Pkwy Ste 110, Carrollton, TX 75010"
   },
   {
     "n": "Song Dermatalogy",
     "s": "",
     "d": "Dr. Song",
     "c": "Carrollton",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "1428 W Hebron Pkwy Ste 120, Carrollton, TX 75010"
   },
   {
     "n": "M.D Benton Cain",
     "s": "",
     "d": "",
     "c": "Carrollton",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "1428 W Hebron Pkwy Ste 135, Carrollton, TX 75010"
   },
   {
     "n": "North texas periodontics and",
     "s": "",
     "d": "Dr. Leslie Carroll",
     "c": "Carrollton",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "1428 W Hebron Pkwy Ste 140, Carrollton, TX 75010"
   },
   {
     "n": "V Care",
     "s": "",
     "d": "",
     "c": "Carrollton",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "1445 MacArthur Dr Ste 122, Carrollton, TX 75007"
   },
   {
     "n": "Airrosti Carrollton",
     "s": "",
     "d": "",
     "c": "Carrollton",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "1428 W Hebron Pkwy Ste 135, Carrollton, TX 75010"
   },
   {
     "n": "Peak Integrated Healthcare",
     "s": "",
     "d": "DR. MATT HICKEN",
     "c": "Carrollton",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "2655 E Belt Line Rd, Carrollton, TX 75006"
   },
   {
     "n": "Evolving Beautiful Mind & Body Healthcare",
     "s": "",
     "d": "Dr Ghazala N. Ahmed",
     "c": "Carrollton",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "2150 N Josey Ln Ste 208, Carrollton, TX 75010"
   },
   {
     "n": "Elevation Spine and Sports Medicine",
     "s": "",
     "d": "Dr. Konner Ackerman",
     "c": "Carrollton",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "2761 E Trinity Mills Rd Ste 100, Carrollton, TX 75006"
   },
   {
     "n": "Dr. Shenbagavalli Palaniswamy",
     "s": "",
     "d": "Dr. Shenbagavalli",
     "c": "Carrollton",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "3020 E Hebron Pkwy Ste 300, Carrollton, TX 75010"
   },
   {
     "n": "The Behavior Exchange",
     "s": "",
     "d": "",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "6105 Windcom Ct Ste 400, Plano, TX 75093"
   },
   {
     "n": "Southwest Allergy & Asthma Center",
     "s": "",
     "d": "John Van Wagoner, M.D",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "6100 Windcom Ct, Plano, TX 75093"
   },
   {
     "n": "Edward T. Shin,M.D",
     "s": "",
     "d": "Edward T. Shin,M.D",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "5804 Communications Pkwy Ste 100, Plano, TX 75093"
   },
   {
     "n": "Vista Physical Therapy - Plano, Windcom Ct",
     "s": "",
     "d": "",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "6105 Windcom Ct Ste 300, Plano, TX 75093"
   },
   {
     "n": "Frisco Center for Internal Medicine",
@@ -43330,7 +43469,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "12500 Lebanon Rd Ste 103, Frisco, TX 75035",
     "notes": ""
   },
   {
@@ -43338,14 +43477,16 @@ var CLINIC_BANK = [
     "s": "",
     "d": "Shruti Benjamin, MD",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "2840 Legacy Dr Ste 400, Frisco, TX 75034"
   },
   {
     "n": "Inspire Health",
     "s": "",
     "d": "Stephanie Reinhold Garza, MD",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "255 Lebanon Rd Ste 132, Frisco, TX 75036"
   },
   {
     "n": "Greenhill Family Physicians",
@@ -43356,7 +43497,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "5575 Warren Pkwy Ste 106, Frisco, TX 75034",
     "notes": ""
   },
   {
@@ -43368,7 +43509,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "4280 Main St Ste 200, Frisco, TX 75033",
     "notes": ""
   },
   {
@@ -43380,7 +43521,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "2840 Legacy Drive Suite 210, Frisco, TX 75034",
     "notes": ""
   },
   {
@@ -43388,14 +43529,16 @@ var CLINIC_BANK = [
     "s": "",
     "d": "",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "4401 Coit Rd Ste 205 Pavillion I, Frisco, TX 75035"
   },
   {
     "n": "EVIVE HEALTH AND BEAUTY",
     "s": "",
     "d": "",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "11500 State Hwy 121 Ste 320, Frisco, TX 75035"
   },
   {
     "n": "Just For Kids Dentistry",
@@ -43409,70 +43552,80 @@ var CLINIC_BANK = [
     "s": "",
     "d": "Dr. Brian C. Procter",
     "c": "McKinney",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "7692 Eldorado Pkwy, McKinney, TX 75070"
   },
   {
     "n": "Pain Treatment Institute",
     "s": "",
     "d": "Dr. Sameer Syed",
     "c": "McKinney",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "7668 Eldorado Pkwy Ste 100, McKinney, TX 75070"
   },
   {
     "n": "Lice Clinics of America",
     "s": "",
     "d": "",
     "c": "McKinney",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "3120 Hudson Crossing Ste A2, McKinney, TX 75070"
   },
   {
     "n": "Texas family healthcare",
     "s": "",
     "d": "Sophia Hussain, MD",
     "c": "McKinney",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "140 S Custer Rd Ste 100, McKinney, TX 75070"
   },
   {
     "n": "PebblePath Pediatric Dentistry&Orthodontics",
     "s": "",
     "d": "Dr. Thien Tran",
     "c": "McKinney",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "6633 Eldorado Pkwy Ste 100, McKinney, TX 75070"
   },
   {
     "n": "North Dallas Urology Associates",
     "s": "",
     "d": "Dr. Stephen Lieman",
     "c": "McKinney",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "4501 Medical Center Dr Ste 100, McKinney, TX 75069"
   },
   {
     "n": "McKinney Adult Medicine",
     "s": "",
     "d": "Dr. Michael Parisi",
     "c": "McKinney",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "4501 Medical Center Dr Ste 200, McKinney, TX 75069"
   },
   {
     "n": "CityBridge Urgent Care",
     "s": "",
     "d": "",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "910 W Parker Rd Ste 102, Plano, TX 75075"
   },
   {
     "n": "Dr. Isaac Z. Pugach",
     "s": "",
     "d": "Dr. Isaac Z. Pugach",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "660 N Central Expy Ste 640, Plano, TX 75074"
   },
   {
     "n": "Greenhill family physians",
     "s": "",
     "d": "Dr Mike",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "5575 Warren Pkwy Ste 106, Frisco, TX 75034"
   },
   {
     "n": "Dr. Philip K. Chen",
@@ -43483,7 +43636,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "5904 Chapel Hill Blvd Ste 102, Plano, TX 75075",
     "notes": ""
   },
   {
@@ -43495,7 +43648,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "5148 Village Creek Dr Ste 300, Plano, TX 75093",
     "notes": ""
   },
   {
@@ -43503,21 +43656,24 @@ var CLINIC_BANK = [
     "s": "",
     "d": "Dr Hanh Dieu Nguyen",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "6513A Chase Oaks Blvd, Plano, TX 75023"
   },
   {
     "n": "Serenity Primary Care",
     "s": "",
     "d": "Dr. Rashidi",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "1208 Village Creek Dr Ste 104, Plano, TX 75093"
   },
   {
     "n": "Village Health Partners - Frisco Medical Village",
     "s": "",
     "d": "Lisa Abbott, MD",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "9990 Dallas Pkwy Ste 200, Frisco, TX 75033"
   },
   {
     "n": "ProMed Health Primary Care - Frisco",
@@ -43528,7 +43684,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "11691 Independence Pkwy Unit 110, Frisco, TX 75035",
     "notes": ""
   },
   {
@@ -43540,7 +43696,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "255 W Lebanon Rd Ste 116, Frisco, TX 75036",
     "notes": ""
   },
   {
@@ -43552,7 +43708,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "255 Lebanon Rd Ste 124, Frisco, TX 75036",
     "notes": ""
   },
   {
@@ -43560,14 +43716,16 @@ var CLINIC_BANK = [
     "s": "",
     "d": "Taha Saif, MD",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "255 W Lebanon Ste 324, Frisco, TX 75036"
   },
   {
     "n": "Monkey Mouths",
     "s": "",
     "d": "Nikki Wensel Rustad, M.A",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "255 W Lebanon Rd Ste 316, Frisco, TX 75036"
   },
   {
     "n": "Body Loom Wellness",
@@ -43578,7 +43736,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "255 W Lebanon Rd Ste 106, Frisco, TX 75036",
     "notes": ""
   },
   {
@@ -43586,63 +43744,72 @@ var CLINIC_BANK = [
     "s": "",
     "d": "Dr Furqan Rizvi",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "255 Lebanon Rd Ste 224, Frisco, TX 75036"
   },
   {
     "n": "Behavioral Innovations",
     "s": "",
     "d": "",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "8795 Preston Trace Blvd, Frisco, TX 75033"
   },
   {
     "n": "Modern Podiatry",
     "s": "",
     "d": "Dr. Woojung Lee",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "255 Lebanon Rd Ste 202, Frisco, TX 75036"
   },
   {
     "n": "Diana Health Allen",
     "s": "",
     "d": "",
     "c": "Allen",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "1120 Raintree Cir Ste 280, Allen, TX 75013"
   },
   {
     "n": "Rajiv M Joseph MD, PhD, FAAN",
     "s": "NEUR",
     "d": "Rajiv M Joseph MD, PhD, FAAN",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "7920 Preston Rd Ste 100, Plano, TX 75024"
   },
   {
     "n": "Dr. Geeta Rajan",
     "s": "NEUR",
     "d": "Dr. Geeta Rajan",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "4601 Old Shepard Pl Ste 406, Plano, TX 75093"
   },
   {
     "n": "Childrens health neurology",
     "s": "NEUR",
     "d": "",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "7609 Preston Rd Ste P1100, Plano, TX 75024"
   },
   {
     "n": "Indu Mayakrishnan M.D",
     "s": "NEUR",
     "d": "Indu Mayakrishnan M.D",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "7920 Preston Rd Ste 100, Plano, TX 75024"
   },
   {
     "n": "Mohsin Maqbool, MD",
     "s": "NEUR",
     "d": "Mohsin Maqbool, MD",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "4032 McDermott Rd Ste 100, Plano, TX 75024"
   },
   {
     "n": "Balance Diabetes and Endocrinology",
@@ -43653,7 +43820,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "6533 Preston Rd Ste 100, Plano, TX 75024",
     "notes": ""
   },
   {
@@ -43661,98 +43828,112 @@ var CLINIC_BANK = [
     "s": "",
     "d": "Ramy Elhalwagi, D.O.",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "525 Shiloh Rd Ste 4100, Plano, TX 75074"
   },
   {
     "n": "CLINICA HISPANA PLANO TX",
     "s": "",
     "d": "",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "1116 Dobie Dr Ste 101, Plano, TX 75074"
   },
   {
     "n": "Achieve Physical Therapy",
     "s": "",
     "d": "",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "2200 Los Rios Blvd Ste 132, Plano, TX 75074"
   },
   {
     "n": "Care Choice Family Clinic",
     "s": "",
     "d": "Dr. Sheeba Daniel",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "525 Shiloh Rd Ste 2300, Plano, TX 75074"
   },
   {
     "n": "Fem Care",
     "s": "OB/GYN",
     "d": "DR. GEOFFREY N. JAMES",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "525 Shiloh Rd Ste 2200, Plano, TX 75074"
   },
   {
     "n": "Intricate Health",
     "s": "OB/GYN",
     "d": "Charmaine Gibson MD,",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "525 Shiloh Rd Ste 2100, Plano, TX 75074"
   },
   {
     "n": "Inspire Health - Plano Doctors",
     "s": "",
     "d": "Dr. Bush Benjamin",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "5026 Tennyson Pkwy, Plano, TX 75024"
   },
   {
     "n": "Doctors of Internal Medicine",
     "s": "",
     "d": "Suryadutt Venkat, MD",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "5941 Dallas Pkwy, Plano, TX 75093"
   },
   {
     "n": "My Dentist in Plano",
     "s": "",
     "d": "Dr. Darren Dickson",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "6545 Preston Rd Ste 100, Plano, TX 75024"
   },
   {
     "n": "Advanced dental center",
     "s": "",
     "d": "Dr. Hopkins’s",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "6541 Preston Rd Ste 100, Plano, TX 75024"
   },
   {
     "n": "Asara Physical Therapy and Balance Clinic",
     "s": "",
     "d": "Dr.Asha J Gummadi",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "6537 Preston Rd Ste B, Plano, TX 75024"
   },
   {
     "n": "Premier Wellness Internal Medicine",
     "s": "",
     "d": "Dr. Michelle Sun",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "3900 W 15th St Ste 404, Plano, TX 75075"
   },
   {
     "n": "Pediatric Specialists of Plano",
     "s": "",
     "d": "Dr. Fatimah Ahmed",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "3405 Midway Rd Ste 650, Plano, TX 75093"
   },
   {
     "n": "Infectious Disease Doctors PA",
     "s": "",
     "d": "Sofia Ansari, M.D.",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "6537 Preston Rd, Plano, TX 75024"
   },
   {
     "n": "US Legacy Clinic",
@@ -43763,7 +43944,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "280 Legacy Dr Ste 106, Plano, TX 75023",
     "notes": ""
   },
   {
@@ -43771,21 +43952,24 @@ var CLINIC_BANK = [
     "s": "",
     "d": "Sharon Wiener MD",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "6529 W Plano Pkwy Ste D, Plano, TX 75093"
   },
   {
     "n": "NextCare Urgent Care",
     "s": "",
     "d": "Dr. Chesshir",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "3304 Alma Dr, Plano, TX 75023"
   },
   {
     "n": "Southern Endocrinology",
     "s": "",
     "d": "",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "7504 San Jacinto Pl, Plano, TX 75024"
   },
   {
     "n": "Plano Therapy center",
@@ -43799,21 +43983,24 @@ var CLINIC_BANK = [
     "s": "",
     "d": "",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "4112 W Spring Creek Pkwy, Plano, TX 75024"
   },
   {
     "n": "Mind Body OPTIMIZATION",
     "s": "",
     "d": "",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "5038 Tennyson Pkwy Ste 100B, Plano, TX 75024"
   },
   {
     "n": "Amy Mathew Burton, MD",
     "s": "",
     "d": "Amy Mathew Burton, MD",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "6124 W Parker Rd Ste 330, Plano, TX 75093"
   },
   {
     "n": "Endocrinology",
@@ -43827,42 +44014,48 @@ var CLINIC_BANK = [
     "s": "",
     "d": "Dr Sara Mahmood",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "14725 Lebanon Rd #200, Frisco, TX 75035"
   },
   {
     "n": "Pediatric Endocrinology of North Texas",
     "s": "",
     "d": "",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "6124 W Parker Rd MOB 3 Ste 330, Plano, TX 75093"
   },
   {
     "n": "Dr. Madhuri Gudipaty",
     "s": "OB/GYN",
     "d": "",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "5953 Dallas Pkwy Ste 200A, Plano, TX 75093"
   },
   {
     "n": "Gupta Orthodontics",
     "s": "ortho",
     "d": "Dr. Deepak Gupta",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "5961 Dallas Pkwy Ste 601, Plano, TX 75093"
   },
   {
     "n": "Spine and pain clinic of texas",
     "s": "Pain managment",
     "d": "Dr. Arif",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "6300 Stonewood Dr Ste 206, Plano, TX 75024"
   },
   {
     "n": "Kalpana Thakur , M.D.",
     "s": "",
     "d": "Kalpana Thakur , M.D.",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "1600 Coit Rd, Plano, TX 75075"
   },
   {
     "n": "Action Family Care",
@@ -43873,7 +44066,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "4601 Old Shepard Pl Ste 401A, Plano, TX 75093",
     "notes": ""
   },
   {
@@ -43881,21 +44074,24 @@ var CLINIC_BANK = [
     "s": "",
     "d": "Mir Ali, MD",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "4013 14th St Ste 401, Plano, TX 75074"
   },
   {
     "n": "MD.Jenny Tseng",
     "s": "Gastroenterologist",
     "d": "MD.Jenny Tseng",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "6300 Stonewood Dr Ste 410, Plano, TX 75024"
   },
   {
     "n": "Texas Rheumatology care",
     "s": "",
     "d": "Dr. Fehmda Zahabi",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "6300 Stonewood Dr Ste 412, Plano, TX 75024"
   },
   {
     "n": "AIX Family Care",
@@ -43921,63 +44117,72 @@ var CLINIC_BANK = [
     "s": "",
     "d": "MD Lisa R. Reznik",
     "c": "Carrollton",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "4100 Fairway Dr Ste 120, Carrollton, TX 75010"
   },
   {
     "n": "George A.Nail MD",
     "s": "",
     "d": "George A.Nail MD",
     "c": "Carrollton",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "1813 Golden Trail Ct Ste 100, Carrollton, TX 75010"
   },
   {
     "n": "Castle Hills Pediatrics",
     "s": "",
     "d": "",
     "c": "Carrollton",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "1821 Golden Trl Ct, Carrollton, TX 75010"
   },
   {
     "n": "Dr.Dandois DDS",
     "s": "",
     "d": "",
     "c": "Carrollton",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "1821 Golden Trail Ct Ste 220, Carrollton, TX 75010"
   },
   {
     "n": "US clinics",
     "s": "",
     "d": "",
     "c": "Carrollton",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "4541 N Josey Ln Ste 110, Carrollton, TX 75010"
   },
   {
     "n": "Sure Cure",
     "s": "",
     "d": "",
     "c": "Carrollton",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "4541 N Josey Ln Ste 130, Carrollton, TX 75010"
   },
   {
     "n": "BODYSCRIBE",
     "s": "",
     "d": "",
     "c": "Carrollton",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "4217 Marsh Ridge Rd Ste 100, Carrollton, TX 75010"
   },
   {
     "n": "Urban skin care dallas",
     "s": "",
     "d": "",
     "c": "Carrollton",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "4217 Marsh Ridge Rd Ste 100, Carrollton, TX 75010"
   },
   {
     "n": "North Texas Perodontics and Implantology",
     "s": "",
     "d": "Dr. Leslie",
     "c": "Carrollton",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "1428 W Hebron Pkwy Ste 140, Carrollton, TX 75010"
   },
   {
     "n": "Complete Heart Care",
@@ -43988,7 +44193,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "2517 Virginia Pkwy Ste 101, McKinney, TX 75071",
     "notes": ""
   },
   {
@@ -43996,7 +44201,8 @@ var CLINIC_BANK = [
     "s": "",
     "d": "",
     "c": "McKinney",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "6587 Virginia Pkwy, McKinney, TX 75071"
   },
   {
     "n": "Exult Healthcare",
@@ -44007,7 +44213,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "4801 Medical Center Dr, McKinney, TX 75069",
     "notes": ""
   },
   {
@@ -44015,14 +44221,16 @@ var CLINIC_BANK = [
     "s": "",
     "d": "Dr Visalakshi Rao Vallury",
     "c": "McKinney",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "5971 Virginia Pkwy Ste 100, McKinney, TX 75071"
   },
   {
     "n": "McKinney Endodontics",
     "s": "",
     "d": "Dr. Paul D. Clark’s",
     "c": "McKinney",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "5913 Virginia Pkwy Ste 400, McKinney, TX 75071"
   },
   {
     "n": "Holistic Health Center of Dallas",
@@ -44033,7 +44241,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "1701 W Eldorado Pkwy Ste 202, McKinney, TX 75069",
     "notes": ""
   },
   {
@@ -44041,7 +44249,8 @@ var CLINIC_BANK = [
     "s": "",
     "d": "Sumit Katyal, M.D.",
     "c": "McKinney",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "1701 Eldorado Pkwy Ste 202, McKinney, TX 75069"
   },
   {
     "n": "CommonGood Medical",
@@ -44052,7 +44261,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "103 E Lamar St, McKinney, TX 75069",
     "notes": ""
   },
   {
@@ -44064,7 +44273,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "7900 Henneman Way Ste 100, McKinney, TX 75070",
     "notes": ""
   },
   {
@@ -44072,21 +44281,24 @@ var CLINIC_BANK = [
     "s": "",
     "d": "Dr. Padda",
     "c": "McKinney",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "4521 Medical Center Dr Ste 500, McKinney, TX 75069"
   },
   {
     "n": "Banks, Tracey - Tracey Banks, MD",
     "s": "",
     "d": "Tracey Banks, MD",
     "c": "McKinney",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "6609 Virginia Pkwy, McKinney, TX 75071"
   },
   {
     "n": "Pediatric Heathcare Associates",
     "s": "",
     "d": "Elizabeth BonnetMD, FAAP",
     "c": "McKinney",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "3701 Eldorado Pkwy Ste A, McKinney, TX 75070"
   },
   {
     "n": "TX Primary care plus",
@@ -44097,7 +44309,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "5040 Tennyson Pkwy, Plano, TX 75024",
     "notes": ""
   },
   {
@@ -44105,28 +44317,32 @@ var CLINIC_BANK = [
     "s": "",
     "d": "",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "6800 Alma Dr, Plano, TX 75023"
   },
   {
     "n": "Shepherd Chiropractice and famly wellness",
     "s": "",
     "d": "",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "5800 Legacy Dr, Plano, TX 75024"
   },
   {
     "n": "Dennis family wellness center",
     "s": "",
     "d": "",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "930 W Parker Rd Ste 505, Plano, TX 75075"
   },
   {
     "n": "Fehmida Zahabi",
     "s": "",
     "d": "",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "6300 Stonewood Dr Ste 412, Plano, TX 75024"
   },
   {
     "n": "Stonebriar Medical Associates",
@@ -44137,7 +44353,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "6842 Main St Suite 203, Frisco, TX 75033",
     "notes": ""
   },
   {
@@ -44145,21 +44361,24 @@ var CLINIC_BANK = [
     "s": "PCP",
     "d": "Katherine Johnson, MD",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "12530 Lebanon Rd Ste 202, Frisco, TX 75035"
   },
   {
     "n": "Dr Philips Chen",
     "s": "",
     "d": "",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "5904 Chapel Hill Blvd Ste 102, Plano, TX 75075"
   },
   {
     "n": "Christy Walker MD Gynecology",
     "s": "MD",
     "d": "Christy Walker MD",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "6130 W Parker Rd Bldg 1 Ste 204, Plano, TX 75093"
   },
   {
     "n": "monkey mouth pediatric therapy",
@@ -44173,28 +44392,32 @@ var CLINIC_BANK = [
     "s": "",
     "d": "",
     "c": "Allen",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "311 N Allen Dr, Allen, TX 75013"
   },
   {
     "n": "Brookwood Family Practice",
     "s": "",
     "d": "",
     "c": "Allen",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "865 Junction Dr, Allen, TX 75013"
   },
   {
     "n": "Family healthcare associates",
     "s": "",
     "d": "",
     "c": "Allen",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "1105 Central Expy N Ste 2120, Allen, TX 75013"
   },
   {
     "n": "Allen Wellness",
     "s": "",
     "d": "",
     "c": "Allen",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "997 Raintree Cir Ste 130, Allen, TX 75013"
   },
   {
     "n": "Allen children clinic",
@@ -44208,42 +44431,48 @@ var CLINIC_BANK = [
     "s": "",
     "d": "MD Neelma Khan",
     "c": "Allen",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "1050 Central Expy S Ste 1200, Allen, TX 75013"
   },
   {
     "n": "Total health primary care",
     "s": "",
     "d": "",
     "c": "Allen",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "906 W McDermott Dr Ste A-124, Allen, TX 75013"
   },
   {
     "n": "MCKINNEY RANCH FAMILY DENTAL + KIDS",
     "s": "Periodontist",
     "d": "Dr. Hsia",
     "c": "McKinney",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "3950 S Ridge Rd Ste 500, McKinney, TX 75070"
   },
   {
     "n": "ORTHODONIST",
     "s": "",
     "d": "DR. Victor Sigoda",
     "c": "McKinney",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "7700 Eldorado Pkwy Ste 200, McKinney, TX 75070"
   },
   {
     "n": "Best kids care",
     "s": "",
     "d": "Dr. Masoud Al masi",
     "c": "McKinney",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "4200 S Lake Forest Dr Ste 100, McKinney, TX 75070"
   },
   {
     "n": "Graff Foot Ankle & Wound CareMckinney",
     "s": "",
     "d": "",
     "c": "McKinney",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "1400 N Coit Rd Ste 503, McKinney, TX 75071"
   },
   {
     "n": "Village Green Memory Care",
@@ -44254,7 +44483,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "3149 Medical Center Dr, McKinney, TX 75069",
     "notes": ""
   },
   {
@@ -44266,7 +44495,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "4987 W University Dr Ste 150, McKinney, TX 75071",
     "notes": ""
   },
   {
@@ -44274,63 +44503,72 @@ var CLINIC_BANK = [
     "s": "",
     "d": "Dr.James W. Lundin, DC, FNP-C",
     "c": "McKinney",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "270 Redbud Blvd Ste 100, McKinney, TX 75069"
   },
   {
     "n": "Ntx medcare and weightloss",
     "s": "",
     "d": "",
     "c": "Allen",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "1505 W McDermott Dr Ste 200, Allen, TX 75013"
   },
   {
     "n": "Spring valley wellness center",
     "s": "",
     "d": "",
     "c": "Allen",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "1504 N Greenville Ave Ste 120, Allen, TX 75002"
   },
   {
     "n": "American Family Care",
     "s": "",
     "d": "",
     "c": "Allen",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "596 E Stacy Rd Ste 1110, Allen, TX 75002"
   },
   {
     "n": "Southern Charm Pediatrics",
     "s": "",
     "d": "",
     "c": "McKinney",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "1400 N Coit Rd Ste 302, McKinney, TX 75071"
   },
   {
     "n": "Narural choice peditatrics",
     "s": "",
     "d": "",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "3535 Victory Group Way Suite 305, Frisco, TX 75034"
   },
   {
     "n": "Healthy kids pediatrics",
     "s": "",
     "d": "",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "5680 Frisco Square Blvd Ste 2300, Frisco, TX 75034"
   },
   {
     "n": "Pediatrtics  associates of frisco",
     "s": "",
     "d": "",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "9191 Kyser Way Suite 500, Frisco, TX 75033"
   },
   {
     "n": "Best nest pediatrics",
     "s": "",
     "d": "",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "4040 Legacy Dr #201, Frisco, TX 75034"
   },
   {
     "n": "ABC Pediatrics",
@@ -44344,7 +44582,8 @@ var CLINIC_BANK = [
     "s": "",
     "d": "",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "6105 Windcom Ct Ste 100, Plano, TX 75093"
   },
   {
     "n": "bright kids pediatrics",
@@ -44358,91 +44597,104 @@ var CLINIC_BANK = [
     "s": "",
     "d": "",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "5560 Independence Parkway, Frisco, TX 75035"
   },
   {
     "n": "MC kids pediatrics",
     "s": "",
     "d": "",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "7800 Preston Rd Ste 300, Plano, TX 75024"
   },
   {
     "n": "Sunny Hill Min Jung",
     "s": "",
     "d": "",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "4500 Hillcrest Rd #140, Frisco, TX 75035"
   },
   {
     "n": "Whole chlild texas",
     "s": "",
     "d": "",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "3550 Parkwood Blvd Ste B100, Frisco, TX 75034"
   },
   {
     "n": "Allen family first choice",
     "s": "",
     "d": "",
     "c": "Allen",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "977 Raintree Cir Ste 110, Allen, TX 75013"
   },
   {
     "n": "Family care and wellness",
     "s": "",
     "d": "",
     "c": "Allen",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "915 W Exchange Pkwy Ste 210, Allen, TX 75013"
   },
   {
     "n": "Salveo family clinic",
     "s": "",
     "d": "",
     "c": "Allen",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "614 S Watters Rd Ste 101, Allen, TX 75013"
   },
   {
     "n": "Fair health wellness center",
     "s": "",
     "d": "",
     "c": "Allen",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "60 E McDermott Dr Ste A, Allen, TX 75002"
   },
   {
     "n": "Fast doc urgent care",
     "s": "",
     "d": "",
     "c": "Allen",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "325 Central Expy S, Allen, TX 75013"
   },
   {
     "n": "East side childrens clinic",
     "s": "",
     "d": "",
     "c": "Allen",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "311 N Allen Dr, Allen, TX 75013"
   },
   {
     "n": "TLC pediatric",
     "s": "",
     "d": "",
     "c": "Allen",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "1105 N Central Expy Ste 250 MOB 1, Allen, TX 75013"
   },
   {
     "n": "Angel Pediatritics",
     "s": "",
     "d": "",
     "c": "Allen",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "717 S Greenville Ave Ste 104, Allen, TX 75002"
   },
   {
     "n": "Southern Charm Pediatritics",
     "s": "",
     "d": "",
     "c": "Allen",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "105 N Alma Suite 300, Allen, TX 75013"
   },
   {
     "n": "Lone star",
@@ -44456,14 +44708,16 @@ var CLINIC_BANK = [
     "s": "",
     "d": "",
     "c": "Allen",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "1511 W McDermott Dr Bldg 2 Ste 240, Allen, TX 75013"
   },
   {
     "n": "Natural choice pediatrics",
     "s": "",
     "d": "",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "3535 Victory Group Way Suite 305, Frisco, TX 75034"
   },
   {
     "n": "Frisco Family Healthcare Clinic",
@@ -44474,7 +44728,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "9555 Lebanon Rd #1003, Frisco, TX 75035",
     "notes": ""
   },
   {
@@ -44482,7 +44736,8 @@ var CLINIC_BANK = [
     "s": "",
     "d": "",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "2855 Preston Rd, Frisco, TX 75034"
   },
   {
     "n": "Frisco quick care",
@@ -44493,7 +44748,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "8845 Gary Burns Dr Ste 180, Frisco, TX 75034",
     "notes": ""
   },
   {
@@ -44501,49 +44756,56 @@ var CLINIC_BANK = [
     "s": "",
     "d": "",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "4280 Main St Ste 200, Frisco, TX 75033"
   },
   {
     "n": "Alpha Health frisco primry care",
     "s": "",
     "d": "",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "255 W Lebanon Rd Ste 116, Frisco, TX 75036"
   },
   {
     "n": "Prime Choice family clinic: urgent care",
     "s": "",
     "d": "",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "12828 Eldorado Pkwy Ste 170, Frisco, TX 75035"
   },
   {
     "n": "Clinica Familiar ProHealth Studio",
     "s": "",
     "d": "",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "4645 Wyndham Lane Ste 230, Frisco, TX 75033"
   },
   {
     "n": "Karin K bergman",
     "s": "",
     "d": "",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "5150 Warren Pkwy Bldg 7 Ste 705B, Frisco, TX 75034"
   },
   {
     "n": "Advance med clinic of plano",
     "s": "",
     "d": "",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "4701 W Plano Pkwy Ste 100, Plano, TX 75093"
   },
   {
     "n": "City bridge urgent care",
     "s": "",
     "d": "",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "910 W Parker Rd Ste 102, Plano, TX 75075"
   },
   {
     "n": "Legacy internal medicine",
@@ -44554,7 +44816,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "11330 Legacy Dr #204, Frisco, TX 75033",
     "notes": ""
   },
   {
@@ -44569,14 +44831,16 @@ var CLINIC_BANK = [
     "s": "",
     "d": "",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "5030 Tennyson Pkwy Ste 100, Plano, TX 75024"
   },
   {
     "n": "Family medicine plus",
     "s": "",
     "d": "",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "11330 Legacy Dr, Frisco, TX 75033"
   },
   {
     "n": "plano",
@@ -44597,14 +44861,16 @@ var CLINIC_BANK = [
     "s": "",
     "d": "",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "2801 W Parker Rd Ste 8, Plano, TX 75023"
   },
   {
     "n": "Express health systems",
     "s": "",
     "d": "",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "230 W Parker Rd Ste 210A, Plano, TX 75075"
   },
   {
     "n": "Next Gen",
@@ -44622,7 +44888,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "3242 Preston Rd Ste 203, Plano, TX 75093",
     "notes": ""
   },
   {
@@ -44630,42 +44896,48 @@ var CLINIC_BANK = [
     "s": "",
     "d": "",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "3560 E Park Blvd, Plano, TX 75074"
   },
   {
     "n": "Driven  healthcare",
     "s": "",
     "d": "",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "2772 Stonebrook Parkway Suite 100, Frisco, TX 75034"
   },
   {
     "n": "RNV Podiatry",
     "s": "",
     "d": "",
     "c": "Plano",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "6300 W Parker Rd Ste 425, Plano, TX 75093"
   },
   {
     "n": "Smile Breeze Dentistry",
     "s": "",
     "d": "",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "5285 Independence Parkway Suite 200, Frisco, TX 75035"
   },
   {
     "n": "StrlVeMD",
     "s": "",
     "d": "",
     "c": "Frisco",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "7044 Lebanon Road Suite 102, Frisco, TX 75034"
   },
   {
     "n": "Dr. Shenbagavalli Palaniswamy, MD",
     "s": "",
     "d": "",
     "c": "Carrollton",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "3020 E Hebron Pkwy Ste 300, Carrollton, TX 75010"
   },
   {
     "n": "Carrolton spring",
@@ -44679,28 +44951,32 @@ var CLINIC_BANK = [
     "s": "",
     "d": "",
     "c": "Allen",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "1505 W McDermott Dr Ste 200, Allen, TX 75013"
   },
   {
     "n": "AFC Urgent Care Allen‑Fairview",
     "s": "",
     "d": "",
     "c": "Allen",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "596 E Stacy Rd Ste 1110, Allen, TX 75002"
   },
   {
     "n": "Shepherd  family medicine and wellness",
     "s": "",
     "d": "",
     "c": "Allen",
-    "t": "Duaa"
+    "t": "Duaa",
+    "address": "515 W Main St, Allen, TX 75013"
   },
   {
     "n": "Texas Primary Care",
     "s": "PCP",
     "d": "",
     "c": "Frisco",
-    "t": "Sadia"
+    "t": "Sadia",
+    "address": "9191 Kyser Way Ste 205, Frisco, TX 75033"
   },
   {
     "n": "Pioneer Medical Associates",
@@ -44711,7 +44987,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "14111 King Rd Suite 320, Frisco, TX 75036",
     "notes": ""
   },
   {
@@ -44723,7 +44999,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "3220 Parkwood Blvd, Frisco, TX 75034",
     "notes": ""
   },
   {
@@ -44735,7 +45011,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "5971 Virginia Pkwy Ste 100, McKinney, TX 75071",
     "notes": ""
   },
   {
@@ -44743,14 +45019,16 @@ var CLINIC_BANK = [
     "s": "",
     "d": "",
     "c": "McKinney",
-    "t": "Sadia"
+    "t": "Sadia",
+    "address": "4201 Medical Center Dr Ste 240, McKinney, TX 75069"
   },
   {
     "n": "Fuentes Guillermo DO",
     "s": "",
     "d": "",
     "c": "Carrollton",
-    "t": "sadia"
+    "t": "sadia",
+    "address": "1205 N Josey Ln, Carrollton, TX 75006"
   },
   {
     "n": "Alpha Primary Care",
@@ -44761,7 +45039,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "9191 Kyser Way, Frisco, TX 75033",
     "notes": ""
   },
   {
@@ -44769,7 +45047,8 @@ var CLINIC_BANK = [
     "s": "",
     "d": "",
     "c": "Frisco",
-    "t": "Sadia"
+    "t": "Sadia",
+    "address": "2601 Network Blvd Suite 500, Frisco, TX 75034"
   },
   {
     "n": "Careone",
@@ -44780,7 +45059,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "3648 Old Denton Rd Ste 110, Carrollton, TX 75007",
     "notes": ""
   },
   {
@@ -44788,7 +45067,8 @@ var CLINIC_BANK = [
     "s": "",
     "d": "",
     "c": "Frisco",
-    "t": "Sadia"
+    "t": "Sadia",
+    "address": "9191 Kyser Way Suite 500, Frisco, TX 75033"
   },
   {
     "n": "Clinica San Miguel",
@@ -44806,7 +45086,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "3740 N Josey Ln, Carrollton, TX 75007",
     "notes": ""
   },
   {
@@ -44814,14 +45094,16 @@ var CLINIC_BANK = [
     "s": "",
     "d": "",
     "c": "Carrollton",
-    "t": "Sadia"
+    "t": "Sadia",
+    "address": "1933 E Frankford Rd Ste 100, Carrollton, TX 75007"
   },
   {
     "n": "Care one Plus",
     "s": "",
     "d": "",
     "c": "Carrollton",
-    "t": "Sadia"
+    "t": "Sadia",
+    "address": "3648 Old Denton Rd Ste 110, Carrollton, TX 75007"
   },
   {
     "n": "Medical Clinic /Dan Dinh",
@@ -44847,14 +45129,16 @@ var CLINIC_BANK = [
     "s": "",
     "d": "",
     "c": "Frisco",
-    "t": "Sadia"
+    "t": "Sadia",
+    "address": "Frisco, TX"
   },
   {
     "n": "Premier Independant",
     "s": "",
     "d": "",
     "c": "McKinney",
-    "t": "Sadia"
+    "t": "Sadia",
+    "address": "1820 N Lake Forest Dr Ste 300, McKinney, TX 75071"
   },
   {
     "n": "Elite",
@@ -44873,7 +45157,8 @@ var CLINIC_BANK = [
     "s": "",
     "d": "",
     "c": "Carrollton",
-    "t": "Sadia"
+    "t": "Sadia",
+    "address": "4780 N Josey Ln, Carrollton, TX 75010"
   },
   {
     "n": "Sandy Maccoy",
@@ -44908,14 +45193,16 @@ var CLINIC_BANK = [
     "s": "",
     "d": "",
     "c": "Carrollton",
-    "t": "Sadia"
+    "t": "Sadia",
+    "address": "1212 N Josey Ln Ste 110, Carrollton, TX 75006"
   },
   {
     "n": "Dr fuentis",
     "s": "",
     "d": "",
     "c": "Carrollton",
-    "t": "Sadia"
+    "t": "Sadia",
+    "address": "1205 N Josey Ln, Carrollton, TX 75006"
   },
   {
     "n": "Care one",
@@ -44926,7 +45213,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "3648 Old Denton Rd Ste 110, Carrollton, TX 75007",
     "notes": ""
   },
   {
@@ -44934,63 +45221,72 @@ var CLINIC_BANK = [
     "s": "",
     "d": "",
     "c": "Carrollton",
-    "t": "Sadia"
+    "t": "Sadia",
+    "address": "1212 N Josey Ln Ste 110, Carrollton, TX 75006"
   },
   {
     "n": "Hardeep rai",
     "s": "",
     "d": "",
     "c": "Carrollton",
-    "t": "Sadia"
+    "t": "Sadia",
+    "address": "1913 Walnut Plz, Carrollton, TX 75006"
   },
   {
     "n": "Willows Womens Health",
     "s": "",
     "d": "",
     "c": "Frisco",
-    "t": "Sadia"
+    "t": "Sadia",
+    "address": "2840 Legacy Dr Ste 400, Frisco, TX 75034"
   },
   {
     "n": "Imanuel",
     "s": "",
     "d": "",
     "c": "Carrollton",
-    "t": "Sadia"
+    "t": "Sadia",
+    "address": "2760 E Trinity Mill Rd Ste 115, Carrollton, TX 75006"
   },
   {
     "n": "Carrollton Family Physicians (James Lee)",
     "s": "",
     "d": "",
     "c": "Carrollton",
-    "t": "zuhaab and amna"
+    "t": "zuhaab and amna",
+    "address": "1809 Golden Trail Ct Ste 220, Carrollton, TX 75010"
   },
   {
     "n": "Texas Health Digestive specialists",
     "s": "",
     "d": "",
     "c": "Carrollton",
-    "t": "zuhaab and amna"
+    "t": "zuhaab and amna",
+    "address": "4221 Medical Pkwy Ste 150, Carrollton, TX 75010"
   },
   {
     "n": "Texas Digestive Disease Consultants",
     "s": "",
     "d": "",
     "c": "Carrollton",
-    "t": "zuhaab and amna"
+    "t": "zuhaab and amna",
+    "address": "4221 Medical Pkwy Ste 150, Carrollton, TX 75010"
   },
   {
     "n": "Primary Care",
     "s": "",
     "d": "",
     "c": "Frisco",
-    "t": "zuhaab and amna"
+    "t": "zuhaab and amna",
+    "address": "4525 Ohio Dr #100, Frisco, TX 75035"
   },
   {
     "n": "Frisco Quickcare",
     "s": "PCP",
     "d": "Gowani",
     "c": "Frisco",
-    "t": "Sadia"
+    "t": "Sadia",
+    "address": "8845 Gary Burns Dr Ste 180, Frisco, TX 75034"
   },
   {
     "n": "Evolve",
@@ -45001,7 +45297,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "5899 Preston Rd Ste 1104, Frisco, TX 75034",
     "notes": ""
   },
   {
@@ -45023,28 +45319,32 @@ var CLINIC_BANK = [
     "s": "",
     "d": "",
     "c": "Carrollton",
-    "t": "Sadia"
+    "t": "Sadia",
+    "address": "2760 E Trinity Mill Rd Ste 115, Carrollton, TX 75006"
   },
   {
     "n": "Align primary care",
     "s": "",
     "d": "",
     "c": "Carrollton",
-    "t": "Sadia"
+    "t": "Sadia",
+    "address": "2775 E Trinity Mills Rd, Carrollton, TX 75006"
   },
   {
     "n": "Orchid Wellness",
     "s": "NP",
     "d": "Chelsea",
     "c": "Carrollton",
-    "t": "Sadia"
+    "t": "Sadia",
+    "address": "3620 N Josey Ln Ste 117, Carrollton, TX 75007"
   },
   {
     "n": "Radiant Heart & Vascular",
     "s": "Cardiologist",
     "d": "",
     "c": "Lewisville",
-    "t": "Sadia"
+    "t": "Sadia",
+    "address": "500 N Valley Pkwy Ste 100, Lewisville, TX 75067"
   },
   {
     "n": "Care Choice",
@@ -45058,7 +45358,8 @@ var CLINIC_BANK = [
     "s": "PCP",
     "d": "Mona Chacko, MD",
     "c": "Frisco",
-    "t": "zuhaab and amna"
+    "t": "zuhaab and amna",
+    "address": "8200 Stonebrook Pkwy Ste 100, Frisco, TX 75034"
   },
   {
     "n": "Highland Medical and primary",
@@ -45100,28 +45401,32 @@ var CLINIC_BANK = [
     "s": "",
     "d": "",
     "c": "McKinney",
-    "t": ""
+    "t": "",
+    "address": "503 N Kentucky St, McKinney, TX 75069"
   },
   {
     "n": "Children choice red",
     "s": "MD",
     "d": "Neha Heider MD",
     "c": "McKinney",
-    "t": ""
+    "t": "",
+    "address": "6587 Virginia Pkwy, McKinney, TX 75071"
   },
   {
     "n": "TX Institute of Cardiology",
     "s": "MD",
     "d": "Faisail Wahid MD",
     "c": "McKinney",
-    "t": ""
+    "t": "",
+    "address": "5313 W University Dr, McKinney, TX 75071"
   },
   {
     "n": "Tx Health Internal Med",
     "s": "",
     "d": "",
     "c": "Frisco",
-    "t": ""
+    "t": "",
+    "address": "13024 Dallas Pkwy Ste 110, Frisco, TX 75034"
   },
   {
     "n": "Cierras Heath Primary care",
@@ -45142,14 +45447,16 @@ var CLINIC_BANK = [
     "s": "",
     "d": "",
     "c": "McKinney",
-    "t": ""
+    "t": "",
+    "address": "4561 Medical Center Dr, McKinney, TX 75069"
   },
   {
     "n": "Carrolton family physicians",
     "s": "",
     "d": "",
     "c": "Carrollton",
-    "t": ""
+    "t": "",
+    "address": "4333 N Josey Ln Ste 302, Carrollton, TX 75010"
   },
   {
     "n": "Carrolton pediatrics",
@@ -45160,7 +45467,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "4300 N Josey Ln Ste 110, Carrollton, TX 75010",
     "notes": ""
   },
   {
@@ -45168,7 +45475,8 @@ var CLINIC_BANK = [
     "s": "",
     "d": "",
     "c": "Carrollton",
-    "t": ""
+    "t": "",
+    "address": "4100 Fairway Dr Ste 320, Carrollton, TX 75010"
   },
   {
     "n": "Woman Health",
@@ -45182,70 +45490,80 @@ var CLINIC_BANK = [
     "s": "",
     "d": "",
     "c": "Carrollton",
-    "t": ""
+    "t": "",
+    "address": "4221 Medical Pkwy Ste 150, Carrollton, TX 75010"
   },
   {
     "n": "Lisa R. Reznik",
     "s": "",
     "d": "",
     "c": "Carrollton",
-    "t": ""
+    "t": "",
+    "address": "4100 Fairway Dr Ste 120, Carrollton, TX 75010"
   },
   {
     "n": "Dr.Lewis montanaro",
     "s": "",
     "d": "",
     "c": "Carrollton",
-    "t": ""
+    "t": "",
+    "address": "4300 N Josey Ln Ste 106, Carrollton, TX 75010"
   },
   {
     "n": "Trinity N. Dallas Neurology",
     "s": "",
     "d": "",
     "c": "Carrollton",
-    "t": ""
+    "t": "",
+    "address": "4325 N Josey Ln Plaza III Ste 211, Carrollton, TX 75010"
   },
   {
     "n": "Core Vescular services",
     "s": "",
     "d": "",
     "c": "Carrollton",
-    "t": ""
+    "t": "",
+    "address": "4541 N Josey Ln Ste 140, Carrollton, TX 75010"
   },
   {
     "n": "Little lantern services",
     "s": "",
     "d": "",
     "c": "Carrollton",
-    "t": ""
+    "t": "",
+    "address": "4541 N Josey Ln Ste 110C, Carrollton, TX 75010"
   },
   {
     "n": "Saint Marys Family clinic",
     "s": "",
     "d": "",
     "c": "Carrollton",
-    "t": ""
+    "t": "",
+    "address": "3730 N Josey Ln Ste 120, Carrollton, TX 75007"
   },
   {
     "n": "Jose Burbano De la Lara",
     "s": "MD",
     "d": "",
     "c": "Carrollton",
-    "t": ""
+    "t": "",
+    "address": "3020 E Hebron Pkwy Ste 100, Carrollton, TX 75010"
   },
   {
     "n": "Dr.Harveer S. Pamar",
     "s": "MD",
     "d": "",
     "c": "Carrollton",
-    "t": ""
+    "t": "",
+    "address": "1212 N Josey Ln Ste 110, Carrollton, TX 75006"
   },
   {
     "n": "Carrolton First care Medical",
     "s": "MD",
     "d": "",
     "c": "Carrollton",
-    "t": ""
+    "t": "",
+    "address": "2625 Old Denton Rd Ste 415, Carrollton, TX 75007"
   },
   {
     "n": "Carrolton Primary care",
@@ -45259,21 +45577,24 @@ var CLINIC_BANK = [
     "s": "PCP",
     "d": "",
     "c": "Carrollton",
-    "t": ""
+    "t": "",
+    "address": "1509 W Hebron Pkwy Ste 140, Carrollton, TX 75010"
   },
   {
     "n": "NTX",
     "s": "",
     "d": "",
     "c": "Frisco",
-    "t": "Sadia"
+    "t": "Sadia",
+    "address": "5520 Independence Pkwy Ste 201, Frisco, TX 75035"
   },
   {
     "n": "Ideal Primary Care",
     "s": "",
     "d": "",
     "c": "Frisco",
-    "t": "Sadia"
+    "t": "Sadia",
+    "address": "5550 Warren Pkwy Ste 120, Frisco, TX 75034"
   },
   {
     "n": "Liberty",
@@ -45294,14 +45615,16 @@ var CLINIC_BANK = [
     "s": "",
     "d": "",
     "c": "Frisco",
-    "t": "Sadia"
+    "t": "Sadia",
+    "address": "8720 Silverado Trail Ste 3C, McKinney, TX 75070"
   },
   {
     "n": "Pro Med",
     "s": "",
     "d": "",
     "c": "Frisco",
-    "t": "Sadia"
+    "t": "Sadia",
+    "address": "11691 Independence Pkwy Unit 110, Frisco, TX 75035"
   },
   {
     "n": "Frisco Urgent care Clinics",
@@ -45312,7 +45635,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "3220 Parkwood Blvd, Frisco, TX 75034",
     "notes": ""
   },
   {
@@ -45320,7 +45643,8 @@ var CLINIC_BANK = [
     "s": "",
     "d": "",
     "c": "Frisco",
-    "t": "Sadia"
+    "t": "Sadia",
+    "address": "4401 Coit Rd Ste 201, Frisco, TX 75035"
   },
   {
     "n": "Internal Medicine Asociates",
@@ -45331,7 +45655,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "255 W Lebanon Rd Ste 208, Frisco, TX 75036",
     "notes": ""
   },
   {
@@ -45357,7 +45681,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "4500 Hillcrest Rd Ste 180, Frisco, TX 75035",
     "notes": ""
   },
   {
@@ -45372,28 +45696,32 @@ var CLINIC_BANK = [
     "s": "",
     "d": "",
     "c": "Frisco",
-    "t": "Sadia"
+    "t": "Sadia",
+    "address": "11330 Legacy Dr Ste 204, Frisco, TX 75033"
   },
   {
     "n": "Kids urgent Care",
     "s": "",
     "d": "",
     "c": "Frisco",
-    "t": "Sadia"
+    "t": "Sadia",
+    "address": "11550 Legacy Dr Ste 420, Frisco, TX 75034"
   },
   {
     "n": "Dr Alang",
     "s": "",
     "d": "",
     "c": "Frisco",
-    "t": "Sadia"
+    "t": "Sadia",
+    "address": "3880 Parkwood Blvd Ste 304, Frisco, TX 75034"
   },
   {
     "n": "Complete Family Medicine",
     "s": "",
     "d": "",
     "c": "Carrollton",
-    "t": "Sadia"
+    "t": "Sadia",
+    "address": "4125 Fairway Dr Ste 190, Carrollton, TX 75010"
   },
   {
     "n": "Greenhill Family Physician",
@@ -45407,14 +45735,16 @@ var CLINIC_BANK = [
     "s": "MD",
     "d": "Aruna",
     "c": "Frisco",
-    "t": "Sadia"
+    "t": "Sadia",
+    "address": "8195 Custer Rd Ste 110, Frisco, TX 75035"
   },
   {
     "n": "DELC Medical care",
     "s": "MD",
     "d": "Lynda E. Mbah MD",
     "c": "Frisco",
-    "t": "Sadia"
+    "t": "Sadia",
+    "address": "5285 Independence Pkwy Ste 400, Frisco, TX 75035"
   },
   {
     "n": "Premerier Independant Physicians",
@@ -45428,28 +45758,32 @@ var CLINIC_BANK = [
     "s": "MD",
     "d": "Sheeba Mathai",
     "c": "Frisco",
-    "t": ""
+    "t": "",
+    "address": "400 Stonebrook Pkwy Unit 200, Frisco, TX 75036"
   },
   {
     "n": "BloomMField Medical",
     "s": "MD",
     "d": "",
     "c": "Frisco",
-    "t": ""
+    "t": "",
+    "address": "8000 Preston Rd Ste 401, Frisco, TX 75034"
   },
   {
     "n": "Pro Med Health Primary Care",
     "s": "MD",
     "d": "Dr.Kavitha llayaraja",
     "c": "Frisco",
-    "t": ""
+    "t": "",
+    "address": "11691 Independence Pkwy Unit 110, Frisco, TX 75035"
   },
   {
     "n": "Sunshine Pediatrics",
     "s": "MD",
     "d": "",
     "c": "Frisco",
-    "t": ""
+    "t": "",
+    "address": "11547 Independence Pkwy Ste 500, Frisco, TX 75035"
   },
   {
     "n": "Specialty Clinics",
@@ -45463,7 +45797,8 @@ var CLINIC_BANK = [
     "s": "MD",
     "d": "Senia Bendt CPC, COBGC",
     "c": "McKinney",
-    "t": ""
+    "t": "",
+    "address": "6609 Virginia Pkwy, McKinney, TX 75071"
   },
   {
     "n": "Allen OB/GYN",
@@ -45477,7 +45812,8 @@ var CLINIC_BANK = [
     "s": "MD",
     "d": "",
     "c": "McKinney",
-    "t": ""
+    "t": "",
+    "address": "4541 Medical Center Dr, McKinney, TX 75069"
   },
   {
     "n": "Peak Fertility",
@@ -45491,49 +45827,56 @@ var CLINIC_BANK = [
     "s": "MD",
     "d": "Alexander Martin MD",
     "c": "McKinney",
-    "t": ""
+    "t": "",
+    "address": "4501 Medical Center Dr Ste 100, McKinney, TX 75069"
   },
   {
     "n": "Julia Minigutti PA-C",
     "s": "PA",
     "d": "Julia Minigutti PA -C",
     "c": "McKinney",
-    "t": ""
+    "t": "",
+    "address": "8000 Eldorado Pkwy Ste A, McKinney, TX 75070"
   },
   {
     "n": "El Shddai Family clinic",
     "s": "MD",
     "d": "Beena Paul FNP-C",
     "c": "McKinney",
-    "t": ""
+    "t": "",
+    "address": "1740 W Virginia St Ste 400, McKinney, TX 75069"
   },
   {
     "n": "Texas Health Care Neck and back",
     "s": "MD",
     "d": "Dr.Douglas Lester",
     "c": "McKinney",
-    "t": ""
+    "t": "",
+    "address": "1720 N Central Expy Ste 200, McKinney, TX 75070"
   },
   {
     "n": "AIRROSTI",
     "s": "DC",
     "d": "Dr. Keith Maraffa",
     "c": "McKinney",
-    "t": ""
+    "t": "",
+    "address": "2720 Virginia Pkwy Ste 200, McKinney, TX 75071"
   },
   {
     "n": "The Adley Craig Racnh",
     "s": "APTS.",
     "d": "______none",
     "c": "McKinney",
-    "t": ""
+    "t": "",
+    "address": "8951 McCutchins Dr, McKinney, TX 75070"
   },
   {
     "n": "Pure Medicine",
     "s": "MD",
     "d": "Jordan Pastorek , MD",
     "c": "Frisco",
-    "t": ""
+    "t": "",
+    "address": "4645 Avon Ln Ste 200, Frisco, TX 75033"
   },
   {
     "n": "Daffodil Primary Care",
@@ -45561,70 +45904,80 @@ var CLINIC_BANK = [
     "s": "",
     "d": "",
     "c": "Frisco",
-    "t": ""
+    "t": "",
+    "address": "8795 Preston Trace Blvd, Frisco, TX 75033"
   },
   {
     "n": "Frisco Hand Center",
     "s": "MD",
     "d": "DinanRahhal MD",
     "c": "Frisco",
-    "t": ""
+    "t": "",
+    "address": "3880 Parkwood Blvd Ste 501, Frisco, TX 75034"
   },
   {
     "n": "Alpha Orthopedics and sports",
     "s": "MD",
     "d": "Brian Snow , MD",
     "c": "McKinney",
-    "t": ""
+    "t": "",
+    "address": "6850 TPC Dr Ste 116, McKinney, TX 75070"
   },
   {
     "n": "Next Step Orthopedics",
     "s": "MD",
     "d": "Dominique Nickson , MD",
     "c": "McKinney",
-    "t": ""
+    "t": "",
+    "address": "8865 Synergy Dr Ste 101, McKinney, TX 75070"
   },
   {
     "n": "Digestive Health Associates",
     "s": "MD",
     "d": "Sanjay Nayyar, MD",
     "c": "McKinney",
-    "t": ""
+    "t": "",
+    "address": "4521 Medical Center Dr Ste 500, McKinney, TX 75069"
   },
   {
     "n": "GRAFF Foot-Ankle Wound Care",
     "s": "DPM",
     "d": "Evan Kyprios DPM, AACFAS, CWSP",
     "c": "McKinney",
-    "t": ""
+    "t": "",
+    "address": "1400 N Coit Rd Ste 503, McKinney, TX 75071"
   },
   {
     "n": "Texas Allergy MD",
     "s": "MD",
     "d": "Nana Mireku MD , FACAAI , FAAAAI",
     "c": "McKinney",
-    "t": ""
+    "t": "",
+    "address": "1400 N Coit Rd Ste 405, McKinney, TX 75071"
   },
   {
     "n": "Unity Wellness Clinic and Rehab",
     "s": "MD",
     "d": "",
     "c": "McKinney",
-    "t": ""
+    "t": "",
+    "address": "1701 Eldorado Pkwy Ste 202, McKinney, TX 75069"
   },
   {
     "n": "Blue Diamond Physical Medicine",
     "s": "MD",
     "d": "Dr.James W. Lundin, DC, FNP-C",
     "c": "McKinney",
-    "t": ""
+    "t": "",
+    "address": "270 Redbud Blvd Ste 100, McKinney, TX 75069"
   },
   {
     "n": "Visalakshi Rao Vallury",
     "s": "MD",
     "d": "",
     "c": "McKinney",
-    "t": ""
+    "t": "",
+    "address": "5971 Virginia Pkwy Ste 100, McKinney, TX 75071"
   },
   {
     "n": "Texas Health Digestive Specialist",
@@ -45635,7 +45988,7 @@ var CLINIC_BANK = [
     "phone": "",
     "fax": "",
     "website": "",
-    "address": "",
+    "address": "4221 Medical Pkwy Ste 150, Carrollton, TX 75010",
     "notes": ""
   },
   {
@@ -45643,21 +45996,24 @@ var CLINIC_BANK = [
     "s": "MD",
     "d": "L.Deepika Koya, MD",
     "c": "Lewisville",
-    "t": ""
+    "t": "",
+    "address": "118 Lynn Ave Ste 500, Lewisville, TX 75057"
   },
   {
     "n": "Lonestar Gastroenterology PA",
     "s": "MD",
     "d": "Gowri Balachandar, M.D",
     "c": "Plano",
-    "t": ""
+    "t": "",
+    "address": "4101 W Spring Creek Pkwy Ste 400, Plano, TX 75024"
   },
   {
     "n": "Summit Primary Care and Internal Medicine",
     "s": "MD",
     "d": "Arunpriya Vadivelu MD",
     "c": "Lewisville",
-    "t": ""
+    "t": "",
+    "address": "118 Lynn Ave Ste 502, Lewisville, TX 75057"
   },
   {
     "n": "Synapse Psychotherapy , LLC",
@@ -45671,49 +46027,56 @@ var CLINIC_BANK = [
     "s": "MD",
     "d": "Cesar Reyes , MD",
     "c": "McKinney",
-    "t": ""
+    "t": "",
+    "address": "1700 N Lake Forest Dr, McKinney, TX 75071"
   },
   {
     "n": "Mckinney Footcare",
     "s": "DPM",
     "d": "Nehla Modha , DPM , AACFAS",
     "c": "McKinney",
-    "t": ""
+    "t": "",
+    "address": "5337 W University Dr Ste 100, McKinney, TX 75071"
   },
   {
     "n": "DHAT Mckinney",
     "s": "MD",
     "d": "Ravi S. Chittajallu, MD",
     "c": "McKinney",
-    "t": ""
+    "t": "",
+    "address": "5337 W University Dr Ste 200 Bldg G, McKinney, TX 75071"
   },
   {
     "n": "Brian Joe , MD Neurology",
     "s": "MD",
     "d": "Brian Joe, MD",
     "c": "McKinney",
-    "t": ""
+    "t": "",
+    "address": "2709 Virginia Pkwy Ste 200, McKinney, TX 75071"
   },
   {
     "n": "Ashna Adams D.O",
     "s": "D.O",
     "d": "Asha Adams , D.O",
     "c": "McKinney",
-    "t": ""
+    "t": "",
+    "address": "4521 Medical Center Dr Ste 500, McKinney, TX 75069"
   },
   {
     "n": "Anu Baweja , M.D.",
     "s": "MD",
     "d": "Anu Baweja M.D",
     "c": "Frisco",
-    "t": ""
+    "t": "",
+    "address": "4433 Punjab Way Ste 201, Frisco, TX 75034"
   },
   {
     "n": "Sunsil Thummala",
     "s": "MD",
     "d": "Sunil Thummala , MD",
     "c": "Frisco",
-    "t": ""
+    "t": "",
+    "address": "9191 Kyser Way Ste 202, Frisco, TX 75033"
   },
   {
     "n": "Family Medicine",
@@ -45727,56 +46090,64 @@ var CLINIC_BANK = [
     "s": "MD",
     "d": "Geeta Rajan, M.D",
     "c": "Plano",
-    "t": ""
+    "t": "",
+    "address": "4601 Old Shepard Pl Ste 406, Plano, TX 75093"
   },
   {
     "n": "North Texas Institute of Neurology",
     "s": "MD",
     "d": "Karen Bontia , MD",
     "c": "Plano",
-    "t": ""
+    "t": "",
+    "address": "5425 W Spring Creek Pkwy Ste 275, Plano, TX 75024"
   },
   {
     "n": "Medical Aesthetics of North Texas",
     "s": "MD",
     "d": "Dennis Eisenburg Gynecology",
     "c": "Plano",
-    "t": ""
+    "t": "",
+    "address": "4716 Alliance Blvd Ste 270, Plano, TX 75093"
   },
   {
     "n": "Southern Endocrynology",
     "s": "MD",
     "d": "Sumana Gangi, M, FACE",
     "c": "Plano",
-    "t": ""
+    "t": "",
+    "address": "7504 San Jacinto Pl, Plano, TX 75024"
   },
   {
     "n": "Womans Health Specialist",
     "s": "FNP-C",
     "d": "Dominique Copeland , APRN, FNP-C",
     "c": "Plano",
-    "t": ""
+    "t": "",
+    "address": "6541 Preston Rd Ste 300, Plano, TX 75024"
   },
   {
     "n": "Neurology and sleep clinic",
     "s": "MD",
     "d": "Alpa Shah, MD",
     "c": "Carrollton",
-    "t": ""
+    "t": "",
+    "address": "4217 Marsh Ridge Rd Ste 120, Carrollton, TX 75010"
   },
   {
     "n": "Advance Nerve andHealth Neuro",
     "s": "MD",
     "d": "",
     "c": "Carrollton",
-    "t": ""
+    "t": "",
+    "address": "1735 Keller Springs Rd Ste 101, Carrollton, TX 75006"
   },
   {
     "n": "Delc Medical Center",
     "s": "",
     "d": "",
     "c": "Frisco",
-    "t": ""
+    "t": "",
+    "address": "5285 Independence Pkwy Ste 400, Frisco, TX 75035"
   },
   {
     "n": "Med Pro Family Clinic",
@@ -45790,7 +46161,8 @@ var CLINIC_BANK = [
     "s": "",
     "d": "",
     "c": "Frisco",
-    "t": ""
+    "t": "",
+    "address": "8680 Main St #1W, Frisco, TX 75033"
   }
 ];
 
