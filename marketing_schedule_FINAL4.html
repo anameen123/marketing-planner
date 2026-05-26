@@ -32405,30 +32405,34 @@ function confirmAddVisit(){
   if(!name){ showToast('Please enter the business name.'); return; }
   if(!address){ showToast('Please enter the address. (Pick a known clinic from suggestions to auto-fill it.)'); return; }
 
-  // ── STRICT-MODE CHECK FOR NON-ADMIN (per user 2026-05-19) ──────────
-  // Members cannot add a brand-new business via the Add Visit modal —
-  // they must pick from the existing Clinic / MVA / Outreach bank by
-  // selecting from the autocomplete suggestions. This is the only way
-  // to prevent typo duplicates (e.g. "Heal 360" vs "Heal360" vs
-  // "heal 360 ") that ended up creating multiple cards for one business.
-  // Admin retains the ability to add brand-new businesses (that's how
-  // the bank grows). Outreach is allowed for everyone since outreach
-  // names are often new events that don't preexist in the bank.
-  var _isAdminUser = (typeof isAdmin === 'function' && isAdmin());
-  if(!_isAdminUser && type !== 'outreach'){
-    var lowerName = name.toLowerCase().trim();
-    var bankList = (type === 'mva')
-      ? (typeof MVA_ATTORNEYS !== 'undefined' ? MVA_ATTORNEYS : [])
-      : (typeof CLINIC_BANK !== 'undefined'   ? CLINIC_BANK   : []);
-    var nameKey  = (type === 'mva') ? 'firm' : 'n';
-    var found = bankList.some(function(b){
-      return b && (b[nameKey] || '').toLowerCase().trim() === lowerName;
-    });
-    if(!found){
-      var label = (type === 'mva') ? 'MVA firm' : 'clinic';
-      showToast('"'+name+'" isn\'t in our '+label+' bank. Pick from the autocomplete suggestions — or ask admin to add it first. (This prevents typo duplicates.)');
-      return;
-    }
+  // ── STRICT BANK-MEMBERSHIP CHECK (per user 2026-05-26 HARDENED) ─────
+  // EVERYONE (members AND admin) must pick from the existing bank — no
+  // free-typing allowed for ANY type (clinic, MVA, outreach). To add a
+  // brand-new business, the user must create a CARD first in the Bank
+  // tab (with address + physician name). This closes the prior outreach
+  // exemption that let "Lunoxy Medical" slip in without a card, AND
+  // closes the admin bypass that let admin add typo duplicates.
+  var lowerName = name.toLowerCase().trim();
+  var bankList, nameKey, typeLabel;
+  if(type === 'mva'){
+    bankList = (typeof MVA_ATTORNEYS !== 'undefined' ? MVA_ATTORNEYS : []);
+    nameKey  = 'firm';
+    typeLabel = 'MVA firm';
+  } else if(type === 'outreach'){
+    bankList = (typeof OUTREACH !== 'undefined' ? OUTREACH : []);
+    nameKey  = 'name';
+    typeLabel = 'outreach event';
+  } else {
+    bankList = (typeof CLINIC_BANK !== 'undefined' ? CLINIC_BANK : []);
+    nameKey  = 'n';
+    typeLabel = 'clinic';
+  }
+  var found = bankList.some(function(b){
+    return b && (b[nameKey] || '').toLowerCase().trim() === lowerName;
+  });
+  if(!found){
+    showToast('"'+name+'" isn\'t in our '+typeLabel+' bank. Create a card first (with address + physician name) before adding a visit. This applies to admin too — no exceptions.');
+    return;
   }
 
   // ── DUPLICATE CHECK ──────────────────────────────────────────────────
@@ -36133,7 +36137,51 @@ var LOGIN_QUOTES = [
       _showCompletedRowsAuditIfNeeded();
     }
   } catch(_e){}
+  // Per user 2026-05-26 cleanup: remove empty visit rows + the "Lunoxy
+  // Medical" row that slipped through the validation. One-shot via
+  // sessionStorage guard — runs once per admin session.
+  try {
+    if(typeof isAdmin === 'function' && isAdmin() && typeof _oneTimeCleanupOrphanRows === 'function'){
+      _oneTimeCleanupOrphanRows();
+    }
+  } catch(_e){}
 })();
+
+// ── PHASE 19d — CLEANUP EMPTY + KNOWN-BAD ROWS (per user 2026-05-26) ────────
+// One-time sweep that removes:
+//   - Rows with no clinic name (pure noise)
+//   - The specific "Lunoxy Medical" row the user flagged (slipped past the
+//     outreach-exempt validation hole that Phase 19e closes)
+var _CLEANUP_SESSION_KEY = 'wcg_orphan_row_cleanup_v1';
+function _oneTimeCleanupOrphanRows(){
+  try { if(sessionStorage.getItem(_CLEANUP_SESSION_KEY)) return; } catch(_){}
+  if(typeof S === 'undefined' || !S.days || !Array.isArray(S.days)) return;
+  var removedEmpty = 0, removedLunoxy = 0;
+  S.days.forEach(function(day){
+    if(!day || !Array.isArray(day.rows)) return;
+    var before = day.rows.length;
+    day.rows = day.rows.filter(function(r){
+      if(!r) return false;
+      if(!r.clinic || !String(r.clinic).trim()){ removedEmpty++; return false; }
+      if(String(r.clinic).trim().toLowerCase() === 'lunoxy medical'){ removedLunoxy++; return false; }
+      return true;
+    });
+  });
+  if(removedEmpty > 0 || removedLunoxy > 0){
+    if(typeof _saveS === 'function') _saveS();
+    if(typeof refresh === 'function' && typeof _DV_LAST_DI === 'number') refresh(_DV_LAST_DI);
+    if(typeof renderCalGrid === 'function') renderCalGrid();
+    if(typeof showToast === 'function'){
+      var parts = [];
+      if(removedEmpty)  parts.push(removedEmpty + ' empty row' + (removedEmpty===1?'':'s'));
+      if(removedLunoxy) parts.push(removedLunoxy + ' Lunoxy Medical row' + (removedLunoxy===1?'':'s'));
+      showToast('🧹 Cleaned ' + parts.join(' + ') + ' from the calendar.');
+    }
+    try { console.info('[cleanup] removed ' + removedEmpty + ' empty + ' + removedLunoxy + ' Lunoxy rows from S.days'); } catch(_){}
+  }
+  try { sessionStorage.setItem(_CLEANUP_SESSION_KEY, '1'); } catch(_){}
+}
+window._oneTimeCleanupOrphanRows = _oneTimeCleanupOrphanRows;
 
 // ── PHASE 19 — RETRO-AUDIT FOR COMPLETED ROWS (per user 2026-05-26) ─────────
 // One-time admin audit that finds existing Completed visit rows missing
