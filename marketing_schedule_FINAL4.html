@@ -3571,7 +3571,14 @@ body.role-front_desk #referrals-view {
             <button type="button" onclick="_rpV5AdjustN(-1)" style="background:#e5e7eb;border:none;color:#374151;width:30px;height:36px;border-radius:6px;font-size:14px;font-weight:700;cursor:pointer">−</button>
             <input type="number" id="rp-level-count" value="5" min="1" max="12" style="flex:1;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box;text-align:center">
             <button type="button" onclick="_rpV5AdjustN(1)" style="background:#e5e7eb;border:none;color:#374151;width:30px;height:36px;border-radius:6px;font-size:14px;font-weight:700;cursor:pointer">+</button>
+            <!-- 🤖 AI suggest N (per user 2026-05-26) — visible only when the
+                 "Use AI planning" toggle is ON, a GitHub Models token is set,
+                 and both Start + End are confirmed. Clicking it sends the
+                 corridor distance + candidate density to GitHub Models and
+                 the recommended N drops into the input. -->
+            <button id="rp-ai-suggest-n-btn" type="button" onclick="_rpAiSuggestLevelCount()" title="Ask AI to pick the optimum N based on Start↔End distance + stale-candidate density" style="display:none;background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;border:none;border-radius:6px;padding:0 11px;height:36px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;white-space:nowrap;align-items:center;gap:4px">🤖 AI suggest</button>
           </div>
+          <div id="rp-ai-suggest-n-hint" style="display:none;font-size:10px;color:#6b21a8;margin-top:5px;line-height:1.45;background:#faf5ff;border:1px solid #ddd6fe;border-radius:6px;padding:5px 8px"></div>
         </div>
         <div>
           <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Corridor half-width <span style="color:var(--muted);font-weight:400">(±miles)</span></label>
@@ -25984,14 +25991,19 @@ function _rpRefreshCenterline(){
   try {
     var startVal = (document.getElementById('rp-start') || {}).value || '';
     var endVal   = (document.getElementById('rp-end')   || {}).value || '';
-    if(!startVal || !endVal){ _rpClearCenterline(); return; }
-    var A = (typeof getRouteCoord === 'function') ? getRouteCoord(startVal) : null;
-    var B = (endVal === '__same__') ? A : ((typeof getRouteCoord === 'function') ? getRouteCoord(endVal) : null);
-    if(A && B && (A.lat !== B.lat || A.lng !== B.lng)){
-      _rpDrawCenterline(A, B);
-    } else {
-      _rpClearCenterline();
+    if(!startVal || !endVal){ _rpClearCenterline(); }
+    else {
+      var A = (typeof getRouteCoord === 'function') ? getRouteCoord(startVal) : null;
+      var B = (endVal === '__same__') ? A : ((typeof getRouteCoord === 'function') ? getRouteCoord(endVal) : null);
+      if(A && B && (A.lat !== B.lat || A.lng !== B.lng)){
+        _rpDrawCenterline(A, B);
+      } else {
+        _rpClearCenterline();
+      }
     }
+    // Per user 2026-05-26: keep the "🤖 AI suggest" button in sync — show
+    // it the moment both endpoints are set (with AI toggle on + key set).
+    if(typeof _rpAiSuggestBtnSync === 'function') _rpAiSuggestBtnSync();
   } catch(_){}
 }
 window._rpRefreshCenterline = _rpRefreshCenterline;
@@ -27599,21 +27611,150 @@ window._RP_AI = _RP_AI;
 function _rpAiOnToggleChange(checked){
   _RP_AI.enabled = !!checked;
   var lbl = document.getElementById('rp-ai-status-hint');
-  if(!lbl) return;
-  if(!_RP_AI.enabled){
-    lbl.textContent = 'AI planning OFF — using hardcoded algorithm.';
-    lbl.style.color = '#64748b';
+  if(lbl){
+    if(!_RP_AI.enabled){
+      lbl.textContent = 'AI planning OFF — using hardcoded algorithm.';
+      lbl.style.color = '#64748b';
+    } else if(typeof hasGeminiKey !== 'function' || !hasGeminiKey()){
+      lbl.innerHTML = '⚠ <b>No GitHub Models token set.</b> Open ⚙ Map v2 settings → paste a token from <a href="https://github.com/settings/personal-access-tokens" target="_blank" rel="noopener" style="color:#7c3aed;text-decoration:underline">github.com/settings/personal-access-tokens</a> (Models · Read scope). Free, no card. Toggle is ignored until then.';
+      lbl.style.color = '#b91c1c';
+    } else {
+      lbl.innerHTML = '🤖 AI planning ON — GitHub Models will suggest an alternative route alongside the algorithm so you can compare. In <b>Corridor mode</b>, click <b>🤖 AI suggest</b> next to the level count to let AI pick the optimum N from your Start↔End geometry.';
+      lbl.style.color = '#6b21a8';
+    }
+  }
+  // Per user 2026-05-26: also sync the corridor "🤖 AI suggest" button so it
+  // appears/hides immediately when the toggle flips.
+  if(typeof _rpAiSuggestBtnSync === 'function') _rpAiSuggestBtnSync();
+}
+window._rpAiOnToggleChange = _rpAiOnToggleChange;
+
+// Visibility sync for the corridor "🤖 AI suggest" level-count button.
+// Shown only when: AI toggle is ON + a token is set + both Start + End are
+// resolved (so the AI has real geometry to reason about).
+function _rpAiSuggestBtnSync(){
+  var btn = document.getElementById('rp-ai-suggest-n-btn');
+  if(!btn) return;
+  var aiOn = !!(window._RP_AI && _RP_AI.enabled);
+  var keyOk = (typeof hasGeminiKey === 'function') && hasGeminiKey();
+  var startVal = (document.getElementById('rp-start') || {}).value || '';
+  var endVal   = (document.getElementById('rp-end')   || {}).value || '';
+  // End may be "__same__" for round-trip — that counts as "both set".
+  var bothSet = !!(startVal && endVal);
+  btn.style.display = (aiOn && keyOk && bothSet) ? 'inline-flex' : 'none';
+  // Hide stale reasoning hint when AI gets disabled
+  if(!aiOn){
+    var hint = document.getElementById('rp-ai-suggest-n-hint');
+    if(hint){ hint.style.display = 'none'; hint.innerHTML = ''; }
+  }
+}
+window._rpAiSuggestBtnSync = _rpAiSuggestBtnSync;
+
+// Ask GitHub Models for the optimum number of route levels given the
+// current Start/End and stale-candidate density inside the corridor.
+// Auto-fills rp-level-count and renders a one-sentence reasoning inline.
+function _rpAiSuggestLevelCount(){
+  if(!_RP_AI || !_RP_AI.enabled){
+    if(typeof showToast === 'function') showToast('Turn on Use AI planning first.');
     return;
   }
   if(typeof hasGeminiKey !== 'function' || !hasGeminiKey()){
-    lbl.innerHTML = '⚠ <b>No GitHub Models token set.</b> Open ⚙ Map v2 settings → paste a token from <a href="https://github.com/settings/personal-access-tokens" target="_blank" rel="noopener" style="color:#7c3aed;text-decoration:underline">github.com/settings/personal-access-tokens</a> (Models · Read scope). Free, no card. Toggle is ignored until then.';
-    lbl.style.color = '#b91c1c';
+    if(typeof showToast === 'function') showToast('No GitHub Models token set — paste one in ⚙ Map v2 settings.');
     return;
   }
-  lbl.innerHTML = '🤖 AI planning ON — GitHub Models will suggest an alternative route alongside the algorithm so you can compare.';
-  lbl.style.color = '#6b21a8';
+  var startVal = (document.getElementById('rp-start') || {}).value || '';
+  var endVal   = (document.getElementById('rp-end')   || {}).value || '';
+  if(!startVal || !endVal){
+    if(typeof showToast === 'function') showToast('Pick Start and End first.');
+    return;
+  }
+  var A = (typeof getRouteCoord === 'function') ? getRouteCoord(startVal) : null;
+  var B = (endVal === '__same__') ? A : ((typeof getRouteCoord === 'function') ? getRouteCoord(endVal) : null);
+  if(!A || !B){
+    if(typeof showToast === 'function') showToast('Could not resolve Start or End coordinates.');
+    return;
+  }
+  var totalMi = _rpHaversineMiles(A, B);
+  if(totalMi < 0.5){
+    if(typeof showToast === 'function') showToast('Start and End are practically the same point — pick distinct endpoints.');
+    return;
+  }
+  // Candidate density scan — ±5 mi (or 25% of distance, whichever is smaller).
+  var densityWidth = Math.min(5, Math.max(1, totalMi * 0.25));
+  var greenCount = 0, yellowCount = 0;
+  function scan(name){
+    var c = (typeof getCoordForBusiness === 'function') ? getCoordForBusiness(name) : null;
+    if(!c) return;
+    var t = _rpV5ProjT(c, A, B);
+    if(t < 0 || t > 1) return;
+    var perp = _rpV5SignedPerp(c, A, B);
+    if(Math.abs(perp) > densityWidth) return;
+    var days = (typeof daysSinceLastVisit === 'function') ? daysSinceLastVisit(name) : null;
+    var rec = (typeof recencyBucket === 'function') ? recencyBucket(days) : null;
+    if(!rec) return;
+    if(rec.key === 'ripe' || rec.key === 'never') greenCount++;
+    else if(rec.key === 'yellow') yellowCount++;
+  }
+  if(typeof CLINIC_BANK   !== 'undefined') CLINIC_BANK.forEach(function(c){ if(c && c.n) scan(c.n); });
+  if(typeof MVA_ATTORNEYS !== 'undefined') MVA_ATTORNEYS.forEach(function(m){ if(m && m.firm) scan(m.firm); });
+  var btn = document.getElementById('rp-ai-suggest-n-btn');
+  var origLabel = btn ? btn.innerHTML : '';
+  if(btn){ btn.disabled = true; btn.innerHTML = '⏳ Asking AI…'; }
+  var hint = document.getElementById('rp-ai-suggest-n-hint');
+  if(hint){ hint.style.display = 'block'; hint.innerHTML = '<i>⏳ Asking AI for the optimum N…</i>'; }
+  var prompt = 'You are helping a medical-marketing rep plan a corridor-style clinic visit route.\n\n'
+    + 'GEOMETRY:\n'
+    + '- Start: ' + (startVal || 'A') + '  (' + A.lat.toFixed(4) + ', ' + A.lng.toFixed(4) + ')\n'
+    + '- End:   ' + ((endVal === '__same__') ? 'same as Start (round trip)' : endVal) + '  (' + B.lat.toFixed(4) + ', ' + B.lng.toFixed(4) + ')\n'
+    + '- Straight-line distance: ' + totalMi.toFixed(1) + ' mi\n\n'
+    + 'CANDIDATE DENSITY (stale clinics within ±' + densityWidth.toFixed(1) + ' mi of the centerline):\n'
+    + '- ' + greenCount + ' green/never-visited (top priority)\n'
+    + '- ' + yellowCount + ' yellow medium-stale\n'
+    + '- ' + (greenCount + yellowCount) + ' total available stops\n\n'
+    + 'HOW LEVELS WORK:\n'
+    + 'The Start→End line is sliced into N equal-length depth chunks ("route levels").\n'
+    + 'Each level is one stop the rep can plan to visit. More levels = tighter slices\n'
+    + '(fewer candidates per slice). Fewer levels = wider slices (more candidate density).\n'
+    + 'Each slice should ideally contain at least 3 candidates so the rep has real choices.\n'
+    + 'Typical rep visits 5-8 clinics per route.\n\n'
+    + 'TASK: Recommend the OPTIMUM N for this trip.\n\n'
+    + 'OUTPUT (JSON only, no markdown, no prose outside the object):\n'
+    + '{\n'
+    + '  "recommendedLevels": <integer 1-12>,\n'
+    + '  "reasoning": "<one sentence why>"\n'
+    + '}\n';
+  _callAIChat(prompt, { temperature: 0.3, maxTokens: 200, wantJson: true })
+    .then(function(text){
+      var parsed = null;
+      try { parsed = JSON.parse(text); }
+      catch(_){
+        var m = String(text || '').match(/\{[\s\S]*\}/);
+        if(m){ try { parsed = JSON.parse(m[0]); } catch(_2){} }
+      }
+      if(btn){ btn.disabled = false; btn.innerHTML = origLabel || '🤖 AI suggest'; }
+      if(!parsed || typeof parsed.recommendedLevels !== 'number'){
+        if(hint){ hint.innerHTML = '⚠ AI returned no usable number. Try again or set N manually.'; hint.style.color = '#b91c1c'; }
+        return;
+      }
+      var n = Math.max(1, Math.min(12, Math.round(parsed.recommendedLevels)));
+      var inp = document.getElementById('rp-level-count');
+      if(inp) inp.value = n;
+      var reason = (parsed.reasoning || '').toString().replace(/</g,'&lt;');
+      if(hint){
+        hint.style.display = 'block';
+        hint.style.color = '#6b21a8';
+        hint.innerHTML = '🤖 AI suggests <b>' + n + ' level' + (n===1?'':'s') + '</b> — ' + reason
+          + ' <span style="color:#94a3b8">(' + (greenCount + yellowCount) + ' candidates in ±' + densityWidth.toFixed(1) + ' mi)</span>';
+      }
+      if(typeof showToast === 'function') showToast('🤖 AI suggests ' + n + ' route levels.');
+    })
+    .catch(function(err){
+      if(btn){ btn.disabled = false; btn.innerHTML = origLabel || '🤖 AI suggest'; }
+      var msg = (err && err.message) ? err.message : String(err || 'unknown');
+      if(hint){ hint.innerHTML = '⚠ AI error: ' + msg.replace(/</g,'&lt;'); hint.style.color = '#b91c1c'; }
+    });
 }
-window._rpAiOnToggleChange = _rpAiOnToggleChange;
+window._rpAiSuggestLevelCount = _rpAiSuggestLevelCount;
 
 // Visibility — show only for admin. Called whenever the planner opens.
 function _rpAiSyncVisibility(){
