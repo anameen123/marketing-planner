@@ -14736,8 +14736,7 @@ function _rlRenderCalDayDetail(iso){
   });
   var entriesHtml = '';
   if(entries.length){
-    entriesHtml = '<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">📋 Logged patient entries (' + entries.length + ')</div>'
-                + '<div style="display:flex;flex-direction:column;gap:6px">';
+    entriesHtml = '<div style="display:flex;flex-direction:column;gap:6px">';
     entries.forEach(function(e){
       var fac = REFERRAL_FACILITIES.find(function(f){ return f.key === e.destinationFacility; });
       var c = REFERRAL_CHANNELS.find(function(x){ return x.key === (e.sourceChannel || 'business'); });
@@ -14756,8 +14755,58 @@ function _rlRenderCalDayDetail(iso){
     });
     entriesHtml += '</div>';
   } else {
-    entriesHtml = '<div style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:14px;font-size:11px;color:var(--muted);text-align:center;font-style:italic">No referral entries logged for this date.</div>';
+    entriesHtml = '<div style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:14px;font-size:11px;color:var(--muted);text-align:center;font-style:italic">No patients logged for this date.</div>';
   }
+
+  // Phase 11 (per user 2026-05-25): also show Pending Referrals for this date.
+  // A referral "matches" the date if its expectedAt OR createdAt falls on iso.
+  // Two sub-tabs let the user toggle between Logged patients and Referrals
+  // without leaving the day-detail view.
+  var refsToday = (typeof PENDING_REFERRALS !== 'undefined' && Array.isArray(PENDING_REFERRALS))
+    ? PENDING_REFERRALS.filter(function(r){
+        if(!r) return false;
+        var expIso = (r.expectedAt || '').slice(0,10);
+        var creIso = (r.createdAt  || '').slice(0,10);
+        return expIso === iso || creIso === iso;
+      })
+    : [];
+  refsToday.sort(function(a, b){ return (a.expectedAt || '').localeCompare(b.expectedAt || ''); });
+  var referralsHtml = '';
+  if(refsToday.length){
+    referralsHtml = '<div style="display:flex;flex-direction:column;gap:6px">';
+    refsToday.forEach(function(r){
+      var fac = REFERRAL_FACILITIES.find(function(f){ return f.key === r.destinationFacility; });
+      var typeIcon = r.sourceType === 'mva' ? '⚖' : r.sourceType === 'wcg_facility' ? '🏥' : '🏥';
+      var statusColor = r.status === 'pending' ? '#f59e0b' : r.status === 'approved' ? '#16a34a' : r.status === 'declined' ? '#9ca3af' : '#64748b';
+      var statusBg = r.status === 'pending' ? '#fffbeb' : r.status === 'approved' ? '#f0fdf4' : '#f8fafc';
+      var statusLabel = r.status === 'pending' ? '⏳ Pending' : r.status === 'approved' ? '✓ Approved' : r.status === 'declined' ? '✗ Declined' : '↩ Retracted';
+      var expDt = r.expectedAt ? new Date(r.expectedAt) : null;
+      var expTime = (expDt && !isNaN(expDt.getTime())) ? expDt.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}) : '—';
+      var creatorLbl = r.creatorRole === 'uc_plano_fd' ? ('🏥 UC Plano · ' + (r.createdBy || '?')) : ('👥 ' + (r.createdBy || '—'));
+      referralsHtml += '<div style="background:' + statusBg + ';border:1px solid var(--border);border-left:3px solid ' + statusColor + ';border-radius:8px;padding:8px 12px;display:flex;align-items:center;gap:12px;font-size:11px;flex-wrap:wrap">'
+                    + '<div style="font-family:DM Mono,monospace;font-weight:700;color:var(--muted);min-width:64px">' + esc(expTime) + '</div>'
+                    + '<div style="flex:1;min-width:0">'
+                    +   '<div style="font-weight:700;color:#0f172a">' + typeIcon + ' ' + esc(r.sourceName) + ' <span style="color:var(--muted);font-weight:400;font-size:10px">→ ' + esc(fac ? fac.short : r.destinationFacility) + '</span></div>'
+                    +   '<div style="font-size:10px;color:var(--muted);margin-top:2px">' + esc(creatorLbl) + (r.notes ? ' · ' + esc(r.notes) : '') + '</div>'
+                    + '</div>'
+                    + '<span style="background:' + statusColor + ';color:#fff;font-size:9px;font-weight:700;padding:2px 7px;border-radius:8px;white-space:nowrap">' + statusLabel + '</span>'
+                    + '</div>';
+    });
+    referralsHtml += '</div>';
+  } else {
+    referralsHtml = '<div style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:14px;font-size:11px;color:var(--muted);text-align:center;font-style:italic">No referrals expected or created on this date.</div>';
+  }
+
+  // Tab bar — sticky inside the detail panel. Default to Logged patients;
+  // clicking switches in-place via _rlDayDetailTab(...).
+  var tabsHtml = '<div style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:12px">'
+              + '<button id="rl-det-tab-patients" type="button" onclick="_rlDayDetailTab(\'patients\')" '
+              +   'style="padding:9px 18px;font-size:12px;font-weight:700;color:#7030A0;cursor:pointer;border:none;background:none;border-bottom:3px solid #7030A0;margin-bottom:-1px;font-family:\'DM Sans\',sans-serif">📋 Logged patients (' + entries.length + ')</button>'
+              + '<button id="rl-det-tab-referrals" type="button" onclick="_rlDayDetailTab(\'referrals\')" '
+              +   'style="padding:9px 18px;font-size:12px;font-weight:600;color:var(--muted);cursor:pointer;border:none;background:none;border-bottom:3px solid transparent;margin-bottom:-1px;font-family:\'DM Sans\',sans-serif">📥 Referrals (' + refsToday.length + ')</button>'
+              + '</div>'
+              + '<div id="rl-det-pane-patients">' + entriesHtml + '</div>'
+              + '<div id="rl-det-pane-referrals" style="display:none">' + referralsHtml + '</div>';
 
   det.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">'
               + '<div><div style="font-size:15px;font-weight:700;color:var(--text)">📅 ' + esc(dateLabel) + '</div></div>'
@@ -14765,8 +14814,30 @@ function _rlRenderCalDayDetail(iso){
               + '</div>'
               + reconHtml
               + shiftHtml
-              + entriesHtml;
+              + tabsHtml;
 }
+
+// Phase 11 (per user 2026-05-25): sub-tab switcher inside the day-detail.
+// Toggles between the Logged patients list and the Referrals list without
+// re-rendering the whole panel.
+function _rlDayDetailTab(which){
+  var tabP = document.getElementById('rl-det-tab-patients');
+  var tabR = document.getElementById('rl-det-tab-referrals');
+  var paneP = document.getElementById('rl-det-pane-patients');
+  var paneR = document.getElementById('rl-det-pane-referrals');
+  if(!tabP || !tabR || !paneP || !paneR) return;
+  var active = which === 'referrals' ? 'referrals' : 'patients';
+  if(active === 'patients'){
+    tabP.style.color = '#7030A0'; tabP.style.fontWeight = '700'; tabP.style.borderBottom = '3px solid #7030A0';
+    tabR.style.color = 'var(--muted)'; tabR.style.fontWeight = '600'; tabR.style.borderBottom = '3px solid transparent';
+    paneP.style.display = ''; paneR.style.display = 'none';
+  } else {
+    tabR.style.color = '#7030A0'; tabR.style.fontWeight = '700'; tabR.style.borderBottom = '3px solid #7030A0';
+    tabP.style.color = 'var(--muted)'; tabP.style.fontWeight = '600'; tabP.style.borderBottom = '3px solid transparent';
+    paneR.style.display = ''; paneP.style.display = 'none';
+  }
+}
+window._rlDayDetailTab = _rlDayDetailTab;
 
 function _rlClearCalSelection(){
   RL_CAL_SELECTED_DATE = '';
