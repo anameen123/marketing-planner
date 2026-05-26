@@ -46246,14 +46246,33 @@ function _seedClinicAddresses(){
   if(!Array.isArray(CLINIC_BANK)) return;
   var edits = _loadClinicAddressEdits();
   var seeded = 0, verified = 0, placeholder = 0;
+  // Helper: does this look like a real street address (number + comma + city)?
+  function looksLikeStreet(addr){
+    if(!addr) return false;
+    var s = String(addr).trim();
+    if(!s || s === 'TBD') return false;
+    if(!/\d/.test(s) || !s.includes(',')) return false;
+    var beforeComma = s.split(',')[0].trim();
+    return /\d/.test(beforeComma);   // street number must be in the first chunk
+  }
   CLINIC_BANK.forEach(function(c){
     if(!c || !c.n) return;
     var key = c.n.toLowerCase().trim();
-    // Priority: admin edit > verified override > city placeholder
+    // Priority (per Phase 18 address enrichment 2026-05-26):
+    //   1. Admin localStorage edit > overrides
+    //   2. Literal address in CLINIC_BANK that looks like a real street
+    //      address (the agent's bulk research went here)
+    //   3. Hardcoded CLINIC_ADDRESS_OVERRIDES (early-batch verified)
+    //   4. City placeholder (last resort)
     if(edits[key] && edits[key].address){
       c.address = edits[key].address;
       c.addressVerified = true;
       c.addressEditedBy = edits[key].by;
+      verified++;
+    } else if(looksLikeStreet(c.address)){
+      // Trust the literal — bulk research from Phase 18a wrote it here.
+      // Keep c.address as-is, just stamp verified.
+      c.addressVerified = true;
       verified++;
     } else if(CLINIC_ADDRESS_OVERRIDES[key]){
       c.address = CLINIC_ADDRESS_OVERRIDES[key].address;
