@@ -7,7 +7,10 @@ const os = require('os');
 const { chromium } = require('playwright');
 
 const OUT_DIR = path.join(os.homedir(), 'Downloads');
-const OUT_PDF = path.join(OUT_DIR, 'Referral Scenarios.pdf');
+// Primary output. If the file is locked (open in a PDF viewer), we fall
+// back to a timestamped filename below so the build doesn't fail.
+const OUT_PDF_PRIMARY = path.join(OUT_DIR, 'Referral Scenarios.pdf');
+let OUT_PDF = OUT_PDF_PRIMARY;
 
 // ── Helpers to build flowchart nodes ─────────────────────────────────────
 function actor(role, label){
@@ -52,16 +55,18 @@ function statusBadge(label, color){
 const scenario1 = `
 <div class="scenario">
   <h2>SCENARIO 1 — UC Plano front desk creates a referral (happy path)</h2>
-  <div class="scenario-meta">Patient is physically at UC Plano. FD has their phone. Ride offered face-to-face.</div>
+  <div class="scenario-meta">Patient is physically at UC Plano. FD has their phone. Ride offered face-to-face — but UC Plano only ASKS; destination FD BOOKS.</div>
   ${actor('ucplano', '🏥 UC Plano Front Desk (Lisa)')}
   ${arrow('opens Create Referral form')}
-  ${step('Fills:<br>• Patient name + patient phone (10-digit US)<br>• Source = UC Plano (auto)<br>• Destination = Frisco ER<br>• ETA: auto-suggested 3:45 PM<br>• 🚗 Ride: asked + patient accepted')}
+  ${step('Fills:<br>• Patient name + patient phone (10-digit US)<br>• Source = UC Plano (auto)<br>• Destination = Frisco ER<br>• ETA: auto-suggested 3:45 PM<br>• 🚗 Ride: <strong>Asked, patient accepted</strong><br><span style="color:#6b21a8;font-size:10px">↳ UC Plano has no Uber Health account — destination FD will book it.</span>')}
   ${arrow('submit → enters PENDING_REFERRALS')}
-  ${step('Status: ⏳ <strong>PENDING</strong>' + statusBadge('pending', '#f59e0b'), { color:'#f59e0b', bg:'#fffbeb' })}
+  ${step('Status: ⏳ <strong>PENDING</strong>' + statusBadge('pending', '#f59e0b') + '<br>rideBookingStatus: <strong>needs_booking</strong>', { color:'#f59e0b', bg:'#fffbeb' })}
   ${handoff('Destination Front Desk')}
   ${actor('fd', '🏥 Frisco ER Front Desk (Sarah)')}
-  ${arrow('sees pending row + ride flag')}
-  ${step('Patient walks in at 3:42 PM (on time)<br>Sarah clicks <strong>✓ Approve & log patient</strong>')}
+  ${arrow('sees pending row + 🚗 purple Uber-booking banner')}
+  ${step('🚗 <strong>Book Uber Health ride</strong> banner shows on her pending row.<br>Sarah clicks <strong>✓ Mark as booked</strong> → prompted for pickup ETA / ride id.<br>Banner turns green: ✓ Uber Health booked by Sarah on May 26 3:32 PM.', { color:'#7c3aed', bg:'#faf5ff' })}
+  ${arrow('audit logs ride_booked + patient arrives at 3:42 PM')}
+  ${step('Sarah clicks <strong>✓ Approve & log patient</strong>')}
   ${arrow('Log Patient modal opens<br>📥 From Referral tab auto-selected')}
   ${step('🔒 Source / 🔒 Destination / 🔒 Member<br>locked from referral.<br>Sarah fills: age, gender, chief complaint,<br>payment type, her name as logger.<br>Clicks <strong>Save</strong>.')}
   ${arrow('on save')}
@@ -151,6 +156,27 @@ const scenario6 = `
 </div>
 `;
 
+const scenario7 = `
+<div class="scenario">
+  <h2>SCENARIO 7 — Uber Health ride booking (full split-of-duty flow)</h2>
+  <div class="scenario-meta">UC Plano asks; Frisco/Castle Hills ER books. UC Plano has no Uber Health account — the destination FD owns the booking. Includes the "couldn't book" branch.</div>
+  ${actor('ucplano', '🏥 UC Plano Front Desk (Lisa)')}
+  ${arrow('patient sitting in front of her — ready for transport')}
+  ${step('Lisa asks: <strong>"Want us to arrange a ride to Castle Hills ER?"</strong><br>Patient says <strong>YES</strong>.<br>Lisa picks <strong>"Asked, patient accepted"</strong> on Create Referral.<br><span style="color:#6b21a8;font-size:10px">⚠ Lisa does NOT book the ride. UC Plano has no Uber Health account.</span>')}
+  ${arrow('submit')}
+  ${step('PENDING_REFERRALS entry:<br>rideRequested: <strong>accepted</strong><br>rideBookingStatus: <strong>needs_booking</strong>' + statusBadge('needs booking', '#7c3aed'), { color:'#7c3aed', bg:'#faf5ff' })}
+  ${handoff('Castle Hills ER Front Desk')}
+  ${actor('fd', '🏥 Castle Hills ER Front Desk (Sarah)')}
+  ${arrow('opens Pending Referrals panel')}
+  ${step('Sees prominent <strong>purple banner</strong> on the row:<br>🚗 <strong>Book Uber Health ride</strong> — Patient John Doe accepted a ride from UC Plano → Castle Hills ER.<br>"UC Plano asked the patient. <strong>You book on your Uber Health account.</strong>"<br>Two buttons: <strong>✓ Mark as booked</strong> · <strong>Couldn\\\'t book</strong>', { color:'#7c3aed', bg:'#faf5ff' })}
+  ${branchArrow('Sarah books successfully ✓', 'Sarah couldn\\\'t book ✗')}
+  ${step('<strong>LEFT BRANCH — Booked</strong><br>Sarah opens Uber Health, books ride, comes back.<br>Clicks <strong>✓ Mark as booked</strong> → prompt: pickup ETA / ride id.<br>Types: <em>"Pickup 3:25 PM, Uber ride #UB-4471"</em><br>Banner turns 🟢 <strong>✓ Uber Health booked by Sarah on 3:22 PM</strong>.<br>followUpActions += { action: ride_booked, by: Sarah, note: ... }', { color:'#16a34a', bg:'#f0fdf4' })}
+  ${step('<strong>RIGHT BRANCH — Couldn\\\'t book</strong><br>Maybe: no driver available · insurance issue · patient changed mind.<br>Sarah clicks <strong>Couldn\\\'t book</strong> → prompt: reason (required).<br>Types: <em>"No drivers in area, patient will Uber on their own"</em><br>rideBookingStatus → <strong>cancelled</strong>.<br>followUpActions += { action: ride_booking_cancelled, note: ... }<br>Audit trail preserved — admin can review why.', { color:'#dc2626', bg:'#fef2f2' })}
+  ${arrow('either way — referral approval flow continues separately')}
+  ${step('Patient arrives → Sarah clicks <strong>✓ Approve & log patient</strong> as normal.<br>Counters trigger.<br>Audit trail shows: ride asked → ride booked (or cancelled) → patient logged.', { color:'#22c55e', bg:'#dcfce7' })}
+</div>
+`;
+
 const scenario5 = `
 <div class="scenario">
   <h2>SCENARIO 5 — Auto-expire safety net (no action by end of 1.5h)</h2>
@@ -210,7 +236,7 @@ const html = `<!doctype html>
     <span style="font-size:11px;opacity:.85">Marketing Planner — Referral System</span>
   </div>
   <h1 style="margin-top:60px">Referral System</h1>
-  <div class="sub">6 end-to-end scenarios for review</div>
+  <div class="sub">7 end-to-end scenarios for review</div>
   <div class="sub" style="font-size:13px;opacity:.8">Prepared for manager approval</div>
   <div class="meta">${dateStr}<br>By Mahmoud Althaher</div>
 </div>
@@ -219,8 +245,8 @@ const html = `<!doctype html>
   <h2>🎨 Legend — color-coded actors</h2>
   <div class="legend-grid">
     <div class="legend-item" style="border-left:4px solid #3b82f6"><strong style="color:#1e3a8a">👥 Marketing Member</strong>Sadia, Duaa, Dr Asin, Abrar. Creates referrals + owns follow-up if patient is late.</div>
-    <div class="legend-item" style="border-left:4px solid #f59e0b"><strong style="color:#92400e">🏥 UC Plano Front Desk</strong>Creates referrals when sending their patients to an ER. Always has patient phone.</div>
-    <div class="legend-item" style="border-left:4px solid #ec4899"><strong style="color:#9d174d">🏥 Destination Facility FD</strong>Frisco ER or Castle Hills ER. Approves incoming referrals + logs patients on arrival.</div>
+    <div class="legend-item" style="border-left:4px solid #f59e0b"><strong style="color:#92400e">🏥 UC Plano Front Desk</strong>Creates referrals when sending their patients to an ER. Always has patient phone. <strong>Asks</strong> about ride — does NOT book (no Uber Health account).</div>
+    <div class="legend-item" style="border-left:4px solid #ec4899"><strong style="color:#9d174d">🏥 Destination Facility FD</strong>Frisco ER or Castle Hills ER. Approves incoming referrals + logs patients on arrival. <strong>Books the Uber Health ride</strong> when the patient accepted at UC Plano.</div>
     <div class="legend-item" style="border-left:4px solid #7c3aed"><strong style="color:#5b21b6">🛡️ Admin</strong>Mahmoud. Can approve any referral as override. Audit-noted.</div>
     <div class="legend-item" style="border-left:4px solid #22c55e"><strong style="color:#14532d">📞 Patient</strong>The person being referred. Phone optional but enables follow-up calls + ride offers.</div>
     <div class="legend-item" style="border-left:4px solid #64748b"><strong style="color:#0f172a">⚙️ System / Automation</strong>Auto-fires popups, auto-expires after 1.5h, tracks audit log.</div>
@@ -237,6 +263,7 @@ const html = `<!doctype html>
     <li><strong>Fuzzy name matching</strong> — "Pediatric Associates" vs "Pediatrics Associates of Frisco" collapse to the same key. Catches typo / pluralization variants.</li>
     <li><strong>Admin notified on every block</strong> — blocked duplicate attempts appear in the Activity Feed so admin can audit member behavior.</li>
     <li><strong>Spending + lead status required for Completed</strong> — visits can't be marked Completed without both fields. Retro-audit modal lists pre-existing violations to admin.</li>
+    <li><strong>🚗 Uber Health split of duty</strong> — UC Plano FD ASKS the patient (no Uber Health account). Destination FD (Frisco ER or Castle Hills ER) BOOKS the ride from their Uber Health account. Tracked end-to-end via rideBookingStatus + audit log. See Scenario 7.</li>
   </ul>
 </div>
 
@@ -246,11 +273,28 @@ ${scenario3}
 ${scenario4}
 ${scenario5}
 ${scenario6}
+${scenario7}
 
 </body></html>`;
 
 (async () => {
   if(!fs.existsSync(OUT_DIR)) fs.mkdirSync(OUT_DIR, { recursive: true });
+  // Probe-write to detect a file lock (user has PDF open in viewer) BEFORE
+  // spinning up Chromium. If locked, switch to a timestamped sibling so the
+  // build still produces output. Either way the user gets the new content.
+  try {
+    if(fs.existsSync(OUT_PDF_PRIMARY)){
+      const fd = fs.openSync(OUT_PDF_PRIMARY, 'r+');
+      fs.closeSync(fd);
+    }
+  } catch (e) {
+    if(e && (e.code === 'EBUSY' || e.code === 'EPERM' || e.code === 'EACCES')){
+      const ts = new Date().toISOString().replace(/[:.]/g,'-').replace('T','_').slice(0,19);
+      OUT_PDF = path.join(OUT_DIR, 'Referral Scenarios (updated ' + ts + ').pdf');
+      console.log('⚠ Primary PDF is locked (open in a viewer). Writing to:');
+      console.log('  ' + OUT_PDF);
+    } else { throw e; }
+  }
   const browser = await chromium.launch();
   const ctx = await browser.newContext();
   const page = await ctx.newPage();
