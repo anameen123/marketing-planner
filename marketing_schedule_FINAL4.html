@@ -2482,6 +2482,27 @@ body.role-front_desk #referrals-view {
         <div style="font-size:10px;color:#1e40af;margin-top:4px;font-style:italic">UC Plano is sending the patient to one of the ERs. Type your name so it's clear who created this referral.</div>
       </div>
 
+      <!-- Section 1b: Patient + contact info (per user 2026-05-26 follow-up plan).
+           At least ONE phone is required (patient OR source clinic) so the
+           follow-up flow has someone to call when the patient is late. -->
+      <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">👤 Patient + contact</div>
+      <div style="margin-bottom:10px">
+        <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Patient name <span style="color:#dc2626">*</span></label>
+        <input type="text" id="cr-patient-name" placeholder="e.g. Maria Lopez" oninput="_crUpdateConditionalFields()" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+        <div>
+          <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Patient phone</label>
+          <input type="tel" id="cr-patient-phone" placeholder="(214) 555-1234" oninput="_crUpdateConditionalFields()" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Source clinic phone</label>
+          <input type="tel" id="cr-clinic-phone" placeholder="(972) 555-9090" oninput="_crUpdateConditionalFields()" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box">
+        </div>
+      </div>
+      <div id="cr-phone-err-hint" style="font-size:10px;color:#dc2626;font-weight:600;margin-bottom:12px;font-style:italic;display:none">⚠ At least one phone is required so we have someone to call when the patient is late.</div>
+      <div id="cr-phone-ok-hint" style="font-size:10px;color:#16a34a;margin-bottom:12px;font-style:italic;display:none">✓ Got a phone — the follow-up flow can call this person.</div>
+
       <!-- Section 2: source. Hidden when creator-type is UC Plano FD —
            for UC Plano referrals the source IS UC Plano (no external picker). -->
       <div id="cr-source-section">
@@ -2508,11 +2529,53 @@ body.role-front_desk #referrals-view {
       <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">🏥 Destination — which WCG facility?</div>
       <div id="cr-destination-row" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:6px;margin-bottom:14px"></div>
 
-      <!-- Section 4: expected arrival + notes -->
+      <!-- Section 4: expected arrival — smart auto-suggest based on
+           source→destination distance (per user 2026-05-26 follow-up plan).
+           Sets the trigger for the late-patient popup later: ETA + 10 min. -->
       <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">📅 Expected arrival</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
         <input type="date" id="cr-expected-date" style="border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box">
         <input type="time" id="cr-expected-time" style="border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box">
+      </div>
+      <div id="cr-eta-suggest" style="display:none;margin-bottom:14px;background:#faf5ff;border:1px solid #d8b4fe;border-radius:6px;padding:7px 10px;font-size:11px;color:#6b21a8;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
+        <span id="cr-eta-suggest-text">💡 Auto-suggest computing…</span>
+        <button type="button" onclick="_crApplyAutoETA()" style="background:#7c3aed;color:#fff;border:none;border-radius:5px;padding:4px 11px;font-size:10px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">Use this ETA</button>
+      </div>
+
+      <!-- Section 4b: Pre-contact / ride offer — conditional on creator + phones.
+           Per user 2026-05-26: UC Plano gets a ride-offer picker; members get
+           a pre-contact confirmation checkbox. -->
+      <div id="cr-ride-section" style="display:none;margin-bottom:14px;padding:11px 13px;background:#eff6ff;border:1px solid #93c5fd;border-radius:8px">
+        <div style="font-size:11px;font-weight:700;color:#1e40af;margin-bottom:8px">🚗 Ride offer (UC Plano)</div>
+        <div style="font-size:10px;color:#1e40af;margin-bottom:8px;line-height:1.45">You have the patient in front of you — ask if they'd like a ride to the destination.</div>
+        <div style="display:flex;flex-direction:column;gap:5px">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:11px;color:#1F3864">
+            <input type="radio" name="cr-ride" value="no" onchange="_crUpdateConditionalFields()" style="accent-color:#1e40af">
+            <span>No, didn't ask</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:11px;color:#1F3864">
+            <input type="radio" name="cr-ride" value="declined" onchange="_crUpdateConditionalFields()" style="accent-color:#1e40af">
+            <span>Asked, patient declined</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:11px;color:#1F3864">
+            <input type="radio" name="cr-ride" value="accepted" onchange="_crUpdateConditionalFields()" style="accent-color:#1e40af">
+            <span>Asked, patient accepted — book a ride</span>
+          </label>
+        </div>
+      </div>
+
+      <div id="cr-precontact-patient" style="display:none;margin-bottom:14px;padding:11px 13px;background:#fef3c7;border:1px solid #fcd34d;border-radius:8px">
+        <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:11px;color:#7c2d12;line-height:1.5">
+          <input type="checkbox" id="cr-precontact-patient-chk" onchange="_crUpdateConditionalFields()" style="accent-color:#f59e0b;margin-top:2px">
+          <span><b>⚠ Pre-contact required (you have patient phone)</b><br>I called or texted the patient confirming they're expected at the destination. <span style="color:#92400e">Without this checked, you can't submit.</span></span>
+        </label>
+      </div>
+
+      <div id="cr-precontact-clinic" style="display:none;margin-bottom:14px;padding:11px 13px;background:#fef3c7;border:1px solid #fcd34d;border-radius:8px">
+        <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:11px;color:#7c2d12;line-height:1.5">
+          <input type="checkbox" id="cr-precontact-clinic-chk" onchange="_crUpdateConditionalFields()" style="accent-color:#f59e0b;margin-top:2px">
+          <span><b>⚠ Pre-contact required (clinic-only)</b><br>I confirmed with the source clinic that the patient is heading to the destination. <span style="color:#92400e">Without this checked, you can't submit.</span></span>
+        </label>
       </div>
 
       <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">📝 Notes (optional)</div>
@@ -15877,7 +15940,7 @@ function openCreateReferralForm(){
   if(destRow){
     destRow.innerHTML = REFERRAL_FACILITIES.map(function(f){
       return '<label style="display:flex;align-items:center;gap:6px;background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:9px 12px;cursor:pointer;font-size:11px;font-weight:600;color:var(--text)">'
-        + '<input type="radio" name="cr-dest" value="' + f.key + '" style="accent-color:#7c3aed">'
+        + '<input type="radio" name="cr-dest" value="' + f.key + '" onchange="_crUpdateConditionalFields()" style="accent-color:#7c3aed">'
         + '<span>🏥 ' + f.label + '</span>'
         + '</label>';
     }).join('');
@@ -15891,10 +15954,24 @@ function openCreateReferralForm(){
   // Clear notes
   var nEl = document.getElementById('cr-notes');
   if(nEl) nEl.value = '';
+  // Per Phase 19: reset new fields (patient name, phones, ride, pre-contact)
+  ['cr-patient-name','cr-patient-phone','cr-clinic-phone'].forEach(function(id){
+    var el = document.getElementById(id); if(el) el.value = '';
+  });
+  document.querySelectorAll('input[name="cr-ride"]').forEach(function(r){ r.checked = false; });
+  ['cr-precontact-patient-chk','cr-precontact-clinic-chk'].forEach(function(id){
+    var el = document.getElementById(id); if(el) el.checked = false;
+  });
+  ['cr-ride-section','cr-precontact-patient','cr-precontact-clinic','cr-eta-suggest','cr-phone-err-hint','cr-phone-ok-hint'].forEach(function(id){
+    var el = document.getElementById(id); if(el) el.style.display = 'none';
+  });
+  window._CR_AUTO_ETA = null;
   // Clear error
   var errEl = document.getElementById('cr-form-err');
   if(errEl){ errEl.style.display = 'none'; errEl.textContent = ''; }
   modal.style.display = 'flex';
+  // Trigger initial conditional sync (no-op until creator type selected)
+  if(typeof _crUpdateConditionalFields === 'function') _crUpdateConditionalFields();
 }
 window.openCreateReferralForm = openCreateReferralForm;
 
@@ -15907,6 +15984,108 @@ window.closeCreateReferralForm = closeCreateReferralForm;
 // Phase 11b: toggle the two creator-type panels based on radio pick.
 // Also toggles the source-picker visibility — UC Plano referrals don't
 // need an external source picker (UC Plano IS the source).
+// ── PHASE 19 — REFERRAL FORM CONDITIONAL UX (per user 2026-05-26) ──────────
+// Three scenarios determine which conditional sections show + which checkbox
+// is required to submit:
+//   • UC Plano FD creator      → ride-offer picker required
+//   • Member + patient phone   → "called/texted patient" checkbox required
+//   • Member + only clinic ph  → "clinic notified" checkbox required
+// Also: at least ONE phone (patient OR clinic) is required for follow-up.
+function _crUpdateConditionalFields(){
+  var creator = document.querySelector('input[name="cr-creator-type"]:checked');
+  var creatorType = creator ? creator.value : '';
+  var patientPhone = (document.getElementById('cr-patient-phone') || {}).value.trim();
+  var clinicPhone  = (document.getElementById('cr-clinic-phone')  || {}).value.trim();
+  var hasAnyPhone = !!(patientPhone || clinicPhone);
+  // Phone-hint state
+  var errH = document.getElementById('cr-phone-err-hint');
+  var okH  = document.getElementById('cr-phone-ok-hint');
+  if(errH) errH.style.display = (!hasAnyPhone && creatorType) ? 'block' : 'none';
+  if(okH)  okH.style.display  = (hasAnyPhone) ? 'block' : 'none';
+  // Conditional sections (mutually exclusive)
+  var rideEl  = document.getElementById('cr-ride-section');
+  var pPatEl  = document.getElementById('cr-precontact-patient');
+  var pCliEl  = document.getElementById('cr-precontact-clinic');
+  if(rideEl) rideEl.style.display = (creatorType === 'uc_plano_fd') ? 'block' : 'none';
+  // For members: which checkbox depends on which phone they entered
+  var showPatientPre = (creatorType === 'member' && patientPhone);
+  var showClinicPre  = (creatorType === 'member' && !patientPhone && clinicPhone);
+  if(pPatEl) pPatEl.style.display = showPatientPre ? 'block' : 'none';
+  if(pCliEl) pCliEl.style.display = showClinicPre  ? 'block' : 'none';
+  // Auto-suggest ETA whenever inputs change (recomputes)
+  if(typeof _crRecomputeAutoETA === 'function') _crRecomputeAutoETA();
+}
+window._crUpdateConditionalFields = _crUpdateConditionalFields;
+
+// Compute distance from source → destination, propose ETA = now + drive time
+// + 5 min buffer. Shows the suggestion banner once both source + destination
+// are picked.
+function _crRecomputeAutoETA(){
+  var suggestEl = document.getElementById('cr-eta-suggest');
+  var suggestTxt = document.getElementById('cr-eta-suggest-text');
+  if(!suggestEl || !suggestTxt) return;
+  var creator = document.querySelector('input[name="cr-creator-type"]:checked');
+  var creatorType = creator ? creator.value : '';
+  var sourceName;
+  if(creatorType === 'uc_plano_fd'){
+    sourceName = 'Urgent Care Plano';
+  } else {
+    var srcInp = document.getElementById('cr-source');
+    sourceName = (srcInp && srcInp.value || '').trim();
+  }
+  var destRadio = document.querySelector('input[name="cr-dest"]:checked');
+  if(!sourceName || !destRadio){ suggestEl.style.display = 'none'; return; }
+  // Resolve coords
+  var sourceCoord;
+  if(creatorType === 'uc_plano_fd'){
+    sourceCoord = { lat: 33.0464, lng: -96.7558 };   // UC Plano
+  } else if(typeof getCoordForBusiness === 'function'){
+    sourceCoord = getCoordForBusiness(sourceName);
+  }
+  if(!sourceCoord){ suggestEl.style.display = 'none'; return; }
+  // Destination coord from WCG_FACILITY_LABELS (defined in Phase 17)
+  var facKey = destRadio.value;
+  var fac = (typeof WCG_FACILITY_LABELS !== 'undefined') ? WCG_FACILITY_LABELS.find(function(f){ return f.key === facKey; }) : null;
+  if(!fac){
+    // Fallback: try ROUTE_COORDS
+    if(typeof ROUTE_COORDS !== 'undefined' && ROUTE_COORDS[facKey]){
+      fac = { lat: ROUTE_COORDS[facKey].lat, lng: ROUTE_COORDS[facKey].lng, name: ROUTE_COORDS[facKey].label };
+    }
+  }
+  if(!fac){ suggestEl.style.display = 'none'; return; }
+  // Haversine miles → urban drive time
+  function haversineMi(a, b){
+    var R = 3958.8, toRad = function(d){ return d * Math.PI / 180; };
+    var dLat = toRad(b.lat - a.lat), dLng = toRad(b.lng - a.lng);
+    var la1 = toRad(a.lat), la2 = toRad(b.lat);
+    var h = Math.sin(dLat/2)*Math.sin(dLat/2) + Math.cos(la1)*Math.cos(la2)*Math.sin(dLng/2)*Math.sin(dLng/2);
+    return 2 * R * Math.asin(Math.sqrt(h));
+  }
+  var mi = haversineMi(sourceCoord, fac);
+  var driveMin = Math.round((mi * 1.4 / 30) * 60);
+  var totalMin = driveMin + 5;   // 5 min buffer (per user 2026-05-26)
+  var arrival = new Date(Date.now() + totalMin * 60 * 1000);
+  var hh = String(arrival.getHours()).padStart(2, '0');
+  var mm = String(arrival.getMinutes()).padStart(2, '0');
+  window._CR_AUTO_ETA = { iso: arrival.toISOString(), hhmm: hh + ':' + mm, driveMin: driveMin };
+  suggestEl.style.display = 'flex';
+  suggestTxt.innerHTML = '💡 Auto-suggest: <b>' + driveMin + ' min</b> drive from ' + sourceName + ' + 5 min = <b>' + hh + ':' + mm + '</b>';
+}
+window._crRecomputeAutoETA = _crRecomputeAutoETA;
+
+function _crApplyAutoETA(){
+  var auto = window._CR_AUTO_ETA;
+  if(!auto) return;
+  var dateEl = document.getElementById('cr-expected-date');
+  var timeEl = document.getElementById('cr-expected-time');
+  if(dateEl && !dateEl.value){
+    var t = new Date();
+    dateEl.value = t.getFullYear() + '-' + String(t.getMonth()+1).padStart(2,'0') + '-' + String(t.getDate()).padStart(2,'0');
+  }
+  if(timeEl) timeEl.value = auto.hhmm;
+}
+window._crApplyAutoETA = _crApplyAutoETA;
+
 function _crCreatorTypeChanged(){
   var picked = document.querySelector('input[name="cr-creator-type"]:checked');
   var type = picked ? picked.value : '';
@@ -15935,6 +16114,8 @@ function _crCreatorTypeChanged(){
       }
     }
   }
+  // Per Phase 19: refresh conditional sections (ride / pre-contact / phone hints)
+  if(typeof _crUpdateConditionalFields === 'function') _crUpdateConditionalFields();
 }
 window._crCreatorTypeChanged = _crCreatorTypeChanged;
 
@@ -15999,6 +16180,8 @@ function _crPickSource(name){
   if(inp) inp.value = name;
   var sug = document.getElementById('cr-source-suggest');
   if(sug) sug.style.display = 'none';
+  // Per Phase 19: recompute ETA suggestion now that source is locked in
+  if(typeof _crUpdateConditionalFields === 'function') _crUpdateConditionalFields();
 }
 window._crPickSource = _crPickSource;
 
@@ -16071,7 +16254,35 @@ function _crSaveReferral(){
   } else {
     showErr('Unknown creator type.'); return;
   }
+  // Per Phase 19 (2026-05-26): new required + conditional fields
+  var patientName = ((document.getElementById('cr-patient-name') || {}).value || '').trim();
+  if(!patientName){ showErr('Enter the patient name.'); return; }
+  var patientPhone = ((document.getElementById('cr-patient-phone') || {}).value || '').trim();
+  var clinicPhone  = ((document.getElementById('cr-clinic-phone')  || {}).value || '').trim();
+  if(!patientPhone && !clinicPhone){
+    showErr('Enter at least ONE phone (patient or source clinic) so we can follow up if the patient is late.');
+    return;
+  }
+  // Conditional confirmations per scenario
+  var rideRequested = null;
+  var preContactConfirmed = false;
+  if(creatorRole === 'uc_plano_fd'){
+    var rideRadio = document.querySelector('input[name="cr-ride"]:checked');
+    if(!rideRadio){ showErr('Did you offer the patient a ride? Pick an option.'); return; }
+    rideRequested = rideRadio.value;   // 'no' | 'declined' | 'accepted'
+    preContactConfirmed = true;   // UC Plano has the patient in front of them
+  } else if(creatorRole === 'marketing'){
+    if(patientPhone){
+      var chk = document.getElementById('cr-precontact-patient-chk');
+      if(!chk || !chk.checked){ showErr('Confirm you called or texted the patient before submitting.'); return; }
+    } else {
+      var chk2 = document.getElementById('cr-precontact-clinic-chk');
+      if(!chk2 || !chk2.checked){ showErr('Confirm you notified the source clinic before submitting.'); return; }
+    }
+    preContactConfirmed = true;
+  }
   var nowIso = new Date().toISOString();
+  var autoETA = (window._CR_AUTO_ETA && window._CR_AUTO_ETA.iso) || null;
   var entry = {
     id: 'pref_' + Date.now() + '_' + Math.random().toString(36).slice(2,8),
     createdAt: nowIso,
@@ -16086,7 +16297,15 @@ function _crSaveReferral(){
     expectedAt: expectedAt,
     status: 'pending',
     notes: notes.trim(),
-    linkedPatientLogId: null
+    linkedPatientLogId: null,
+    // Per Phase 19 (2026-05-26): follow-up data captured at creation
+    patientName: patientName,
+    patientPhone: patientPhone || null,
+    sourceClinicPhone: clinicPhone || null,
+    autoETA: autoETA,
+    rideRequested: rideRequested,             // null for members, 'no'|'declined'|'accepted' for UC Plano
+    preContactConfirmed: preContactConfirmed, // gate enforced at submit
+    followUpActions: []                        // audit log appended by follow-up engine (Phase B)
   };
   PENDING_REFERRALS.push(entry);
   _savePendingReferrals();
