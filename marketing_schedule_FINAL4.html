@@ -6717,12 +6717,60 @@ function _acUpdateSaveButton(){
   }
 }
 
+// ── PHASE 19f — AI VERIFICATION OF NEW BANK CARDS (per user 2026-05-26) ────
+// Before saveNewClinic / saveNewMVA writes to the bank, AI verifies the
+// name + city + doctor (or firm + city) actually matches a real Google Maps
+// listing. Blocks fake / typo entries. Uses GitHub Models (free 50/day).
+function _verifyClinicWithAI(opts){
+  return new Promise(function(resolve, reject){
+    if(typeof _callAIChat !== 'function'){ resolve({ match: true, reason: 'AI not available — skipped check' }); return; }
+    if(typeof hasGeminiKey !== 'function' || !hasGeminiKey()){
+      // Without a token, we can't verify. Reject with a clear reason rather
+      // than silently allowing (the user explicitly wanted Google check).
+      reject(new Error('No GitHub Models token set. Open ⚙ Map v2 to paste one before adding new clinics/MVAs.'));
+      return;
+    }
+    var isMva = opts.type === 'mva';
+    var prompt = ''
+      + 'You are verifying whether a medical clinic / MVA attorney firm is REAL based on what you know about businesses in Texas.\n\n'
+      + 'ENTRY TO VERIFY:\n'
+      + '  Type:     ' + (isMva ? 'MVA / personal-injury law firm' : 'medical clinic') + '\n'
+      + '  Name:     ' + (opts.name || '?') + '\n'
+      + '  City:     ' + (opts.city || '?') + ', Texas\n'
+      + '  ' + (isMva ? 'Lead attorney' : 'Physician') + ': ' + (opts.doctor || '?') + '\n\n'
+      + 'TASK: Decide if this is plausibly a REAL business (would have a Google Maps listing). Use the city + ' + (isMva ? 'attorney' : 'physician') + ' name as cross-references. Be strict — typos, fake-sounding names, or unverifiable combinations should fail.\n\n'
+      + 'OUTPUT (JSON only, no markdown):\n'
+      + '{\n'
+      + '  "match": true|false,\n'
+      + '  "confidence": "high"|"medium"|"low",\n'
+      + '  "reason": "<one sentence — why you decided this>"\n'
+      + '}\n';
+    _callAIChat(prompt, { temperature: 0.2, maxTokens: 200, wantJson: true })
+      .then(function(text){
+        var parsed = null;
+        try { parsed = JSON.parse(text); }
+        catch(_){ var m = String(text||'').match(/\{[\s\S]*\}/); if(m){ try { parsed = JSON.parse(m[0]); } catch(_2){} } }
+        if(!parsed || typeof parsed.match !== 'boolean'){
+          resolve({ match: false, reason: 'AI returned no usable answer.' });
+          return;
+        }
+        // Treat low-confidence YES as a NO to be safe (user said "if it
+        // doesn't match then you will not allow them to add it")
+        if(parsed.match && parsed.confidence === 'low'){
+          resolve({ match: false, reason: 'AI not confident enough: ' + (parsed.reason || '') });
+          return;
+        }
+        resolve({ match: !!parsed.match, reason: parsed.reason || '', confidence: parsed.confidence || '' });
+      })
+      .catch(function(err){ reject(err); });
+  });
+}
+window._verifyClinicWithAI = _verifyClinicWithAI;
+
 function saveNewClinic(){
-  // Per user 2026-05-22 (clarified): members ARE allowed to add clinics, but
-  // they must provide all the data — admin can skip optional fields, members
-  // cannot. The dedupe rule below applies to everyone regardless.
-  var isAdminUser = (typeof isAdmin === 'function') && isAdmin();
-  // Hard block: don't save if Gemini fields are still unverified
+  // Per user 2026-05-26 HARDENED: EVERYONE (members + admin) must provide
+  // physician + address + phone AND pass the AI Google-existence check.
+  // No bypasses. No exceptions.
   if(AC_PENDING_VERIFY.size > 0){
     showToast('Verify ' + AC_PENDING_VERIFY.size + ' AI-filled field(s) before saving.');
     return;
@@ -6738,23 +6786,43 @@ function saveNewClinic(){
   var website = ((document.getElementById('clinic-add-website') || {}).value || '').trim();
   var address = ((document.getElementById('clinic-add-address') || {}).value || '').trim();
   if(website && !/^https?:\/\//i.test(website)) website = 'https://' + website;
-  // Name + City are required for EVERYONE
+  // Required fields (EVERYONE per user 2026-05-26)
   if(!name||!city){ showToast('Clinic name and city are required.'); return; }
-  // ── REQUIRED FIELDS FOR MEMBERS (per user 2026-05-22) ────────────────────
-  // Admin can leave optional fields blank (TBD). Members must provide the
-  // physician name + a street address. "If they want to add a clinic, they
-  // need to provide all the data" — same rule we'll later apply to the
-  // visit-bank-card-add flow.
-  if(!isAdminUser){
-    var missing = [];
-    if(!doctor || doctor.toLowerCase() === 'tbd') missing.push('Physician name');
-    if(!address)                                  missing.push('Street address');
-    if(!phone)                                    missing.push('Phone number');
-    if(missing.length){
-      showToast('Please fill in: ' + missing.join(', ') + '. Members must provide complete info when adding a clinic — only admin can leave fields blank.');
-      return;
-    }
+  var missing = [];
+  if(!doctor || doctor.toLowerCase() === 'tbd') missing.push('Physician name');
+  if(!address) missing.push('Street address');
+  if(!phone)   missing.push('Phone number');
+  if(missing.length){
+    showToast('Please fill in: ' + missing.join(', ') + '. Required for everyone — admin too.');
+    return;
   }
+  // AI Google-existence verification (per user 2026-05-26).
+  // Sends name + city + doctor to GitHub Models — if AI can't confirm a
+  // real Google Maps listing match, block. Prevents typo / fake clinics
+  // from entering the bank.
+  if(typeof _verifyClinicWithAI === 'function'){
+    _verifyClinicWithAI({ name: name, city: city, doctor: doctor, type: 'clinic' })
+      .then(function(result){
+        if(!result || !result.match){
+          showToast('🤖 AI couldn\'t confirm "' + name + '" exists at ' + city + ' with ' + doctor + '. ' + (result && result.reason ? result.reason : 'Check spelling + try again.'));
+          return;
+        }
+        _saveNewClinicAfterAIVerify({ name:name, city:city, doctor:doctor, spec:spec, notes:notes, phone:phone, fax:fax, website:website, address:address });
+      })
+      .catch(function(err){
+        showToast('AI verification error: ' + (err && err.message || err) + '. Try again or ask admin.');
+      });
+    return;
+  }
+  // Fallback if AI helper isn't loaded — proceed with dedupe + save
+  _saveNewClinicAfterAIVerify({ name:name, city:city, doctor:doctor, spec:spec, notes:notes, phone:phone, fax:fax, website:website, address:address });
+}
+
+// Post-AI-verification continuation. Runs the existing dedupe + save flow
+// that was previously inline in saveNewClinic.
+function _saveNewClinicAfterAIVerify(opts){
+  var name = opts.name, city = opts.city, doctor = opts.doctor, spec = opts.spec, notes = opts.notes;
+  var phone = opts.phone, fax = opts.fax, website = opts.website, address = opts.address;
   // Per user 2026-05-22: smart dedupe.
   //  • Same name + same city + same doctor  → block (true duplicate)
   //  • Same name + same city + diff doctor  → WARN + confirm (separate card OK)
@@ -7097,41 +7165,73 @@ function openAddMVA(){
 }
 function closeAddMVA(){document.getElementById('add-mva-modal').style.display='none';}
 function saveNewMVA(){
-  // Per user 2026-05-22 audit: MVA creation is admin-only.
-  if(typeof isAdmin === 'function' && !isAdmin()){
-    if(typeof showToast === 'function') showToast('Admin only — only admin can add MVA attorneys to the bank.');
-    return;
-  }
+  // Per user 2026-05-26 HARDENED: anyone (members included) can add an MVA
+  // firm to the bank IF they provide complete info AND pass AI Google-existence
+  // verification. Was previously admin-only — now everyone with the right
+  // workflow, no admin bypass for incomplete data.
   var firm=(document.getElementById('mva-add-firm').value||'').trim();
   var city=document.getElementById('mva-add-city').value;
   var attorney = (document.getElementById('mva-add-attorney').value || '').trim();
+  var phone   = ((document.getElementById('mva-add-phone')   || {}).value || '').trim();
+  var address = ((document.getElementById('mva-add-address') || {}).value || '').trim();
   if(!firm||!city){showToast('Firm name and city are required.');return;}
+  var missing = [];
+  if(!attorney || attorney.toLowerCase() === 'tbd') missing.push('Lead attorney name');
+  if(!address || address.toLowerCase() === 'tbd')   missing.push('Street address');
+  if(!phone   || phone.toLowerCase() === 'tbd')     missing.push('Phone number');
+  if(missing.length){
+    showToast('Please fill in: ' + missing.join(', ') + '. Required for everyone — no exceptions.');
+    return;
+  }
   // Block exact-match name duplicates across clinic + MVA + outreach
   if(_guardDuplicateBusiness(firm)) return;
   // Block composite-key duplicates: same city + same attorney = same firm
   // even if the name typed is different.
   if(_guardDuplicateByLocationAndContact('mva', city, attorney)) return;
-  showConfirm({icon:'?',msg:'Add "'+firm+'"?',sub:'New MVA attorney for '+city,yesLabel:'Add',danger:false,onConfirm:function(){
+  // AI Google-existence verification (per user 2026-05-26)
+  if(typeof _verifyClinicWithAI === 'function'){
+    _verifyClinicWithAI({ name: firm, city: city, doctor: attorney, type: 'mva' })
+      .then(function(result){
+        if(!result || !result.match){
+          showToast('🤖 AI couldn\'t confirm "' + firm + '" exists at ' + city + ' with attorney ' + attorney + '. ' + (result && result.reason ? result.reason : 'Check spelling + try again.'));
+          return;
+        }
+        _saveNewMvaAfterAIVerify({ firm: firm, city: city, attorney: attorney, phone: phone, address: address });
+      })
+      .catch(function(err){
+        showToast('AI verification error: ' + (err && err.message || err) + '. Try again or ask admin.');
+      });
+    return;
+  }
+  // Fallback if AI helper isn't loaded
+  _saveNewMvaAfterAIVerify({ firm: firm, city: city, attorney: attorney, phone: phone, address: address });
+}
+
+function _saveNewMvaAfterAIVerify(opts){
+  var firm = opts.firm, city = opts.city, attorney = opts.attorney, phone = opts.phone, address = opts.address;
+  showConfirm({icon:'?',msg:'Add "'+firm+'"?',sub:'New MVA attorney for '+city+' · ✓ AI-verified',yesLabel:'Add',danger:false,onConfirm:function(){
     var _mvaWebsite = ((document.getElementById('mva-add-website')||{}).value||'').trim();
     if(_mvaWebsite && !/^https?:\/\//i.test(_mvaWebsite)) _mvaWebsite = 'https://' + _mvaWebsite;
     MVA_ATTORNEYS.push({
       id:'mva'+Date.now(),
       firm:firm,
-      attorney:(document.getElementById('mva-add-attorney').value||'TBD').trim(),
+      attorney: attorney,
       city:city,
-      phone:(document.getElementById('mva-add-phone').value||'TBD').trim(),
+      phone: phone,
       fax:((document.getElementById('mva-add-fax')||{}).value||'').trim(),
       website: _mvaWebsite,
-      address:(document.getElementById('mva-add-address').value||'TBD').trim(),
+      address: address,
       status:'Not Visited',
       notes:(document.getElementById('mva-add-notes').value||'').trim(),
       agent:'',
+      aiVerified: true,
       addedBy: (CURRENT_USER && CURRENT_USER.name) || '',
       addedAt: new Date().toISOString()
     });
-    closeAddMVA();renderMVABank();showToast('Attorney added: '+firm);
+    closeAddMVA();renderMVABank();showToast('Attorney added (AI-verified): '+firm);
   }});
 }
+window._saveNewMvaAfterAIVerify = _saveNewMvaAfterAIVerify;
 window.openAddMVA=openAddMVA;window.closeAddMVA=closeAddMVA;window.saveNewMVA=saveNewMVA;
 
 // ── CUSTOM CONFIRM MODAL ──────────────────────────────────────────────────────
