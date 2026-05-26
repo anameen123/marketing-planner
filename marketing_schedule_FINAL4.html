@@ -3468,7 +3468,7 @@ body.role-front_desk #referrals-view {
         <!-- STEP 1: Starting location -->
         <div id="rp-rw-step-1" class="rp-rw-step" style="display:block">
           <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:6px">Step 1 — Where do you start?</div>
-          <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Pick a starting point. If it's a clinic, it counts as your first visit.</div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Pick a starting point. If it's a clinic, MVA, or outreach stop, it counts as your first visit.</div>
           <div style="display:flex;flex-direction:column;gap:6px">
             <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;padding:8px;border:1px solid var(--border);border-radius:6px;background:#fff">
               <input type="radio" name="rp-rw-start-type" value="facility" checked onchange="_rpRwOnStartTypeChange()" style="cursor:pointer">
@@ -3480,7 +3480,7 @@ body.role-front_desk #referrals-view {
             </label>
             <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;padding:8px;border:1px solid var(--border);border-radius:6px;background:#fff">
               <input type="radio" name="rp-rw-start-type" value="clinic" onchange="_rpRwOnStartTypeChange()" style="cursor:pointer">
-              <span><b>🏥 Clinic</b> <span style="color:var(--muted)">— counts as visit #1</span></span>
+              <span><b>🏥 Clinic / ⚖ MVA / 📣 outreach</b> <span style="color:var(--muted)">— counts as visit #1</span></span>
             </label>
           </div>
           <!-- Per-type input panels (only one visible based on radio) -->
@@ -11257,7 +11257,7 @@ function renderHelpView(){
       ])
     + guideItem('plan-route-random', 'Plan a route — Random Pick wizard', [
         { title: 'Click 🧭 Plan a Route → 🎲 Random Pick', body: 'The 4-step wizard opens.' },
-        { title: 'Step 1 — pick start', body: 'Facility (Frisco / Castle Hills / Plano / Richardson) OR custom location (your home, anywhere) OR a clinic that counts as visit #1.' },
+        { title: 'Step 1 — pick start', body: 'Facility (Frisco / Castle Hills / Plano / Richardson) OR custom location (your home, anywhere) OR a clinic / MVA / outreach stop that counts as visit #1.' },
         { title: 'Step 2 — number of visits', body: 'How many stops total on this route. 1–12.' },
         { title: 'Step 3 — total time', body: 'How long you have (hours). 0.5–12.' },
         { title: 'Step 4 — minutes per stop', body: 'Time you spend at each clinic. Default 12 min. The wizard shows a live drive-budget preview.' },
