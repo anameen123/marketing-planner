@@ -25254,11 +25254,18 @@ function exportDayRouteToGoogleMaps(){
 
   // Collect stops in row order. Each stop = the most-useful query string
   // we can build for Google Maps (real address > "Name, City, TX" > coords).
-  // Skip canceled rows + rows we can't resolve at all.
+  // Per user 2026-05-26: skip Canceled + Completed + Postponed — the path
+  // is for the rep's REMAINING work. Because day.rows is read fresh on each
+  // click, closing Google Maps and re-clicking the button automatically
+  // regenerates the path to drop newly completed/postponed stops.
   var stops = [];
+  var droppedDone = 0;
   day.rows.forEach(function(r){
     if(!r || !r.clinic) return;
-    if(r.status === 'Canceled') return;
+    if(r.status === 'Canceled' || r.status === 'Completed' || r.status === 'Postponed'){
+      droppedDone++;
+      return;
+    }
     var query = _addressFor(r.clinic);
     if(!query){
       var c = (typeof getCoordForBusiness === 'function') ? getCoordForBusiness(r.clinic) : null;
@@ -25271,14 +25278,21 @@ function exportDayRouteToGoogleMaps(){
     }
   });
   if(stops.length === 0){
-    if(typeof showToast === 'function') showToast('None of this day\'s stops have an address or coords. Add at least one address first.');
+    if(typeof showToast === 'function'){
+      if(droppedDone > 0){
+        showToast('All visits are Completed / Postponed / Canceled — nothing left to navigate to. 🎉');
+      } else {
+        showToast('None of this day\'s stops have an address or coords. Add at least one address first.');
+      }
+    }
     return;
   }
+  var doneSuffix = droppedDone > 0 ? ' (' + droppedDone + ' finished/canceled stop' + (droppedDone===1?'':'s') + ' skipped)' : '';
   // Single-stop: open the place card directly.
   if(stops.length === 1){
     var urlOne = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(stops[0].query);
     window.open(urlOne, '_blank', 'noopener');
-    if(typeof showToast === 'function') showToast('🗺️ Opening ' + stops[0].name + ' in Google Maps…');
+    if(typeof showToast === 'function') showToast('🗺️ Opening ' + stops[0].name + ' in Google Maps…' + doneSuffix);
     return;
   }
   // Cap at 10 stops (Google Maps deep-link practical limit — 9 waypoints + dest).
@@ -25301,9 +25315,9 @@ function exportDayRouteToGoogleMaps(){
           + '&travelmode=driving';
   window.open(url, '_blank', 'noopener');
   if(truncated && typeof showToast === 'function'){
-    showToast('Exported first 10 stops to Google Maps. Add the rest from the Google Maps app if needed (deep-link limit).');
+    showToast('Exported first 10 stops to Google Maps' + doneSuffix + '. Add the rest from the Google Maps app if needed (deep-link limit).');
   } else if(typeof showToast === 'function'){
-    showToast('🗺️ Opening ' + stops.length + ' stops in Google Maps with full route…');
+    showToast('🗺️ Opening ' + stops.length + ' stops in Google Maps with full route…' + doneSuffix);
   }
 }
 window.exportDayRouteToGoogleMaps = exportDayRouteToGoogleMaps;
