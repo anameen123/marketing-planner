@@ -38402,26 +38402,44 @@ var KPI_TARGETS={
 // "finances/rankings" jumps to the right nested view. onAfter is a JS string
 // run after switchTab to drill into the sub-tab.
 var DASHBOARD_SECTIONS = [
-  // Top-level tabs
-  { label: 'Home',                 icon: '🏠', tab: 'home',      keywords: ['landing', 'start'] },
-  { label: 'Dashboard / Schedule', icon: '📅', tab: 'schedule',  keywords: ['calendar', 'planning calendar', 'visits'] },
-  { label: 'Team / Members',       icon: '👥', tab: 'members',   keywords: ['stats', 'staff', 'org', 'tree'] },
-  { label: 'Bank of Targets',      icon: '🏢', tab: 'bank',      keywords: ['businesses', 'targets'] },
-  { label: 'Referrals',            icon: '📋', tab: 'referrals', keywords: ['patient', 'pending', 'approved'] },
-  { label: 'Finances',             icon: '💰', tab: 'finances',  keywords: ['budget', 'money'] },
-  { label: 'Reports',              icon: '📋', tab: 'reports',   keywords: ['analytics', 'progress report'] },
-  { label: 'Activity Feed',        icon: '📡', tab: 'feed',      keywords: ['log', 'history', 'changes'] },
-  { label: 'Profile',              icon: '🪪', tab: 'profile',   keywords: ['account', 'settings', 'password'] },
-  // Sub-tabs under Bank
-  { label: 'Bank → Clinics',          icon: '🏥', tab: 'bank', after: "if(typeof switchOverallTab==='function')switchOverallTab('bank')", keywords: ['clinic', 'targets'] },
-  { label: 'Bank → MVA Attorneys',    icon: '⚖',  tab: 'bank', after: "if(typeof switchOverallTab==='function')switchOverallTab('mva')",  keywords: ['mva', 'attorney', 'law'] },
-  { label: 'Bank → Community Outreach',icon: '🏘', tab: 'bank', after: "if(typeof switchOverallTab==='function')switchOverallTab('outreach')", keywords: ['outreach', 'mosque', 'event'] },
-  // Sub-tabs under Finances
-  { label: 'Finances → Spending Log', icon: '📒', tab: 'finances', after: "if(typeof switchFinancesTab==='function')switchFinancesTab('log')",      keywords: ['spending', 'expenses', 'budget', 'log'] },
-  { label: 'Finances → Rankings',     icon: '🏆', tab: 'finances', after: "if(typeof switchFinancesTab==='function')switchFinancesTab('rankings')", keywords: ['ranking', 'leaderboard', 'clinic rank', 'member rank', 'mva rank', 'spending rank'] },
-  { label: 'Finances → Tier Settings',icon: '⚙', tab: 'finances', after: "if(typeof switchFinancesTab==='function')switchFinancesTab('tiers')",    keywords: ['tier', 'settings', 'thresholds', 'config'] },
-  // Status / leads page (legacy switchTab name)
-  { label: 'Status / Leads page',     icon: '📊', tab: 'leads-page', keywords: ['leads', 'status', 'pipeline', 'visit status'] }
+  // ── Top-level tabs ────────────────────────────────────────────────
+  { label: 'Home',                 icon: '🏠', tab: 'home',      keywords: ['landing', 'start', 'dashboard home'] },
+  { label: 'Dashboard / Schedule', icon: '📅', tab: 'schedule',  keywords: ['calendar', 'planning calendar', 'visits', 'plan a route', 'add visit'] },
+  { label: 'Team / Members',       icon: '👥', tab: 'members',   keywords: ['stats', 'staff', 'org', 'tree', 'profile'] },
+  { label: 'Bank of Targets',      icon: '🏢', tab: 'bank',      keywords: ['businesses', 'targets', 'clinics', 'mva', 'outreach'] },
+  { label: 'Referrals',            icon: '📋', tab: 'referrals', keywords: ['patient', 'pending', 'approved', 'log patient', 'create referral'] },
+  { label: 'Finances',             icon: '💰', tab: 'finances',  keywords: ['budget', 'money', 'spending', 'rankings'] },
+  { label: 'Reports',              icon: '📋', tab: 'reports',   keywords: ['analytics', 'progress report', 'pdf', 'print'] },
+  { label: 'Activity Feed',        icon: '📡', tab: 'feed',      keywords: ['log', 'history', 'changes', 'audit'] },
+  { label: 'Profile',              icon: '🪪', tab: 'profile',   keywords: ['account', 'settings', 'password', 'kpi', 'me'] },
+  { label: 'Status / Leads page',  icon: '📊', tab: 'leads-page', keywords: ['leads', 'status', 'pipeline', 'visit status'] },
+  // ── Team sub-tabs ─────────────────────────────────────────────────
+  { label: 'Team → Tree (Org chart)', icon: '🌳', tab: 'members', after: "if(typeof switchTeamTab==='function')switchTeamTab('tree')",  keywords: ['org', 'tree', 'chart', 'hierarchy', 'organization'] },
+  { label: 'Team → Stats',            icon: '📊', tab: 'members', after: "if(typeof switchTeamTab==='function')switchTeamTab('stats')", keywords: ['stats', 'team stats', 'team performance', 'leaderboard'] },
+  // ── Bank sub-tabs (top-level: overall/visits/podcast/status) ─────
+  { label: 'Bank → Bank of Targets', icon: '🏢', tab: 'bank', after: "if(typeof switchClinicTab==='function')switchClinicTab('overall')", keywords: ['overall', 'targets', 'businesses'] },
+  { label: 'Bank → Visits',          icon: '📋', tab: 'bank', after: "if(typeof switchClinicTab==='function')switchClinicTab('visits')",  keywords: ['visits', 'completed visits', 'canceled'] },
+  { label: 'Bank → Podcast Schedule',icon: '🎙', tab: 'bank', after: "if(typeof switchClinicTab==='function')switchClinicTab('podcast')", keywords: ['podcast', 'wcg podcast', 'schedule'] },
+  { label: 'Bank → Status',          icon: '📈', tab: 'bank', after: "if(typeof switchClinicTab==='function')switchClinicTab('status')",  keywords: ['status', 'lead status', 'pipeline'] },
+  // ── Bank → Overall nested (Clinics/MVAs/Outreach) ────────────────
+  { label: 'Bank → Clinics',           icon: '🏥', tab: 'bank', after: "if(typeof switchClinicTab==='function')switchClinicTab('overall');if(typeof switchOverallTab==='function')switchOverallTab('bank')", keywords: ['clinic', 'targets', 'all clinics'] },
+  { label: 'Bank → MVA Attorneys',     icon: '⚖',  tab: 'bank', after: "if(typeof switchClinicTab==='function')switchClinicTab('overall');if(typeof switchOverallTab==='function')switchOverallTab('mva')",  keywords: ['mva', 'attorney', 'law', 'lawyer'] },
+  { label: 'Bank → Community Outreach',icon: '🏘', tab: 'bank', after: "if(typeof switchClinicTab==='function')switchClinicTab('overall');if(typeof switchOverallTab==='function')switchOverallTab('outreach')", keywords: ['outreach', 'mosque', 'event', 'community'] },
+  // ── Finances sub-tabs ────────────────────────────────────────────
+  { label: 'Finances → Spending Log',  icon: '📒', tab: 'finances', after: "if(typeof switchFinancesTab==='function')switchFinancesTab('log')",      keywords: ['spending', 'expenses', 'budget', 'log', 'spending log'] },
+  { label: 'Finances → Rankings',      icon: '🏆', tab: 'finances', after: "if(typeof switchFinancesTab==='function')switchFinancesTab('rankings')", keywords: ['ranking', 'leaderboard', 'clinic rank', 'member rank', 'mva rank', 'spending rank'] },
+  { label: 'Finances → Tier Settings', icon: '⚙', tab: 'finances', after: "if(typeof switchFinancesTab==='function')switchFinancesTab('tiers')",    keywords: ['tier', 'settings', 'thresholds', 'config'] },
+  // ── Finances → Rankings nested sub-rankings ──────────────────────
+  { label: 'Rankings → Clinics',       icon: '🏥', tab: 'finances', after: "if(typeof switchFinancesTab==='function')switchFinancesTab('rankings');if(typeof switchRankingsSub==='function')setTimeout(function(){switchRankingsSub('clinics')},120)", keywords: ['rank clinic', 'clinic leaderboard', 'top clinics'] },
+  { label: 'Rankings → MVA Attorneys', icon: '⚖',  tab: 'finances', after: "if(typeof switchFinancesTab==='function')switchFinancesTab('rankings');if(typeof switchRankingsSub==='function')setTimeout(function(){switchRankingsSub('mva')},120)",    keywords: ['rank mva', 'mva leaderboard', 'top attorneys'] },
+  { label: 'Rankings → Outreach',      icon: '🏘', tab: 'finances', after: "if(typeof switchFinancesTab==='function')switchFinancesTab('rankings');if(typeof switchRankingsSub==='function')setTimeout(function(){switchRankingsSub('outreach')},120)", keywords: ['rank outreach', 'outreach leaderboard'] },
+  // ── Profile sub-tabs ─────────────────────────────────────────────
+  { label: 'Profile → Overview',     icon: '📊', tab: 'profile', after: "if(typeof switchProfileTab==='function')switchProfileTab('overview')",    keywords: ['profile overview', 'me overview', 'my profile'] },
+  { label: 'Profile → Performance',  icon: '🏆', tab: 'profile', after: "if(typeof switchProfileTab==='function')switchProfileTab('performance')", keywords: ['my performance', 'kpi', 'my stats', 'completion ratio', 'visit rate'] },
+  { label: 'Profile → History',      icon: '📋', tab: 'profile', after: "if(typeof switchProfileTab==='function')switchProfileTab('history')",     keywords: ['my history', 'past visits', 'visit history'] },
+  // ── Profile → History nested ─────────────────────────────────────
+  { label: 'History → All Visits',         icon: '📋', tab: 'profile', after: "if(typeof switchProfileTab==='function')switchProfileTab('history');if(typeof switchHistoryTab==='function')setTimeout(function(){switchHistoryTab('visits')},120)", keywords: ['visit history', 'my visits', 'past'] },
+  { label: 'History → Established Leads',  icon: '🌟', tab: 'profile', after: "if(typeof switchProfileTab==='function')switchProfileTab('history');if(typeof switchHistoryTab==='function')setTimeout(function(){switchHistoryTab('leads')},120)",  keywords: ['my leads', 'established leads', 'lead history'] }
 ];
 function _openMasterSearch(){
   var m = document.getElementById('master-search-modal');
