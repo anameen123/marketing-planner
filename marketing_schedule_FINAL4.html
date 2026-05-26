@@ -15056,7 +15056,7 @@ function renderMapV2CostMeter(targetId){
     + '    <div style="height:4px;background:#e5e7eb;border-radius:2px;margin-top:4px;overflow:hidden"><div style="width:' + pctM + '%;height:100%;background:' + color(pctM) + '"></div></div>'
     + '  </div>'
     + '  <div>'
-    + '    <div style="font-size:10px;color:var(--muted);margin-bottom:2px">🤖 Gemini calls</div>'
+    + '    <div style="font-size:10px;color:var(--muted);margin-bottom:2px">🤖 AI calls</div>'
     + '    <div style="font-size:16px;font-weight:800;font-family:DM Mono,monospace;color:' + color(pctG) + '">' + q.geminiCalls + ' / ' + capG + '</div>'
     + '    <div style="height:4px;background:#e5e7eb;border-radius:2px;margin-top:4px;overflow:hidden"><div style="width:' + pctG + '%;height:100%;background:' + color(pctG) + '"></div></div>'
     + '  </div>'
@@ -25097,7 +25097,7 @@ function explainRouteWithGemini(){
   var btn      = document.getElementById('rp-gemini-btn');
   if(!outEl || !statusEl){ return; }
   if(typeof hasGeminiKey !== 'function' || !hasGeminiKey()){
-    outEl.innerHTML = '<div style="color:#92400e;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:10px 14px;font-size:12px">⚠ No Gemini API key configured. Admin → ⚙ Map v2 settings → paste your free <a href="https://github.com/settings/personal-access-tokens" target="_blank" rel="noopener" style="color:#7030A0;text-decoration:underline">GitHub Models token</a> to enable AI route explanations.</div>';
+    outEl.innerHTML = '<div style="color:#92400e;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:10px 14px;font-size:12px">⚠ No AI token set. Admin → ⚙ Map v2 settings → paste your free <a href="https://github.com/settings/personal-access-tokens" target="_blank" rel="noopener" style="color:#7030A0;text-decoration:underline">GitHub Models token</a> to enable AI route explanations.</div>';
     return;
   }
   if(typeof _bumpMapV2Quota === 'function' && !_bumpMapV2Quota('gemini')){
@@ -27474,7 +27474,7 @@ function _rpAiOnToggleChange(checked){
     return;
   }
   if(typeof hasGeminiKey !== 'function' || !hasGeminiKey()){
-    lbl.innerHTML = '⚠ <b>No AI token set.</b> Open ⚙ Map v2 settings to paste your key — toggle will be ignored until then.';
+    lbl.innerHTML = '⚠ <b>No GitHub Models token set.</b> Open ⚙ Map v2 settings → paste a token from <a href="https://github.com/settings/personal-access-tokens" target="_blank" rel="noopener" style="color:#7c3aed;text-decoration:underline">github.com/settings/personal-access-tokens</a> (Models · Read scope). Free, no card. Toggle is ignored until then.';
     lbl.style.color = '#b91c1c';
     return;
   }
@@ -27776,7 +27776,7 @@ window._rpAiPlanRandomRoute = _rpAiPlanRandomRoute;
 // does NOT auto-execute. User decides whether to apply the AI's picks.
 function _rpAiCorridorSecondOpinion(){
   if(!_rpAiCanRun()){
-    if(typeof showToast === 'function') showToast('Enable the AI toggle first (admin only) + set a Gemini key in ⚙ Map v2.');
+    if(typeof showToast === 'function') showToast('Enable the AI toggle first (admin only) + set the GitHub Models token in ⚙ Map v2.');
     return;
   }
   if(!window._RP_V4_LAST || !window._RP_V4_LAST.buckets){
@@ -46721,7 +46721,7 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
 <div id="mapv2-settings-modal" class="modal-ov" style="display:none;z-index:9800">
   <div class="modal-box" style="width:640px;max-width:96vw;max-height:92vh;display:flex;flex-direction:column">
     <div class="modal-top" style="flex-shrink:0;background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff">
-      <span>🗺️ Map v2 — Google Maps + Gemini AI settings</span>
+      <span>🗺️ Map v2 — Google Maps + AI settings</span>
       <button onclick="closeMapV2Settings()" style="background:rgba(255,255,255,.18);color:#fff;border:none">&#215;</button>
     </div>
     <div class="modal-body" style="overflow-y:auto;flex:1;min-height:0;padding:18px 22px">
