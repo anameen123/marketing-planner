@@ -2450,14 +2450,41 @@ body.role-front_desk #referrals-view {
         A clinic or MVA attorney called to say they're sending patients to one of our facilities. Capture that here — once the patient(s) arrive, the destination's front desk will approve this referral and create the patient log.
       </div>
 
-      <!-- Section 1: who's creating this -->
+      <!-- Section 1: who's creating this (Phase 11b corrected per user 2026-05-25).
+           Two paths — either a marketing member (with member-name dropdown) or
+           Urgent Care Plano front desk (with free-text staff name).
+           Marketing members get counted on their referral counter; UC Plano FD
+           doesn't credit any individual marketing member.
+           Pre-selection follows the signed-in user where possible:
+             - marketing member signed-in → Member radio + their name selected
+             - admin                       → no pre-selection (must pick a real member)
+             - UC Plano front desk         → UC Plano radio + staff name blank
+       -->
       <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">👤 Created by</div>
-      <div style="display:grid;grid-template-columns:1fr;gap:6px;margin-bottom:14px">
-        <input type="text" id="cr-creator" readonly style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#f8fafc;color:#475569;box-sizing:border-box">
-        <div style="font-size:10px;color:var(--muted);font-style:italic">Auto-filled from your sign-in — only you (or admin) can edit/retract this referral later.</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px">
+        <label style="display:flex;align-items:center;gap:6px;background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:9px 12px;cursor:pointer;font-size:12px;font-weight:600">
+          <input type="radio" name="cr-creator-type" value="member" onchange="_crCreatorTypeChanged()" style="accent-color:#7c3aed"> 👥 Marketing member
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:9px 12px;cursor:pointer;font-size:12px;font-weight:600">
+          <input type="radio" name="cr-creator-type" value="uc_plano_fd" onchange="_crCreatorTypeChanged()" style="accent-color:#1F3864"> 🏥 UC Plano (front desk)
+        </label>
+      </div>
+      <!-- Member-path panel: pick which of the 4 marketing members created the referral -->
+      <div id="cr-by-member-panel" style="display:none;margin-bottom:14px;padding:11px 13px;background:#f5f3ff;border:1px solid #d8b4fe;border-radius:8px">
+        <label style="font-size:11px;font-weight:600;color:#581c87;display:block;margin-bottom:4px">Which marketing member? <span style="color:#dc2626">*</span></label>
+        <select id="cr-creator-member" style="width:100%;border:1px solid #d8b4fe;border-radius:6px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box"></select>
+        <div style="font-size:10px;color:#581c87;margin-top:4px;font-style:italic">Their referral counter will be incremented when the front desk approves this. Only that member (or admin) can retract.</div>
+      </div>
+      <!-- UC Plano path: free-text staff name -->
+      <div id="cr-by-ucplano-panel" style="display:none;margin-bottom:14px;padding:11px 13px;background:#eff6ff;border:1px solid #93c5fd;border-radius:8px">
+        <label style="font-size:11px;font-weight:600;color:#1e40af;display:block;margin-bottom:4px">UC Plano front-desk staff name <span style="color:#dc2626">*</span></label>
+        <input type="text" id="cr-creator-ucplano-name" placeholder="e.g. Lisa · morning shift" style="width:100%;border:1px solid #93c5fd;border-radius:6px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box">
+        <div style="font-size:10px;color:#1e40af;margin-top:4px;font-style:italic">UC Plano is sending the patient to one of the ERs. Type your name so it's clear who created this referral.</div>
       </div>
 
-      <!-- Section 2: source -->
+      <!-- Section 2: source. Hidden when creator-type is UC Plano FD —
+           for UC Plano referrals the source IS UC Plano (no external picker). -->
+      <div id="cr-source-section">
       <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">📞 Source — who's sending the patient(s)?</div>
       <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin-bottom:10px">
         <label style="display:flex;align-items:center;gap:6px;background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:8px 10px;cursor:pointer;font-size:11px;font-weight:600">
@@ -2475,6 +2502,7 @@ body.role-front_desk #referrals-view {
                style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box">
         <div id="cr-source-suggest" style="display:none;position:absolute;left:0;right:0;top:100%;margin-top:2px;background:#fff;border:1px solid var(--border);border-radius:8px;max-height:220px;overflow-y:auto;z-index:10;box-shadow:0 8px 20px rgba(0,0,0,.1)"></div>
       </div>
+      </div><!-- /cr-source-section -->
 
       <!-- Section 3: destination -->
       <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">🏥 Destination — which WCG facility?</div>
@@ -15371,22 +15399,52 @@ window._rlPickEvent = _rlPickEvent;
 function isReferralCreator(){
   if(typeof isAdmin === 'function' && isAdmin()) return true;
   if(!CURRENT_USER || !CURRENT_USER.role) return false;
-  // 'member' = marketing team; also accept any future role flagged as such
-  return CURRENT_USER.role === 'member';
+  // 'member' = marketing team (Sadia, Duaa, Dr Asin, Abrar)
+  if(CURRENT_USER.role === 'member') return true;
+  // Phase 11b corrected per user 2026-05-25: UC Plano front desk also
+  // creates referrals (they send patients to ER for imaging etc).
+  if(CURRENT_USER.role === 'front_desk' && CURRENT_USER.facilityKey === 'plano_uc') return true;
+  return false;
 }
 window.isReferralCreator = isReferralCreator;
 
 function openCreateReferralForm(){
   if(!isReferralCreator()){
-    if(typeof showToast === 'function') showToast('Only marketing members or admin can create referrals.');
+    if(typeof showToast === 'function') showToast('Only marketing members or UC Plano front desk can create referrals.');
     return;
   }
   var modal = document.getElementById('create-referral-modal');
   if(!modal) return;
-  // Pre-fill creator field (read-only)
-  var creator = (CURRENT_USER && CURRENT_USER.name) || '';
-  var crCreator = document.getElementById('cr-creator');
-  if(crCreator) crCreator.value = creator;
+  // Populate the marketing-member dropdown from MEMBERS (the 4 marketing names)
+  var memSel = document.getElementById('cr-creator-member');
+  if(memSel){
+    var memHtml = '<option value="">— Pick a marketing member —</option>';
+    if(typeof MEMBERS !== 'undefined' && Array.isArray(MEMBERS)){
+      MEMBERS.forEach(function(m){ memHtml += '<option value="' + m + '">' + m + '</option>'; });
+    }
+    memSel.innerHTML = memHtml;
+  }
+  // Reset the UC Plano staff-name field
+  var ucName = document.getElementById('cr-creator-ucplano-name');
+  if(ucName) ucName.value = '';
+  // Pre-select creator type + name based on signed-in user
+  document.querySelectorAll('input[name="cr-creator-type"]').forEach(function(r){ r.checked = false; });
+  var preselectType = '';
+  if(CURRENT_USER){
+    if(CURRENT_USER.role === 'member'){
+      preselectType = 'member';
+      if(memSel && CURRENT_USER.name) memSel.value = CURRENT_USER.name;
+    } else if(CURRENT_USER.role === 'front_desk' && CURRENT_USER.facilityKey === 'plano_uc'){
+      preselectType = 'uc_plano_fd';
+    }
+    // admin → no pre-select (must pick which member or UC Plano)
+  }
+  if(preselectType){
+    var r = document.querySelector('input[name="cr-creator-type"][value="' + preselectType + '"]');
+    if(r) r.checked = true;
+  }
+  // Render the two panels' visibility based on initial selection
+  _crCreatorTypeChanged();
   // Reset source picker
   document.querySelectorAll('input[name="cr-source-type"]').forEach(function(r){ r.checked = false; });
   var crSrc = document.getElementById('cr-source');
@@ -15424,6 +15482,40 @@ function closeCreateReferralForm(){
   if(modal) modal.style.display = 'none';
 }
 window.closeCreateReferralForm = closeCreateReferralForm;
+
+// Phase 11b: toggle the two creator-type panels based on radio pick.
+// Also toggles the source-picker visibility — UC Plano referrals don't
+// need an external source picker (UC Plano IS the source).
+function _crCreatorTypeChanged(){
+  var picked = document.querySelector('input[name="cr-creator-type"]:checked');
+  var type = picked ? picked.value : '';
+  var memPanel = document.getElementById('cr-by-member-panel');
+  var ucPanel  = document.getElementById('cr-by-ucplano-panel');
+  if(memPanel) memPanel.style.display = (type === 'member')      ? '' : 'none';
+  if(ucPanel)  ucPanel.style.display  = (type === 'uc_plano_fd') ? '' : 'none';
+  // Hide the external Clinic/MVA source picker for UC Plano referrals —
+  // they're transferring from THEIR facility, no external referrer to pick.
+  var srcSection = document.getElementById('cr-source-section');
+  if(srcSection){
+    srcSection.style.display = (type === 'uc_plano_fd') ? 'none' : '';
+  }
+  // Also: UC Plano referrals shouldn't go to UC Plano itself. Hide the
+  // UC Plano radio in the destination picker when creator is UC Plano FD,
+  // and remove its check if previously selected.
+  var ucDestRadio = document.querySelector('input[name="cr-dest"][value="plano_uc"]');
+  if(ucDestRadio){
+    var lbl = ucDestRadio.closest('label');
+    if(lbl){
+      if(type === 'uc_plano_fd'){
+        if(ucDestRadio.checked) ucDestRadio.checked = false;
+        lbl.style.display = 'none';
+      } else {
+        lbl.style.display = '';
+      }
+    }
+  }
+}
+window._crCreatorTypeChanged = _crCreatorTypeChanged;
 
 // Cascading source picker: enable + retype-placeholder based on Clinic/MVA radio.
 function _crSourceTypeChanged(){
@@ -15502,20 +15594,32 @@ function _crSaveReferral(){
     if(errEl){ errEl.textContent = msg; errEl.style.display = 'block'; }
     else if(typeof showToast === 'function') showToast(msg);
   }
+  // Read creator type first — UC Plano referrals don't have an external
+  // Clinic/MVA source (UC Plano IS the source by definition).
+  var typeRadioCheck = document.querySelector('input[name="cr-creator-type"]:checked');
+  var isUcPlanoCreator = typeRadioCheck && typeRadioCheck.value === 'uc_plano_fd';
   var srcInp = document.getElementById('cr-source');
-  var sourceType = (srcInp && srcInp.dataset && srcInp.dataset.sourceType) || '';
-  var sourceName = (srcInp && srcInp.value || '').trim();
-  if(!sourceType){ showErr('Pick Clinic or MVA — which type is sending the patient?'); return; }
-  if(!sourceName){ showErr('Pick the specific clinic/MVA name from the suggestions.'); return; }
-  // Strict match against the bank — no typos creating shadow entries
-  var bankList = (sourceType === 'clinic')
-    ? (typeof CLINIC_BANK !== 'undefined' ? CLINIC_BANK : [])
-    : (typeof MVA_ATTORNEYS !== 'undefined' ? MVA_ATTORNEYS : []);
-  var nameKey = (sourceType === 'clinic') ? 'n' : 'firm';
-  var matchExists = bankList.some(function(b){ return b && (b[nameKey] || '').toLowerCase() === sourceName.toLowerCase(); });
-  if(!matchExists){
-    showErr('"' + sourceName + '" isn\'t in our bank. Pick from the autocomplete suggestions (or ask admin to add the clinic first).');
-    return;
+  var sourceType, sourceName;
+  if(isUcPlanoCreator){
+    // Source is implicit: UC Plano is sending. Stamp it so downstream
+    // counters/displays know where the referral originated.
+    sourceType = 'wcg_facility';
+    sourceName = 'Urgent Care Plano';
+  } else {
+    sourceType = (srcInp && srcInp.dataset && srcInp.dataset.sourceType) || '';
+    sourceName = (srcInp && srcInp.value || '').trim();
+    if(!sourceType){ showErr('Pick Clinic or MVA — which type is sending the patient?'); return; }
+    if(!sourceName){ showErr('Pick the specific clinic/MVA name from the suggestions.'); return; }
+    // Strict match against the bank — no typos creating shadow entries
+    var bankList = (sourceType === 'clinic')
+      ? (typeof CLINIC_BANK !== 'undefined' ? CLINIC_BANK : [])
+      : (typeof MVA_ATTORNEYS !== 'undefined' ? MVA_ATTORNEYS : []);
+    var nameKey = (sourceType === 'clinic') ? 'n' : 'firm';
+    var matchExists = bankList.some(function(b){ return b && (b[nameKey] || '').toLowerCase() === sourceName.toLowerCase(); });
+    if(!matchExists){
+      showErr('"' + sourceName + '" isn\'t in our bank. Pick from the autocomplete suggestions (or ask admin to add the clinic first).');
+      return;
+    }
   }
   var destRadio = document.querySelector('input[name="cr-dest"]:checked');
   if(!destRadio){ showErr('Pick the destination facility.'); return; }
@@ -15524,13 +15628,37 @@ function _crSaveReferral(){
   if(!dateEl || !dateEl.value){ showErr('Pick the expected arrival date.'); return; }
   var expectedAt = dateEl.value + 'T' + ((timeEl && timeEl.value) || '12:00') + ':00';
   var notes = (document.getElementById('cr-notes') || {}).value || '';
+  // Phase 11b corrected: creator-type two-path validation.
+  var typeRadio = document.querySelector('input[name="cr-creator-type"]:checked');
+  if(!typeRadio){ showErr('Pick who is creating this referral — Marketing member or UC Plano front desk.'); return; }
+  var creatorRole, createdBy;
+  if(typeRadio.value === 'member'){
+    var memSel = document.getElementById('cr-creator-member');
+    createdBy = memSel ? memSel.value : '';
+    if(!createdBy){ showErr('Pick which marketing member is creating this referral.'); return; }
+    // Strict: must be a real MEMBER (defends against DOM tampering)
+    if(typeof MEMBERS !== 'undefined' && Array.isArray(MEMBERS) && MEMBERS.indexOf(createdBy) < 0){
+      showErr('"' + createdBy + '" is not a current marketing member. Pick from the dropdown.'); return;
+    }
+    creatorRole = 'marketing';
+  } else if(typeRadio.value === 'uc_plano_fd'){
+    var ucInp = document.getElementById('cr-creator-ucplano-name');
+    var staffName = (ucInp && ucInp.value || '').trim();
+    if(!staffName){ showErr('Type the UC Plano front-desk staff name.'); return; }
+    createdBy = staffName;
+    creatorRole = 'uc_plano_fd';
+  } else {
+    showErr('Unknown creator type.'); return;
+  }
   var nowIso = new Date().toISOString();
-  var creator = (CURRENT_USER && CURRENT_USER.name) || '';
   var entry = {
     id: 'pref_' + Date.now() + '_' + Math.random().toString(36).slice(2,8),
     createdAt: nowIso,
-    createdBy: creator,
-    creatorRole: 'marketing',
+    createdBy: createdBy,
+    creatorRole: creatorRole,
+    // Phase 11b: signed-in identity, separate from the credited member.
+    // Useful for audit (admin creating on behalf of a member, etc.).
+    createdByAccount: (CURRENT_USER && CURRENT_USER.name) || '',
     sourceType: sourceType,
     sourceName: sourceName,
     destinationFacility: destRadio.value,
@@ -15756,17 +15884,28 @@ function _crFinalizeRetract(ref){
 // Marketing creator cancels a pending referral they made (before front desk
 // has approved/declined). Decline + Retract are front-desk actions; this is
 // the creator-side equivalent for an erroneously-created referral.
+//
+// Permission rule per user 2026-05-25 ("no member can override another"):
+//   - Admin always allowed
+//   - For 'marketing' referrals: the credited member (ref.createdBy) must
+//     match the signed-in user
+//   - For 'uc_plano_fd' referrals: the signed-in user must be on the
+//     shared UC Plano front-desk account (ref.createdByAccount === name)
 function retractPendingReferral(id){
   var ref = (PENDING_REFERRALS || []).find(function(r){ return r.id === id; });
   if(!ref || ref.status !== 'pending') return;
   var isAdminUser = (typeof isAdmin === 'function' && isAdmin());
-  if(!isAdminUser && ref.createdBy !== (CURRENT_USER && CURRENT_USER.name)){
+  var myName = (CURRENT_USER && CURRENT_USER.name) || '';
+  var canRetract = isAdminUser
+    || (ref.creatorRole === 'marketing'   && ref.createdBy === myName)
+    || (ref.creatorRole === 'uc_plano_fd' && ref.createdByAccount === myName);
+  if(!canRetract){
     if(typeof showToast === 'function') showToast('Only the creator (or admin) can cancel this referral.');
     return;
   }
   ref.status = 'retracted';
   ref.retractedAt = new Date().toISOString();
-  ref.retractedBy = (CURRENT_USER && CURRENT_USER.name) || '';
+  ref.retractedBy = myName;
   _savePendingReferrals();
   if(typeof renderPendingReferrals === 'function') renderPendingReferrals();
   if(typeof showToast === 'function') showToast('Referral canceled.');
