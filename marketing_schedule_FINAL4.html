@@ -2558,8 +2558,8 @@ body.role-front_desk #referrals-view {
            Per user 2026-05-26: UC Plano gets a ride-offer picker; members get
            a pre-contact confirmation checkbox. -->
       <div id="cr-ride-section" style="display:none;margin-bottom:14px;padding:11px 13px;background:#eff6ff;border:1px solid #93c5fd;border-radius:8px">
-        <div style="font-size:11px;font-weight:700;color:#1e40af;margin-bottom:8px">🚗 Ride offer (UC Plano)</div>
-        <div style="font-size:10px;color:#1e40af;margin-bottom:8px;line-height:1.45">You have the patient in front of you — ask if they'd like a ride to the destination.</div>
+        <div style="font-size:11px;font-weight:700;color:#1e40af;margin-bottom:6px">🚗 Ride offer (UC Plano)</div>
+        <div style="font-size:10px;color:#1e40af;margin-bottom:8px;line-height:1.45">You have the patient in front of you — ask if they'd like a ride to the destination. <b>You don't book it</b> — the destination front desk (Frisco ER or Castle Hills ER) has the Uber Health account and books the ride after they approve.</div>
         <div style="display:flex;flex-direction:column;gap:5px">
           <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:11px;color:#1F3864">
             <input type="radio" name="cr-ride" value="no" onchange="_crUpdateConditionalFields()" style="accent-color:#1e40af">
@@ -2571,7 +2571,7 @@ body.role-front_desk #referrals-view {
           </label>
           <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:11px;color:#1F3864">
             <input type="radio" name="cr-ride" value="accepted" onchange="_crUpdateConditionalFields()" style="accent-color:#1e40af">
-            <span>Asked, patient accepted — book a ride</span>
+            <span>Asked, <b>patient accepted</b> — destination FD will book the Uber Health ride</span>
           </label>
         </div>
       </div>
@@ -13371,7 +13371,21 @@ function _crRenderFollowUpModal(refs){
     var lateMin = eta ? Math.round((Date.now() - eta.getTime()) / 60000) : '?';
     var ridePart = '';
     if(r.creatorRole === 'uc_plano_fd' && r.rideRequested){
-      var rideLbl = r.rideRequested === 'accepted' ? '🚗 booked' : r.rideRequested === 'declined' ? 'declined' : 'not offered';
+      // Phase 23: UC Plano asks but doesn't book. Show the real booking
+      // status, not a misleading "🚗 booked" label that just means accepted.
+      var rideLbl;
+      if(r.rideRequested === 'accepted'){
+        if(r.rideBookingStatus === 'booked'){
+          var bWhen = r.rideBookedAt ? fmtTime(r.rideBookedAt) : '';
+          rideLbl = '🚗 ✓ Uber Health booked by ' + (r.rideBookedBy || 'FD') + (bWhen ? ' @ ' + bWhen : '');
+        } else {
+          rideLbl = '🚗 patient accepted — <span style="color:#b91c1c">needs Uber Health booking (destination FD)</span>';
+        }
+      } else if(r.rideRequested === 'declined'){
+        rideLbl = 'declined';
+      } else {
+        rideLbl = 'not offered';
+      }
       ridePart = '<div style="font-size:11px;color:#1F3864">Ride: <b>' + rideLbl + '</b></div>';
     }
     var patientPhoneFmt = fmtPhone(r.patientPhone);
@@ -13449,6 +13463,73 @@ function _crLogFollowUpAction(refId, action, note){
   if(typeof _savePendingReferrals === 'function') _savePendingReferrals();
 }
 window._crLogFollowUpAction = _crLogFollowUpAction;
+
+// Phase 23 (2026-05-26): Uber Health booking handlers.
+// UC Plano FD asks the patient. Destination FD (Frisco ER or Castle Hills
+// ER) is the one with the Uber Health account, so they book the ride and
+// confirm with these handlers. Audit-logged via followUpActions.
+function _crMarkRideBooked(refId){
+  var ref = (PENDING_REFERRALS || []).find(function(r){ return r.id === refId; });
+  if(!ref){ if(typeof showToast === 'function') showToast('Referral not found.'); return; }
+  if(ref.rideRequested !== 'accepted'){
+    if(typeof showToast === 'function') showToast('This patient didn\'t accept a ride.');
+    return;
+  }
+  // Guard: only destination FD (or admin) can confirm a booking.
+  var isFD = !!(CURRENT_USER && CURRENT_USER.role === 'front_desk');
+  var isAdminViewer = (typeof isAdmin === 'function') && isAdmin();
+  var viewerIsDestFD = isFD && CURRENT_USER.facilityKey === ref.destinationFacility;
+  if(!viewerIsDestFD && !isAdminViewer){
+    if(typeof showToast === 'function') showToast('Only the destination front desk (or admin) books the Uber ride.');
+    return;
+  }
+  var note = '';
+  try {
+    note = (typeof prompt === 'function')
+      ? (prompt('Optional — Uber Health pickup ETA or ride id (Cancel skips):') || '')
+      : '';
+  } catch(_){}
+  ref.rideBookingStatus = 'booked';
+  ref.rideBookedBy = (CURRENT_USER && CURRENT_USER.name) || '?';
+  ref.rideBookedAt = new Date().toISOString();
+  ref.rideBookingNote = note ? String(note).trim() : null;
+  _crLogFollowUpAction(refId, 'ride_booked', 'Booked Uber Health ride' + (note ? ' — ' + note : ''));
+  if(typeof _savePendingReferrals === 'function') _savePendingReferrals();
+  if(typeof renderPendingReferrals === 'function') renderPendingReferrals();
+  if(typeof showToast === 'function') showToast('🚗 Uber Health booking confirmed.');
+}
+window._crMarkRideBooked = _crMarkRideBooked;
+
+function _crCancelRideBooking(refId){
+  var ref = (PENDING_REFERRALS || []).find(function(r){ return r.id === refId; });
+  if(!ref){ if(typeof showToast === 'function') showToast('Referral not found.'); return; }
+  var isFD = !!(CURRENT_USER && CURRENT_USER.role === 'front_desk');
+  var isAdminViewer = (typeof isAdmin === 'function') && isAdmin();
+  var viewerIsDestFD = isFD && CURRENT_USER.facilityKey === ref.destinationFacility;
+  if(!viewerIsDestFD && !isAdminViewer){
+    if(typeof showToast === 'function') showToast('Only the destination front desk (or admin) handles ride bookings.');
+    return;
+  }
+  var reason = '';
+  try {
+    reason = (typeof prompt === 'function')
+      ? (prompt('Why couldn\'t the ride be booked? (logs to audit trail)') || '')
+      : '';
+  } catch(_){}
+  if(!reason || !reason.trim()){
+    if(typeof showToast === 'function') showToast('Reason required for audit trail.');
+    return;
+  }
+  ref.rideBookingStatus = 'cancelled';
+  ref.rideBookedBy = null;
+  ref.rideBookedAt = null;
+  ref.rideBookingNote = reason.trim();
+  _crLogFollowUpAction(refId, 'ride_booking_cancelled', reason.trim());
+  if(typeof _savePendingReferrals === 'function') _savePendingReferrals();
+  if(typeof renderPendingReferrals === 'function') renderPendingReferrals();
+  if(typeof showToast === 'function') showToast('Booking marked as not completed — logged to audit.');
+}
+window._crCancelRideBooking = _crCancelRideBooking;
 
 function _crSaveFollowUpNote(refId){
   var ta = document.getElementById('cr-fu-note-' + refId);
@@ -16893,6 +16974,16 @@ function _crSaveReferral(){
     sourceClinicPhone: clinicPhone || null,
     autoETA: autoETA,
     rideRequested: rideRequested,             // null for members, 'no'|'declined'|'accepted' for UC Plano
+    // Phase 23 (2026-05-26): Ride flow split between asker and booker.
+    //   • UC Plano FD asks the patient (no Uber Health account).
+    //   • Destination FD (Frisco ER OR Castle Hills ER) books the actual
+    //     Uber Health ride. So accepted-rides start at 'needs_booking'
+    //     until the destination FD confirms with _crMarkRideBooked.
+    rideBookingStatus: (rideRequested === 'accepted') ? 'needs_booking' : null,
+    // 'needs_booking' | 'booked' | 'cancelled' | null
+    rideBookedBy: null,    // destination FD name on confirmation
+    rideBookedAt: null,    // ISO timestamp
+    rideBookingNote: null, // free-text note from booker (e.g. ETA, ride id)
     preContactConfirmed: preContactConfirmed, // gate enforced at submit
     followUpActions: []                        // audit log appended by follow-up engine (Phase B)
   };
@@ -17006,6 +17097,46 @@ function renderPendingReferrals(){
         + '<button onclick="_crOpenFollowUpForRef(\'' + r.id + '\')" style="background:#f59e0b;color:#fff;border:none;border-radius:5px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">📞 Open follow-up</button>'
         + '</div>';
     }
+    // Phase 23 (2026-05-26): UBER HEALTH BOOKING CTA
+    // UC Plano asks; destination FD books on Uber Health. When viewer is
+    // the destination FD (or admin) and the patient accepted a ride that
+    // isn't booked yet, show a prominent purple banner with a one-click
+    // "Mark as booked" button. After booking, show a green confirmation.
+    var rideBookingBanner = '';
+    var viewerIsDestFD = isFD && CURRENT_USER && CURRENT_USER.facilityKey === r.destinationFacility;
+    var viewerCanBook = viewerIsDestFD || isAdminViewer;
+    if(r.rideRequested === 'accepted' && r.status !== 'declined' && r.status !== 'retracted'){
+      if(r.rideBookingStatus === 'booked'){
+        var bookedWhenStr = r.rideBookedAt ? new Date(r.rideBookedAt).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) : '';
+        rideBookingBanner = '<div style="margin-top:8px;padding:8px 11px;background:#f0fdf4;border:1px solid #86efac;border-left:3px solid #16a34a;border-radius:6px;font-size:11px;color:#14532d;line-height:1.5">'
+          + '<b>🚗 ✓ Uber Health ride booked</b> by <b>' + String(r.rideBookedBy || 'FD').replace(/</g,'&lt;') + '</b>'
+          + (bookedWhenStr ? ' on <b>' + bookedWhenStr + '</b>' : '')
+          + (r.rideBookingNote ? ' · ' + String(r.rideBookingNote).replace(/</g,'&lt;') : '')
+          + '</div>';
+      } else if(viewerCanBook){
+        // Patient accepted, you (destination FD) own the booking
+        var destAddrLbl = facLabel;
+        rideBookingBanner = '<div style="margin-top:8px;padding:10px 12px;background:linear-gradient(135deg,#faf5ff,#f3e8ff);border:1px solid #c4b5fd;border-left:3px solid #7c3aed;border-radius:6px;font-size:11px;color:#4c1d95;line-height:1.5">'
+          + '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap">'
+          +   '<div style="flex:1;min-width:180px">'
+          +     '<div style="font-weight:800;font-size:12px">🚗 Book Uber Health ride</div>'
+          +     '<div style="margin-top:3px">Patient <b>' + String(r.patientName || 'patient').replace(/</g,'&lt;') + '</b> accepted a ride from <b>' + String(r.sourceName || '?').replace(/</g,'&lt;') + '</b> → <b>' + String(destAddrLbl).replace(/</g,'&lt;') + '</b>.</div>'
+          +     '<div style="margin-top:2px;font-size:10px;color:#6b21a8">UC Plano asked the patient. <b>You book on your Uber Health account</b> (UC Plano doesn\'t have one).</div>'
+          +   '</div>'
+          +   '<div style="display:flex;flex-direction:column;gap:5px;flex-shrink:0">'
+          +     '<button onclick="_crMarkRideBooked(\'' + r.id + '\')" style="background:#7c3aed;color:#fff;border:none;border-radius:6px;padding:7px 13px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;white-space:nowrap">✓ Mark as booked</button>'
+          +     '<button onclick="_crCancelRideBooking(\'' + r.id + '\')" style="background:transparent;border:1px solid #c4b5fd;color:#6b21a8;border-radius:6px;padding:5px 10px;font-size:10px;font-weight:600;cursor:pointer;font-family:DM Sans,sans-serif;white-space:nowrap">Couldn\'t book</button>'
+          +   '</div>'
+          + '</div>'
+          + '</div>';
+      } else {
+        // Viewer is the creator (UC Plano) — passive status indicator only
+        rideBookingBanner = '<div style="margin-top:8px;padding:7px 10px;background:#faf5ff;border:1px solid #ddd6fe;border-radius:6px;font-size:10px;color:#6b21a8;line-height:1.45">'
+          + '🚗 Patient accepted a ride. <b>' + String(facLabel).replace(/</g,'&lt;') + '</b> front desk will book the Uber Health ride.'
+          + '</div>';
+      }
+    }
+
     // Admin-override audit note (per user 2026-05-26) — full-width banner
     // (NOT a small chip) directly below the row data so it's plainly visible.
     // Includes the admin's name + timestamp so anyone reviewing later sees
@@ -17028,6 +17159,8 @@ function renderPendingReferrals(){
             var actionLbl = a.action === 'called_patient' ? 'Called patient'
                           : a.action === 'called_clinic'  ? 'Called clinic'
                           : a.action === 'offered_ride'   ? 'Offered ride'
+                          : a.action === 'ride_booked'    ? '🚗 Booked Uber Health'
+                          : a.action === 'ride_booking_cancelled' ? '🚗 Could NOT book Uber'
                           : a.action === 'eta_updated'    ? 'Updated ETA'
                           : a.action === 'no_show'        ? 'Marked no-show'
                           : a.action === 'arrived'        ? 'Patient arrived'
@@ -17042,6 +17175,7 @@ function renderPendingReferrals(){
       +   '<div style="flex:1;min-width:0">'
       +     '<div style="font-size:13px;font-weight:700;color:#0f172a">' + typeIcon + ' ' + r.sourceName.replace(/</g,'&lt;') + ' <span style="color:var(--muted);font-weight:400;font-size:11px">→ ' + facLabel + '</span>' + (r.patientName ? ' <span style="color:var(--muted);font-weight:400;font-size:11px"> · ' + r.patientName.replace(/</g,'&lt;') + '</span>' : '') + '</div>'
       +     '<div style="font-size:10px;color:var(--muted);margin-top:2px">Created by <b>' + creatorLbl.replace(/</g,'&lt;') + '</b> · Expected ' + expStr + (r.notes ? ' · Notes: ' + r.notes.replace(/</g,'&lt;') : '') + '</div>'
+      +     rideBookingBanner
       +     lateBadge
       +     auditTrail
       +     adminOverrideBadge
