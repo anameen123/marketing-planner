@@ -3310,7 +3310,7 @@ body.role-front_desk #referrals-view {
                by JS in renderDayMap when isAdmin() returns true. Opens the
                existing settings modal where the Google Maps + Gemini keys
                + daily quota caps are configured. -->
-          <button id="dv-mapv2-settings-btn" type="button" onclick="openMapV2Settings()" title="Map v2 settings — paste Google Maps API key for real driving directions, traffic-aware ETA, and Gemini auto-fill" style="display:none;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);color:#fff;border-radius:6px;padding:5px 9px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">⚙ Map v2</button>
+          <button id="dv-mapv2-settings-btn" type="button" onclick="openMapV2Settings()" title="Map v2 settings — paste Google Maps API key for real driving directions, traffic-aware ETA, and AI auto-fill" style="display:none;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);color:#fff;border-radius:6px;padding:5px 9px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">⚙ Map v2</button>
           <button id="dv-map-expand-btn" type="button" onclick="toggleDayMapExpanded()"
                   title="Expand the map to full height — easier to see the route"
                   style="background:#1F3864;border:none;color:#fff;border-radius:6px;padding:5px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;display:inline-flex;align-items:center;gap:5px;line-height:1.1">
@@ -6404,7 +6404,7 @@ function openAddClinic(){
 }
 function closeAddClinic(){ document.getElementById('add-clinic-modal').style.display='none'; }
 
-// Switch between Manual entry and Gemini auto-fill modes
+// Switch between Manual entry and AI auto-fill modes
 function _acSwitchMode(mode){
   var tabM = document.getElementById('ac-mode-manual');
   var tabG = document.getElementById('ac-mode-gemini');
@@ -6431,16 +6431,16 @@ function _acRunGemini(){
   if(!name){ statusEl.textContent = 'Type the clinic name first.'; return; }
   if(!city){ statusEl.textContent = 'Pick the city.'; return; }
   if(typeof hasGeminiKey !== 'function' || !hasGeminiKey()){
-    statusEl.innerHTML = '⚠️ No Gemini key set. <a href="#" onclick="openMapV2Settings();return false" style="color:#7030A0;text-decoration:underline">Open Map v2 Settings</a> to paste your AI Studio key.';
+    statusEl.innerHTML = '⚠️ No AI token set. <a href="#" onclick="openMapV2Settings();return false" style="color:#7030A0;text-decoration:underline">Open Map v2 Settings</a> to paste your GitHub Models token.';
     return;
   }
   if(typeof _bumpMapV2Quota === 'function' && !_bumpMapV2Quota('gemini')){
-    statusEl.textContent = '⚠ Daily Gemini quota reached.';
+    statusEl.textContent = '⚠ Daily AI quota reached.';
     return;
   }
   btnEl.disabled = true;
   btnEl.style.opacity = '.6';
-  statusEl.textContent = '⏳ Asking Gemini...';
+  statusEl.textContent = '⏳ Asking AI...';
   statusEl.style.color = '#5b21b6';
 
   var prompt = 'Look up contact information for this medical clinic in the US.\n\n'
@@ -6544,7 +6544,7 @@ function _acAddGeminiBadge(fieldId){
   badge.type = 'button';
   badge.className = 'ac-gemini-badge';
   badge.setAttribute('data-field', fieldId);
-  badge.title = 'Verify this Gemini-filled value';
+  badge.title = 'Verify this AI-filled value';
   badge.textContent = '🤖 unverified — click to verify';
   badge.style.cssText = 'background:#fef3c7;border:1px solid #fcd34d;color:#92400e;font-size:9px;font-weight:700;padding:2px 8px;border-radius:6px;cursor:pointer;margin-top:4px;font-family:inherit';
   badge.onclick = function(){ _acVerifyField(fieldId); };
@@ -6591,7 +6591,7 @@ function _acUpdateSaveButton(){
     btn.disabled = true;
     btn.style.opacity = '.5';
     btn.style.cursor = 'not-allowed';
-    btn.title = 'Verify ' + AC_PENDING_VERIFY.size + ' Gemini-filled field(s) before saving';
+    btn.title = 'Verify ' + AC_PENDING_VERIFY.size + ' AI-filled field(s) before saving';
   } else {
     btn.disabled = false;
     btn.style.opacity = '';
@@ -6607,7 +6607,7 @@ function saveNewClinic(){
   var isAdminUser = (typeof isAdmin === 'function') && isAdmin();
   // Hard block: don't save if Gemini fields are still unverified
   if(AC_PENDING_VERIFY.size > 0){
-    showToast('Verify ' + AC_PENDING_VERIFY.size + ' Gemini-filled field(s) before saving.');
+    showToast('Verify ' + AC_PENDING_VERIFY.size + ' AI-filled field(s) before saving.');
     return;
   }
   var name=(document.getElementById('clinic-add-name').value||'').trim();
@@ -6681,7 +6681,7 @@ function saveNewClinic(){
   // Composite check: same city + same physician with a different name (catches typo variants)
   if(_guardDuplicateByLocationAndContact('clinic', city, doctor)) return;
   // No conflict — save normally
-  showConfirm({icon:'?',msg:'Add "'+name+'"?',sub:'New clinic in '+city + (AC_FILLED_BY === 'gemini' ? ' · 🤖 Gemini-assisted' : ''),yesLabel:'Add',danger:false,onConfirm:function(){
+  showConfirm({icon:'?',msg:'Add "'+name+'"?',sub:'New clinic in '+city + (AC_FILLED_BY === 'gemini' ? ' · 🤖 AI-assisted' : ''),yesLabel:'Add',danger:false,onConfirm:function(){
     _saveClinicRecord(name, doctor, spec, city, notes, phone, fax, website, address);
   }});
 }
@@ -6702,7 +6702,7 @@ function _saveClinicRecord(name, doctor, spec, city, notes, phone, fax, website,
   var lbl=document.getElementById('bank-count-label');
   if(lbl) lbl.textContent=CLINIC_BANK.length+' clinics — browse, search, and add to any date';
   if(typeof renderBank === 'function') renderBank();
-  if(typeof showToast === 'function') showToast('Clinic added: '+name + (filledBy === 'gemini' ? ' (Gemini-assisted)' : ''));
+  if(typeof showToast === 'function') showToast('Clinic added: '+name + (filledBy === 'gemini' ? ' (AI-assisted)' : ''));
   // Self-action audit trail (per user 2026-05-22) — every member who adds a
   // clinic sees a "you added clinic X" entry in their own activity bell.
   try {
@@ -14906,7 +14906,7 @@ function saveMapV2Settings(){
   var geminiCap = parseInt(document.getElementById('mv2-gemini-cap').value, 10);
   var enabled   = document.getElementById('mv2-enabled').checked;
   if(mapsKey && mapsKey.length < 20){ showErr('Maps key looks too short — paste the full key'); return; }
-  if(geminiKey && geminiKey.length < 20){ showErr('Gemini key looks too short — paste the full key'); return; }
+  if(geminiKey && geminiKey.length < 20){ showErr('AI token looks too short — paste the full key'); return; }
   if(isNaN(mapsCap) || mapsCap < 0) mapsCap = MAPV2_DEFAULT_CONFIG.maxMapsCallsPerDay;
   if(isNaN(geminiCap) || geminiCap < 0) geminiCap = MAPV2_DEFAULT_CONFIG.maxGeminiCallsPerDay;
   MAPV2_CONFIG.mapsKey   = mapsKey;
@@ -14947,7 +14947,7 @@ function _mv2TestGeminiKey(){
   var status = document.getElementById('mv2-gemini-status');
   var k = document.getElementById('mv2-gemini-key').value.trim();
   if(!k){ status.textContent = 'Paste a key first.'; status.style.color = '#dc2626'; return; }
-  status.textContent = '⏳ Testing Gemini...'; status.style.color = '#1F3864';
+  status.textContent = '⏳ Testing AI...'; status.style.color = '#1F3864';
   // Phase 8b: hit GitHub Models endpoint (was Gemini). Auth = Bearer token in header.
   var url = 'https://models.github.ai/inference/chat/completions';
   var body = {
@@ -14972,7 +14972,7 @@ function _mv2TestGeminiKey(){
       status.textContent = '✗ ' + json.error.message;
       status.style.color = '#dc2626';
     } else if(json.choices && json.choices.length){
-      status.textContent = '✓ Gemini key works — model responded.';
+      status.textContent = '✓ AI token works — model responded.';
       status.style.color = '#16a34a';
     } else {
       status.textContent = '✗ Unexpected response shape';
@@ -22382,7 +22382,7 @@ function askGeminiForRouteAdvice(ctx, cb){
     cb(new Error('No Gemini key — skipping AI advice')); return;
   }
   if(!_bumpQuota('gemini')){
-    cb(new Error('Daily Gemini quota reached')); return;
+    cb(new Error('Daily AI quota reached')); return;
   }
   // Build the prompt — JSON in, JSON out for reliable parsing.
   var prompt = ''
@@ -25069,11 +25069,11 @@ function explainRouteWithGemini(){
   var btn      = document.getElementById('rp-gemini-btn');
   if(!outEl || !statusEl){ return; }
   if(typeof hasGeminiKey !== 'function' || !hasGeminiKey()){
-    outEl.innerHTML = '<div style="color:#92400e;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:10px 14px;font-size:12px">⚠ No Gemini API key configured. Admin → ⚙ Map v2 settings → paste your free <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style="color:#7030A0;text-decoration:underline">Google AI Studio key</a> to enable AI route explanations.</div>';
+    outEl.innerHTML = '<div style="color:#92400e;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:10px 14px;font-size:12px">⚠ No Gemini API key configured. Admin → ⚙ Map v2 settings → paste your free <a href="https://github.com/settings/personal-access-tokens" target="_blank" rel="noopener" style="color:#7030A0;text-decoration:underline">GitHub Models token</a> to enable AI route explanations.</div>';
     return;
   }
   if(typeof _bumpMapV2Quota === 'function' && !_bumpMapV2Quota('gemini')){
-    outEl.innerHTML = '<div style="color:#92400e;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:10px 14px;font-size:12px">⚠ Daily Gemini quota reached (' + (MAPV2_CONFIG.maxGeminiCallsPerDay || '?') + ' calls/day). Resets at midnight.</div>';
+    outEl.innerHTML = '<div style="color:#92400e;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:10px 14px;font-size:12px">⚠ Daily AI quota reached (' + (MAPV2_CONFIG.maxGeminiCallsPerDay || '?') + ' calls/day). Resets at midnight.</div>';
     return;
   }
   var summary = _rpBuildRouteSummaryForLlm();
@@ -25098,7 +25098,7 @@ function explainRouteWithGemini(){
 
   btn.disabled = true;
   btn.style.opacity = '.6';
-  statusEl.textContent = '⏳ Asking Gemini for a strategy…';
+  statusEl.textContent = '⏳ Asking AI for a strategy…';
   outEl.innerHTML = '';
 
   // Phase 8b: route through GitHub Models (was Gemini).
@@ -25217,36 +25217,80 @@ function exportDayRouteToGoogleMaps(){
     if(typeof showToast === 'function') showToast('No visits on this day to export.');
     return;
   }
-  // Collect coords in row order (= visit order), only valid visits.
+  // Phase 10b v2 (per user 2026-05-25 "huge mess" feedback): use STREET
+  // ADDRESS when we have it, falling back to "Clinic Name, City, TX".
+  // Either way Google Maps shows the actual business name in the route —
+  // not a bare lat/lng pin like v1 did. Lat/lng is only a last resort
+  // for entries with no address and no city.
+  function _addressFor(name){
+    if(!name) return null;
+    var low = String(name).toLowerCase();
+    if(typeof CLINIC_BANK !== 'undefined'){
+      var c = CLINIC_BANK.find(function(x){ return (x.n || '').toLowerCase() === low; });
+      if(c){
+        if(c.address && c.address.trim() && c.address !== 'TBD') return c.address;
+        return (c.n + (c.c ? ', ' + c.c : '') + ', TX').trim();
+      }
+    }
+    if(typeof MVA_ATTORNEYS !== 'undefined'){
+      var m = MVA_ATTORNEYS.find(function(x){ return (x.firm || '').toLowerCase() === low; });
+      if(m){
+        if(m.address && m.address.trim() && m.address !== 'TBD') return m.address;
+        return (m.firm + (m.city ? ', ' + m.city : '') + ', TX').trim();
+      }
+    }
+    if(typeof OUTREACH !== 'undefined'){
+      var o = OUTREACH.find(function(x){ return (x.name || '').toLowerCase() === low; });
+      if(o){
+        if(o.address && o.address.trim() && o.address !== 'TBD') return o.address;
+        return (o.name + (o.city ? ', ' + o.city : '') + ', TX').trim();
+      }
+    }
+    return null;
+  }
+
+  // Collect stops in row order. Each stop = the most-useful query string
+  // we can build for Google Maps (real address > "Name, City, TX" > coords).
+  // Skip canceled rows + rows we can't resolve at all.
   var stops = [];
   day.rows.forEach(function(r){
     if(!r || !r.clinic) return;
     if(r.status === 'Canceled') return;
-    var c = (typeof getCoordForBusiness === 'function') ? getCoordForBusiness(r.clinic) : null;
-    if(c && c.lat != null && c.lng != null){
-      stops.push({ name: r.clinic, lat: c.lat, lng: c.lng });
+    var query = _addressFor(r.clinic);
+    if(!query){
+      var c = (typeof getCoordForBusiness === 'function') ? getCoordForBusiness(r.clinic) : null;
+      if(c && c.lat != null && c.lng != null){
+        query = c.lat + ',' + c.lng;
+      }
+    }
+    if(query){
+      stops.push({ name: r.clinic, query: query });
     }
   });
   if(stops.length === 0){
-    if(typeof showToast === 'function') showToast('No stops on this day have known coordinates yet. Add clinic addresses first.');
+    if(typeof showToast === 'function') showToast('None of this day\'s stops have an address or coords. Add at least one address first.');
     return;
   }
-  // Single-stop: open the place card instead of directions.
+  // Single-stop: open the place card directly.
   if(stops.length === 1){
-    var urlOne = 'https://www.google.com/maps/search/?api=1&query='
-               + encodeURIComponent(stops[0].lat + ',' + stops[0].lng);
+    var urlOne = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(stops[0].query);
     window.open(urlOne, '_blank', 'noopener');
+    if(typeof showToast === 'function') showToast('🗺️ Opening ' + stops[0].name + ' in Google Maps…');
     return;
   }
-  // Cap at 10 stops (Google Maps deep-link practical limit).
+  // Cap at 10 stops (Google Maps deep-link practical limit — 9 waypoints + dest).
   var truncated = false;
   if(stops.length > 10){
     truncated = true;
     stops = stops.slice(0, 10);
   }
-  var origin      = stops[0].lat + ',' + stops[0].lng;
-  var destination = stops[stops.length - 1].lat + ',' + stops[stops.length - 1].lng;
-  var waypoints   = stops.slice(1, -1).map(function(s){ return s.lat + ',' + s.lng; }).join('|');
+  // Build the directions URL. Origin = first stop, destination = last stop,
+  // waypoints = everything in between. Google Maps resolves each query to
+  // the actual business and draws the FULL route — user no longer has to
+  // paste each clinic name as a separate search.
+  var origin      = stops[0].query;
+  var destination = stops[stops.length - 1].query;
+  var waypoints   = stops.slice(1, -1).map(function(s){ return s.query; }).join('|');
   var url = 'https://www.google.com/maps/dir/?api=1'
           + '&origin='      + encodeURIComponent(origin)
           + '&destination=' + encodeURIComponent(destination)
@@ -25254,9 +25298,9 @@ function exportDayRouteToGoogleMaps(){
           + '&travelmode=driving';
   window.open(url, '_blank', 'noopener');
   if(truncated && typeof showToast === 'function'){
-    showToast('Exported first 10 stops to Google Maps (deep-link limit). Add the rest from the in-app map.');
+    showToast('Exported first 10 stops to Google Maps. Add the rest from the Google Maps app if needed (deep-link limit).');
   } else if(typeof showToast === 'function'){
-    showToast('🗺️ Opening ' + stops.length + ' stops in Google Maps…');
+    showToast('🗺️ Opening ' + stops.length + ' stops in Google Maps with full route…');
   }
 }
 window.exportDayRouteToGoogleMaps = exportDayRouteToGoogleMaps;
@@ -27378,7 +27422,7 @@ window._rpRwGenerate = _rpRwGenerate;
 //      the wrap never runs and the original function is hit directly.
 //   3. ADMIN-ONLY — toggle is hidden for non-admin users. The toggle state
 //      isn't persisted across sessions (sticks to local _RP_AI.enabled).
-//   4. Falls back gracefully — if Gemini errors or returns garbage, the
+//   4. Falls back gracefully — if AI errors or returns garbage, the
 //      original algorithm result is still shown. AI just adds a 4th route
 //      card (Random Pick) or an advisory panel (Corridor).
 // ────────────────────────────────────────────────────────────────────────────
@@ -27402,7 +27446,7 @@ function _rpAiOnToggleChange(checked){
     return;
   }
   if(typeof hasGeminiKey !== 'function' || !hasGeminiKey()){
-    lbl.innerHTML = '⚠ <b>No Gemini key set.</b> Open ⚙ Map v2 settings to paste your key — toggle will be ignored until then.';
+    lbl.innerHTML = '⚠ <b>No AI token set.</b> Open ⚙ Map v2 settings to paste your key — toggle will be ignored until then.';
     lbl.style.color = '#b91c1c';
     return;
   }
@@ -27449,7 +27493,7 @@ function _rpAiPlanRandomRoute(){
   return new Promise(function(resolve){
     if(!_rpAiCanRun()) { resolve(null); return; }
     if(typeof _bumpQuota !== 'function' || !_bumpQuota('gemini')){
-      _RP_AI.lastError = 'Daily Gemini quota reached';
+      _RP_AI.lastError = 'Daily AI quota reached';
       resolve(null); return;
     }
     var start = _RP_RW && _RP_RW.start;
@@ -27538,7 +27582,7 @@ function _rpAiPlanRandomRoute(){
         .map(function(n){ return lookup[String(n).toLowerCase()]; })
         .filter(Boolean);
       if(ordered.length === 0){
-        _RP_AI.lastError = 'Gemini names did not match the pool';
+        _RP_AI.lastError = 'AI names did not match the pool';
         resolve(null); return;
       }
 
@@ -27712,7 +27756,7 @@ function _rpAiCorridorSecondOpinion(){
     return;
   }
   if(typeof _bumpQuota !== 'function' || !_bumpQuota('gemini')){
-    if(typeof showToast === 'function') showToast('Daily Gemini quota reached.');
+    if(typeof showToast === 'function') showToast('Daily AI quota reached.');
     return;
   }
   // Flatten all bucket candidates into one pool with priority hints
@@ -46689,7 +46733,7 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
             <input type="number" id="mv2-maps-cap" min="0" max="10000" style="width:100%;border:1px solid #fcd34d;border-radius:6px;padding:5px 8px;font-size:11px;font-family:DM Mono,monospace;background:#fff;box-sizing:border-box">
           </div>
           <div>
-            <label style="font-size:10px;color:#92400e;display:block;margin-bottom:3px">Gemini calls / day max</label>
+            <label style="font-size:10px;color:#92400e;display:block;margin-bottom:3px">AI calls / day max</label>
             <input type="number" id="mv2-gemini-cap" min="0" max="10000" style="width:100%;border:1px solid #fcd34d;border-radius:6px;padding:5px 8px;font-size:11px;font-family:DM Mono,monospace;background:#fff;box-sizing:border-box">
           </div>
         </div>
@@ -48190,13 +48234,13 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
 </div>
 
 
-<!-- Add Clinic Modal — with Gemini auto-fill (v2.4: 2026-05-18) -->
+<!-- Add Clinic Modal — with AI auto-fill (v2.4: 2026-05-18) -->
 <div id="add-clinic-modal" style="display:none" class="modal-ov">
   <div class="modal-box" style="width:480px;max-height:92vh;display:flex;flex-direction:column">
     <div class="modal-top">&#127973; Add Clinic <button onclick="closeAddClinic()">&#215;</button></div>
     <div class="modal-body" style="overflow-y:auto;flex:1;min-height:0">
 
-      <!-- ── Mode tabs: Manual / Gemini auto-fill ────────────────── -->
+      <!-- ── Mode tabs: Manual / AI auto-fill ────────────────── -->
       <div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:14px">
         <button id="ac-mode-manual" type="button" onclick="_acSwitchMode('manual')"
                 style="padding:9px 16px;font-size:12px;font-weight:600;color:var(--purple);cursor:pointer;border:none;background:none;border-bottom:3px solid var(--purple);font-family:inherit;margin-bottom:-2px">✏️ Manual entry</button>
@@ -48252,7 +48296,7 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
 
       <!-- Verification gate that appears after Gemini fills the form -->
       <div id="ac-verify-banner" style="display:none;background:#fef3c7;border:1px solid #fcd34d;border-radius:10px;padding:10px 14px;margin-top:8px;font-size:11px;color:#92400e;line-height:1.4">
-        <strong>🤖 Fields below were filled by Gemini.</strong> Review each one — phone numbers and addresses are common hallucination targets. Click <strong>Verified</strong> to clear the 🤖 badge once you've confirmed. <em>The Add Clinic button is disabled until you verify every Gemini-filled field.</em>
+        <strong>🤖 Fields below were filled by Gemini.</strong> Review each one — phone numbers and addresses are common hallucination targets. Click <strong>Verified</strong> to clear the 🤖 badge once you've confirmed. <em>The Add Clinic button is disabled until you verify every AI-filled field.</em>
       </div>
     </div>
     <div class="modal-foot">
