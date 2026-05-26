@@ -21339,15 +21339,33 @@ function rowHasMember(row, name){
 }
 // Find an existing visit on a given day for a given clinic name (case-insensitive).
 // Returns {di, ri, row} or null.
+// Per user 2026-05-26: normalize clinic names so "Pediatric Associates of
+// Frisco" and "Pediatrics Associates Of Frisco" collapse to the same key.
+// Strips punctuation, case, plural-s endings, and noise words (of/the).
+function _normalizeClinicName(name){
+  if(!name) return '';
+  return String(name)
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]+/g, ' ')      // strip punctuation
+    .replace(/\b(of|the|and|&)\b/g, ' ') // ignore connector words
+    .replace(/s\b/g, '')                 // strip trailing s on each word (plural collapse)
+    .replace(/\s+/g, ' ')                // collapse whitespace
+    .trim();
+}
+window._normalizeClinicName = _normalizeClinicName;
+
 function findExistingVisitOnDay(di, clinicName){
   if(typeof S === 'undefined' || !S.days || !S.days[di] || !clinicName) return null;
-  var lower = ('' + clinicName).toLowerCase();
+  var target = _normalizeClinicName(clinicName);
+  if(!target) return null;
   var rows = S.days[di].rows;
   for(var i = 0; i < rows.length; i++){
     var r = rows[i];
     // Phase 9b: skip canceled rows. A canceled visit doesn't block adding the
     // same clinic again on the same day (matches the new same-week behavior).
-    if(r && r.clinic && r.status !== 'Canceled' && r.clinic.toLowerCase() === lower){
+    // Per user 2026-05-26: normalized-name match catches "Pediatric" vs
+    // "Pediatrics" + casing/punctuation drift.
+    if(r && r.clinic && r.status !== 'Canceled' && _normalizeClinicName(r.clinic) === target){
       return { di: di, ri: i, row: r };
     }
   }
@@ -27750,11 +27768,16 @@ function _rpScheduledClinicsForActiveWeek(dateStr){
       if(day.date < monKey || day.date > sunKey) return;
       day.rows.forEach(function(r){
         if(!r || !r.clinic) return;
-        // Phase 9b: skip canceled rows � once canceled/deleted, the same
+        // Phase 9b: skip canceled rows — once canceled/deleted, the same
         // clinic should be re-addable that week without a warning.
         if(r.status === 'Canceled') return;
-        if(out[r.clinic]) return;   // first-seen wins (deterministic dedupe info)
-        out[r.clinic] = { date: day.date, member: r.member || '' };
+        // Per user 2026-05-26: normalize the key so "Pediatric" vs
+        // "Pediatrics" + casing variants collapse to the same week-dupe.
+        var key = (typeof _normalizeClinicName === 'function')
+          ? _normalizeClinicName(r.clinic)
+          : (r.clinic || '').toLowerCase();
+        if(!key || out[key]) return;   // first-seen wins (deterministic dedupe info)
+        out[key] = { date: day.date, member: r.member || '', actualName: r.clinic };
       });
     });
   } catch(_){}
@@ -27789,7 +27812,9 @@ function _rpV4Collect(A, B, halfWidth, opts){
     // schedule — recommending a clinic that's already booked is just noise.
     if(scheduled[name]) return;
     // Phase 9: skip clinics already planned anywhere in this Mon-Sun week.
-    if(weekScheduled[name]) return;
+    // Per 2026-05-26: weekScheduled is keyed by normalized name now.
+    var _normN = (typeof _normalizeClinicName === 'function') ? _normalizeClinicName(name) : (name||'').toLowerCase();
+    if(weekScheduled[_normN]) return;
     var coord = (typeof getCoordForBusiness === 'function') ? getCoordForBusiness(name) : null;
     if(!coord) return;
     var perp = _rpV4PerpMiles(coord, A, B);
@@ -28762,7 +28787,13 @@ function _rpRwBuildRoutes(){
     // shows a confirmation gate) if they really want to duplicate.
     if(typeof _rpScheduledClinicsForActiveWeek === 'function'){
       var _wkSched = _rpScheduledClinicsForActiveWeek();
-      Object.keys(_wkSched).forEach(function(n){ excludeSet[n] = true; });
+      // Per 2026-05-26: keys are normalized; recover the actual clinic name
+      // from each entry's .actualName so excludeSet uses real names that
+      // match the candidate pool.
+      Object.keys(_wkSched).forEach(function(k){
+        var actual = (_wkSched[k] && _wkSched[k].actualName) || k;
+        excludeSet[actual] = true;
+      });
     }
     // 5. Build pool (already excludes scheduled clinics if they're in S.days)
     var pool = (needNew > 0) ? _rpRwBuildCandidatePool(start.coord, excludeSet) : [];
@@ -32549,6 +32580,15 @@ function confirmAddVisit(){
     var isAdminUser_dup = (typeof isAdmin === 'function') && isAdmin();
     if(!isAdminUser_dup && !window._addVisitOverrideDupe){
       showToast('"' + name + '" is already on the schedule for ' + (S.days[di] && S.days[di].date) + ' (by ' + existingMember + '). One visit per clinic per day — pick a different date.');
+      // Per user 2026-05-26: notify admin via activity log when a member
+      // tries (and is blocked from) adding a duplicate.
+      try {
+        if(typeof logActivity === 'function'){
+          logActivity('dup_blocked', meName || 'member', name,
+            'Tried to add "' + name + '" on ' + ((S.days[di] && S.days[di].date) || '?') + ' — already assigned to ' + existingMember + '. Blocked (same-day duplicate).',
+            (S.days[di] && S.days[di].date) || '');
+        }
+      } catch(_){}
       return;
     }
     // Admin path: allow override with explicit confirm + audit flag
@@ -32580,7 +32620,9 @@ function confirmAddVisit(){
   if(type !== 'outreach' && !window._addVisitOverrideDupe && typeof _rpScheduledClinicsForActiveWeek === 'function'){
     var targetDate = (S.days[di] && S.days[di].date) || '';
     var weekMap = _rpScheduledClinicsForActiveWeek(targetDate);
-    var wkMatch = weekMap && weekMap[name];
+    // Per user 2026-05-26: normalize for lookup so name-typo variants match
+    var weekKey = (typeof _normalizeClinicName === 'function') ? _normalizeClinicName(name) : (name || '').toLowerCase();
+    var wkMatch = weekMap && weekMap[weekKey];
     if(wkMatch && wkMatch.date !== targetDate){
       var meName2 = (CURRENT_USER && CURRENT_USER.name) || '';
       var otherMember = wkMatch.member || '(unassigned)';
@@ -32594,6 +32636,13 @@ function confirmAddVisit(){
       var isAdminUser_wk = (typeof isAdmin === 'function') && isAdmin();
       if(!isAdminUser_wk){
         showToast('"' + name + '" is already scheduled this week on ' + wkLabel + ' by ' + otherMember + '. One visit per clinic per week — pick a different clinic or wait until next week.');
+        try {
+          if(typeof logActivity === 'function'){
+            logActivity('dup_blocked', meName2 || 'member', name,
+              'Tried to add "' + name + '" — already scheduled this week (' + wkLabel + ' by ' + otherMember + '). Blocked (same-week duplicate).',
+              targetDate);
+          }
+        } catch(_){}
         return;
       }
       // Admin override path
