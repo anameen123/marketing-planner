@@ -3561,27 +3561,32 @@ body.role-front_desk #referrals-view {
         <!-- Step progress dots -->
         <div id="rp-rw-progress" style="display:flex;gap:6px;justify-content:center;margin-bottom:14px"></div>
 
-        <!-- STEP 1: Starting location -->
+        <!-- STEP 1: Starting location — redesigned 2026-05-26 to match
+             Corridor's inline pattern. PRIMARY action is the purple 📍 Map
+             button. Search input is the secondary keyboard path. Three
+             choices (Facility / Custom / Clinic) compressed into a single
+             pill-toggle above the picker. -->
         <div id="rp-rw-step-1" class="rp-rw-step" style="display:block">
-          <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:6px">Step 1 — Where do you start?</div>
-          <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Pick a starting point. If it's a clinic, MVA, or outreach stop, it counts as your first visit.</div>
-          <div style="display:flex;flex-direction:column;gap:6px">
-            <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;padding:8px;border:1px solid var(--border);border-radius:6px;background:#fff">
-              <input type="radio" name="rp-rw-start-type" value="facility" checked onchange="_rpRwOnStartTypeChange()" style="cursor:pointer">
-              <span><b>🏥 WCG facility</b> <span style="color:var(--muted)">— Frisco, Castle Hills, Plano, or Richardson</span></span>
-            </label>
-            <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;padding:8px;border:1px solid var(--border);border-radius:6px;background:#fff">
-              <input type="radio" name="rp-rw-start-type" value="custom" onchange="_rpRwOnStartTypeChange()" style="cursor:pointer">
-              <span><b>📍 Custom location</b> <span style="color:var(--muted)">— home, hotel, or anywhere</span></span>
-            </label>
-            <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;padding:8px;border:1px solid var(--border);border-radius:6px;background:#fff">
-              <input type="radio" name="rp-rw-start-type" value="clinic" onchange="_rpRwOnStartTypeChange()" style="cursor:pointer">
-              <span><b>🏥 Clinic / ⚖ MVA / 📣 outreach</b> <span style="color:var(--muted)">— counts as visit #1</span></span>
-            </label>
+          <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px">Step 1 — Where do you start? <span style="color:#ef4444">*</span></div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Tap <b>📍 Map</b> to click any pin (preview + confirm), or type to search. Clinic / MVA / outreach starts count as visit #1.</div>
+
+          <!-- Single inline picker: [search] [📍 Map] — matches Corridor -->
+          <div style="display:grid;grid-template-columns:1fr auto;gap:8px;margin-bottom:8px">
+            <input id="rp-rw-clinic-search" type="text" placeholder="Type a clinic, MVA, outreach, or WCG facility name…" oninput="_rpRwClinicSearch()" onfocus="_rpRwClinicSearch()" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box">
+            <button type="button" onclick="_rpRwStartPickOnMap()" title="Click any pin on the map to preview, then ✓ Confirm" style="background:#7030A0;color:#fff;border:none;border-radius:8px;padding:10px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;white-space:nowrap;box-shadow:0 2px 6px rgba(112,48,160,.3)">📍 Pick on map</button>
           </div>
-          <!-- Per-type input panels (only one visible based on radio) -->
-          <div id="rp-rw-start-facility" style="margin-top:10px">
-            <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Pick facility</label>
+          <div id="rp-rw-clinic-suggestions" style="background:#fff;border:1px solid var(--border);border-radius:6px;max-height:160px;overflow-y:auto;display:none;margin-bottom:8px"></div>
+
+          <!-- Quick-pick pills for the 3 start types -->
+          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px">
+            <span style="font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.05em;align-self:center;margin-right:4px">Quick start:</span>
+            <button type="button" onclick="_rpRwQuickStartFacility()" style="background:#fff;border:1px solid var(--border);color:#1F3864;border-radius:14px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">🏥 WCG facility</button>
+            <button type="button" onclick="_rpRwQuickStartCustom()"   style="background:#fff;border:1px solid var(--border);color:#1F3864;border-radius:14px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">📍 Custom location</button>
+          </div>
+
+          <!-- WCG facility quick-pick panel (hidden by default; toggled by quick-start pill) -->
+          <div id="rp-rw-start-facility" style="display:none;margin-top:10px;padding:10px 12px;background:#f8fafc;border:1px solid var(--border);border-radius:8px">
+            <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Pick a WCG facility</label>
             <select id="rp-rw-facility-select" onchange="_rpRwFacilityPick(this.value)" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-size:12px;background:#fff">
               <option value="">— Choose —</option>
               <option value="_facility_frisco_er">Frisco ER</option>
@@ -3590,19 +3595,20 @@ body.role-front_desk #referrals-view {
               <option value="_facility_richardson">Richardson</option>
             </select>
           </div>
-          <div id="rp-rw-start-custom" style="display:none;margin-top:10px">
+
+          <!-- Custom location panel (hidden by default; toggled by quick-start pill) -->
+          <div id="rp-rw-start-custom" style="display:none;margin-top:10px;padding:10px 12px;background:#f8fafc;border:1px solid var(--border);border-radius:8px">
             <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Custom address or label</label>
             <input id="rp-rw-custom-name" type="text" placeholder="e.g. Home, 123 Main St, Plano" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-size:12px;background:#fff;box-sizing:border-box">
-            <button type="button" onclick="_rpRwStartPickOnMap()" style="margin-top:6px;background:#1F3864;color:#fff;border:none;border-radius:5px;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer">📍 Or pick on map</button>
-            <div style="font-size:10px;color:var(--muted);margin-top:4px;font-style:italic">Custom locations show as a temporary blue pin and don't create a visit row.</div>
+            <div style="font-size:10px;color:var(--muted);margin-top:4px;font-style:italic">Type a label, then tap <b>📍 Pick on map</b> above to drop a pin anywhere.</div>
           </div>
-          <div id="rp-rw-start-clinic" style="display:none;margin-top:10px">
-            <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Type to search clinic / MVA / outreach</label>
-            <input id="rp-rw-clinic-search" type="text" placeholder="Start typing a name…" oninput="_rpRwClinicSearch()" onfocus="_rpRwClinicSearch()" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-size:12px;background:#fff;box-sizing:border-box">
-            <div id="rp-rw-clinic-suggestions" style="background:#fff;border:1px solid var(--border);border-radius:6px;margin-top:4px;max-height:160px;overflow-y:auto;display:none"></div>
-            <button type="button" onclick="_rpRwStartPickOnMap()" style="margin-top:6px;background:#1F3864;color:#fff;border:none;border-radius:5px;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer">📍 Or pick on map</button>
-          </div>
-          <div id="rp-rw-step-1-summary" style="margin-top:10px;font-size:11px;color:#16a34a;font-weight:600;display:none"></div>
+
+          <!-- Hidden radio (legacy) — still used by _rpRwOnStartTypeChange + downstream logic -->
+          <input type="radio" name="rp-rw-start-type" value="facility" id="rp-rw-type-facility" onchange="_rpRwOnStartTypeChange()" style="display:none">
+          <input type="radio" name="rp-rw-start-type" value="custom"   id="rp-rw-type-custom"   onchange="_rpRwOnStartTypeChange()" style="display:none">
+          <input type="radio" name="rp-rw-start-type" value="clinic"   id="rp-rw-type-clinic"   onchange="_rpRwOnStartTypeChange()" checked style="display:none">
+
+          <div id="rp-rw-step-1-summary" style="margin-top:10px;font-size:12px;color:#16a34a;font-weight:700;display:none;padding:8px 12px;background:#f0fdf4;border:1px solid #86efac;border-radius:6px"></div>
         </div>
 
         <!-- STEP 2: Visit count — RANGE (default) or SPECIFIC (per user 2026-05-26).
@@ -28265,6 +28271,52 @@ function _rpRwOnStartTypeChange(){
 }
 window._rpRwOnStartTypeChange = _rpRwOnStartTypeChange;
 
+// Quick-start pills (2026-05-26): the Step 1 redesign hides the radios
+// behind two pill buttons + the inline search/map picker (which defaults
+// to startType='clinic'). Tapping a pill flips startType and unveils the
+// matching sub-panel (facility dropdown or custom-label input). Tapping
+// the same pill twice collapses back to clinic mode.
+function _rpRwQuickStartFacility(){
+  if(_RP_RW.startType === 'facility'){
+    // Toggle off → back to clinic search mode
+    var rcl = document.getElementById('rp-rw-type-clinic');
+    if(rcl){ rcl.checked = true; }
+    _rpRwOnStartTypeChange();
+    return;
+  }
+  var r = document.getElementById('rp-rw-type-facility');
+  if(r){ r.checked = true; }
+  _rpRwOnStartTypeChange();
+  // Hide suggestion dropdown if it's open
+  var sug = document.getElementById('rp-rw-clinic-suggestions');
+  if(sug){ sug.style.display = 'none'; }
+  // Focus the facility select for quick keyboard pick
+  setTimeout(function(){
+    var sel = document.getElementById('rp-rw-facility-select');
+    if(sel && typeof sel.focus === 'function') sel.focus();
+  }, 50);
+}
+window._rpRwQuickStartFacility = _rpRwQuickStartFacility;
+
+function _rpRwQuickStartCustom(){
+  if(_RP_RW.startType === 'custom'){
+    var rcl = document.getElementById('rp-rw-type-clinic');
+    if(rcl){ rcl.checked = true; }
+    _rpRwOnStartTypeChange();
+    return;
+  }
+  var r = document.getElementById('rp-rw-type-custom');
+  if(r){ r.checked = true; }
+  _rpRwOnStartTypeChange();
+  var sug = document.getElementById('rp-rw-clinic-suggestions');
+  if(sug){ sug.style.display = 'none'; }
+  setTimeout(function(){
+    var inp = document.getElementById('rp-rw-custom-name');
+    if(inp && typeof inp.focus === 'function') inp.focus();
+  }, 50);
+}
+window._rpRwQuickStartCustom = _rpRwQuickStartCustom;
+
 // Try to lock in the start from current step-1 input state. Returns true on success.
 function _rpRwTryResolveStart(){
   if(_RP_RW.startType === 'facility'){
@@ -28429,6 +28481,15 @@ function _rpRwClinicPick(name, type){
   if(!coord){
     if(typeof showToast === 'function') showToast('No coordinates known for ' + name + '. Try another.');
     return;
+  }
+  // 2026-05-26: Step-1 redesign — the inline search is always visible even
+  // when a Quick-Start pill flipped startType to facility/custom. If the
+  // user actually picks a clinic from the suggestions, we MUST switch
+  // startType back to 'clinic' so _rpRwTryResolveStart accepts it.
+  if(_RP_RW.startType !== 'clinic'){
+    var rcl = document.getElementById('rp-rw-type-clinic');
+    if(rcl){ rcl.checked = true; }
+    if(typeof _rpRwOnStartTypeChange === 'function') _rpRwOnStartTypeChange();
   }
   _RP_RW.start = {
     name: name, coord: coord, kind: type || 'clinic',
