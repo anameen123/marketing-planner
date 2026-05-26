@@ -38339,16 +38339,30 @@ var KPI_TARGETS={
 // Live-search across CLINIC_BANK, MVA_ATTORNEYS, OUTREACH, REFERRAL_LOG
 // (patients), PENDING_REFERRALS, MEMBERS, plus a hardcoded list of dashboard
 // section names (jumps to the right tab).
+// Per user 2026-05-26: index includes all sub-tabs so a search like
+// "finances/rankings" jumps to the right nested view. onAfter is a JS string
+// run after switchTab to drill into the sub-tab.
 var DASHBOARD_SECTIONS = [
-  { label: 'Home',         icon: '🏠', tab: 'home' },
-  { label: 'Dashboard / Schedule', icon: '📅', tab: 'schedule' },
-  { label: 'Team / Members', icon: '👥', tab: 'members' },
-  { label: 'Bank (Clinics + MVAs + Outreach)', icon: '🏢', tab: 'bank' },
-  { label: 'Referrals',     icon: '📋', tab: 'referrals' },
-  { label: 'Finances / Spending', icon: '💰', tab: 'finances' },
-  { label: 'Reports',       icon: '📋', tab: 'reports' },
-  { label: 'Activity Feed', icon: '📡', tab: 'feed' },
-  { label: 'Profile',       icon: '🪪', tab: 'profile' }
+  // Top-level tabs
+  { label: 'Home',                 icon: '🏠', tab: 'home',      keywords: ['landing', 'start'] },
+  { label: 'Dashboard / Schedule', icon: '📅', tab: 'schedule',  keywords: ['calendar', 'planning calendar', 'visits'] },
+  { label: 'Team / Members',       icon: '👥', tab: 'members',   keywords: ['stats', 'staff', 'org', 'tree'] },
+  { label: 'Bank of Targets',      icon: '🏢', tab: 'bank',      keywords: ['businesses', 'targets'] },
+  { label: 'Referrals',            icon: '📋', tab: 'referrals', keywords: ['patient', 'pending', 'approved'] },
+  { label: 'Finances',             icon: '💰', tab: 'finances',  keywords: ['budget', 'money'] },
+  { label: 'Reports',              icon: '📋', tab: 'reports',   keywords: ['analytics', 'progress report'] },
+  { label: 'Activity Feed',        icon: '📡', tab: 'feed',      keywords: ['log', 'history', 'changes'] },
+  { label: 'Profile',              icon: '🪪', tab: 'profile',   keywords: ['account', 'settings', 'password'] },
+  // Sub-tabs under Bank
+  { label: 'Bank → Clinics',          icon: '🏥', tab: 'bank', after: "if(typeof switchOverallTab==='function')switchOverallTab('bank')", keywords: ['clinic', 'targets'] },
+  { label: 'Bank → MVA Attorneys',    icon: '⚖',  tab: 'bank', after: "if(typeof switchOverallTab==='function')switchOverallTab('mva')",  keywords: ['mva', 'attorney', 'law'] },
+  { label: 'Bank → Community Outreach',icon: '🏘', tab: 'bank', after: "if(typeof switchOverallTab==='function')switchOverallTab('outreach')", keywords: ['outreach', 'mosque', 'event'] },
+  // Sub-tabs under Finances
+  { label: 'Finances → Spending Log', icon: '📒', tab: 'finances', after: "if(typeof switchFinancesTab==='function')switchFinancesTab('log')",      keywords: ['spending', 'expenses', 'budget', 'log'] },
+  { label: 'Finances → Rankings',     icon: '🏆', tab: 'finances', after: "if(typeof switchFinancesTab==='function')switchFinancesTab('rankings')", keywords: ['ranking', 'leaderboard', 'clinic rank', 'member rank', 'mva rank', 'spending rank'] },
+  { label: 'Finances → Tier Settings',icon: '⚙', tab: 'finances', after: "if(typeof switchFinancesTab==='function')switchFinancesTab('tiers')",    keywords: ['tier', 'settings', 'thresholds', 'config'] },
+  // Status / leads page (legacy switchTab name)
+  { label: 'Status / Leads page',     icon: '📊', tab: 'leads-page', keywords: ['leads', 'status', 'pipeline', 'visit status'] }
 ];
 function _openMasterSearch(){
   var m = document.getElementById('master-search-modal');
@@ -38389,11 +38403,23 @@ function _runMasterSearch(){
             + '</div>';
         }).join('');
   }
+  // Per user 2026-05-26: tokenize the query so "finances/rankings" or
+  // "bank mva" matches multi-word section labels. Each token must hit
+  // either the label or one of the keywords.
+  var tokens = q.split(/[\s\/\-,]+/).filter(Boolean);
+  function sectionMatches(s){
+    if(!tokens.length) return false;
+    var haystack = (s.label + ' ' + (s.keywords || []).join(' ')).toLowerCase();
+    return tokens.every(function(t){ return haystack.includes(t); });
+  }
   var sections = [];
-  // Dashboard sections
-  var sec = DASHBOARD_SECTIONS.filter(function(s){ return s.label.toLowerCase().includes(q); })
-    .slice(0, 5).map(function(s){
-      return { icon: s.icon, title: s.label, sub: 'Tab: ' + s.tab, onclick: 'switchTab(\'' + s.tab + '\');_closeMasterSearch()' };
+  // Dashboard sections (top-level + sub-tabs)
+  var sec = DASHBOARD_SECTIONS.filter(sectionMatches)
+    .slice(0, 8).map(function(s){
+      var click = "switchTab('" + s.tab + "');";
+      if(s.after) click += "setTimeout(function(){try{" + s.after.replace(/'/g, "\\'") + "}catch(_){}}, 280);";
+      click += "_closeMasterSearch()";
+      return { icon: s.icon, title: s.label, sub: 'Tab: ' + s.tab, onclick: click };
     });
   sections.push(group('Sections', sec));
   // Clinics
