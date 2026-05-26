@@ -3440,6 +3440,11 @@ body.role-front_desk #referrals-view {
         </label>
         <div id="rp-end-err" style="font-size:10px;color:#ef4444;margin-top:4px;display:none;font-weight:600">Pick an End — or tick <b>Round trip</b> to return to Start.</div>
       </div>
+      <!-- Pin-pick status panel (per user 2026-05-26) — shows "👆 Click a
+           pin to set START/END" + the pending preview + ✓ Confirm / ✕ Cancel
+           buttons. Dedicated to corridor mode (the legacy rp-pick-status
+           span in the map header is too small for the new preview UI). -->
+      <div id="rp-corridor-pick-status" style="display:none;margin-bottom:10px"></div>
 
       <!-- ── RANDOM PICK MODE — Picked stops list (per user 2026-05-22) ──
            Visible only when mode = 'random'. Lists every pin the user has
@@ -25911,6 +25916,9 @@ function _rpPickEndpoint(which, idx){
   // Visual: refresh start/end highlights on the map.
   if(typeof _rpRefreshHighlights === 'function') _rpRefreshHighlights();
   if(typeof _rpUpdateStatus === 'function') _rpUpdateStatus();
+  // Per user 2026-05-26: draw the Start→End straight-line centerline on
+  // the map as soon as both endpoints are resolved.
+  if(typeof _rpRefreshCenterline === 'function') _rpRefreshCenterline();
   // If both ends are now set, build the smart panel (also draws the
   // corridor + fitBounds on the map).
   if(_RP_START_NAME && _RP_END_NAME){
@@ -25948,11 +25956,52 @@ function _rpPickSame(){
 }
 window._rpPickSame = _rpPickSame;
 
+// Start→End centerline drawn on the day-view map (per user 2026-05-26).
+// Gives the user a clear visual of the corridor axis as soon as both
+// endpoints are resolved, before they ever click "Find candidates".
+var _DV_CENTERLINE = null;
+function _rpDrawCenterline(A, B){
+  if(!_DV_MAP || typeof L === 'undefined' || !A || !B) return;
+  if(_DV_CENTERLINE){ try { _DV_MAP.removeLayer(_DV_CENTERLINE); } catch(_){} _DV_CENTERLINE = null; }
+  _DV_CENTERLINE = L.polyline(
+    [[A.lat, A.lng], [B.lat, B.lng]],
+    { color:'#1F3864', weight:3, opacity:0.85, dashArray:'10,6', interactive:false }
+  ).addTo(_DV_MAP);
+  // Fit the map so both endpoints are visible (with a little padding).
+  try { _DV_MAP.fitBounds(_DV_CENTERLINE.getBounds().pad(0.25), { maxZoom: 13 }); } catch(_){}
+}
+window._rpDrawCenterline = _rpDrawCenterline;
+function _rpClearCenterline(){
+  if(_DV_CENTERLINE && _DV_MAP){
+    try { _DV_MAP.removeLayer(_DV_CENTERLINE); } catch(_){}
+  }
+  _DV_CENTERLINE = null;
+}
+window._rpClearCenterline = _rpClearCenterline;
+// Read current rp-start/rp-end, resolve their coords, draw the centerline
+// if both resolve (else clear). Called any time an endpoint changes.
+function _rpRefreshCenterline(){
+  try {
+    var startVal = (document.getElementById('rp-start') || {}).value || '';
+    var endVal   = (document.getElementById('rp-end')   || {}).value || '';
+    if(!startVal || !endVal){ _rpClearCenterline(); return; }
+    var A = (typeof getRouteCoord === 'function') ? getRouteCoord(startVal) : null;
+    var B = (endVal === '__same__') ? A : ((typeof getRouteCoord === 'function') ? getRouteCoord(endVal) : null);
+    if(A && B && (A.lat !== B.lat || A.lng !== B.lng)){
+      _rpDrawCenterline(A, B);
+    } else {
+      _rpClearCenterline();
+    }
+  } catch(_){}
+}
+window._rpRefreshCenterline = _rpRefreshCenterline;
+
 function closeRoutePlanner(){
   // Per user 2026-05-23: closing the drawer disarms the random-pick map
   // listener and clears the guided "S" marker so a future open starts fresh.
   if(typeof _rpDisarmRandomMap === 'function') _rpDisarmRandomMap();
   if(typeof _rpClearStartMarker === 'function') _rpClearStartMarker();
+  if(typeof _rpClearCenterline === 'function') _rpClearCenterline();
   document.getElementById('route-planner-modal').style.display = 'none';
   // Per user 2026-05-25: release the map-function lock so Add Visit
   // popups and other handlers work again.
@@ -25993,6 +26042,7 @@ var _RP_DIALOG_AWAITING = null;  // 'start' | 'end' | null
 function rpPickFromMapMode(which){
   if(which !== 'start' && which !== 'end') return;
   _RP_DIALOG_AWAITING = which;
+  _RP_DIALOG_PENDING  = null;   // start fresh — no pending pick yet
   // Per user 2026-05-23: drawer stays open. We arm the pick listener but
   // DON'T close the planner anymore — the map is visible on the left half
   // of the screen while the drawer occupies the right 460px.
@@ -26004,34 +26054,94 @@ function rpPickFromMapMode(which){
     window._RP_DIALOG_SNAPSHOT = { startVal:startVal, endVal:endVal, startLbl:startLbl, endLbl:endLbl };
   } catch(_){}
   if(typeof showToast === 'function'){
-    showToast('👆 Click any pin on the map to set the ' + (which === 'start' ? 'START' : 'END') + ' point. Planner stays open.');
+    showToast('👆 Click any pin on the map to preview the ' + (which === 'start' ? 'START' : 'END') + '. Then tap ✓ Confirm.');
   }
-  var st = document.getElementById('rp-pick-status');
-  if(st){
-    st.textContent = '👆 Click a pin on the map to set ' + (which === 'start' ? 'START' : 'END');
-    st.style.color = '#7030A0';
-    st.style.fontWeight = '700';
-    st.style.background = '#faf5ff';
-    st.style.border = '1px solid #d8b4fe';
-    st.style.padding = '7px 10px';
-    st.style.borderRadius = '8px';
-    st.style.fontSize = '11px';
-    st.style.display = 'block';
-    st.style.marginTop = '6px';
-  }
+  _rpRenderPickStatus();
 }
 window.rpPickFromMapMode = rpPickFromMapMode;
 
+// Per user 2026-05-26: pending state lives between pin click and confirm.
+// Re-clicking another pin overrides this. ✓ Confirm commits to rp-start /
+// rp-end. ✕ Cancel exits pin-pick mode without committing.
+var _RP_DIALOG_PENDING = null;
+
+function _rpRenderPickStatus(){
+  // Prefer the dedicated corridor-mode container (per user 2026-05-26).
+  // Falls back to the legacy rp-pick-status span in the map header.
+  var st = document.getElementById('rp-corridor-pick-status')
+        || document.getElementById('rp-pick-status');
+  if(!st) return;
+  if(!_RP_DIALOG_AWAITING){
+    st.style.display = 'none';
+    st.innerHTML = '';
+    return;
+  }
+  var which = _RP_DIALOG_AWAITING;
+  var label = which === 'start' ? 'START' : 'END';
+  var pending = _RP_DIALOG_PENDING;
+  st.style.color = '#7030A0';
+  st.style.fontWeight = '600';
+  st.style.background = '#faf5ff';
+  st.style.border = '1px solid #d8b4fe';
+  st.style.padding = '9px 11px';
+  st.style.borderRadius = '8px';
+  st.style.fontSize = '11px';
+  st.style.display = 'block';
+  st.style.marginTop = '0';
+  st.style.lineHeight = '1.5';
+  var head = '<div style="font-weight:800;color:#7030A0">👆 Click a pin on the map to set ' + label + '</div>';
+  if(pending){
+    var safeName = String(pending.name).replace(/</g, '&lt;');
+    head += '<div style="margin-top:6px;padding:6px 8px;background:#fff;border:1px solid #c4b5fd;border-radius:6px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">'
+      +    '<span style="color:#1F3864;font-weight:700">Pending: <span style="color:#7030A0">' + safeName + '</span></span>'
+      +    '<span style="display:flex;gap:6px">'
+      +      '<button type="button" onclick="_rpConfirmPendingPick()" style="background:#16a34a;color:#fff;border:none;border-radius:5px;padding:5px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">✓ Confirm</button>'
+      +      '<button type="button" onclick="_rpCancelPinMode()" style="background:#fff;color:#374151;border:1px solid #cbd5e1;border-radius:5px;padding:5px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">✕ Cancel</button>'
+      +    '</span>'
+      + '</div>'
+      + '<div style="margin-top:4px;font-size:10px;color:#7c2d12;font-style:italic">Click another pin to swap the preview before confirming.</div>';
+  } else {
+    head += '<div style="margin-top:6px;display:flex;justify-content:flex-end">'
+      +    '<button type="button" onclick="_rpCancelPinMode()" style="background:#fff;color:#374151;border:1px solid #cbd5e1;border-radius:5px;padding:4px 10px;font-size:10px;font-weight:600;cursor:pointer;font-family:DM Sans,sans-serif">✕ Cancel pin-pick</button>'
+      + '</div>';
+  }
+  st.innerHTML = head;
+}
+window._rpRenderPickStatus = _rpRenderPickStatus;
+
 // When a map pin is clicked and _RP_DIALOG_AWAITING is set, this consumes
-// the click — fills the corresponding dialog field and reopens the dialog.
+// the click. Per user 2026-05-26: now sets pending preview instead of
+// committing — user must click ✓ Confirm to actually fill the field.
+// Re-clicking another pin overrides the pending preview.
 function _rpDialogConsumePinClick(name){
   if(!_RP_DIALOG_AWAITING || !name) return false;
-  var which = _RP_DIALOG_AWAITING;
-  _RP_DIALOG_AWAITING = null;
-  // Resolve the pool entry so we can fill the visible label + hidden value
   var pool = window._RP_POOL || [];
   var match = pool.find(function(p){ return p.name === name; });
-  // Restore the snapshot first so the OTHER field doesn't lose its value
+  _RP_DIALOG_PENDING = { name: name, match: match || null };
+  _rpRenderPickStatus();
+  // Make sure the planner modal is still on top so user sees the buttons.
+  try {
+    var modal = document.getElementById('route-planner-modal');
+    if(modal && modal.style.display === 'none') modal.style.display = 'flex';
+  } catch(_){}
+  if(typeof showToast === 'function'){
+    showToast('Pending: ' + name + ' — tap ✓ Confirm or pick another pin.');
+  }
+  return true;
+}
+window._rpDialogConsumePinClick = _rpDialogConsumePinClick;
+
+// Commit the pending pin to the awaiting field. Called by the ✓ Confirm
+// button in the pick status panel.
+function _rpConfirmPendingPick(){
+  if(!_RP_DIALOG_AWAITING){ return; }
+  if(!_RP_DIALOG_PENDING){
+    if(typeof showToast === 'function') showToast('Click a pin first to set the preview, then tap ✓ Confirm.');
+    return;
+  }
+  var which = _RP_DIALOG_AWAITING;
+  var pending = _RP_DIALOG_PENDING;
+  // Restore the OTHER field's snapshot so it doesn't accidentally clear
   try {
     var snap = window._RP_DIALOG_SNAPSHOT || {};
     if(snap.startVal) (document.getElementById('rp-start') || {}).value = snap.startVal;
@@ -26039,27 +26149,35 @@ function _rpDialogConsumePinClick(name){
     if(snap.startLbl) (document.getElementById('rp-start-search') || {}).value = snap.startLbl;
     if(snap.endLbl)   (document.getElementById('rp-end-search')   || {}).value = snap.endLbl;
   } catch(_){}
-  // Now write the new pick into the awaiting field
   var inp = document.getElementById('rp-'+which+'-search');
   var hid = document.getElementById('rp-'+which);
-  if(match){
-    if(inp) inp.value = match.icon + ' ' + match.name + ' · ' + match.city;
-    if(hid) hid.value = match.value;
+  var m = pending.match;
+  if(m){
+    if(inp) inp.value = (m.icon || '📍') + ' ' + m.name + (m.city ? ' · ' + m.city : '');
+    if(hid) hid.value = m.value || m.name;
   } else {
-    // Pin name isn't in the route-planner pool (orphan business — e.g. a
-    // clinic without a recognized city). Store the name anyway so the
-    // user has feedback that the click landed.
-    if(inp) inp.value = '📍 ' + name;
-    if(hid) hid.value = name;
+    if(inp) inp.value = '📍 ' + pending.name;
+    if(hid) hid.value = pending.name;
   }
-  // Reopen the dialog so the user can continue
-  setTimeout(function(){
-    var modal = document.getElementById('route-planner-modal');
-    if(modal) modal.style.display = 'flex';
-  }, 100);
-  return true;
+  // Exit pin-pick mode
+  _RP_DIALOG_AWAITING = null;
+  _RP_DIALOG_PENDING  = null;
+  _rpRenderPickStatus();
+  if(typeof _rpRefreshCenterline === 'function') _rpRefreshCenterline();
+  if(typeof showToast === 'function'){
+    showToast('✓ ' + (which === 'start' ? 'Start' : 'End') + ' set: ' + pending.name);
+  }
 }
-window._rpDialogConsumePinClick = _rpDialogConsumePinClick;
+window._rpConfirmPendingPick = _rpConfirmPendingPick;
+
+// Exit pin-pick mode without committing — leaves rp-start/rp-end untouched.
+function _rpCancelPinMode(){
+  _RP_DIALOG_AWAITING = null;
+  _RP_DIALOG_PENDING  = null;
+  _rpRenderPickStatus();
+  if(typeof showToast === 'function') showToast('Pin-pick canceled.');
+}
+window._rpCancelPinMode = _rpCancelPinMode;
 
 // Show the coverage summary inline (in the rp-results panel). Lists how many
 // clinics / MVAs are mappable, groups unresolved ones by their (unrecognized)
@@ -29345,6 +29463,10 @@ function _rpV5FindForLevel(A, B, k, opts){
       }
       var days = (typeof daysSinceLastVisit === 'function') ? daysSinceLastVisit(name) : null;
       var rec = (typeof recencyBucket === 'function') ? recencyBucket(days) : { color:'#9ca3af', key:'never' };
+      // Per user 2026-05-26: only suggest stale (green/grey) or medium-stale
+      // (yellow) candidates. Skip recently visited ones — they shouldn't be
+      // re-suggested. fresh=red (just visited), warm=orange (recent).
+      if(rec.key === 'fresh' || rec.key === 'warm') return;
       out.push({
         name: name, bizType: bizType, spec: spec || '',
         coord: coord, days: days, rec: rec,
@@ -29363,16 +29485,41 @@ function _rpV5FindForLevel(A, B, k, opts){
   var cands = collect(width);
   var effectiveWidth = width;
   // (autoExpand kept on the opts contract for back-compat but is a no-op.)
-  // Sort: oldest-since-visited first (ripest), then closest to line.
-  // Per user 2026-05-25 (revised): null (never visited) treated as RIPE
-  // (Infinity) — cold leads are top recommendation priority.
+  // Sort priority (per user 2026-05-26):
+  //   1. Green (ripe) + Grey (never) first — sorted by days-stale descending
+  //   2. Yellow at the bottom — same internal sort
+  // Tiebreak: closer to the centerline first.
+  function _bucketRank(c){
+    var k = c.rec && c.rec.key;
+    if(k === 'ripe' || k === 'never') return 0;
+    return 1;   // yellow
+  }
   cands.sort(function(a,b){
+    var ra = _bucketRank(a), rb = _bucketRank(b);
+    if(ra !== rb) return ra - rb;
     var aD = (a.days == null) ? Infinity : a.days;
     var bD = (b.days == null) ? Infinity : b.days;
-    if(aD !== bD) return bD - aD;   // stalest first
+    if(aD !== bD) return bD - aD;   // stalest first within bucket
     return a.absPerp - b.absPerp;
   });
-  return { candidates: cands, effectiveWidth: effectiveWidth, tLo: tLo, tHi: tHi };
+  // Per user 2026-05-26: split into +side and -side, take top 5 from each.
+  // The wizard surfaces max 10 candidates per level (5 per side).
+  var POSITIVE = [], NEGATIVE = [];
+  cands.forEach(function(c){
+    if(c.perp >= 0) POSITIVE.push(c); else NEGATIVE.push(c);
+  });
+  var positiveSide = POSITIVE.slice(0, 5);
+  var negativeSide = NEGATIVE.slice(0, 5);
+  // Keep `candidates` as the flat combined list (positive first, then
+  // negative) so any older code path that reads .candidates still works.
+  var combined = positiveSide.concat(negativeSide);
+  return {
+    candidates: combined,
+    positiveSide: positiveSide,
+    negativeSide: negativeSide,
+    effectiveWidth: effectiveWidth,
+    tLo: tLo, tHi: tHi
+  };
 }
 
 // Entry — called by "Find candidates" in corridor mode. Replaces v4.
@@ -29395,6 +29542,21 @@ function _rpV5Start(){
   var N = parseInt((document.getElementById('rp-level-count') || {}).value, 10) || 5;
   if(N < 1) N = 1; if(N > 12) N = 12;
   var halfWidth = parseFloat((document.getElementById('rp-corridor') || {}).value) || 3;
+  // Per user 2026-05-26: corridor half-width must be < 25% of the straight-
+  // line Start→End length. Clamp + toast if exceeded so the user sees what
+  // was applied.
+  var straightMi = _rpHaversineMiles(A, B);
+  var maxHalfWidth = straightMi * 0.25;
+  if(maxHalfWidth < 0.5) maxHalfWidth = 0.5;   // avoid sub-half-mile for tiny round-trips
+  if(halfWidth > maxHalfWidth){
+    var capped = Math.floor(maxHalfWidth * 10) / 10;
+    var inp = document.getElementById('rp-corridor');
+    if(inp) inp.value = capped;
+    if(typeof showToast === 'function'){
+      showToast('Corridor half-width capped at ' + capped.toFixed(1) + ' mi (25% of the ' + straightMi.toFixed(1) + ' mi Start→End length).');
+    }
+    halfWidth = capped;
+  }
   var autoExpand = !!(document.getElementById('rp-auto-expand') && document.getElementById('rp-auto-expand').checked);
   var specFilter = (document.getElementById('rp-specialty') || {}).value || '';
   var skipVisited = !!(document.getElementById('rp-skip-visited') && document.getElementById('rp-skip-visited').checked);
@@ -29482,9 +29644,10 @@ function _rpV5ShowLevel(k){
     +   ' · <span style="color:var(--muted)">'+slice.candidates.length+' candidate'+(slice.candidates.length===1?'':'s')+' found · sorted longest-not-visited first</span>'
     +   widenBtns
     + '</div>';
-  // Candidate list
+  // Candidate list — per user 2026-05-26: split into ± side columns, max 5
+  // per side, only green/grey/yellow shown (fresh/warm filtered out upstream).
   if(slice.candidates.length === 0){
-    html += '<div style="padding:14px;background:#fafbfc;border:1px dashed var(--border);border-radius:8px;font-size:12px;color:var(--muted);font-style:italic;text-align:center">No candidates in this slice at ±'+(slice.effectiveWidth||base)+' mi.'
+    html += '<div style="padding:14px;background:#fafbfc;border:1px dashed var(--border);border-radius:8px;font-size:12px;color:var(--muted);font-style:italic;text-align:center">No stale-enough candidates in this slice at ±'+(slice.effectiveWidth||base)+' mi (recently visited clinics are not suggested).'
       + (widenedBy < 2 ? ' Try the <b>+'+(widenedBy<1?'1':'2')+' mi</b> button above for this level only, or skip and click <b>Next →</b>.' : ' This level is at the +2 mi cap — skip it with <b>Next →</b>.')
       + '</div>';
   } else {
@@ -29492,7 +29655,9 @@ function _rpV5ShowLevel(k){
     // Same-side rule: once a level has a pick, candidates on the opposite
     // side are visually dimmed so the user sees they can't be added.
     var lockedSide = picks.length > 0 ? (picks[0].perp >= 0 ? '+' : '-') : null;
-    html += slice.candidates.map(function(c, i){
+    var pickCount = picks.length;
+    var atPickCap = pickCount >= 3;
+    function renderRow(c){
       var checked = picks.some(function(p){ return p.name === c.name; }) ? 'checked' : '';
       var safeName = String(c.name).replace(/'/g,"\\'").replace(/"/g,'&quot;');
       var typeIcon = c.bizType === 'mva' ? '⚖' : '🏥';
@@ -29503,21 +29668,41 @@ function _rpV5ShowLevel(k){
       var sideColor = c.perp >= 0 ? '#3b82f6' : '#ef4444';
       var perpStr = sideSign + Math.abs(c.perp).toFixed(1) + ' mi';
       var thisSide = c.perp >= 0 ? '+' : '-';
-      var isLocked = (lockedSide && thisSide !== lockedSide && !checked);
+      var blockedBySide = (lockedSide && thisSide !== lockedSide && !checked);
+      var blockedByCap  = (atPickCap && !checked);
+      var isLocked = blockedBySide || blockedByCap;
       var rowStyle = isLocked
         ? 'display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px dashed #fecaca;border-radius:8px;cursor:not-allowed;background:#fef2f2;margin-bottom:4px;opacity:.55'
         : 'display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid #f1f5f9;border-radius:8px;cursor:pointer;background:#fff;margin-bottom:4px;transition:background .12s';
       var hover = isLocked ? '' : ' onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'#fff\'"';
-      var lockTitle = isLocked ? ' title="Opposite side from existing pick in this level — uncheck the other one first, or pick this in a different level."' : '';
+      var lockTitle = blockedByCap
+        ? ' title="Max 3 picks per level — uncheck one first."'
+        : (blockedBySide ? ' title="Opposite side from existing pick in this level — uncheck the other one first."' : '');
       return '<label style="'+rowStyle+'"'+hover+lockTitle+'>'
         + '<input type="checkbox" '+checked+(isLocked?' disabled':'')+' onchange="_rpV5ToggleCheck('+k+',\''+safeName+'\',this.checked)" style="cursor:'+(isLocked?'not-allowed':'pointer')+';flex-shrink:0">'
         + '<span style="font-size:13px">'+dot+' '+typeIcon+'</span>'
         + '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><strong>'+c.name.replace(/</g,'&lt;')+'</strong> <span style="color:var(--muted);font-size:10px">· '+typeLbl+' · '+staleLbl+'</span></span>'
         + '<span title="Deroute from the Start→End line: '+(c.perp>=0?'positive':'negative')+' side · '+Math.abs(c.perp).toFixed(2)+' miles perpendicular" style="font-size:9px;color:#fff;background:'+sideColor+';border-radius:8px;padding:2px 7px;font-weight:700;flex-shrink:0">'+perpStr+'</span>'
         + '</label>';
-    }).join('');
+    }
+    function renderColumn(label, color, list, sideKey){
+      var head = '<div style="font-size:11px;font-weight:800;color:'+color+';text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;padding:4px 8px;background:'+color+'22;border-radius:6px;display:inline-block">'+label+' · '+list.length+'/5</div>';
+      if(list.length === 0){
+        return '<div>'+head+'<div style="font-size:11px;color:var(--muted);font-style:italic;padding:8px 4px">None on this side.</div></div>';
+      }
+      return '<div>'+head+list.map(renderRow).join('')+'</div>';
+    }
+    var pos = slice.positiveSide || [];
+    var neg = slice.negativeSide || [];
+    html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:6px">'
+      + renderColumn('➕ Positive side', '#3b82f6', pos, '+')
+      + renderColumn('➖ Negative side', '#ef4444', neg, '-')
+      + '</div>';
     if(lockedSide){
       html += '<div style="font-size:10px;color:#7c2d12;background:#fff7ed;border:1px solid #fed7aa;border-radius:6px;padding:5px 8px;margin-top:4px;font-style:italic">🔒 Same-side rule: this level is locked to the <b>'+lockedSide+' side</b>. Opposite-side rows are dimmed.</div>';
+    }
+    if(atPickCap){
+      html += '<div style="font-size:10px;color:#7c2d12;background:#fff7ed;border:1px solid #fed7aa;border-radius:6px;padding:5px 8px;margin-top:4px;font-style:italic">📌 Max-3 cap reached on this level. Uncheck one to add another.</div>';
     }
   }
   // Navigation buttons
@@ -29573,6 +29758,14 @@ function _rpV5ToggleCheck(k, name, on){
     // on the same side of the Start→End line. Crossing sides per-level adds
     // zigzag without buying coverage in a different depth slice.
     var existing = _RP_V5_PICKS[key];
+    // Per-level pick cap (user 2026-05-26): max 3 picks per level.
+    if(existing.length >= 3){
+      if(typeof showToast === 'function'){
+        showToast('Max 3 picks per level. Uncheck one to add another.');
+      }
+      _rpV5ShowLevel(k);
+      return;
+    }
     if(existing.length > 0){
       var existingSide = existing[0].perp >= 0 ? '+' : '-';
       var newSide      = c.perp        >= 0 ? '+' : '-';
