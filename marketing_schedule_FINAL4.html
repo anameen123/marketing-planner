@@ -1957,46 +1957,19 @@ body.role-front_desk #referrals-view {
       </div><div class="cal-card">
         <div class="cal-month-nav">
           <span id="cal-month-label">May 2026</span>
-          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
-            <!-- Business-type chips (per user 2026-05-22 v2) — rebuilt as proper
-                 flex pills so the icon + label sit INSIDE the same background,
-                 not floating separately. Visible solid border, slightly bigger
-                 padding for readability. Toggle which business types contribute
-                 to the day's visit-count badge; default = all on. -->
-            <!-- Per user 2026-05-26 contrast fix: chips/dropdowns/buttons in
-                 the calendar toolbar were rgba(255,255,255,.22) on the navy
-                 gradient → unreadable, looked like overlapping/misplaced text.
-                 Now solid white background with navy text (high contrast),
-                 with a subtle purple ring when active. -->
-            <button id="cal-bizchip-clinic"   type="button" onclick="toggleCalBizType('clinic')"   title="Show / hide CLINIC visits on the calendar"     style="display:inline-flex;align-items:center;gap:5px;background:#fff;border:1.5px solid #fff;color:#1F3864;border-radius:18px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;letter-spacing:.02em;line-height:1;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.15)"><span style="font-size:13px;line-height:1">🏥</span><span>Clinics</span></button>
-            <button id="cal-bizchip-mva"      type="button" onclick="toggleCalBizType('mva')"      title="Show / hide MVA-attorney visits"               style="display:inline-flex;align-items:center;gap:5px;background:#fff;border:1.5px solid #fff;color:#1F3864;border-radius:18px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;letter-spacing:.02em;line-height:1;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.15)"><span style="font-size:13px;line-height:1">⚖</span><span>MVAs</span></button>
-            <button id="cal-bizchip-outreach" type="button" onclick="toggleCalBizType('outreach')" title="Show / hide community-outreach visits"         style="display:inline-flex;align-items:center;gap:5px;background:#fff;border:1.5px solid #fff;color:#1F3864;border-radius:18px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;letter-spacing:.02em;line-height:1;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.15)"><span style="font-size:13px;line-height:1">🏘</span><span>Outreach</span></button>
-            <span style="color:#fff;opacity:.6;font-weight:700">·</span>
-            <!-- Member filter — pick a member to show only days containing
-                 visits assigned to / completed by / canceled by them. -->
-            <select id="cal-member-filter" onchange="setCalMemberFilter(this.value)"
-                    title="Filter the calendar to one member's visits"
-                    style="background:#fff;border:1px solid #fff;color:#1F3864;border-radius:6px;padding:5px 8px;font-size:11px;font-weight:600;font-family:'DM Sans',sans-serif;cursor:pointer;outline:none;box-shadow:0 1px 3px rgba(0,0,0,.15)">
-              <option value="">👥 All members</option>
-            </select>
-            <select id="cal-status-filter" onchange="setCalStatusFilter(this.value)"
-                    title="Optionally limit to one status"
-                    style="background:#fff;border:1px solid #fff;color:#1F3864;border-radius:6px;padding:5px 8px;font-size:11px;font-weight:600;font-family:'DM Sans',sans-serif;cursor:pointer;outline:none;box-shadow:0 1px 3px rgba(0,0,0,.15)">
-              <option value="">Any status</option>
-              <option value="Pending">Pending</option>
-              <option value="Completed">Completed</option>
-              <option value="Postponed">Postponed</option>
-              <option value="Canceled">Canceled</option>
-            </select>
-            <span style="color:#fff;opacity:.6;font-weight:700">·</span>
-            <!-- Quick-jump buttons (per user 2026-05-22) — "easier to track"
-                 per his request. Tap Today to scroll to the current day cell;
-                 Week jumps the calendar header to today's week if we're
-                 looking at a different month. -->
-            <button onclick="jumpCalToday()"  title="Scroll to today's cell" style="background:#16a34a;border:1.5px solid #fff;color:#fff;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;box-shadow:0 1px 3px rgba(0,0,0,.2)">Today</button>
-            <button onclick="jumpCalThisWeek()" title="Show the current calendar week" style="background:#fff;border:1.5px solid #fff;color:#1F3864;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;box-shadow:0 1px 3px rgba(0,0,0,.15)">This week</button>
-            <button onclick="navMonth(-1)">&#8249;</button>
-            <button onclick="navMonth(1)">&#8250;</button>
+          <!-- Per user 2026-05-26 ('I told you 100 times'): removed all the
+               chip toggles + member/status filters + Today/This-week buttons.
+               Master Search (Ctrl+K) covers filtering use cases. Hidden hooks
+               kept below so legacy state vars + JS that reads these IDs don't
+               throw. Only the prev/next month arrows remain in the toolbar. -->
+          <div style="display:flex;gap:6px;align-items:center;justify-content:flex-end">
+            <button onclick="navMonth(-1)" title="Previous month">&#8249;</button>
+            <button onclick="navMonth(1)" title="Next month">&#8250;</button>
+            <select id="cal-member-filter" onchange="setCalMemberFilter(this.value)" style="display:none"><option value="">All</option></select>
+            <select id="cal-status-filter" onchange="setCalStatusFilter(this.value)" style="display:none"><option value="">Any</option></select>
+            <span id="cal-bizchip-clinic" style="display:none"></span>
+            <span id="cal-bizchip-mva" style="display:none"></span>
+            <span id="cal-bizchip-outreach" style="display:none"></span>
           </div>
         </div>
         <div id="cal-filter-banner" style="display:none;background:#fef3c7;border-bottom:1px solid #fcd34d;color:#78350f;padding:6px 14px;font-size:11px;font-weight:600"></div>
@@ -12329,11 +12302,10 @@ function applyRoleRestrictions(){
     var obsAddBtn=document.getElementById('obs-add-btn');
     if(obsAddBtn)obsAddBtn.style.display='inline-block';
   }
-  // 📋 Referrals tab — visible to admin + front-desk. Members/readonly hide.
-  // Note: ON DESKTOP the top-nav is hidden by the sidebar (body.has-sidebar
-  // .main-nav{display:none}), so the SIDEBAR variant of this tab must also
-  // be toggled — handled below.
-  var canSeeReferrals = (CURRENT_USER.role === 'admin' || CURRENT_USER.role === 'front_desk');
+  // 📋 Referrals tab — per user 2026-05-26: REVERSED the prior restriction.
+  // Members now see Referrals too (they can create + see their own pending /
+  // approved ones). Hide only for readonly role.
+  var canSeeReferrals = (CURRENT_USER.role !== 'readonly');
   var refTab = document.getElementById('tab-referrals');
   if(refTab) refTab.style.display = canSeeReferrals ? '' : 'none';
   var refSidebarTab = document.getElementById('sidebar-tab-referrals');
@@ -34873,6 +34845,13 @@ window._closeVisitMenu = _closeVisitMenu;
 function deleteVisit(di,ri){
   var row = (S.days[di] && S.days[di].rows[ri]) || null;
   if(!row){ return; }
+  // Per user 2026-05-26: members can't delete other members' visits.
+  // Admin can. Original creator + assigned member can delete their own.
+  if(typeof canEditVisitRow === 'function' && !canEditVisitRow(row)){
+    var owner = row.addedBy || row.member || 'another member';
+    if(typeof showToast === 'function') showToast('Only ' + owner + ' or admin can delete this visit.');
+    return;
+  }
   // Per user 2026-05-19: skip the confirmation prompt entirely when the row
   // is "empty" — no member assigned AND no spending logged. Those deletions
   // are reversible-in-spirit (nothing was committed against anyone's counter)
@@ -38460,6 +38439,42 @@ function _runMasterSearch(){
       });
   }
   sections.push(group('Patients / Referrals', refs));
+  // Per user 2026-05-26 (#56): also search spending entries across all days.
+  // Walks S.days[*].rows looking for spending data matching query (by clinic
+  // name, member, amount string, or notes).
+  var spends = [];
+  try {
+    if(typeof S !== 'undefined' && S.days && Array.isArray(S.days)){
+      var matchAmount = parseFloat(q);
+      for(var di = 0; di < S.days.length && spends.length < 8; di++){
+        var day = S.days[di];
+        if(!day || !Array.isArray(day.rows)) continue;
+        for(var ri = 0; ri < day.rows.length && spends.length < 8; ri++){
+          var rw = day.rows[ri];
+          if(!rw || !rw.spending) continue;
+          var sp = rw.spending;
+          var spTotal = sp.total != null ? Number(sp.total) : (Array.isArray(sp.items) ? sp.items.reduce(function(t,i){ return t + (Number(i.amount)||0); }, 0) : 0);
+          var clinicLc = (rw.clinic || '').toLowerCase();
+          var memberLc = (rw.member || '').toLowerCase();
+          var notesLc  = (sp.notes || '').toLowerCase();
+          var amountMatch = !isNaN(matchAmount) && Math.abs(spTotal - matchAmount) < 0.01;
+          if(clinicLc.includes(q) || memberLc.includes(q) || notesLc.includes(q) || amountMatch){
+            var subBits = [];
+            if(day.date)   subBits.push(day.date);
+            if(rw.member)  subBits.push(rw.member);
+            if(sp.notes)   subBits.push('"' + String(sp.notes).slice(0, 40) + '"');
+            spends.push({
+              icon: '💰',
+              title: '$' + spTotal.toFixed(2) + ' · ' + (rw.clinic || 'visit'),
+              sub: subBits.join(' · '),
+              onclick: 'switchTab(\'finances\');_closeMasterSearch()'
+            });
+          }
+        }
+      }
+    }
+  } catch(_){}
+  sections.push(group('Spending', spends));
   var html = sections.filter(Boolean).join('');
   if(!html){
     box.innerHTML = '<div style="padding:20px;text-align:center;color:var(--muted);font-size:12px">No matches for <b>"' + esc(q) + '"</b>.</div>';
@@ -38467,7 +38482,7 @@ function _runMasterSearch(){
     return;
   }
   box.innerHTML = html;
-  var total = sec.length + clinics.length + mvas.length + outr.length + mems.length + refs.length;
+  var total = sec.length + clinics.length + mvas.length + outr.length + mems.length + refs.length + spends.length;
   if(cnt) cnt.textContent = total + ' result' + (total===1?'':'s');
 }
 window._runMasterSearch = _runMasterSearch;
@@ -42544,20 +42559,51 @@ function _renderHomePageInternal(){
     }
   }
 
-  // Latest announcement (top of the list, if any)
+  // Latest announcement (top of the list, if any).
+  // Per user 2026-05-26: if no announcement exists, fall back to either the
+  // latest activity-feed item OR a motivational quote — never an empty
+  // "No announcements yet" stub.
   var annBox = document.getElementById('home-announcement');
   if(annBox){
+    var rendered = false;
     if(typeof ANNOUNCEMENTS !== 'undefined' && Array.isArray(ANNOUNCEMENTS) && ANNOUNCEMENTS.length){
-      // ANNOUNCEMENTS shape varies — try the most-recent entry's text
       var top = ANNOUNCEMENTS[0];
       var text = (top && (top.text || top.msg || top.message || top.title)) || '';
       if(text){
         annBox.innerHTML = '<div style="font-size:12px;color:#1e293b;line-height:1.5">' + String(text).replace(/</g,'&lt;') + '</div>';
-      } else {
-        annBox.innerHTML = '<div style="color:#94a3b8;font-style:italic;padding:8px 0">No announcements yet.</div>';
+        rendered = true;
       }
-    } else {
-      annBox.innerHTML = '<div style="color:#94a3b8;font-style:italic;padding:8px 0">No announcements yet.</div>';
+    }
+    if(!rendered){
+      // Fallback 1: latest activity feed item
+      var feedLine = '';
+      try {
+        if(typeof ACTIVITY_LOG !== 'undefined' && Array.isArray(ACTIVITY_LOG) && ACTIVITY_LOG.length){
+          var last = ACTIVITY_LOG[ACTIVITY_LOG.length - 1];
+          if(last && (last.msg || last.message)){
+            var when = last.ts ? new Date(last.ts).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) : '';
+            feedLine = '<div style="font-size:11px;color:#64748b;font-weight:600;margin-bottom:4px">🕒 Latest activity · ' + when + '</div>'
+                     + '<div style="font-size:12px;color:#1e293b;line-height:1.5">' + String(last.msg || last.message).replace(/</g,'&lt;') + '</div>';
+          }
+        }
+      } catch(_){}
+      if(feedLine){
+        annBox.innerHTML = feedLine;
+        rendered = true;
+      }
+    }
+    if(!rendered){
+      // Fallback 2: rotating motivational quote
+      var quotes = [
+        '"Every visit is a step closer to the next lead." — Anonymous',
+        '"Today\'s seeds grow into tomorrow\'s relationships." — Anonymous',
+        '"Marketing is no longer about the stuff that you make, but about the stories you tell." — Seth Godin',
+        '"The best way to predict the future is to create it." — Peter Drucker',
+        '"Show up. Add value. Build trust. Repeat." — Anonymous'
+      ];
+      var pick = quotes[Math.floor(Date.now() / (1000*60*60*4)) % quotes.length];
+      annBox.innerHTML = '<div style="font-size:11px;color:#64748b;font-weight:600;margin-bottom:4px">💭 Quote of the moment</div>'
+                       + '<div style="font-size:12px;color:#1e293b;line-height:1.5;font-style:italic">' + pick + '</div>';
     }
   }
 }
@@ -51801,7 +51847,7 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
          where they're locked to this tab). Per user 2026-05-19: this was
          missing from the sidebar, which is why admin reported "I don't see
          the referrals page" after the sidebar replaced the top nav. -->
-    <button id="sidebar-tab-referrals" class="md-nav-item nav-admin-only" data-tooltip="Referrals" onclick="memberDrawerGo('referrals')"><span class="md-ico">📋</span><span class="md-lbl">Referrals</span></button>
+    <button id="sidebar-tab-referrals" class="md-nav-item" data-tooltip="Referrals" onclick="memberDrawerGo('referrals')"><span class="md-ico">📋</span><span class="md-lbl">Referrals</span></button>
     <button class="md-nav-item nav-admin-only" data-tooltip="Reports" onclick="memberDrawerGo('reports')"><span class="md-ico">📋</span><span class="md-lbl">Reports</span></button>
     <button class="md-nav-item nav-admin-only" data-tooltip="Activity Feed" onclick="memberDrawerGo('activity')"><span class="md-ico">📡</span><span class="md-lbl">Activity Feed</span></button>
 
