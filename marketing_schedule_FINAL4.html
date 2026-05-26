@@ -1944,6 +1944,14 @@ body.role-front_desk #referrals-view {
 
   <div class="landing-body" id="schedule-view" style="display:none">
     <div>
+      <!-- Per user 2026-05-26: prominent master search bar on the dashboard
+           page itself (not just the small chip in the recent-tabs strip).
+           Clicking it opens the same Ctrl+K palette. -->
+      <div onclick="_openMasterSearch()" style="background:#fff;border:2px solid #c4b5fd;border-radius:12px;padding:12px 18px;margin-bottom:14px;cursor:pointer;display:flex;align-items:center;gap:12px;box-shadow:0 2px 10px rgba(112,48,160,.12);transition:all .15s" onmouseover="this.style.borderColor='#7030A0';this.style.boxShadow='0 4px 16px rgba(112,48,160,.22)'" onmouseout="this.style.borderColor='#c4b5fd';this.style.boxShadow='0 2px 10px rgba(112,48,160,.12)'">
+        <span style="font-size:22px">🔍</span>
+        <div style="flex:1;color:#64748b;font-size:13px">Search anything — clinics, MVAs, patients, referrals, spending, sections… <span style="color:#1F3864;font-weight:600">try "finances/rankings" or "bloomfield"</span></div>
+        <span style="background:#7030A0;color:#fff;font-size:10px;font-weight:700;padding:4px 9px;border-radius:5px;letter-spacing:.04em">Ctrl + K</span>
+      </div>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
         <div onclick="openBigCalendar()"
              title="Click to expand the calendar"
