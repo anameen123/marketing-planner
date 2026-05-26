@@ -3466,6 +3466,22 @@ body.role-front_desk #referrals-view {
            picks one (with up to 50% of stops swappable). Visible only when
            mode = 'random' AND the new wizard is active (vs. the legacy
            free-form flow). -->
+      <!-- Random Pick is AI-ONLY per user 2026-05-26. When the AI toggle is
+           OFF or no GitHub Models token is set, the wizard is replaced by
+           this gate banner with a one-click jump to Map v2 settings. -->
+      <div id="rp-random-ai-required" style="display:none;margin-bottom:10px;padding:18px 20px;background:linear-gradient(135deg,#faf5ff,#eef2ff);border:1px solid #c4b5fd;border-radius:12px">
+        <div style="display:flex;align-items:flex-start;gap:14px">
+          <div style="font-size:34px;line-height:1">🤖</div>
+          <div style="flex:1">
+            <div style="font-size:14px;font-weight:800;color:#581c87;margin-bottom:4px">AI required for Random Pick</div>
+            <div style="font-size:11px;color:#6b21a8;line-height:1.55;margin-bottom:10px">Random Pick now runs entirely on GitHub Models — it handles the variable juggling (start, time budget, visit range) that the deterministic algorithm couldn't. Turn on <b>🤖 Use AI planning</b> and paste a token to use this mode. <a href="https://github.com/settings/personal-access-tokens" target="_blank" rel="noopener" style="color:#7c3aed;text-decoration:underline">Get a free token</a> (Models · Read scope, no card).</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button type="button" onclick="openMapV2Settings()" style="background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;border:none;border-radius:6px;padding:8px 14px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">⚙ Open Map v2 settings</button>
+              <button type="button" onclick="_rpSetMode('corridor')" style="background:#fff;color:#1F3864;border:1px solid #cbd5e1;border-radius:6px;padding:8px 14px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">← Switch to Corridor</button>
+            </div>
+          </div>
+        </div>
+      </div>
       <div id="rp-random-wizard" style="display:none;margin-bottom:10px">
         <!-- Step progress dots -->
         <div id="rp-rw-progress" style="display:flex;gap:6px;justify-content:center;margin-bottom:14px"></div>
@@ -3514,13 +3530,30 @@ body.role-front_desk #referrals-view {
           <div id="rp-rw-step-1-summary" style="margin-top:10px;font-size:11px;color:#16a34a;font-weight:600;display:none"></div>
         </div>
 
-        <!-- STEP 2: Number of visits -->
+        <!-- STEP 2: Visit count — RANGE (default) or SPECIFIC (per user 2026-05-26).
+             AI is given the bounds and may trim toward min if the time budget
+             can't fit max. Bounds clamped: min ≥ 4, max ≤ 10. -->
         <div id="rp-rw-step-2" class="rp-rw-step" style="display:none">
           <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:6px">Step 2 — How many visits?</div>
-          <div style="font-size:11px;color:var(--muted);margin-bottom:10px">How many clinics / MVAs to visit on this route.</div>
-          <div style="display:flex;align-items:center;gap:8px;max-width:200px">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Give AI either a <b>range</b> (it can trim down to min if your time can't fit max) or a <b>specific</b> count.</div>
+          <div style="display:flex;gap:6px;margin-bottom:12px;background:#f1f5f9;padding:4px;border-radius:8px;width:fit-content">
+            <button type="button" id="rp-rw-visits-mode-range" onclick="_rpRwSetVisitMode(true)" style="background:#fff;border:none;color:#1F3864;padding:6px 14px;font-size:11px;font-weight:700;cursor:pointer;border-radius:6px;box-shadow:0 1px 3px rgba(31,56,100,.15);font-family:DM Sans,sans-serif">Range</button>
+            <button type="button" id="rp-rw-visits-mode-specific" onclick="_rpRwSetVisitMode(false)" style="background:transparent;border:none;color:#64748b;padding:6px 14px;font-size:11px;font-weight:600;cursor:pointer;border-radius:6px;font-family:DM Sans,sans-serif">Specific</button>
+          </div>
+          <div id="rp-rw-visits-range" style="display:flex;align-items:center;gap:10px">
+            <div>
+              <label style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:4px">Min (≥ 4)</label>
+              <input id="rp-rw-min-visits" type="number" value="4" min="4" max="10" oninput="_RP_RW.minVisits=Math.max(4,Math.min(10,parseInt(this.value,10)||4))" style="width:80px;border:1px solid var(--border);border-radius:8px;padding:9px;font-size:14px;text-align:center;background:#fff;box-sizing:border-box">
+            </div>
+            <span style="font-size:14px;color:var(--muted);margin-top:18px">→</span>
+            <div>
+              <label style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:4px">Max (≤ 10)</label>
+              <input id="rp-rw-max-visits" type="number" value="8" min="4" max="10" oninput="_RP_RW.maxVisits=Math.max(4,Math.min(10,parseInt(this.value,10)||8))" style="width:80px;border:1px solid var(--border);border-radius:8px;padding:9px;font-size:14px;text-align:center;background:#fff;box-sizing:border-box">
+            </div>
+          </div>
+          <div id="rp-rw-visits-specific" style="display:none;align-items:center;gap:8px;max-width:220px">
             <button type="button" onclick="_rpRwAdjustVisits(-1)" style="background:#e5e7eb;border:none;color:#374151;width:36px;height:42px;border-radius:6px;font-size:18px;font-weight:700;cursor:pointer">−</button>
-            <input id="rp-rw-num-visits" type="number" value="5" min="1" max="12" oninput="_RP_RW.numVisits=parseInt(this.value,10)||5" style="flex:1;border:1px solid var(--border);border-radius:8px;padding:10px;font-size:14px;text-align:center;background:#fff;box-sizing:border-box">
+            <input id="rp-rw-num-visits" type="number" value="6" min="4" max="10" oninput="_RP_RW.numVisits=Math.max(4,Math.min(10,parseInt(this.value,10)||6))" style="flex:1;border:1px solid var(--border);border-radius:8px;padding:10px;font-size:14px;text-align:center;background:#fff;box-sizing:border-box">
             <button type="button" onclick="_rpRwAdjustVisits(1)" style="background:#e5e7eb;border:none;color:#374151;width:36px;height:42px;border-radius:6px;font-size:18px;font-weight:700;cursor:pointer">+</button>
           </div>
         </div>
@@ -26843,15 +26876,19 @@ window._RP_RW = window._RP_RW || {
   step: 1,
   startType: 'facility',     // 'facility' | 'custom' | 'clinic'
   start: null,               // { name, coord, isVisit } once chosen — isVisit=true for clinic-as-start
-  numVisits: 5,
+  numVisits: 6,
   totalHours: 4,
-  stopMinutes: 12
+  stopMinutes: 12,
+  useRange: true,
+  minVisits: 4,
+  maxVisits: 8
 };
 
 function _rpRwReset(){
   window._RP_RW = {
     step: 1, startType: 'facility', start: null,
-    numVisits: 5, totalHours: 4, stopMinutes: 12
+    numVisits: 6, totalHours: 4, stopMinutes: 12,
+    useRange: true, minVisits: 4, maxVisits: 8
   };
 }
 window._rpRwReset = _rpRwReset;
@@ -26995,13 +27032,30 @@ window._rpRwTryResolveStart = _rpRwTryResolveStart;
 function _rpRwAdjustVisits(delta){
   var inp = document.getElementById('rp-rw-num-visits');
   if(!inp) return;
-  var v = (parseInt(inp.value, 10) || 5) + delta;
-  if(v < 1) v = 1;
-  if(v > 12) v = 12;
+  var v = (parseInt(inp.value, 10) || 6) + delta;
+  if(v < 4) v = 4;
+  if(v > 10) v = 10;
   inp.value = v;
   _RP_RW.numVisits = v;
 }
 window._rpRwAdjustVisits = _rpRwAdjustVisits;
+
+// Toggle between Range mode (min/max) and Specific mode (single count).
+// Per user 2026-05-26: AI accepts both; range gives it room to optimize.
+function _rpRwSetVisitMode(useRange){
+  _RP_RW.useRange = !!useRange;
+  var rangeBox = document.getElementById('rp-rw-visits-range');
+  var specBox  = document.getElementById('rp-rw-visits-specific');
+  var rBtn = document.getElementById('rp-rw-visits-mode-range');
+  var sBtn = document.getElementById('rp-rw-visits-mode-specific');
+  if(rangeBox) rangeBox.style.display = useRange ? 'flex' : 'none';
+  if(specBox)  specBox.style.display  = useRange ? 'none' : 'flex';
+  function styleActive(btn){ if(btn){ btn.style.background = '#fff'; btn.style.color = '#1F3864'; btn.style.fontWeight = '700'; btn.style.boxShadow = '0 1px 3px rgba(31,56,100,.15)'; } }
+  function styleIdle(btn){   if(btn){ btn.style.background = 'transparent'; btn.style.color = '#64748b'; btn.style.fontWeight = '600'; btn.style.boxShadow = 'none'; } }
+  if(useRange){ styleActive(rBtn); styleIdle(sBtn); }
+  else { styleActive(sBtn); styleIdle(rBtn); }
+}
+window._rpRwSetVisitMode = _rpRwSetVisitMode;
 
 // Step 4 — live budget preview. Computes available drive minutes.
 function _rpRwUpdateBudgetPreview(){
@@ -27149,6 +27203,11 @@ window._rpRwFacilityPick = _rpRwFacilityPick;
 // even appear (dropdown is the picker).
 var _RP_RW_MAP_PICK_ACTIVE = false;
 var _RP_RW_MAP_PICK_BANNER = null;
+// Pending pick state (per user 2026-05-26) — pin click sets this; user
+// must click ✓ Confirm to actually commit it to _RP_RW.start. Re-clicking
+// another pin overrides the pending.
+var _RP_RW_PENDING_PICK = null;
+
 function _rpRwStartPickOnMap(){
   if(_RP_RW.startType === 'facility'){
     if(typeof showToast === 'function') showToast('Use the dropdown for facilities.');
@@ -27162,19 +27221,51 @@ function _rpRwStartPickOnMap(){
     }
   }
   _RP_RW_MAP_PICK_ACTIVE = true;
-  // Floating banner — fixed at top of viewport, above the map
+  _RP_RW_PENDING_PICK = null;
+  // Floating banner — fixed at top of viewport. Re-rendered by
+  // _rpRwUpdatePickBanner when a pin is clicked (shows the pending preview
+  // + ✓ Confirm / ✕ Cancel buttons).
+  if(_RP_RW_MAP_PICK_BANNER){
+    try { document.body.removeChild(_RP_RW_MAP_PICK_BANNER); } catch(_){}
+    _RP_RW_MAP_PICK_BANNER = null;
+  }
   var b = document.createElement('div');
-  b.style.cssText = 'position:fixed;top:60px;left:50%;transform:translateX(-50%);z-index:9999;background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;padding:10px 18px;border-radius:8px;font-family:DM Sans,sans-serif;font-size:12px;font-weight:700;box-shadow:0 4px 14px rgba(0,0,0,.25);display:flex;align-items:center;gap:12px';
-  b.innerHTML = (_RP_RW.startType === 'clinic')
-    ? '📍 Click on a pin to set your starting clinic <button onclick="_rpRwCancelMapPick()" style="background:rgba(255,255,255,.2);color:#fff;border:1px solid rgba(255,255,255,.5);border-radius:5px;padding:3px 10px;font-size:11px;cursor:pointer;font-family:inherit">✕ Cancel</button>'
-    : '📍 Click anywhere on the map to set your custom location <button onclick="_rpRwCancelMapPick()" style="background:rgba(255,255,255,.2);color:#fff;border:1px solid rgba(255,255,255,.5);border-radius:5px;padding:3px 10px;font-size:11px;cursor:pointer;font-family:inherit">✕ Cancel</button>';
+  b.id = 'rp-rw-map-pick-banner';
+  b.style.cssText = 'position:fixed;top:60px;left:50%;transform:translateX(-50%);z-index:9999;background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;padding:10px 16px;border-radius:10px;font-family:DM Sans,sans-serif;font-size:12px;box-shadow:0 4px 14px rgba(0,0,0,.25);min-width:280px;max-width:520px';
   document.body.appendChild(b);
   _RP_RW_MAP_PICK_BANNER = b;
+  _rpRwUpdatePickBanner();
 }
 window._rpRwStartPickOnMap = _rpRwStartPickOnMap;
 
+function _rpRwUpdatePickBanner(){
+  var b = _RP_RW_MAP_PICK_BANNER;
+  if(!b) return;
+  var prompt = (_RP_RW.startType === 'clinic')
+    ? '👆 Click a pin on the map to preview your starting clinic'
+    : '👆 Click anywhere on the map to preview your starting location';
+  var pending = _RP_RW_PENDING_PICK;
+  var html = '<div style="font-weight:700">' + prompt + '</div>';
+  if(pending){
+    var safeName = String(pending.name).replace(/</g, '&lt;');
+    html += '<div style="margin-top:8px;padding:7px 10px;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.4);border-radius:6px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">'
+      +   '<span><b>Pending:</b> ' + safeName + '</span>'
+      +   '<span style="display:flex;gap:5px">'
+      +     '<button type="button" onclick="_rpRwConfirmPendingPick()" style="background:#16a34a;color:#fff;border:none;border-radius:5px;padding:4px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">✓ Confirm</button>'
+      +     '<button type="button" onclick="_rpRwCancelMapPick()" style="background:rgba(255,255,255,.2);color:#fff;border:1px solid rgba(255,255,255,.5);border-radius:5px;padding:4px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">✕ Cancel</button>'
+      +   '</span>'
+      + '</div>'
+      + '<div style="margin-top:4px;font-size:10px;opacity:.85;font-style:italic">Click another pin to swap the preview.</div>';
+  } else {
+    html += '<div style="margin-top:6px;text-align:right"><button type="button" onclick="_rpRwCancelMapPick()" style="background:rgba(255,255,255,.2);color:#fff;border:1px solid rgba(255,255,255,.5);border-radius:5px;padding:3px 10px;font-size:11px;cursor:pointer;font-family:inherit">✕ Cancel pick mode</button></div>';
+  }
+  b.innerHTML = html;
+}
+window._rpRwUpdatePickBanner = _rpRwUpdatePickBanner;
+
 function _rpRwCancelMapPick(){
   _RP_RW_MAP_PICK_ACTIVE = false;
+  _RP_RW_PENDING_PICK = null;
   if(_RP_RW_MAP_PICK_BANNER){
     try { document.body.removeChild(_RP_RW_MAP_PICK_BANNER); } catch(_){}
     _RP_RW_MAP_PICK_BANNER = null;
@@ -27182,11 +27273,37 @@ function _rpRwCancelMapPick(){
 }
 window._rpRwCancelMapPick = _rpRwCancelMapPick;
 
-// Called by the map click handler when a pick is in progress.
+// Commit the pending pick to _RP_RW.start. Called by ✓ Confirm in the banner.
+function _rpRwConfirmPendingPick(){
+  var p = _RP_RW_PENDING_PICK;
+  if(!p){
+    if(typeof showToast === 'function') showToast('Click a pin first to preview, then ✓ Confirm.');
+    return;
+  }
+  _RP_RW.start = { name: p.name, coord: p.coord, kind: p.kind, isVisit: !!p.isVisit };
+  if(_RP_RW.startType === 'clinic'){
+    var inp = document.getElementById('rp-rw-clinic-search');
+    if(inp) inp.value = p.name;
+  }
+  _rpRwCancelMapPick();
+  if(typeof _rpRwTryResolveStart === 'function') _rpRwTryResolveStart();
+  try {
+    if(typeof _DV_MAP !== 'undefined' && _DV_MAP){
+      _DV_MAP.setView([p.coord.lat, p.coord.lng], 12, { animate: true });
+    }
+    if(typeof _rpDrawStartMarker === 'function'){
+      _rpDrawStartMarker(p.coord, p.name);
+    }
+  } catch(_){}
+  if(typeof showToast === 'function') showToast('✓ Start set: ' + p.name);
+}
+window._rpRwConfirmPendingPick = _rpRwConfirmPendingPick;
+
+// Called by the map click handler when a pick is in progress. Now sets a
+// PENDING preview instead of committing — user must tap ✓ Confirm.
 function _rpRwHandleMapPick(latlng){
   if(!_RP_RW_MAP_PICK_ACTIVE || !latlng) return false;
   if(_RP_RW.startType === 'clinic'){
-    // Snap to nearest pin within 2 mi
     var best = null, bestDist = Infinity;
     function consider(name){
       var c = (typeof getCoordForBusiness === 'function') ? getCoordForBusiness(name) : null;
@@ -27201,24 +27318,12 @@ function _rpRwHandleMapPick(latlng){
       if(typeof showToast === 'function') showToast('No pin within 2 mi. Try closer to a marker.');
       return false;
     }
-    _RP_RW.start = { name: best.name, coord: best.coord, kind: 'clinic', isVisit: true };
-    var inp = document.getElementById('rp-rw-clinic-search');
-    if(inp) inp.value = best.name;
+    _RP_RW_PENDING_PICK = { name: best.name, coord: best.coord, kind: 'clinic', isVisit: true };
   } else if(_RP_RW.startType === 'custom'){
     var name = (document.getElementById('rp-rw-custom-name') || {}).value.trim() || 'Custom location';
-    _RP_RW.start = { name: name, coord: { lat: latlng.lat, lng: latlng.lng }, kind: 'custom', isVisit: false };
+    _RP_RW_PENDING_PICK = { name: name, coord: { lat: latlng.lat, lng: latlng.lng }, kind: 'custom', isVisit: false };
   }
-  // Cancel the picker, zoom in, drop S marker
-  _rpRwCancelMapPick();
-  if(typeof _rpRwTryResolveStart === 'function') _rpRwTryResolveStart();
-  try {
-    if(typeof _DV_MAP !== 'undefined' && _DV_MAP && _RP_RW.start){
-      _DV_MAP.setView([_RP_RW.start.coord.lat, _RP_RW.start.coord.lng], 12, { animate: true });
-    }
-    if(typeof _rpDrawStartMarker === 'function' && _RP_RW.start){
-      _rpDrawStartMarker(_RP_RW.start.coord, _RP_RW.start.name);
-    }
-  } catch(_){}
+  _rpRwUpdatePickBanner();
   return true;
 }
 window._rpRwHandleMapPick = _rpRwHandleMapPick;
@@ -27599,6 +27704,11 @@ function _rpAiOnToggleChange(checked){
   // Per user 2026-05-26: also sync the corridor "🤖 AI suggest" button so it
   // appears/hides immediately when the toggle flips.
   if(typeof _rpAiSuggestBtnSync === 'function') _rpAiSuggestBtnSync();
+  // If we're currently on Random Pick (which is now AI-only), re-evaluate
+  // the gate visibility so the wizard appears/disappears as AI toggles.
+  if(typeof _RP_MODE !== 'undefined' && _RP_MODE === 'random' && typeof _rpSetMode === 'function'){
+    _rpSetMode('random');
+  }
 }
 window._rpAiOnToggleChange = _rpAiOnToggleChange;
 
@@ -27771,29 +27881,38 @@ function _rpAiPlanRandomRoute(){
       resolve(null); return;
     }
     var start = _RP_RW && _RP_RW.start;
-    var N = _RP_RW && _RP_RW.numVisits;
-    var totalMin = (_RP_RW && _RP_RW.totalHours || 0) * 60;
+    var userHours = (_RP_RW && _RP_RW.totalHours) || 0;
+    var userMin = userHours * 60;
     var stopMin = (_RP_RW && _RP_RW.stopMinutes) || 0;
     if(!start || !start.coord){ resolve(null); return; }
 
-    // Reuse the SAME locked-stops + candidate pool the algorithm just used
+    // Per user 2026-05-26: AI sees the user's range (or specific count) and
+    // may TRIM down to minVisits + STRETCH time up to max(5, userHours) if
+    // the original ask is infeasible.
+    var useRange = !!(_RP_RW && _RP_RW.useRange);
+    var minV = useRange ? (_RP_RW.minVisits || 4) : (_RP_RW.numVisits || 6);
+    var maxV = useRange ? (_RP_RW.maxVisits || 8) : (_RP_RW.numVisits || 6);
+    if(minV < 4) minV = 4; if(minV > 10) minV = 10;
+    if(maxV < minV) maxV = minV; if(maxV > 10) maxV = 10;
+    var maxAllowedHours = Math.max(5, userHours);   // AI ceiling for time stretch
+
+    // Reuse the same locked-stops + candidate pool the algorithm path uses
     var locked = (typeof _rpRwLockedStops === 'function') ? _rpRwLockedStops() : [];
     if(start.isVisit){
       locked = locked.filter(function(l){ return l.name !== start.name; });
     }
     var startCounts = start.isVisit ? 1 : 0;
-    var needNew = N - locked.length - startCounts;
-    if(needNew < 0){ resolve(null); return; }
 
     var excludeSet = {};
     excludeSet[start.name] = true;
     locked.forEach(function(l){ excludeSet[l.name] = true; });
-    var pool = (needNew > 0 && typeof _rpRwBuildCandidatePool === 'function')
+    var pool = (typeof _rpRwBuildCandidatePool === 'function')
       ? _rpRwBuildCandidatePool(start.coord, excludeSet) : [];
-    if(needNew > 0 && pool.length === 0){ resolve(null); return; }
+    if(pool.length === 0 && locked.length === 0 && !start.isVisit){ resolve(null); return; }
 
-    // Trim pool to the closest ~40 to keep the prompt compact
-    var poolForPrompt = pool.slice(0, 40).map(function(c){
+    // Trim pool to the closest ~50 to keep the prompt compact (AI needs more
+    // room since it now picks the COUNT too)
+    var poolForPrompt = pool.slice(0, 50).map(function(c){
       var d = (typeof daysSinceLastVisit === 'function') ? daysSinceLastVisit(c.name) : null;
       return {
         name: c.name,
@@ -27806,34 +27925,46 @@ function _rpAiPlanRandomRoute(){
       };
     });
 
+    var bandLine = useRange
+      ? '  Visit count: USER WANTS BETWEEN ' + minV + ' AND ' + maxV + ' stops (you may pick any integer in this range)\n'
+      : '  Visit count: USER WANTS ' + minV + ' stops (but you may trim to ' + minV + '..' + maxV + ' if budget is too tight; here min=max so trimming = stick to ' + minV + ')\n';
+
     var prompt = ''
       + 'You are a routing planner for a medical-marketing rep doing in-person clinic visits.\n'
-      + 'Pick the OPTIMAL set of stops AND their visiting order for today, given the constraints.\n'
+      + 'Pick the OPTIMAL set of stops + visiting order + final time/count for a round-trip route.\n'
       + 'Respond ONLY with valid JSON (no markdown, no prose outside the JSON object).\n\n'
-      + 'CONSTRAINTS:\n'
-      + '  Start: ' + start.name + ' at (' + start.coord.lat.toFixed(4) + ', ' + start.coord.lng.toFixed(4) + ')\n'
-      + '  Total stops requested: ' + N + '  (round-trip — end back at start)\n'
-      + '  Total time budget: ' + totalMin + ' minutes\n'
-      + '  Time at each stop: ' + stopMin + ' minutes  (so drive budget = ' + (totalMin - N * stopMin) + ' min)\n\n'
+      + 'INPUTS:\n'
+      + '  Start: ' + start.name + ' at (' + start.coord.lat.toFixed(4) + ', ' + start.coord.lng.toFixed(4) + ')' + (start.isVisit ? '  (counts as visit #1)' : '  (facility — not a visit)') + '\n'
+      + bandLine
+      + '  User time budget: ' + userHours.toFixed(2) + ' hours (' + userMin + ' min)\n'
+      + '  Per-stop minutes: ' + stopMin + ' min\n'
+      + '  AI time ceiling (if you must stretch): ' + maxAllowedHours.toFixed(2) + ' hours\n'
+      + '  Floor for stops if you must trim: ' + minV + '\n\n'
       + (locked.length
-          ? 'LOCKED STOPS (must be included — already scheduled for today):\n'
+          ? 'LOCKED STOPS (must be included — already on today\'s schedule):\n'
             + JSON.stringify(locked.map(function(l){ return l.name; })) + '\n\n'
           : '')
-      + 'CANDIDATE POOL — pick ' + (N - locked.length - startCounts) + ' of these (only their EXACT names):\n'
+      + 'CANDIDATE POOL (you pick from these EXACT names only):\n'
       + JSON.stringify(poolForPrompt, null, 2) + '\n\n'
+      + 'PERMISSIONS — you may auto-optimize when the user ask doesn\'t fit:\n'
+      + '  - You may stretch finalTimeHours UP TO ' + maxAllowedHours.toFixed(2) + ' (never below the user\'s input).\n'
+      + '  - You may set finalVisitCount to any integer in [' + minV + ', ' + maxV + '].\n'
+      + '  - Goal: a feasible route the rep can actually do.\n\n'
       + 'OBJECTIVE:\n'
       + '  - Maximize relationship value: prefer clinics with high daysSinceVisit (stale) or "never" visited.\n'
-      + '  - daysSinceVisit >= 21 (or "never") = ripe; 14-20 = warm; < 14 = too recent (skip unless cluster forces it).\n'
+      + '  - daysSinceVisit >= 21 (or "never") = ripe; 14-20 = warm; < 14 = too recent (skip unless locked).\n'
       + '  - Higher leadLevel = established lead, slight boost.\n'
-      + '  - Minimize zig-zag: cluster geographically. Use roughMiFromStart as a hint.\n'
+      + '  - Cluster geographically. Use roughMiFromStart as a hint.\n'
       + '  - Order stops so total drive distance is minimized (TSP-like).\n\n'
       + 'OUTPUT SHAPE (strict):\n'
       + '{\n'
-      + '  "orderedStopNames": [ "<exact name #1>", "<exact name #2>", ... ],\n'
-      + '  "reasoning": "<2-3 sentence summary of WHY you picked these and this order>"\n'
+      + '  "finalVisitCount": <integer in [' + minV + ',' + maxV + ']>,\n'
+      + '  "finalTimeHours":  <number, the time you actually used; ' + userHours.toFixed(2) + ' if you did not stretch>,\n'
+      + '  "orderedStopNames": [ "<exact name #1>", ..., "<exact name #finalVisitCount>" ],\n'
+      + '  "reasoning": "<2-3 sentence summary of WHY this set/order + WHY any adjustments>",\n'
+      + '  "optimizationsApplied": [ { "field": "timeHours"|"visitCount", "from": <number>, "to": <number>, "reason": "<short>" } ]\n'
       + '}\n\n'
-      + 'CRITICAL: orderedStopNames must contain ' + N + ' names total, each an EXACT match from the locked\n'
-      + 'list and/or candidate pool above. Do not invent names. Do not omit locked stops.\n';
+      + 'CRITICAL: orderedStopNames length MUST equal finalVisitCount. Names must EXACTLY match the locked list and/or pool. Do not invent names. Always include all locked stops.\n';
 
     // Phase 8b: route through GitHub Models (was Gemini).
     _callAIChat(prompt, { temperature: 0.4, maxTokens: 900, wantJson: true })
@@ -27888,11 +28019,31 @@ function _rpAiPlanRandomRoute(){
           return !locked.some(function(l){ return l.name === s.name; });
         });
         rt.mix = { green: greenN, yellow: yellowN, red: allStops.length - greenN - yellowN };
+        // Use AI's finalTimeHours if it stretched, else user's budget
+        var finalHours = parsed && typeof parsed.finalTimeHours === 'number' ? parsed.finalTimeHours : userHours;
+        var finalMin = finalHours * 60;
         rt.totalRouteMin = Math.round(rt.totalDriveMin + (allStops.length + startCounts) * stopMin);
-        rt.fitsBudget = (rt.totalRouteMin <= totalMin);
+        rt.fitsBudget = (rt.totalRouteMin <= finalMin);
         rt.strategy = 'AI';
         rt.aiGenerated = true;
         rt.aiReasoning = parsed.reasoning || '';
+        // Per user 2026-05-26: surface AI's auto-optimizations for the result
+        // card to display ("You asked: 10 visits / 1h → AI gave: 5 / 3.5h").
+        rt.aiOptimizations = Array.isArray(parsed.optimizationsApplied) ? parsed.optimizationsApplied : [];
+        rt.userAsk = {
+          visits: useRange ? (minV + '-' + maxV) : String(minV),
+          minVisits: minV,
+          maxVisits: maxV,
+          timeHours: userHours,
+          useRange: useRange
+        };
+        rt.aiFinal = {
+          visits: allStops.length,
+          timeHours: finalHours,
+          timeStretched: (finalHours > userHours + 0.05),
+          visitsTrimmed: useRange && (allStops.length < maxV),
+          visitsAtFloor: (allStops.length === minV)
+        };
         _RP_AI.lastResult = rt;
         resolve(rt);
       }
@@ -27932,39 +28083,41 @@ function _rpAiPlanRandomRoute(){
 }
 window._rpAiPlanRandomRoute = _rpAiPlanRandomRoute;
 
-// ── WRAPPER: hook the wizard's Generate to append an AI route ────────────
-// Captures the existing window._rpRwGenerate, replaces with a wrapper that
-// runs the original AND (if AI is on) appends an AI route to the rendered
-// result. Removing this whole module restores the original function.
+// ── WRAPPER: AI-ONLY Generate (per user 2026-05-26) ──────────────────────
+// Random Pick mode is now AI-only. The algorithm A/B/C strategies are no
+// longer surfaced — the wrapper skips _rpRwBuildRoutes entirely and just
+// calls _rpAiPlanRandomRoute, then renders ONLY the AI route.
+//
+// Falls back to a clear error card if the AI call fails (since there's no
+// algorithm route to backfill). The original window._rpRwGenerate is
+// preserved as window._rpRwGenerateAlgoOnly in case anything needs it.
 (function _rpAiHookRandomPickGenerate(){
   var orig = window._rpRwGenerate;
-  if(typeof orig !== 'function') return;
+  if(typeof orig === 'function') window._rpRwGenerateAlgoOnly = orig;
   window._rpRwGenerate = function(){
     var btn = document.getElementById('rp-rw-generate-btn');
-    if(btn){ btn.disabled = true; btn.textContent = '⏳ Generating…'; }
+    if(btn){ btn.disabled = true; btn.textContent = '⏳ Asking AI…'; }
     window._RP_RW_BATCH = 1;
     window._RP_RW_SHOWN_NAMES = {};
-    // Call the SAME underlying builder the original uses
-    _rpRwBuildRoutes().then(function(result){
-      if(!_rpAiCanRun()){
-        // AI not active — exact original behavior
-        if(btn){ btn.disabled = false; btn.textContent = '⚡ Generate routes'; }
-        if(typeof _rpRwRenderRoutes === 'function') _rpRwRenderRoutes(result, false);
+    if(!_rpAiCanRun()){
+      if(btn){ btn.disabled = false; btn.textContent = '⚡ Generate routes'; }
+      if(typeof showToast === 'function') showToast('🤖 Turn on AI planning + set a token first — Random Pick is AI-only now.');
+      return;
+    }
+    _rpAiPlanRandomRoute().then(function(aiRoute){
+      if(btn){ btn.disabled = false; btn.textContent = '⚡ Generate routes'; }
+      if(!aiRoute){
+        var errMsg = _RP_AI.lastError || 'AI returned no usable route';
+        if(typeof showToast === 'function') showToast('🤖 AI route failed: ' + errMsg);
+        if(typeof _rpRwRenderRoutes === 'function'){
+          _rpRwRenderRoutes({ routes: [], error: 'ai-failed', impossibilityMath: { message: 'AI: ' + errMsg + '. Try again, or adjust your inputs.' } }, false);
+        }
         return;
       }
-      // AI ON — kick off the AI route in parallel
-      if(btn){ btn.textContent = '⏳ + 🤖 Asking AI…'; }
-      _rpAiPlanRandomRoute().then(function(aiRoute){
-        if(btn){ btn.disabled = false; btn.textContent = '⚡ Generate routes'; }
-        if(aiRoute){
-          // Prepend AI route so it shows at the top for comparison
-          result.routes = [aiRoute].concat(result.routes || []);
-        } else if(_RP_AI.lastError){
-          // Show an inline error banner via toast — but still render algorithm routes
-          if(typeof showToast === 'function') showToast('🤖 AI route failed: ' + _RP_AI.lastError);
-        }
-        if(typeof _rpRwRenderRoutes === 'function') _rpRwRenderRoutes(result, false);
-      });
+      // ONLY the AI route — no algorithm A/B/C alongside
+      if(typeof _rpRwRenderRoutes === 'function'){
+        _rpRwRenderRoutes({ routes: [aiRoute], error: null }, false);
+      }
     });
   };
 })();
@@ -27998,6 +28151,32 @@ window._rpAiPlanRandomRoute = _rpAiPlanRandomRoute;
           if(titleEl){
             titleEl.innerHTML = '🤖 AI Suggestion <span style="background:#7c3aed;color:#fff;font-size:9px;padding:1px 6px;border-radius:3px;font-weight:700;margin-left:4px">GPT-4o</span>';
             titleEl.style.color = '#581c87';
+          }
+        }
+        // Per user 2026-05-26: AI optimization banner — show what AI changed
+        // vs the user's original ask (time stretched / count trimmed).
+        var fin = r.aiFinal || {};
+        var ask = r.userAsk || {};
+        var hasOpt = !!(fin.timeStretched || fin.visitsTrimmed || (Array.isArray(r.aiOptimizations) && r.aiOptimizations.length));
+        if(hasOpt){
+          var ob = document.createElement('div');
+          ob.style.cssText = 'background:linear-gradient(135deg,#fef3c7,#fed7aa);border:1px solid #fcd34d;border-left:4px solid #f59e0b;border-radius:6px;padding:10px 12px;margin:6px 0;font-size:11px;color:#7c2d12;line-height:1.55';
+          var diffLines = [];
+          if(fin.timeStretched){
+            diffLines.push('<b>Time:</b> ' + Number(ask.timeHours || 0).toFixed(1) + 'h → <b>' + Number(fin.timeHours).toFixed(1) + 'h</b> (stretched)');
+          }
+          if(fin.visitsTrimmed || (ask.useRange && fin.visits != null && (fin.visits < (ask.maxVisits||0)))){
+            diffLines.push('<b>Visits:</b> asked ' + ask.visits + ' → AI gave <b>' + fin.visits + '</b>');
+          }
+          var reasonParts = (r.aiOptimizations || []).map(function(o){ return o && o.reason ? String(o.reason) : ''; }).filter(Boolean);
+          ob.innerHTML = '<div style="font-weight:800;margin-bottom:4px">🤖 AI optimized your inputs</div>'
+            + '<div>' + diffLines.join(' · ') + '</div>'
+            + (reasonParts.length ? '<div style="margin-top:4px;font-style:italic;color:#92400e">' + reasonParts.join(' · ').replace(/</g,'&lt;') + '</div>' : '');
+          // Insert at top of card (right after title row)
+          if(titleRow && titleRow.nextSibling){
+            card.insertBefore(ob, titleRow.nextSibling);
+          } else {
+            card.insertBefore(ob, card.firstChild);
           }
         }
         // Append a reasoning panel BELOW the stops list
@@ -29099,17 +29278,24 @@ function _rpSetMode(mode){
   // both modes when in random (no Start/End text inputs needed since the
   // wizard captures the start itself).
   var corridorOnly = ['rp-mode-corridor-blurb','rp-end-wrap','rp-corridor-controls','rp-corridor-filters','rp-results'];
-  var randomOnly   = ['rp-mode-random-blurb','rp-random-wizard','rp-random-results'];
-  // Also hide the legacy free-form picks list — wizard replaces it
+  // Per user 2026-05-26: Random Pick is AI-only. The wizard + results show
+  // only when AI is ON + token is set; otherwise the gate banner shows.
+  var aiReady = !!(window._RP_AI && _RP_AI.enabled) && (typeof hasGeminiKey === 'function') && hasGeminiKey();
+  var randomShowWizard = (mode === 'random') && aiReady;
+  var randomShowGate   = (mode === 'random') && !aiReady;
   var randomHideAlways = ['rp-random-picks-wrap'];
   corridorOnly.forEach(function(id){
     var el = document.getElementById(id);
     if(el) el.style.display = (mode === 'corridor') ? '' : 'none';
   });
-  randomOnly.forEach(function(id){
-    var el = document.getElementById(id);
-    if(el) el.style.display = (mode === 'random') ? '' : 'none';
-  });
+  var gate = document.getElementById('rp-random-ai-required');
+  var wiz  = document.getElementById('rp-random-wizard');
+  var res  = document.getElementById('rp-random-results');
+  var blurb= document.getElementById('rp-mode-random-blurb');
+  if(gate)  gate.style.display  = randomShowGate ? '' : 'none';
+  if(wiz)   wiz.style.display   = randomShowWizard ? '' : 'none';
+  if(res)   res.style.display   = randomShowWizard ? '' : 'none';
+  if(blurb) blurb.style.display = (mode === 'random') ? '' : 'none';
   randomHideAlways.forEach(function(id){
     var el = document.getElementById(id);
     if(el) el.style.display = 'none';
