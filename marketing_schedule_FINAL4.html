@@ -12002,6 +12002,30 @@ window.renderUserBadge=renderUserBadge;
 
 function isAdmin(){ return CURRENT_USER&&CURRENT_USER.role==='admin'; }
 
+// Shared admin-override audit note (per user 2026-05-26). Use this any time
+// admin overrides something a member or front desk did. Renders a yellow
+// banner directly below the affected value: "🛡️ Override by admin · <action>
+// by <admin name> on <when> instead of <original actor>". Keeping the look
+// consistent across the system means audit trails are skim-readable.
+//
+// Args: { actionLabel, adminName, when, originalActor, extraNote }
+function _renderAdminOverrideNote(opts){
+  opts = opts || {};
+  var safe = function(s){ return String(s == null ? '' : s).replace(/</g,'&lt;'); };
+  var action = safe(opts.actionLabel || 'Modified');
+  var who    = safe(opts.adminName   || (CURRENT_USER && CURRENT_USER.name) || 'admin');
+  var when   = safe(opts.when        || '');
+  var orig   = safe(opts.originalActor || '');
+  var extra  = opts.extraNote ? '<div style="margin-top:2px;font-size:10px;color:#7c2d12;opacity:.85">'+safe(opts.extraNote)+'</div>' : '';
+  return '<div style="margin-top:8px;background:#fef3c7;border:1px solid #fcd34d;border-left:3px solid #f59e0b;border-radius:6px;padding:7px 10px;font-size:11px;color:#7c2d12;line-height:1.5">'
+    + '<b>🛡️ Override by admin</b> · ' + action + ' by <b>' + who + '</b>'
+    + (when ? ' on <b>' + when + '</b>' : '')
+    + (orig ? ' instead of <b>' + orig + '</b>' : '')
+    + extra
+    + '</div>';
+}
+window._renderAdminOverrideNote = _renderAdminOverrideNote;
+
 // ── "View as member" admin tool ────────────────────────────────────────
 // Lets the real admin switch the UI temporarily to render as another role
 // (member or readonly), useful for testing what each team member sees.
@@ -16065,11 +16089,18 @@ function renderPendingReferrals(){
     if(isCreator && !isFD && r.status === 'pending' && (r.createdBy === (CURRENT_USER && CURRENT_USER.name) || (typeof isAdmin === 'function' && isAdmin()))){
       actions += '<div style="margin-top:6px"><button onclick="retractPendingReferral(\'' + r.id + '\')" style="background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:5px;padding:4px 10px;font-size:10px;font-weight:600;cursor:pointer">↩ Cancel this referral</button></div>';
     }
-    // Admin-override audit badge (per user 2026-05-26) — visible whenever
-    // an admin stepped in for the destination front desk.
-    var adminOverrideBadge = r.approvedByAdmin
-      ? '<div style="margin-top:6px;display:inline-block;background:#fef3c7;border:1px solid #fcd34d;border-radius:6px;padding:3px 9px;font-size:10px;font-weight:700;color:#92400e" title="Admin approved on behalf of the destination front desk.">🛡️ Approved by admin (override)</div>'
-      : '';
+    // Admin-override audit note (per user 2026-05-26) — full-width banner
+    // (NOT a small chip) directly below the row data so it's plainly visible.
+    // Includes the admin's name + timestamp so anyone reviewing later sees
+    // exactly who overrode what + when.
+    var adminOverrideBadge = '';
+    if(r.approvedByAdmin){
+      var adminName = (r.approvedBy || '?').replace(/</g,'&lt;');
+      var when = r.approvedAt ? new Date(r.approvedAt).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) : '';
+      adminOverrideBadge = (typeof _renderAdminOverrideNote === 'function')
+        ? _renderAdminOverrideNote({ actionLabel:'Approved this referral', adminName:adminName, when:when, originalActor:'destination front desk' })
+        : '<div style="margin-top:8px;background:#fef3c7;border:1px solid #fcd34d;border-left:3px solid #f59e0b;border-radius:6px;padding:7px 10px;font-size:11px;color:#7c2d12;line-height:1.5"><b>🛡️ Override by admin</b> · Approved by <b>'+adminName+'</b> on <b>'+when+'</b> instead of the destination front desk.</div>';
+    }
     return '<div style="background:' + statusBg + ';border:1px solid #e2e8f0;border-left:3px solid ' + statusColor + ';border-radius:8px;padding:11px 14px">'
       + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap">'
       +   '<div style="flex:1;min-width:0">'
