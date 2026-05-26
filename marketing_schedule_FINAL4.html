@@ -1937,33 +1937,38 @@ body.role-front_desk #referrals-view {
                  not floating separately. Visible solid border, slightly bigger
                  padding for readability. Toggle which business types contribute
                  to the day's visit-count badge; default = all on. -->
-            <button id="cal-bizchip-clinic"   type="button" onclick="toggleCalBizType('clinic')"   title="Show / hide CLINIC visits on the calendar"     style="display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,.22);border:1.5px solid rgba(255,255,255,.55);color:#fff;border-radius:18px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;letter-spacing:.02em;line-height:1;white-space:nowrap"><span style="font-size:13px;line-height:1">🏥</span><span>Clinics</span></button>
-            <button id="cal-bizchip-mva"      type="button" onclick="toggleCalBizType('mva')"      title="Show / hide MVA-attorney visits"               style="display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,.22);border:1.5px solid rgba(255,255,255,.55);color:#fff;border-radius:18px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;letter-spacing:.02em;line-height:1;white-space:nowrap"><span style="font-size:13px;line-height:1">⚖</span><span>MVAs</span></button>
-            <button id="cal-bizchip-outreach" type="button" onclick="toggleCalBizType('outreach')" title="Show / hide community-outreach visits"         style="display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,.22);border:1.5px solid rgba(255,255,255,.55);color:#fff;border-radius:18px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;letter-spacing:.02em;line-height:1;white-space:nowrap"><span style="font-size:13px;line-height:1">🏘</span><span>Outreach</span></button>
-            <span style="opacity:.35;color:#fff">·</span>
+            <!-- Per user 2026-05-26 contrast fix: chips/dropdowns/buttons in
+                 the calendar toolbar were rgba(255,255,255,.22) on the navy
+                 gradient → unreadable, looked like overlapping/misplaced text.
+                 Now solid white background with navy text (high contrast),
+                 with a subtle purple ring when active. -->
+            <button id="cal-bizchip-clinic"   type="button" onclick="toggleCalBizType('clinic')"   title="Show / hide CLINIC visits on the calendar"     style="display:inline-flex;align-items:center;gap:5px;background:#fff;border:1.5px solid #fff;color:#1F3864;border-radius:18px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;letter-spacing:.02em;line-height:1;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.15)"><span style="font-size:13px;line-height:1">🏥</span><span>Clinics</span></button>
+            <button id="cal-bizchip-mva"      type="button" onclick="toggleCalBizType('mva')"      title="Show / hide MVA-attorney visits"               style="display:inline-flex;align-items:center;gap:5px;background:#fff;border:1.5px solid #fff;color:#1F3864;border-radius:18px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;letter-spacing:.02em;line-height:1;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.15)"><span style="font-size:13px;line-height:1">⚖</span><span>MVAs</span></button>
+            <button id="cal-bizchip-outreach" type="button" onclick="toggleCalBizType('outreach')" title="Show / hide community-outreach visits"         style="display:inline-flex;align-items:center;gap:5px;background:#fff;border:1.5px solid #fff;color:#1F3864;border-radius:18px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;letter-spacing:.02em;line-height:1;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.15)"><span style="font-size:13px;line-height:1">🏘</span><span>Outreach</span></button>
+            <span style="color:#fff;opacity:.6;font-weight:700">·</span>
             <!-- Member filter — pick a member to show only days containing
                  visits assigned to / completed by / canceled by them. -->
             <select id="cal-member-filter" onchange="setCalMemberFilter(this.value)"
                     title="Filter the calendar to one member's visits"
-                    style="background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.25);color:#fff;border-radius:6px;padding:5px 8px;font-size:11px;font-family:'DM Sans',sans-serif;cursor:pointer;outline:none">
+                    style="background:#fff;border:1px solid #fff;color:#1F3864;border-radius:6px;padding:5px 8px;font-size:11px;font-weight:600;font-family:'DM Sans',sans-serif;cursor:pointer;outline:none;box-shadow:0 1px 3px rgba(0,0,0,.15)">
               <option value="">👥 All members</option>
             </select>
             <select id="cal-status-filter" onchange="setCalStatusFilter(this.value)"
                     title="Optionally limit to one status"
-                    style="background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.25);color:#fff;border-radius:6px;padding:5px 8px;font-size:11px;font-family:'DM Sans',sans-serif;cursor:pointer;outline:none">
+                    style="background:#fff;border:1px solid #fff;color:#1F3864;border-radius:6px;padding:5px 8px;font-size:11px;font-weight:600;font-family:'DM Sans',sans-serif;cursor:pointer;outline:none;box-shadow:0 1px 3px rgba(0,0,0,.15)">
               <option value="">Any status</option>
               <option value="Pending">Pending</option>
               <option value="Completed">Completed</option>
               <option value="Postponed">Postponed</option>
               <option value="Canceled">Canceled</option>
             </select>
-            <span style="opacity:.35;color:#fff">·</span>
+            <span style="color:#fff;opacity:.6;font-weight:700">·</span>
             <!-- Quick-jump buttons (per user 2026-05-22) — "easier to track"
                  per his request. Tap Today to scroll to the current day cell;
                  Week jumps the calendar header to today's week if we're
                  looking at a different month. -->
-            <button onclick="jumpCalToday()"  title="Scroll to today's cell" style="background:rgba(34,197,94,.25);border:1px solid rgba(34,197,94,.55);color:#fff;border-radius:6px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif">Today</button>
-            <button onclick="jumpCalThisWeek()" title="Show the current calendar week" style="background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.25);color:#fff;border-radius:6px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif">This week</button>
+            <button onclick="jumpCalToday()"  title="Scroll to today's cell" style="background:#16a34a;border:1.5px solid #fff;color:#fff;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;box-shadow:0 1px 3px rgba(0,0,0,.2)">Today</button>
+            <button onclick="jumpCalThisWeek()" title="Show the current calendar week" style="background:#fff;border:1.5px solid #fff;color:#1F3864;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;box-shadow:0 1px 3px rgba(0,0,0,.15)">This week</button>
             <button onclick="navMonth(-1)">&#8249;</button>
             <button onclick="navMonth(1)">&#8250;</button>
           </div>
@@ -36372,14 +36377,15 @@ function _refreshCalBizChips(){
     var el = document.getElementById('cal-bizchip-'+t);
     if(!el) return;
     var on = !!_CAL_BIZ_TYPES[t];
-    // Keep the chip as ONE cohesive pill in both states — icon + text inside
-    // the same border. Muted state dims everything together (lower opacity +
-    // strike-through on the inner text spans), but the pill shape stays.
-    el.style.background     = on ? 'rgba(255,255,255,.22)' : 'rgba(255,255,255,.08)';
-    el.style.borderColor    = on ? 'rgba(255,255,255,.55)' : 'rgba(255,255,255,.25)';
-    el.style.color          = on ? '#fff' : 'rgba(255,255,255,.45)';
-    el.style.opacity        = on ? '1' : '.7';
+    // Per user 2026-05-26 contrast fix: chips are now solid white when ON
+    // (readable) and dimmed-translucent when OFF (clearly indicates the
+    // toggle state). Strike-through preserved as the off-cue.
+    el.style.background     = on ? '#fff' : 'rgba(255,255,255,.18)';
+    el.style.borderColor    = on ? '#fff' : 'rgba(255,255,255,.45)';
+    el.style.color          = on ? '#1F3864' : 'rgba(255,255,255,.65)';
+    el.style.opacity        = on ? '1' : '.75';
     el.style.textDecoration = on ? '' : 'line-through';
+    el.style.boxShadow      = on ? '0 1px 3px rgba(0,0,0,.15)' : 'none';
   });
 }
 window._refreshCalBizChips = _refreshCalBizChips;
