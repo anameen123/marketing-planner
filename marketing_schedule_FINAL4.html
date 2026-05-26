@@ -10401,6 +10401,11 @@ function _finishLogin(){
   // Per user 2026-05-26: sweep expired pending referrals on boot so stale
   // ones from earlier sessions auto-flip to 'incomplete' before render.
   if(typeof _crSweepExpiredReferrals === 'function') _crSweepExpiredReferrals();
+  // Phase 19b: fire the follow-up popup on boot if any owned referrals are
+  // late and unseen. Deferred so the rest of the boot can settle first.
+  setTimeout(function(){
+    try { if(typeof _crShowFollowUpPopupIfNeeded === 'function') _crShowFollowUpPopupIfNeeded(); } catch(_){}
+  }, 1500);
   if(typeof _recomputeReferralCountsFromLog === 'function') _recomputeReferralCountsFromLog();
   // Load shift-total reconciliation data
   if(typeof _loadShiftTotals === 'function') _loadShiftTotals();
@@ -13088,12 +13093,63 @@ function _crIsReferralExpired(ref){
   if(!ref || ref.status !== 'pending' || !ref.createdAt) return false;
   var created = new Date(ref.createdAt);
   if(isNaN(created.getTime())) return false;
-  // End of the day AFTER creation (local time). Example: created Mon 11pm
-  // → expiration = Tue 23:59:59.999 local.
-  var exp = new Date(created.getFullYear(), created.getMonth(), created.getDate() + 1, 23, 59, 59, 999);
-  return Date.now() > exp.getTime();
+  // Per user 2026-05-26 (locked decision #4): max wait 1.5 hours from
+  // createdAt. After that → auto-incomplete (used to be end-of-Day+1).
+  return (Date.now() - created.getTime()) > (90 * 60 * 1000);
 }
 window._crIsReferralExpired = _crIsReferralExpired;
+
+// ── PHASE 19b — LATE-REFERRAL HELPERS (per user 2026-05-26 follow-up plan) ──
+// Compute the "ETA + 10 min" trigger that fires the follow-up popup.
+// Uses ref.expectedAt as the primary timestamp; falls back to autoETA;
+// falls back to createdAt + 15 min if neither was set.
+function _crEffectiveETA(ref){
+  if(!ref) return null;
+  if(ref.expectedAt){
+    var t = new Date(ref.expectedAt);
+    if(!isNaN(t.getTime())) return t;
+  }
+  if(ref.autoETA){
+    var t2 = new Date(ref.autoETA);
+    if(!isNaN(t2.getTime())) return t2;
+  }
+  if(ref.createdAt){
+    var t3 = new Date(ref.createdAt);
+    if(!isNaN(t3.getTime())){
+      return new Date(t3.getTime() + 15 * 60 * 1000);   // 15-min default if no ETA
+    }
+  }
+  return null;
+}
+window._crEffectiveETA = _crEffectiveETA;
+
+// True when the popup should be considered: pending + past (ETA + 10 min) +
+// not already shown + not auto-expired yet.
+// Buffer is 10 min on original ETA, OR 5 min if ETA was just updated post-call
+// (followUpEtaUpdatedAt set). Per locked decision #3.
+function _crIsReferralLate(ref){
+  if(!ref || ref.status !== 'pending') return false;
+  var eta = _crEffectiveETA(ref);
+  if(!eta) return false;
+  var bufferMin = ref.followUpEtaUpdatedAt ? 5 : 10;
+  var triggerAt = eta.getTime() + bufferMin * 60 * 1000;
+  return Date.now() > triggerAt;
+}
+window._crIsReferralLate = _crIsReferralLate;
+
+// Owner routing per locked decision: UC Plano creator → destination FD;
+// Member creator → the member. Admin sees all (in addition).
+function _crCurrentUserIsOwner(ref){
+  if(!ref || !CURRENT_USER) return false;
+  if(ref.creatorRole === 'uc_plano_fd'){
+    return CURRENT_USER.role === 'front_desk' && CURRENT_USER.facilityKey === ref.destinationFacility;
+  }
+  if(ref.creatorRole === 'marketing'){
+    return CURRENT_USER.name === ref.createdBy;
+  }
+  return false;
+}
+window._crCurrentUserIsOwner = _crCurrentUserIsOwner;
 
 function _crSweepExpiredReferrals(){
   if(!Array.isArray(PENDING_REFERRALS)) return 0;
@@ -13122,9 +13178,224 @@ if(!window._CR_SWEEP_TIMER_REGISTERED){
     try {
       var n = _crSweepExpiredReferrals();
       if(n > 0 && typeof renderPendingReferrals === 'function') renderPendingReferrals();
+      // Phase 19b: also check for late referrals the popup should fire on
+      if(typeof _crShowFollowUpPopupIfNeeded === 'function') _crShowFollowUpPopupIfNeeded();
     } catch(_){}
   }, 5 * 60 * 1000);
 }
+
+// ── PHASE 19b — FOLLOW-UP POPUP ENGINE (per user 2026-05-26) ────────────────
+// Scans PENDING_REFERRALS for late ones the CURRENT_USER owns. If any are
+// found AND haven't been shown to this user yet (followUpShownAt unset OR
+// older than the current ETA), open a single modal listing them with action
+// buttons. Per locked decision #2: fires ONCE — no repeat loop. Persistent
+// row badge in the Pending panel keeps the visibility after dismiss.
+function _crCollectLateOwnedReferrals(){
+  if(!Array.isArray(PENDING_REFERRALS)) return [];
+  return PENDING_REFERRALS.filter(function(r){
+    if(!_crIsReferralLate(r)) return false;
+    if(!_crCurrentUserIsOwner(r)) return false;
+    // Don't re-show after this user dismissed it (per locked decision: fires
+    // once). User can still see + act from the Pending panel row badge.
+    var shownForETA = r.followUpShownAt;
+    var etaIso = (_crEffectiveETA(r) || {toISOString:function(){return '';}}).toISOString();
+    // If ETA changed since last shown, reset show flag
+    if(shownForETA && r.followUpShownForETA === etaIso) return false;
+    return true;
+  });
+}
+window._crCollectLateOwnedReferrals = _crCollectLateOwnedReferrals;
+
+function _crShowFollowUpPopupIfNeeded(){
+  var late = _crCollectLateOwnedReferrals();
+  if(late.length === 0) return;
+  // Mark all as shown so they don't re-fire on this user
+  var nowIso = new Date().toISOString();
+  late.forEach(function(r){
+    var etaIso = (_crEffectiveETA(r) || {toISOString:function(){return '';}}).toISOString();
+    r.followUpShownAt = nowIso;
+    r.followUpShownForETA = etaIso;
+  });
+  if(typeof _savePendingReferrals === 'function') _savePendingReferrals();
+  _crRenderFollowUpModal(late);
+}
+window._crShowFollowUpPopupIfNeeded = _crShowFollowUpPopupIfNeeded;
+
+// Public re-open — for the row badge "Open follow-up" button
+function _crOpenFollowUpForRef(refId){
+  var ref = (PENDING_REFERRALS || []).find(function(r){ return r.id === refId; });
+  if(!ref) return;
+  _crRenderFollowUpModal([ref]);
+}
+window._crOpenFollowUpForRef = _crOpenFollowUpForRef;
+
+function _crRenderFollowUpModal(refs){
+  var existing = document.getElementById('cr-followup-modal');
+  if(existing) existing.remove();
+  var modal = document.createElement('div');
+  modal.id = 'cr-followup-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.62);z-index:90000;display:flex;align-items:center;justify-content:center;padding:20px;font-family:DM Sans,sans-serif';
+  function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function fmtTime(iso){
+    try { return new Date(iso).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}); } catch(_){ return '—'; }
+  }
+  function fmtPhone(p){
+    if(!p) return null;
+    // Naive US format if 10 digits
+    var d = String(p).replace(/\D/g,'');
+    if(d.length === 10) return '(' + d.slice(0,3) + ') ' + d.slice(3,6) + '-' + d.slice(6);
+    return p;
+  }
+  var bodyHtml = refs.map(function(r){
+    var eta = _crEffectiveETA(r);
+    var etaStr = eta ? fmtTime(eta.toISOString()) : '—';
+    var nowStr = fmtTime(new Date().toISOString());
+    var fac = (REFERRAL_FACILITIES || []).find(function(f){ return f.key === r.destinationFacility; });
+    var lateMin = eta ? Math.round((Date.now() - eta.getTime()) / 60000) : '?';
+    var ridePart = '';
+    if(r.creatorRole === 'uc_plano_fd' && r.rideRequested){
+      var rideLbl = r.rideRequested === 'accepted' ? '🚗 booked' : r.rideRequested === 'declined' ? 'declined' : 'not offered';
+      ridePart = '<div style="font-size:11px;color:#1F3864">Ride: <b>' + rideLbl + '</b></div>';
+    }
+    var patientPhoneFmt = fmtPhone(r.patientPhone);
+    var clinicPhoneFmt  = fmtPhone(r.sourceClinicPhone);
+    var callPatientBtn = patientPhoneFmt
+      ? '<a href="tel:' + r.patientPhone + '" onclick="_crLogFollowUpAction(\'' + r.id + '\',\'called_patient\',\'\')" style="display:inline-block;background:#16a34a;color:#fff;border:none;border-radius:6px;padding:8px 14px;font-size:11px;font-weight:700;cursor:pointer;text-decoration:none;font-family:DM Sans,sans-serif">📞 Call patient ' + patientPhoneFmt + '</a>'
+      : '<button disabled style="background:#e5e7eb;color:#94a3b8;border:none;border-radius:6px;padding:8px 14px;font-size:11px;font-weight:700;cursor:not-allowed;font-family:DM Sans,sans-serif" title="No patient phone on file">📞 Call patient (no phone)</button>';
+    var callClinicBtn = clinicPhoneFmt
+      ? '<a href="tel:' + r.sourceClinicPhone + '" onclick="_crLogFollowUpAction(\'' + r.id + '\',\'called_clinic\',\'\')" style="display:inline-block;background:#1F3864;color:#fff;border:none;border-radius:6px;padding:8px 14px;font-size:11px;font-weight:700;cursor:pointer;text-decoration:none;font-family:DM Sans,sans-serif">📞 Call clinic ' + clinicPhoneFmt + '</a>'
+      : '<button disabled style="background:#e5e7eb;color:#94a3b8;border:none;border-radius:6px;padding:8px 14px;font-size:11px;font-weight:700;cursor:not-allowed;font-family:DM Sans,sans-serif" title="No clinic phone on file">📞 Call clinic (no phone)</button>';
+    var rideOfferBtn = (r.patientPhone)
+      ? '<button onclick="_crLogFollowUpAction(\'' + r.id + '\',\'offered_ride\',\'Offered ride to patient.\')" style="background:#fff;color:#7c3aed;border:1px solid #c4b5fd;border-radius:6px;padding:8px 14px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">🚗 Offered a ride</button>'
+      : '';
+    return '<div data-refid="' + r.id + '" style="border:1px solid #fed7aa;border-left:4px solid #f59e0b;border-radius:8px;padding:12px 14px;margin-bottom:10px;background:#fffbeb">'
+      + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-bottom:8px">'
+      +   '<div style="flex:1;min-width:0">'
+      +     '<div style="font-size:14px;font-weight:800;color:#7c2d12">⏰ ' + esc(r.patientName || 'Patient') + ' is ' + lateMin + ' min late</div>'
+      +     '<div style="font-size:11px;color:#7c2d12;margin-top:2px">Expected ' + etaStr + ' · Now ' + nowStr + '</div>'
+      +     '<div style="font-size:11px;color:#1F3864;margin-top:3px">Source: ' + esc(r.sourceName) + (fac ? ' → ' + esc(fac.label) : '') + '</div>'
+      +     '<div style="font-size:11px;color:#1F3864">Created by: ' + esc(r.createdBy) + '</div>'
+      +     ridePart
+      +   '</div>'
+      + '</div>'
+      + '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">'
+      +   callPatientBtn
+      +   callClinicBtn
+      +   rideOfferBtn
+      + '</div>'
+      + '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">'
+      +   '<button onclick="_crFollowUpArrived(\'' + r.id + '\')" style="background:#16a34a;color:#fff;border:none;border-radius:6px;padding:7px 13px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">✓ Patient arrived → log them</button>'
+      +   '<button onclick="_crFollowUpNoShow(\'' + r.id + '\')" style="background:transparent;color:#b91c1c;border:1px solid #fca5a5;border-radius:6px;padding:7px 13px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">✗ Mark no-show</button>'
+      + '</div>'
+      + '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px;background:#fff;border:1px solid #e5e7eb;border-radius:6px;padding:7px 9px">'
+      +   '<span style="font-size:11px;color:#374151;font-weight:600">🔄 New ETA:</span>'
+      +   '<input type="time" id="cr-fu-eta-' + r.id + '" style="border:1px solid #cbd5e1;border-radius:5px;padding:5px 8px;font-size:11px;background:#fff;font-family:DM Sans,sans-serif">'
+      +   '<button onclick="_crFollowUpUpdateETA(\'' + r.id + '\')" style="background:#7030A0;color:#fff;border:none;border-radius:5px;padding:5px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">Update → reset timer</button>'
+      + '</div>'
+      + '<div style="font-size:11px;color:#374151;margin-bottom:4px;font-weight:600">📝 What happened? (logs to audit trail)</div>'
+      + '<textarea id="cr-fu-note-' + r.id + '" rows="2" placeholder="e.g. Patient stuck in traffic, will arrive in 15 min" style="width:100%;border:1px solid #cbd5e1;border-radius:6px;padding:7px 10px;font-size:11px;background:#fff;box-sizing:border-box;resize:vertical;font-family:DM Sans,sans-serif"></textarea>'
+      + '<div style="margin-top:6px;text-align:right">'
+      +   '<button onclick="_crSaveFollowUpNote(\'' + r.id + '\')" style="background:#fff;color:#1F3864;border:1px solid #cbd5e1;border-radius:5px;padding:5px 11px;font-size:10px;font-weight:600;cursor:pointer;font-family:DM Sans,sans-serif">💾 Save note</button>'
+      + '</div>'
+      + '</div>';
+  }).join('');
+  modal.innerHTML = '<div style="background:#fff;border-radius:12px;max-width:680px;width:100%;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 20px 50px rgba(0,0,0,.4)">'
+    + '<div style="padding:14px 22px;background:linear-gradient(135deg,#dc2626,#b91c1c);color:#fff;border-radius:12px 12px 0 0;display:flex;justify-content:space-between;align-items:flex-start;gap:10px">'
+    +   '<div><div style="font-size:14px;font-weight:800">⏰ Late patient' + (refs.length===1?'':'s') + ' need follow-up</div>'
+    +     '<div style="font-size:11px;opacity:.9;margin-top:3px">' + refs.length + ' referral' + (refs.length===1?'':'s') + ' past their expected arrival. Take action below — this popup won\'t reappear automatically.</div></div>'
+    +   '<button onclick="_crCloseFollowUpModal()" style="background:rgba(255,255,255,.18);border:none;color:#fff;font-size:22px;cursor:pointer;line-height:1;padding:0 6px;border-radius:5px">×</button>'
+    + '</div>'
+    + '<div style="padding:14px 22px;overflow-y:auto;flex:1">' + bodyHtml + '</div>'
+    + '<div style="padding:10px 22px;border-top:1px solid #e2e8f0;display:flex;justify-content:flex-end">'
+    +   '<button onclick="_crCloseFollowUpModal()" style="background:#1F3864;color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">Dismiss</button>'
+    + '</div>'
+    + '</div>';
+  document.body.appendChild(modal);
+}
+function _crCloseFollowUpModal(){
+  var m = document.getElementById('cr-followup-modal');
+  if(m) m.remove();
+}
+window._crCloseFollowUpModal = _crCloseFollowUpModal;
+
+// ── Action handlers ────────────────────────────────────────────────────────
+function _crLogFollowUpAction(refId, action, note){
+  var ref = (PENDING_REFERRALS || []).find(function(r){ return r.id === refId; });
+  if(!ref) return;
+  if(!Array.isArray(ref.followUpActions)) ref.followUpActions = [];
+  ref.followUpActions.push({
+    at: new Date().toISOString(),
+    by: (CURRENT_USER && CURRENT_USER.name) || '?',
+    action: action,
+    note: note || ''
+  });
+  if(typeof _savePendingReferrals === 'function') _savePendingReferrals();
+}
+window._crLogFollowUpAction = _crLogFollowUpAction;
+
+function _crSaveFollowUpNote(refId){
+  var ta = document.getElementById('cr-fu-note-' + refId);
+  var note = ta ? (ta.value || '').trim() : '';
+  if(!note){
+    if(typeof showToast === 'function') showToast('Type a note first.');
+    return;
+  }
+  _crLogFollowUpAction(refId, 'note', note);
+  if(ta) ta.value = '';
+  if(typeof showToast === 'function') showToast('✓ Note saved to audit trail.');
+}
+window._crSaveFollowUpNote = _crSaveFollowUpNote;
+
+function _crFollowUpUpdateETA(refId){
+  var inp = document.getElementById('cr-fu-eta-' + refId);
+  if(!inp || !inp.value){
+    if(typeof showToast === 'function') showToast('Pick a new time first.');
+    return;
+  }
+  var ref = (PENDING_REFERRALS || []).find(function(r){ return r.id === refId; });
+  if(!ref) return;
+  // Combine today's date with the new time
+  var today = new Date();
+  var hhmm = inp.value.split(':');
+  var newEta = new Date(today.getFullYear(), today.getMonth(), today.getDate(), parseInt(hhmm[0],10), parseInt(hhmm[1],10), 0);
+  // If the new time is BEFORE now, assume next day
+  if(newEta.getTime() < Date.now() - 60000) newEta = new Date(newEta.getTime() + 24*60*60*1000);
+  ref.expectedAt = newEta.toISOString();
+  ref.followUpEtaUpdatedAt = new Date().toISOString();
+  // Reset the popup-shown flag so the NEW ETA + 5 min trigger can fire again
+  ref.followUpShownAt = null;
+  ref.followUpShownForETA = null;
+  _crLogFollowUpAction(refId, 'eta_updated', 'New ETA: ' + newEta.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}));
+  if(typeof renderPendingReferrals === 'function') renderPendingReferrals();
+  if(typeof showToast === 'function') showToast('✓ New ETA: ' + newEta.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}) + ' — timer reset (+5 min buffer)');
+  _crCloseFollowUpModal();
+}
+window._crFollowUpUpdateETA = _crFollowUpUpdateETA;
+
+function _crFollowUpArrived(refId){
+  _crLogFollowUpAction(refId, 'arrived', 'Patient arrived after follow-up.');
+  _crCloseFollowUpModal();
+  if(typeof approvePendingReferral === 'function') approvePendingReferral(refId);
+}
+window._crFollowUpArrived = _crFollowUpArrived;
+
+function _crFollowUpNoShow(refId){
+  var ref = (PENDING_REFERRALS || []).find(function(r){ return r.id === refId; });
+  if(!ref) return;
+  if(!window.confirm('Mark this referral as no-show? It won\'t create a patient log.')) return;
+  ref.status = 'incomplete';
+  ref.incompletedAt = new Date().toISOString();
+  ref.incompletedBy = (CURRENT_USER && CURRENT_USER.name) || '?';
+  ref.autoExpired = false;
+  _crLogFollowUpAction(refId, 'no_show', 'Marked no-show via follow-up popup.');
+  if(typeof _savePendingReferrals === 'function') _savePendingReferrals();
+  if(typeof renderPendingReferrals === 'function') renderPendingReferrals();
+  if(typeof showToast === 'function') showToast('Marked as no-show.');
+  _crCloseFollowUpModal();
+  // Re-open modal if there were more late referrals
+  setTimeout(function(){ _crShowFollowUpPopupIfNeeded(); }, 400);
+}
+window._crFollowUpNoShow = _crFollowUpNoShow;
 
 // ── REFERRAL LOG: CRUD ────────────────────────────────────────────────
 // Insert a new entry. Returns the entry on success, or { error:'...' }.
@@ -16321,8 +16592,12 @@ window._crSaveReferral = _crSaveReferral;
 //   - Status filter dropdown narrows further (default = pending only)
 function renderPendingReferrals(){
   // Per user 2026-05-26: sweep auto-expirations before rendering so the
-  // panel never shows a stale 'pending' row past its 23:59-of-day+1 cutoff.
+  // panel never shows a stale 'pending' row past its 1.5-hour cutoff.
   if(typeof _crSweepExpiredReferrals === 'function') _crSweepExpiredReferrals();
+  // Phase 19b: also fire the follow-up popup if any owned referrals are late
+  if(typeof _crShowFollowUpPopupIfNeeded === 'function'){
+    setTimeout(function(){ _crShowFollowUpPopupIfNeeded(); }, 250);
+  }
   var wrap = document.getElementById('pending-referrals-wrap');
   var list = document.getElementById('pr-list');
   var badge = document.getElementById('pr-count-badge');
@@ -16402,6 +16677,17 @@ function renderPendingReferrals(){
     if(isCreator && !isFD && r.status === 'pending' && (r.createdBy === (CURRENT_USER && CURRENT_USER.name) || (typeof isAdmin === 'function' && isAdmin()))){
       actions += '<div style="margin-top:6px"><button onclick="retractPendingReferral(\'' + r.id + '\')" style="background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:5px;padding:4px 10px;font-size:10px;font-weight:600;cursor:pointer">↩ Cancel this referral</button></div>';
     }
+    // Phase 19b late-referral badge — appears on pending rows past the
+    // ETA + 10 min trigger. Click → re-open follow-up modal for this ref.
+    var lateBadge = '';
+    if(r.status === 'pending' && typeof _crIsReferralLate === 'function' && _crIsReferralLate(r)){
+      var etaForBadge = (typeof _crEffectiveETA === 'function') ? _crEffectiveETA(r) : null;
+      var lateMinForBadge = etaForBadge ? Math.round((Date.now() - etaForBadge.getTime()) / 60000) : 0;
+      lateBadge = '<div style="margin-top:6px;padding:7px 10px;background:#fef3c7;border:1px solid #fcd34d;border-left:3px solid #f59e0b;border-radius:6px;font-size:11px;color:#7c2d12;line-height:1.45;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">'
+        + '<span><b>⏰ ' + lateMinForBadge + ' min late</b> — patient hasn\'t arrived</span>'
+        + '<button onclick="_crOpenFollowUpForRef(\'' + r.id + '\')" style="background:#f59e0b;color:#fff;border:none;border-radius:5px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">📞 Open follow-up</button>'
+        + '</div>';
+    }
     // Admin-override audit note (per user 2026-05-26) — full-width banner
     // (NOT a small chip) directly below the row data so it's plainly visible.
     // Includes the admin's name + timestamp so anyone reviewing later sees
@@ -16414,11 +16700,32 @@ function renderPendingReferrals(){
         ? _renderAdminOverrideNote({ actionLabel:'Approved this referral', adminName:adminName, when:when, originalActor:'destination front desk' })
         : '<div style="margin-top:8px;background:#fef3c7;border:1px solid #fcd34d;border-left:3px solid #f59e0b;border-radius:6px;padding:7px 10px;font-size:11px;color:#7c2d12;line-height:1.5"><b>🛡️ Override by admin</b> · Approved by <b>'+adminName+'</b> on <b>'+when+'</b> instead of the destination front desk.</div>';
     }
+    // Phase 19b: render audit log of follow-up actions (if any)
+    var auditTrail = '';
+    if(Array.isArray(r.followUpActions) && r.followUpActions.length > 0){
+      auditTrail = '<div style="margin-top:6px;padding:7px 10px;background:#f8fafc;border:1px solid #e2e8f0;border-left:3px solid #94a3b8;border-radius:6px;font-size:10px;color:#475569;line-height:1.5">'
+        + '<div style="font-weight:700;color:#1F3864;margin-bottom:3px">📋 Follow-up log</div>'
+        + r.followUpActions.map(function(a){
+            var when = a.at ? new Date(a.at).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}) : '?';
+            var actionLbl = a.action === 'called_patient' ? 'Called patient'
+                          : a.action === 'called_clinic'  ? 'Called clinic'
+                          : a.action === 'offered_ride'   ? 'Offered ride'
+                          : a.action === 'eta_updated'    ? 'Updated ETA'
+                          : a.action === 'no_show'        ? 'Marked no-show'
+                          : a.action === 'arrived'        ? 'Patient arrived'
+                          : a.action === 'note'           ? 'Note'
+                          : a.action;
+            return '<div>• <b>' + when + '</b> · ' + (a.by || '?').replace(/</g,'&lt;') + ' · ' + actionLbl + (a.note ? ': <i>' + String(a.note).replace(/</g,'&lt;') + '</i>' : '') + '</div>';
+          }).join('')
+        + '</div>';
+    }
     return '<div style="background:' + statusBg + ';border:1px solid #e2e8f0;border-left:3px solid ' + statusColor + ';border-radius:8px;padding:11px 14px">'
       + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap">'
       +   '<div style="flex:1;min-width:0">'
-      +     '<div style="font-size:13px;font-weight:700;color:#0f172a">' + typeIcon + ' ' + r.sourceName.replace(/</g,'&lt;') + ' <span style="color:var(--muted);font-weight:400;font-size:11px">→ ' + facLabel + '</span></div>'
+      +     '<div style="font-size:13px;font-weight:700;color:#0f172a">' + typeIcon + ' ' + r.sourceName.replace(/</g,'&lt;') + ' <span style="color:var(--muted);font-weight:400;font-size:11px">→ ' + facLabel + '</span>' + (r.patientName ? ' <span style="color:var(--muted);font-weight:400;font-size:11px"> · ' + r.patientName.replace(/</g,'&lt;') + '</span>' : '') + '</div>'
       +     '<div style="font-size:10px;color:var(--muted);margin-top:2px">Created by <b>' + creatorLbl.replace(/</g,'&lt;') + '</b> · Expected ' + expStr + (r.notes ? ' · Notes: ' + r.notes.replace(/</g,'&lt;') : '') + '</div>'
+      +     lateBadge
+      +     auditTrail
       +     adminOverrideBadge
       +   '</div>'
       +   '<span style="background:' + statusColor + ';color:#fff;font-size:10px;font-weight:700;padding:3px 9px;border-radius:10px;white-space:nowrap">' + statusLabel + '</span>'
