@@ -13216,6 +13216,19 @@ function editReferralEntry(id, patch){
 
   if(typeof isAdmin === 'function' && isAdmin()){
     entry.adminEdited = new Date().toISOString();
+    // Per user 2026-05-26: full audit record when admin overrides someone
+    // else's entry. Permanent — stays on the record even if it's edited
+    // again later.
+    var adminName = (CURRENT_USER && CURRENT_USER.name) || 'admin';
+    var origActor = entry.filledByName || entry.enteredBy || entry.memberName || 'original logger';
+    if(origActor && origActor !== adminName){
+      entry.adminOverride = {
+        adminName: adminName,
+        editedAt: entry.adminEdited,
+        originalActor: origActor,
+        actionLabel: 'Edited this referral'
+      };
+    }
   }
   REFERRAL_LOG[idx] = entry;
   _saveReferralLog();
@@ -14053,7 +14066,12 @@ function renderReferralLog(){
       srcHtml = '<div style="font-size:11px;color:var(--text)"><span onclick="event.stopPropagation();openReferralHistory(\'' + safeJs(e.sourceBusiness) + '\')" style="color:#1F3864;cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px" title="Click to see this business\'s full referral history">' + esc(chanLabel(e)) + '</span></div>';
     }
     var canEdit = canEditReferralEntry(e);
-    var editedMark = e.adminEdited ? ' <span title="Edited by admin" style="font-size:9px;color:#f59e0b">✎</span>' : '';
+    // Per user 2026-05-26: admin override gets a more prominent chip (yellow
+    // shield badge) on the collapsed row so it's visible at a glance, plus
+    // the full _renderAdminOverrideNote banner in the expand detail.
+    var editedMark = e.adminOverride
+      ? ' <span title="Override by admin · ' + esc(e.adminOverride.adminName || '') + '" style="font-size:9px;font-weight:700;color:#fff;background:#f59e0b;border-radius:5px;padding:1px 5px;margin-left:4px">🛡️</span>'
+      : (e.adminEdited ? ' <span title="Edited by admin" style="font-size:9px;color:#f59e0b">✎</span>' : '');
 
     rowsHtml += '<tr id="rl-row-' + e.id + '" onclick="_rlToggleExpand(\'' + e.id + '\')" style="' + (i%2===0?'':'background:#fafbfc') + ';border-bottom:1px solid var(--border);cursor:pointer">'
       + '<td style="padding:9px 6px;text-align:center;font-size:11px;color:var(--muted);width:18px"><span id="rl-arrow-' + e.id + '">▸</span></td>'
@@ -14097,8 +14115,23 @@ function renderReferralLog(){
       +   (e.extraNotes
             ? '<div style="margin-top:10px"><div style="font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;font-size:9px;margin-bottom:3px">Extra notes</div><div style="color:var(--text);font-size:12px;white-space:pre-wrap">' + esc(e.extraNotes) + '</div></div>'
             : '')
-      +   (e.adminEdited
-            ? '<div style="margin-top:10px;font-size:10px;color:#92400e;background:#fef3c7;border:1px solid #fcd34d;border-radius:6px;padding:5px 9px;display:inline-block">✎ Last edited by admin: ' + esc(new Date(e.adminEdited).toLocaleString()) + '</div>'
+      +   (e.adminOverride && typeof _renderAdminOverrideNote === 'function'
+            ? _renderAdminOverrideNote({
+                actionLabel: e.adminOverride.actionLabel || 'Edited this referral',
+                adminName: e.adminOverride.adminName,
+                when: e.adminOverride.editedAt ? new Date(e.adminOverride.editedAt).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) : '',
+                originalActor: e.adminOverride.originalActor
+              })
+            : (e.adminEdited
+                ? '<div style="margin-top:10px;font-size:10px;color:#92400e;background:#fef3c7;border:1px solid #fcd34d;border-radius:6px;padding:5px 9px;display:inline-block">✎ Last edited by admin: ' + esc(new Date(e.adminEdited).toLocaleString()) + '</div>'
+                : ''))
+      +   (e.approvedByAdmin && typeof _renderAdminOverrideNote === 'function'
+            ? _renderAdminOverrideNote({
+                actionLabel: 'Approved the source referral',
+                adminName: e.approvedBy || 'admin',
+                when: e.ts ? new Date(e.ts).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) : '',
+                originalActor: 'destination front desk'
+              })
             : '')
       + '</td>'
       + '</tr>';
