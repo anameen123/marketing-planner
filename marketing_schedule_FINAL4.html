@@ -42593,17 +42593,16 @@ function _renderHomePageInternal(){
       }
     }
     if(!rendered){
-      // Fallback 2: rotating motivational quote
-      var quotes = [
-        '"Every visit is a step closer to the next lead." — Anonymous',
-        '"Today\'s seeds grow into tomorrow\'s relationships." — Anonymous',
-        '"Marketing is no longer about the stuff that you make, but about the stories you tell." — Seth Godin',
-        '"The best way to predict the future is to create it." — Peter Drucker',
-        '"Show up. Add value. Build trust. Repeat." — Anonymous'
-      ];
-      var pick = quotes[Math.floor(Date.now() / (1000*60*60*4)) % quotes.length];
+      // Fallback 2 (per user 2026-05-26): link to the SAME ticker quotes
+      // that scroll at the top of every page (TICKER_QUOTES), so the
+      // announcement card stays consistent with the brand voice and we
+      // don't maintain two separate quote lists.
+      var pool = (typeof TICKER_QUOTES !== 'undefined' && Array.isArray(TICKER_QUOTES) && TICKER_QUOTES.length)
+        ? TICKER_QUOTES
+        : ['🎯 Every visit is a step closer to the next lead'];
+      var pick = pool[Math.floor(Date.now() / (1000*60*60*4)) % pool.length];
       annBox.innerHTML = '<div style="font-size:11px;color:#64748b;font-weight:600;margin-bottom:4px">💭 Quote of the moment</div>'
-                       + '<div style="font-size:12px;color:#1e293b;line-height:1.5;font-style:italic">' + pick + '</div>';
+                       + '<div style="font-size:12px;color:#1e293b;line-height:1.5;font-style:italic">' + String(pick).replace(/</g,'&lt;') + '</div>';
     }
   }
 }
