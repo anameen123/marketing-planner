@@ -1536,14 +1536,7 @@ body.member-view.member-mobile .member-bottom-nav{display:none}
 body.member-mobile:not(.role-admin) .nav-admin-only {
   display: none !important;
 }
-/* Exception: call-handler members (e.g. Duaa) need the Team tab because
-   the Monthly Call Conversions chart + "+1 Convert" button live there.
-   So anything tagged .nav-handler-also stays visible for them even though
-   it also has .nav-admin-only. The body.is-call-handler class is added
-   by applyMemberViewClass when the current user is in CALL_HANDLERS. */
-body.member-mobile.is-call-handler .nav-handler-also {
-  display: flex !important;
-}
+/* Call-handler nav exception removed 2026-05-27 — Conversions feature deleted. */
 
 /* ── FRONT-DESK ROLE LOCKDOWN (v2: 2026-05-18) ─────────────────────────
    Front-desk users (per-facility shared logins from IT) ONLY see the
@@ -2261,24 +2254,7 @@ body.role-front_desk #referrals-view {
     </div>
   </div><!-- /monthly-completion-wrap -->
 
-  <!-- Monthly Call Conversions (only rendered for members flagged as call handlers) -->
-  <div id="monthly-conversions-wrap" style="display:none;background:var(--card);border-radius:14px;border:1px solid #fcd34d;padding:20px;margin-bottom:18px;box-shadow:0 2px 12px rgba(245,158,11,.10)">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-      <div>
-        <div style="font-size:13px;font-weight:700;color:#92400e">📞 Monthly Call Conversions</div>
-        <div style="font-size:11px;color:var(--muted);margin-top:2px">Calls converted into actual ER visits — manual log, resets weekly + monthly</div>
-      </div>
-      <div style="display:flex;gap:6px">
-        <button onclick="setConversionsPeriod(3)" id="cv-btn-3" style="padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;background:#92400e;border:none;color:#fff">3 Months</button>
-        <button onclick="setConversionsPeriod(6)" id="cv-btn-6" style="padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;background:var(--card);border:1px solid var(--border);color:var(--muted)">6 Months</button>
-      </div>
-    </div>
-    <div id="conversions-current-summary" style="margin-bottom:16px"></div>
-    <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Trend</div>
-    <div style="background:#fffbeb;border-radius:10px;padding:12px;border:1px solid #fcd34d">
-      <svg id="monthly-conversions-svg" width="100%" height="140" style="display:block;overflow:visible"></svg>
-    </div>
-  </div>
+  <!-- Monthly Call Conversions removed 2026-05-27 per user. -->
   </div><!-- /panel-overview -->
 
   <!-- Performance Panel -->
@@ -2814,15 +2790,7 @@ body.role-front_desk #referrals-view {
         <input type="color" id="am-color" style="width:60px;height:36px;border:1px solid var(--border);border-radius:8px;padding:2px;cursor:pointer;background:#fff">
         <span style="font-size:10px;color:var(--muted);margin-left:8px;font-style:italic">Used for member-card headers and chips throughout the app</span>
       </div>
-      <div class="kpi-input-row" style="margin-top:14px;padding:10px 12px;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px">
-        <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer">
-          <input type="checkbox" id="am-call-handler" style="margin-top:2px;cursor:pointer">
-          <span>
-            <span style="font-size:12px;font-weight:700;color:#92400e">📞 Handles incoming ER calls</span>
-            <span style="font-size:10px;color:#78350f;display:block;margin-top:3px">Members with this flag get a "+1 Convert" button on their dashboard card to log call conversions weekly + monthly.</span>
-          </span>
-        </label>
-      </div>
+      <!-- Call-handler flag removed 2026-05-27 per user (Conversions feature ripped out). -->
     </div>
     <div class="modal-foot">
       <button class="btn-cancel" onclick="closeAddMemberModal()">Cancel</button>
@@ -10665,14 +10633,8 @@ function applyMemberViewClass(){
   if(CURRENT_USER && CURRENT_USER.role){
     b.classList.add('role-' + CURRENT_USER.role);
   }
-  // Call-handler flag (e.g. Duaa today). Adds body.is-call-handler so we can
-  // selectively re-show certain otherwise-hidden tabs (specifically Team,
-  // where the monthly call-conversion chart + "+1 Convert" button live).
+  // Call-handler body class removed 2026-05-27 — Conversions feature deleted.
   b.classList.remove('is-call-handler');
-  if(CURRENT_USER && typeof isCallHandler === 'function'
-     && isCallHandler(CURRENT_USER.name)){
-    b.classList.add('is-call-handler');
-  }
   // Per user 2026-05-23: refresh the Team Chat sidebar entry visibility —
   // shown only for the 4 named users (admin/abrar/sadia/ahsan).
   if(typeof renderTeamChatVisibility === 'function') renderTeamChatVisibility();
@@ -11326,11 +11288,9 @@ function renderHelpView(){
   var isMember = (role === 'member');
   var isFD = (role === 'front_desk');
   var isReadOnly = (role === 'readonly');
-  // Call-handler bonus: Duaa specifically tracks call → conversion stats
-  // via the Monthly Call Conversions widget. The handler list is matched
-  // by display name (case-insensitive) so renames stay safe.
+  // Call-handler bonus removed 2026-05-27 — Conversions feature deleted.
   var name = (u.name || '').toLowerCase();
-  var isHandler = (name.indexOf('duaa') >= 0);
+  var isHandler = false;   // kept as harmless ref in case other branches still read it
 
   // ── Shared mini-illustration helpers ──────────────────────────────────
   // Inline SVG mockups stand in for screenshots. Each one is a stylized
@@ -11640,21 +11600,8 @@ function renderHelpView(){
       adminContent);
   }
 
-  // ── Section: Call-handler bonus (Duaa) ────────────────────────────────
-  if(isHandler){
-    var handlerContent = step(1,
-        '<strong>+1 Convert</strong> on the Team tab',
-        'When you take a phone call that converts into an actual visit, hit the +1 Convert button on your member card. It increments your Monthly Call Conversions counter immediately.', '')
-      + step(2,
-        'Monthly Call Conversions chart',
-        'Right side of the Team tab → your conversion total per month with a trend line vs previous months. Admin sees everyone\'s; you see your own.', '')
-      + step(3,
-        'You also have access to Patient Referrals',
-        'Same Log-a-Patient flow as Admin. Pick yourself when crediting — your monthly referral total in the Referrals tab will show your number alongside the rest of the team.', '');
-    sections += section('📞', 'Call-handler bonus — for you, Duaa',
-      'Tools you have that other members don\'t',
-      handlerContent);
-  }
+  // Call-handler bonus section removed 2026-05-27 — Conversions feature deleted.
+  // Duaa still has Patient Referrals access via the normal member flow.
 
   // ── Section: What you CAN'T do (helpful guardrails) ──────────────────
   var guardrails = '';
@@ -21250,10 +21197,11 @@ var MEMBER_TEAM_TAG = 'On-ground Marketing';
 // First three are already used by the seeded members (matches MCOLORS).
 var MEMBER_COLOR_POOL = ['#0d9488','#b45309','#be185d','#0369a1','#65a30d','#7c2d12','#4338ca'];
 var MCOLORS={'Duaa':'#1e40af','Ms Sadia':'#166534','Dr Ahsan':'#5b21b6','Abrar Mamun':'#0d9488'};
-// CALL_HANDLERS — set of member names who get the "+1 Convert" button on
-// their dashboard card. Was previously referenced but never declared.
-// Duaa is seeded as a call handler since she handles incoming ER calls today.
-var CALL_HANDLERS = { 'Duaa': true };
+// CALL_HANDLERS — emptied 2026-05-27. Conversions feature ripped out per user;
+// kept the global as an empty object so any straggler `isCallHandler(name)`
+// check returns false instead of throwing ReferenceError. Safe to delete
+// alongside CALL_CONVERSIONS / CALL_LOCATIONS once all references are gone.
+var CALL_HANDLERS = {};
 // CALL_CONVERSIONS — { memberName: [{ts, week, month, ...}, ...] }.
 // Tracks +1 Convert button clicks per call-handler member. Previously
 // referenced but never declared.
@@ -38718,40 +38666,7 @@ function renderCounters(){
             +'<span style="font-size:9px;opacity:.65;letter-spacing:.04em">&nbsp;</span>'
           +'</div>';
         })()
-        // CONVERSIONS ROW — only on cards for members flagged as call handlers (Duaa).
-        // The whole row is the OVERALL counter; clicking opens a detail modal
-        // with per-location +1 / -1 buttons (each one prompts confirmation).
-        // Per-location breakdown (Plano UC / Frisco ER / Castle Hills) lives in the modal
-        // because it's too dense to fit on the card.
-        +(isCallHandler(m)
-          ? (function(){
-              var wc = getWeekConversions(m);
-              var mc = getMonthConversions(m);
-              var safeM = m.replace(/\'/g,"\\'");
-              return '<div onclick="openConversionDetail(\''+safeM+'\')" '
-                +'title="Click for per-location breakdown + +1/-1 controls" '
-                +'style="background:linear-gradient(90deg,#fef3c7 0%,#fde68a 100%);border-top:1px solid #fcd34d;padding:9px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px;cursor:pointer;transition:filter .15s" '
-                +'onmouseover="this.style.filter=\'brightness(1.04)\'" '
-                +'onmouseout="this.style.filter=\'brightness(1)\'">'
-                +'<div style="display:flex;align-items:center;gap:8px">'
-                  +'<span style="font-size:16px">📞</span>'
-                  +'<div>'
-                    +'<div style="font-size:9px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.06em">Calls Converted · Overall</div>'
-                    +'<div style="font-size:11px;color:#78350f;margin-top:1px">'
-                      +'<strong style="font-size:14px;font-family:DM Mono,monospace;color:#92400e">'+wc+'</strong> this week'
-                      +' <span style="opacity:.6;margin:0 4px">·</span> '
-                      +'<strong style="font-family:DM Mono,monospace">'+mc+'</strong> this month'
-                    +'</div>'
-                  +'</div>'
-                +'</div>'
-                +'<div style="display:flex;align-items:center;gap:6px;color:#92400e;font-size:11px;font-weight:600">'
-                  +'<span style="font-size:9px;font-style:italic;opacity:.75">3 locations</span>'
-                  +'<span style="font-size:14px">↗</span>'
-                +'</div>'
-              +'</div>';
-            })()
-          : ''
-        )
+        // Calls-Converted row removed 2026-05-27 per user.
         +'</div>';
     }).join('');
     })()
@@ -39422,7 +39337,7 @@ function confirmAddMember(){
   var email= (document.getElementById('am-email').value||'').trim().toLowerCase();
   var pos  = (document.getElementById('am-position').value||'').trim() || 'Marketing Agent';
   var color= document.getElementById('am-color').value || '#0d9488';
-  var isHandler = document.getElementById('am-call-handler') && document.getElementById('am-call-handler').checked;
+  var isHandler = false;   // Call-handler flag removed 2026-05-27
   if(!name){ showToast('Please enter the member\'s full name.'); return; }
   if(!email || email.indexOf('@') < 1){ showToast('Please enter the member\'s Microsoft 365 sign-in email.'); return; }
   if(MEMBERS.indexOf(name) >= 0){ showToast('A member with that name already exists.'); return; }
