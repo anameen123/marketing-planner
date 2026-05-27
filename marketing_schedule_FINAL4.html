@@ -3482,7 +3482,7 @@ body.role-front_desk #referrals-view {
                    style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box">
             <div id="rp-start-suggest" style="display:none;position:absolute;left:0;right:0;top:100%;margin-top:2px;background:#fff;border:1px solid var(--border);border-radius:8px;max-height:260px;overflow-y:auto;z-index:10;box-shadow:0 8px 20px rgba(31,56,100,.12)"></div>
           </div>
-          <button type="button" onclick="rpPickFromMapMode('start')" title="Close this dialog and pick the Start by clicking a pin on the map" style="background:#7030A0;color:#fff;border:none;border-radius:8px;padding:9px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;white-space:nowrap">📍 Map</button>
+          <button type="button" onclick="event.stopPropagation();rpPickFromMapMode('start')" title="Pick the Start by clicking a pin on the map — the drawer stays open" style="background:#7030A0;color:#fff;border:none;border-radius:8px;padding:9px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;white-space:nowrap">📍 Map</button>
         </div>
         <input type="hidden" id="rp-start">
         <div style="font-size:10px;color:var(--muted);margin-top:3px;font-style:italic">Type to search, or tap <b>📍 Map</b> to pick a pin on the map.</div>
@@ -3506,7 +3506,7 @@ body.role-front_desk #referrals-view {
                    style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box">
             <div id="rp-end-suggest" style="display:none;position:absolute;left:0;right:0;top:100%;margin-top:2px;background:#fff;border:1px solid var(--border);border-radius:8px;max-height:260px;overflow-y:auto;z-index:10;box-shadow:0 8px 20px rgba(31,56,100,.12)"></div>
           </div>
-          <button type="button" onclick="rpPickFromMapMode('end')" title="Close this dialog and pick the End by clicking a pin on the map" style="background:#1F3864;color:#fff;border:none;border-radius:8px;padding:9px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;white-space:nowrap">📍 Map</button>
+          <button type="button" onclick="event.stopPropagation();rpPickFromMapMode('end')" title="Pick the End by clicking a pin on the map — the drawer stays open" style="background:#1F3864;color:#fff;border:none;border-radius:8px;padding:9px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;white-space:nowrap">📍 Map</button>
         </div>
         <input type="hidden" id="rp-end" value="">
         <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text);margin-top:6px;cursor:pointer">
@@ -3573,7 +3573,7 @@ body.role-front_desk #referrals-view {
           <!-- Single inline picker: [search] [📍 Map] — matches Corridor -->
           <div style="display:grid;grid-template-columns:1fr auto;gap:8px;margin-bottom:8px">
             <input id="rp-rw-clinic-search" type="text" placeholder="Type a clinic, MVA, outreach, or WCG facility name…" oninput="_rpRwClinicSearch()" onfocus="_rpRwClinicSearch()" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box">
-            <button type="button" onclick="_rpRwStartPickOnMap()" title="Click any pin on the map to preview, then ✓ Confirm" style="background:#7030A0;color:#fff;border:none;border-radius:8px;padding:10px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;white-space:nowrap;box-shadow:0 2px 6px rgba(112,48,160,.3)">📍 Pick on map</button>
+            <button type="button" onclick="event.stopPropagation();_rpRwStartPickOnMap()" title="Click any pin on the map to preview, then ✓ Confirm" style="background:#7030A0;color:#fff;border:none;border-radius:8px;padding:10px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;white-space:nowrap;box-shadow:0 2px 6px rgba(112,48,160,.3)">📍 Pick on map</button>
           </div>
           <div id="rp-rw-clinic-suggestions" style="background:#fff;border:1px solid var(--border);border-radius:6px;max-height:160px;overflow-y:auto;display:none;margin-bottom:8px"></div>
 
@@ -27318,6 +27318,8 @@ function _rpPickEndpoint(which, idx){
   // corridor + fitBounds on the map).
   if(_RP_START_NAME && _RP_END_NAME){
     if(typeof _rpBuildSmartPanel === 'function') _rpBuildSmartPanel();
+    // Phase 24: auto-trigger AI suggest now that both endpoints are set.
+    if(typeof _rpAutoSuggestIfReady === 'function') _rpAutoSuggestIfReady();
   } else if(_RP_START_NAME || _RP_END_NAME){
     // Only one endpoint chosen — pan/zoom the map to it so the user sees
     // where they just picked and can visually plan the other end.
@@ -27521,6 +27523,12 @@ function _rpDialogConsumePinClick(name){
   var match = pool.find(function(p){ return p.name === name; });
   _RP_DIALOG_PENDING = { name: name, match: match || null };
   _rpRenderPickStatus();
+  // Phase 24: drop the bright-blue PREVIEW ring on the tapped pin so the
+  // user gets visual confirmation BEFORE they click ✓ Confirm.
+  try {
+    var c = (typeof getCoordForBusiness === 'function') ? getCoordForBusiness(name) : null;
+    if(c && typeof _rpDrawPreviewRing === 'function') _rpDrawPreviewRing(c);
+  } catch(_){}
   // Make sure the planner modal is still on top so user sees the buttons.
   try {
     var modal = document.getElementById('route-planner-modal');
@@ -27594,9 +27602,15 @@ function _rpConfirmPendingPick(){
     }
   } catch(_){}
   if(typeof _rpRefreshCenterline === 'function') _rpRefreshCenterline();
+  // Phase 24: clear the bright-blue preview ring now that we've placed the
+  // permanent S / E marker.
+  if(typeof _rpClearPreviewRing === 'function') _rpClearPreviewRing();
   if(typeof showToast === 'function'){
     showToast('✓ ' + (which === 'start' ? 'Start' : 'End') + ' set: ' + pending.name);
   }
+  // Phase 24: AI is default — if both Start + End are now set, auto-fire
+  // the suggest so N levels + half-width get filled in without a click.
+  if(typeof _rpAutoSuggestIfReady === 'function') _rpAutoSuggestIfReady();
 }
 window._rpConfirmPendingPick = _rpConfirmPendingPick;
 
@@ -27605,6 +27619,8 @@ function _rpCancelPinMode(){
   _RP_DIALOG_AWAITING = null;
   _RP_DIALOG_PENDING  = null;
   _rpRenderPickStatus();
+  // Phase 24: drop the bright-blue preview ring on cancel.
+  if(typeof _rpClearPreviewRing === 'function') _rpClearPreviewRing();
   if(typeof showToast === 'function') showToast('Pin-pick canceled.');
 }
 window._rpCancelPinMode = _rpCancelPinMode;
@@ -28304,13 +28320,30 @@ window._RP_RW = window._RP_RW || {
 };
 
 function _rpRwReset(){
+  // 2026-05-26 Phase 22: default startType MUST match the checked-by-default
+  // radio in the HTML (`rp-rw-type-clinic`). When it was 'facility' here,
+  // clicking the new inline 📍 Pick on map button hit the early-return guard
+  // in _rpRwStartPickOnMap and silently dropped the user out of the picker.
   window._RP_RW = {
-    step: 1, startType: 'facility', start: null,
+    step: 1, startType: 'clinic', start: null,
     numVisits: 6, totalHours: 4, stopMinutes: 12,
     useRange: true, minVisits: 4, maxVisits: 8
   };
 }
 window._rpRwReset = _rpRwReset;
+
+// Re-read whichever start-type radio is currently checked and update the
+// _RP_RW.startType field. Called at the top of _rpRwStartPickOnMap so we
+// can never desync between DOM state and JS state.
+function _rpRwSyncStartTypeFromDom(){
+  try {
+    var radios = document.getElementsByName('rp-rw-start-type');
+    for(var i = 0; i < radios.length; i++){
+      if(radios[i].checked){ _RP_RW.startType = radios[i].value; return; }
+    }
+  } catch(_){}
+}
+window._rpRwSyncStartTypeFromDom = _rpRwSyncStartTypeFromDom;
 
 // Render the step progress dots (filled = visited, current = bigger).
 function _rpRwRenderProgress(){
@@ -28683,6 +28716,10 @@ var _RP_RW_MAP_PICK_BANNER = null;
 var _RP_RW_PENDING_PICK = null;
 
 function _rpRwStartPickOnMap(){
+  // Phase 22 fix: always sync from DOM first — the radios are hidden so
+  // _RP_RW.startType could be stale if the user just toggled a Quick Start
+  // pill without retriggering _rpRwOnStartTypeChange.
+  if(typeof _rpRwSyncStartTypeFromDom === 'function') _rpRwSyncStartTypeFromDom();
   if(_RP_RW.startType === 'facility'){
     if(typeof showToast === 'function') showToast('Use the dropdown for facilities.');
     return;
@@ -28744,6 +28781,8 @@ function _rpRwCancelMapPick(){
     try { document.body.removeChild(_RP_RW_MAP_PICK_BANNER); } catch(_){}
     _RP_RW_MAP_PICK_BANNER = null;
   }
+  // Phase 24: drop the bright-blue preview ring on cancel / confirm.
+  if(typeof _rpClearPreviewRing === 'function') _rpClearPreviewRing();
 }
 window._rpRwCancelMapPick = _rpRwCancelMapPick;
 
@@ -28796,6 +28835,10 @@ function _rpRwHandleMapPick(latlng){
   } else if(_RP_RW.startType === 'custom'){
     var name = (document.getElementById('rp-rw-custom-name') || {}).value.trim() || 'Custom location';
     _RP_RW_PENDING_PICK = { name: name, coord: { lat: latlng.lat, lng: latlng.lng }, kind: 'custom', isVisit: false };
+  }
+  // Phase 24: bright-blue PREVIEW ring on the pending pick.
+  if(_RP_RW_PENDING_PICK && _RP_RW_PENDING_PICK.coord && typeof _rpDrawPreviewRing === 'function'){
+    _rpDrawPreviewRing(_RP_RW_PENDING_PICK.coord);
   }
   _rpRwUpdatePickBanner();
   return true;
@@ -29157,11 +29200,15 @@ window._rpRwGenerate = _rpRwGenerate;
 //      card (Random Pick) or an advisory panel (Corridor).
 // ────────────────────────────────────────────────────────────────────────────
 
+// Phase 24 (2026-05-26): AI is the DEFAULT for admin per user. The toggle
+// stays so it can be disabled, but on load AI is on if a GitHub Models
+// token is set. We also auto-fire the suggest on every Start+End change.
 var _RP_AI = {
-  enabled: false,              // master toggle (admin-controlled)
+  enabled: true,               // master toggle — defaults ON per user
   lastResult: null,            // most recent AI route for inspection
   lastError: null,
-  lastCorridorAdvice: null     // corridor-mode AI second opinion
+  lastCorridorAdvice: null,    // corridor-mode AI second opinion
+  autoSuggestLast: null        // throttle key so we don't refire identically
 };
 window._RP_AI = _RP_AI;
 
@@ -29265,6 +29312,9 @@ function _rpAiSuggestLevelCount(){
   if(btn){ btn.disabled = true; btn.innerHTML = '⏳ Asking AI…'; }
   var hint = document.getElementById('rp-ai-suggest-n-hint');
   if(hint){ hint.style.display = 'block'; hint.innerHTML = '<i>⏳ Asking AI for the optimum N…</i>'; }
+  // Phase 24: AI also picks corridor half-width. Cap at 25% of total distance
+  // (matches the algorithmic cap in _rpV4Collect) AND a hard 12 mi ceiling.
+  var maxHalfWidth = Math.min(12, Math.max(1, totalMi * 0.25));
   var prompt = 'You are helping a medical-marketing rep plan a corridor-style clinic visit route.\n\n'
     + 'GEOMETRY:\n'
     + '- Start: ' + (startVal || 'A') + '  (' + A.lat.toFixed(4) + ', ' + A.lng.toFixed(4) + ')\n'
@@ -29274,17 +29324,22 @@ function _rpAiSuggestLevelCount(){
     + '- ' + greenCount + ' green/never-visited (top priority)\n'
     + '- ' + yellowCount + ' yellow medium-stale\n'
     + '- ' + (greenCount + yellowCount) + ' total available stops\n\n'
-    + 'HOW LEVELS WORK:\n'
+    + 'HOW LEVELS + HALF-WIDTH WORK:\n'
     + 'The Start→End line is sliced into N equal-length depth chunks ("route levels").\n'
     + 'Each level is one stop the rep can plan to visit. More levels = tighter slices\n'
     + '(fewer candidates per slice). Fewer levels = wider slices (more candidate density).\n'
     + 'Each slice should ideally contain at least 3 candidates so the rep has real choices.\n'
     + 'Typical rep visits 5-8 clinics per route.\n\n'
-    + 'TASK: Recommend the OPTIMUM N for this trip.\n\n'
+    + 'CORRIDOR HALF-WIDTH (±miles from centerline) controls how far off-route we will\n'
+    + 'consider candidates. Wider = more options but more driving detour. Narrower =\n'
+    + 'tight efficient route but fewer choices. Cap is ' + maxHalfWidth.toFixed(1) + ' mi (25% of total distance).\n'
+    + 'Sweet spot is usually 2-4 mi in dense urban areas and 4-6 mi in sparse suburbs.\n\n'
+    + 'TASK: Recommend BOTH the optimum N AND the optimum half-width for this trip.\n\n'
     + 'OUTPUT (JSON only, no markdown, no prose outside the object):\n'
     + '{\n'
     + '  "recommendedLevels": <integer 1-12>,\n'
-    + '  "reasoning": "<one sentence why>"\n'
+    + '  "recommendedHalfWidthMi": <number 1-' + maxHalfWidth.toFixed(1) + '>,\n'
+    + '  "reasoning": "<one sentence covering both choices>"\n'
     + '}\n';
   _callAIChat(prompt, { temperature: 0.3, maxTokens: 200, wantJson: true })
     .then(function(text){
@@ -29302,14 +29357,27 @@ function _rpAiSuggestLevelCount(){
       var n = Math.max(1, Math.min(12, Math.round(parsed.recommendedLevels)));
       var inp = document.getElementById('rp-level-count');
       if(inp) inp.value = n;
+      // Phase 24: also accept + apply the recommended half-width.
+      var halfMi = null;
+      if(typeof parsed.recommendedHalfWidthMi === 'number' && !isNaN(parsed.recommendedHalfWidthMi)){
+        halfMi = Math.max(1, Math.min(maxHalfWidth, Math.round(parsed.recommendedHalfWidthMi * 2) / 2)); // round to 0.5
+        var wInp = document.getElementById('rp-corridor');
+        if(wInp){
+          wInp.value = halfMi;
+          // Fire the onchange so the side hint label updates
+          if(typeof _rpV4OnWidthChange === 'function') _rpV4OnWidthChange();
+        }
+      }
       var reason = (parsed.reasoning || '').toString().replace(/</g,'&lt;');
       if(hint){
         hint.style.display = 'block';
         hint.style.color = '#6b21a8';
-        hint.innerHTML = '🤖 AI suggests <b>' + n + ' level' + (n===1?'':'s') + '</b> — ' + reason
+        hint.innerHTML = '🤖 AI suggests <b>' + n + ' level' + (n===1?'':'s') + '</b>'
+          + (halfMi != null ? ' · <b>±' + halfMi + ' mi</b> corridor' : '')
+          + ' — ' + reason
           + ' <span style="color:#94a3b8">(' + (greenCount + yellowCount) + ' candidates in ±' + densityWidth.toFixed(1) + ' mi)</span>';
       }
-      if(typeof showToast === 'function') showToast('🤖 AI suggests ' + n + ' route levels.');
+      if(typeof showToast === 'function') showToast('🤖 AI set ' + n + ' levels' + (halfMi != null ? ' · ±' + halfMi + ' mi corridor' : ''));
     })
     .catch(function(err){
       if(btn){ btn.disabled = false; btn.innerHTML = origLabel || '🤖 AI suggest'; }
@@ -29318,6 +29386,27 @@ function _rpAiSuggestLevelCount(){
     });
 }
 window._rpAiSuggestLevelCount = _rpAiSuggestLevelCount;
+
+// Phase 24 (2026-05-26): AI is the default. Whenever Start + End are both
+// set, automatically run the AI suggest so N + half-width get pre-filled.
+// Throttle: skip if we just ran this exact (startVal, endVal) pair.
+function _rpAutoSuggestIfReady(){
+  try {
+    if(!_RP_AI || !_RP_AI.enabled) return;
+    if(typeof hasGeminiKey !== 'function' || !hasGeminiKey()) return;
+    var startVal = (document.getElementById('rp-start') || {}).value || '';
+    var endVal   = (document.getElementById('rp-end')   || {}).value || '';
+    if(!startVal || !endVal) return;
+    var pairKey = startVal + '|' + endVal;
+    if(_RP_AI.autoSuggestLast === pairKey) return;   // already ran for this pair
+    _RP_AI.autoSuggestLast = pairKey;
+    // Defer to next tick so the confirm flow finishes painting first.
+    setTimeout(function(){
+      if(typeof _rpAiSuggestLevelCount === 'function') _rpAiSuggestLevelCount();
+    }, 80);
+  } catch(_){}
+}
+window._rpAutoSuggestIfReady = _rpAutoSuggestIfReady;
 
 // Visibility — show only for admin. Called whenever the planner opens.
 function _rpAiSyncVisibility(){
@@ -31072,12 +31161,15 @@ function _rpClearEndMarker(){
 }
 window._rpClearEndMarker = _rpClearEndMarker;
 
-// ── PHASE 17 — CANDIDATE PIN HIGHLIGHTS PER SIDE (per user 2026-05-26) ─────
-// While walking the corridor wizard levels, paint a colored ring around each
-// candidate pin on the map so the user can spatially see which clinics are
-// the options for THIS level + which side (positive=blue, negative=red).
-// On level navigation OR wizard close, clear the rings. When the user picks
-// from one side (same-side rule locks the level), dim the opposite side.
+// ── PHASE 17 — CANDIDATE PIN HIGHLIGHTS (per user 2026-05-26) ─────────────
+// Phase 24 (2026-05-26): switched to a 3-state BLUE scheme per user.
+//   • Suggested for this level (not yet picked) → DARK BLUE ring (#1e3a8a)
+//   • Picked for this level                     → LIGHT BLUE ring (#60a5fa)
+//     filled to clearly show it's the chosen one
+//   • Same-side rule excludes it                → grey dashed (dim)
+// The earlier blue/red per-side scheme was confusing — red signalled "bad"
+// when it just meant the other geographic side. Blue everywhere keeps the
+// signal "this is a candidate" and reserves color difference for state.
 var _DV_CANDIDATE_HIGHLIGHTS = null;
 function _rpDrawCandidateHighlights(slice, lockedSide){
   if(!_DV_MAP || typeof L === 'undefined' || !slice) return;
@@ -31086,19 +31178,40 @@ function _rpDrawCandidateHighlights(slice, lockedSide){
   } else {
     _DV_CANDIDATE_HIGHLIGHTS.clearLayers();
   }
+  // Lookup the currently-picked names for this level so we can flip their
+  // ring to light-blue / filled.
+  var pickedNames = {};
+  try {
+    var key = 'level' + (typeof _RP_V5_STEP !== 'undefined' ? _RP_V5_STEP : 0);
+    var pickList = (typeof _RP_V5_PICKS !== 'undefined' && _RP_V5_PICKS[key]) || [];
+    pickList.forEach(function(p){ if(p && p.name) pickedNames[p.name] = true; });
+  } catch(_){}
   function ring(c, sideKey){
     if(!c || !c.coord) return;
     var isLocked = (lockedSide && lockedSide !== sideKey);
-    var color = sideKey === '+' ? '#3b82f6' : '#ef4444';
-    if(isLocked) color = '#cbd5e1';   // dim if same-side rule excludes it
+    var isPicked = !!pickedNames[c.name];
+    // Default — suggested for this level
+    var color      = '#1e3a8a';   // dark blue
+    var fillColor  = '#1e3a8a';
+    var fillOpac   = 0.12;
+    var weight     = 3;
+    var opacity    = 0.95;
+    var dash       = null;
+    if(isLocked){
+      color = '#cbd5e1'; fillColor = '#cbd5e1';
+      weight = 2; opacity = 0.5; fillOpac = 0.05; dash = '4,4';
+    } else if(isPicked){
+      color = '#60a5fa'; fillColor = '#60a5fa';   // light blue (selected)
+      weight = 4; opacity = 1; fillOpac = 0.45;
+    }
     var marker = L.circleMarker([c.coord.lat, c.coord.lng], {
-      radius: 14,
+      radius: isPicked ? 16 : 14,
       color: color,
-      weight: isLocked ? 2 : 3,
-      opacity: isLocked ? 0.5 : 0.95,
-      fillColor: color,
-      fillOpacity: isLocked ? 0.05 : 0.15,
-      dashArray: isLocked ? '4,4' : null,
+      weight: weight,
+      opacity: opacity,
+      fillColor: fillColor,
+      fillOpacity: fillOpac,
+      dashArray: dash,
       interactive: false
     });
     _DV_CANDIDATE_HIGHLIGHTS.addLayer(marker);
@@ -31107,6 +31220,58 @@ function _rpDrawCandidateHighlights(slice, lockedSide){
   (slice.negativeSide || []).forEach(function(c){ ring(c, '-'); });
 }
 window._rpDrawCandidateHighlights = _rpDrawCandidateHighlights;
+
+// Phase 24: redraw the highlight layer whenever a pick is toggled so the
+// light-blue ring appears/disappears immediately. Helper used by
+// _rpV5ToggleCheck to keep the map in sync with the list state.
+function _rpRedrawHighlightsForCurrentLevel(){
+  try {
+    if(typeof _RP_V5_LAST === 'undefined' || !_RP_V5_LAST || !_RP_V5_LAST.slices) return;
+    var k = (typeof _RP_V5_STEP !== 'undefined') ? _RP_V5_STEP : 1;
+    var slice = _RP_V5_LAST.slices[k - 1];
+    if(!slice) return;
+    // Recompute lockedSide same as _rpV5ShowLevel does
+    var picks = (typeof _RP_V5_PICKS !== 'undefined' && _RP_V5_PICKS['level' + k]) || [];
+    var lockedSide = picks.length ? (picks[0].perp >= 0 ? '+' : '-') : null;
+    if(typeof _rpDrawCandidateHighlights === 'function'){
+      _rpDrawCandidateHighlights(slice, lockedSide);
+    }
+  } catch(_){}
+}
+window._rpRedrawHighlightsForCurrentLevel = _rpRedrawHighlightsForCurrentLevel;
+
+// Phase 24 (2026-05-26): TEMPORARY preview ring for the pick-on-map flow.
+// When the user clicks a pin while in Start/End pick-mode (or the Random
+// Pick wizard's pick-mode), the picked pin gets a bright blue pulse ring
+// so the "you tapped this one" feedback is unmistakable before they click
+// ✓ Confirm. Cleared on confirm, on cancel, on re-pick (next call wipes
+// the previous overlay), or when the planner closes.
+var _DV_PREVIEW_RING = null;
+function _rpDrawPreviewRing(coord){
+  if(!_DV_MAP || typeof L === 'undefined' || !coord) return;
+  if(_DV_PREVIEW_RING){
+    try { _DV_MAP.removeLayer(_DV_PREVIEW_RING); } catch(_){}
+    _DV_PREVIEW_RING = null;
+  }
+  _DV_PREVIEW_RING = L.circleMarker([coord.lat, coord.lng], {
+    radius: 18,
+    color: '#3b82f6',          // bright blue
+    weight: 4,
+    opacity: 1,
+    fillColor: '#3b82f6',
+    fillOpacity: 0.25,
+    className: 'rp-preview-ring',
+    interactive: false
+  }).addTo(_DV_MAP);
+}
+window._rpDrawPreviewRing = _rpDrawPreviewRing;
+function _rpClearPreviewRing(){
+  if(_DV_PREVIEW_RING && _DV_MAP){
+    try { _DV_MAP.removeLayer(_DV_PREVIEW_RING); } catch(_){}
+  }
+  _DV_PREVIEW_RING = null;
+}
+window._rpClearPreviewRing = _rpClearPreviewRing;
 function _rpClearCandidateHighlights(){
   if(_DV_CANDIDATE_HIGHLIGHTS && _DV_MAP){
     try { _DV_MAP.removeLayer(_DV_CANDIDATE_HIGHLIGHTS); } catch(_){}
@@ -32075,6 +32240,11 @@ function _rpV5ToggleCheck(k, name, on){
   }
   // Update the "picks from this level" counter inline
   _rpV5ShowLevel(k);
+  // Phase 24: also refresh map highlights so the picked pin flips to the
+  // light-blue selected ring (and dropped picks flip back to dark blue).
+  if(typeof _rpRedrawHighlightsForCurrentLevel === 'function'){
+    _rpRedrawHighlightsForCurrentLevel();
+  }
 }
 window._rpV5ToggleCheck = _rpV5ToggleCheck;
 
