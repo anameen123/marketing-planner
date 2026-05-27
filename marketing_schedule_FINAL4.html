@@ -21258,6 +21258,17 @@ var CALL_HANDLERS = { 'Duaa': true };
 // Tracks +1 Convert button clicks per call-handler member. Previously
 // referenced but never declared.
 var CALL_CONVERSIONS = {};
+// CALL_LOCATIONS — the three intake destinations a call-handler can route a
+// converted caller to. Used by logConversion / removeOneConversion /
+// renderConversionDetail (lines ~48185, 48213, 48360). Was previously
+// referenced but never declared — fired `CALL_LOCATIONS is not defined`
+// pageerror on every boot. Each entry: id (storage key), name (full label),
+// short (counter label), icon (emoji), color (accent for the card).
+var CALL_LOCATIONS = [
+  { id: 'frisco_er',       name: 'Frisco ER',        short: 'Frisco ER',  icon: '🏨', color: '#1F3864' },
+  { id: 'castle_hills_er', name: 'Castle Hills ER',  short: 'Castle Hills', icon: '🏨', color: '#7030A0' },
+  { id: 'plano_uc',        name: 'Urgent Care Plano', short: 'UC Plano',    icon: '🏥', color: '#0d9488' }
+];
 var AREAS=['Frisco','Plano','McKinney','Carrollton','Allen','Other'];
 
 // ── WEEK HELPERS (define BEFORE first use) ────────────────────────────────
