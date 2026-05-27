@@ -188,6 +188,14 @@ td:last-child{border-right:none}
    route from Google…" indicator. Standalone keyframes so the spinner
    div's inline animation:spin works. */
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+/* Phase 25 (2026-05-27): bright-blue pulsing halo around the picked Start /
+   End pin on the day-view map. Slower pulse than the normal cursor blink,
+   3 cycles per ~5 sec so it draws the eye without nagging. */
+@keyframes rpSelHaloPulse {
+  0%   { transform: scale(1);    opacity: 1; }
+  50%  { transform: scale(1.18); opacity: .65; }
+  100% { transform: scale(1);    opacity: 1; }
+}
 /* Per user 2026-05-25 Phase 7: row fill-state coloring for unconfirmed
    rows (light amber, "needs filling") vs confirmed rows (light blue,
    "done"). These take precedence over the biz-type colors but yield to
@@ -24873,6 +24881,21 @@ function renderAllBusinessPins(){
         iconAnchor: [8, 8]
       })
     }).bindPopup(popupHtml);
+    // Phase 25 (2026-05-27): One-click commit when planner is armed.
+    // If the user has clicked [📍 Map] in the planner drawer, the next
+    // pin click should IMMEDIATELY commit (no popup, no preview, no
+    // separate confirm step) and drop the S/E marker on this pin.
+    marker.on('click', function(ev){
+      try {
+        if(typeof _RP_DIALOG_AWAITING !== 'undefined' && _RP_DIALOG_AWAITING && typeof _rpQuickPickPin === 'function'){
+          // Suppress the default popup for this click
+          if(ev && ev.originalEvent && ev.originalEvent.stopPropagation) ev.originalEvent.stopPropagation();
+          if(_DV_MAP && _DV_MAP.closePopup) _DV_MAP.closePopup();
+          marker.closePopup && marker.closePopup();
+          _rpQuickPickPin(name, { lat: lat, lng: lng });
+        }
+      } catch(_){}
+    });
     layer.addLayer(marker);
   }
   // ── ZOOM-AWARE RENDERING ────────────────────────────────────────────
@@ -27365,6 +27388,9 @@ function closeRoutePlanner(){
   if(typeof _rpClearEndMarker   === 'function') _rpClearEndMarker();
   if(typeof _rpClearCenterline === 'function') _rpClearCenterline();
   if(typeof _rpClearCandidateHighlights === 'function') _rpClearCandidateHighlights();
+  // Phase 25: also drop the blue selection halos around the picked pins.
+  if(typeof _rpClearSelectionHalo === 'function') _rpClearSelectionHalo();
+  if(typeof _rpClearPreviewRing === 'function') _rpClearPreviewRing();
   document.getElementById('route-planner-modal').style.display = 'none';
   // Per user 2026-05-25: release the map-function lock so Add Visit
   // popups and other handlers work again.
@@ -27442,17 +27468,22 @@ function _rpRenderPickStatus(){
   var which = _RP_DIALOG_AWAITING;
   var label = which === 'start' ? 'START' : 'END';
   var pending = _RP_DIALOG_PENDING;
-  st.style.color = '#7030A0';
+  // Phase 25: stronger visual treatment so the user knows they're in pick mode.
+  var bgColor   = (which === 'start') ? '#3b82f6' : '#7c3aed';
+  var fadeBg    = (which === 'start') ? '#dbeafe' : '#f3e8ff';
+  var borderCol = (which === 'start') ? '#93c5fd' : '#c4b5fd';
+  st.style.color = bgColor;
   st.style.fontWeight = '600';
-  st.style.background = '#faf5ff';
-  st.style.border = '1px solid #d8b4fe';
-  st.style.padding = '9px 11px';
-  st.style.borderRadius = '8px';
-  st.style.fontSize = '11px';
+  st.style.background = fadeBg;
+  st.style.border = '2px solid ' + borderCol;
+  st.style.padding = '10px 12px';
+  st.style.borderRadius = '10px';
+  st.style.fontSize = '12px';
   st.style.display = 'block';
   st.style.marginTop = '0';
   st.style.lineHeight = '1.5';
-  var head = '<div style="font-weight:800;color:#7030A0">👆 Click a pin on the map to set ' + label + '</div>';
+  var head = '<div style="font-weight:800;color:' + bgColor + ';font-size:13px">📍 Pick mode active — click any pin to set ' + label + '</div>'
+           + '<div style="font-size:10px;color:#475569;margin-top:3px;font-style:italic">One click = done. A blue halo will mark the pin you picked.</div>';
   if(pending){
     var safeName = String(pending.name).replace(/</g, '&lt;');
     head += '<div style="margin-top:6px;padding:6px 8px;background:#fff;border:1px solid #c4b5fd;border-radius:6px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">'
@@ -27583,6 +27614,131 @@ function _rpCancelPinMode(){
   if(typeof showToast === 'function') showToast('Pin-pick canceled.');
 }
 window._rpCancelPinMode = _rpCancelPinMode;
+
+// Phase 25 (2026-05-27): ONE-CLICK pin pick. Called by the per-pin click
+// listener attached in the addPin loop. Skips the popup + preview-confirm
+// dance entirely — straight to commit. Drops the S/E marker AND a thick
+// persistent blue glow ring on the picked pin so the user can always see
+// which pin is the current Start/End even after panning.
+function _rpQuickPickPin(name, coord){
+  if(!_RP_DIALOG_AWAITING) return;
+  var which = _RP_DIALOG_AWAITING;     // 'start' | 'end'
+  if(!coord && typeof getCoordForBusiness === 'function'){
+    coord = getCoordForBusiness(name);
+  }
+  if(!coord && typeof getRouteCoord === 'function'){
+    coord = getRouteCoord(name);
+  }
+  if(!coord){
+    if(typeof showToast === 'function') showToast('No coordinates for ' + name + '. Pick another pin.');
+    return;
+  }
+  // Find a match in the pool (gives us the canonical value / label)
+  var pool = window._RP_POOL || [];
+  var match = pool.find(function(p){ return p.name === name; });
+  // Write the values into the corridor inputs
+  var inp = document.getElementById('rp-' + which + '-search');
+  var hid = document.getElementById('rp-' + which);
+  if(match){
+    if(inp) inp.value = (match.icon || '📍') + ' ' + match.name + (match.city ? ' · ' + match.city : '');
+    if(hid) hid.value = match.value || match.name;
+  } else {
+    if(inp) inp.value = '📍 ' + name;
+    if(hid) hid.value = name;
+  }
+  // Update the planner globals
+  if(which === 'start') _RP_START_NAME = (hid && hid.value) || name;
+  if(which === 'end')   _RP_END_NAME   = (hid && hid.value) || name;
+  // Exit pin-pick mode
+  _RP_DIALOG_AWAITING = null;
+  _RP_DIALOG_PENDING  = null;
+  if(typeof _rpRenderPickStatus === 'function') _rpRenderPickStatus();
+  if(typeof _rpClearPreviewRing === 'function') _rpClearPreviewRing();
+  // Drop the permanent S or E marker on this pin location
+  try {
+    if(which === 'start' && typeof _rpDrawStartMarker === 'function'){
+      _rpDrawStartMarker(coord, name);
+    } else if(which === 'end' && typeof _rpDrawEndMarker === 'function'){
+      _rpDrawEndMarker(coord, name);
+    }
+    // Persistent BLUE selection halo so the user can see which pin they
+    // picked even when the map is scrolled/zoomed. Drawn ABOVE clinic pins.
+    if(typeof _rpDrawSelectionHalo === 'function'){
+      _rpDrawSelectionHalo(which, coord, name);
+    }
+    // Auto-fit if both ends are set
+    var startVal = (document.getElementById('rp-start') || {}).value || '';
+    var endVal   = (document.getElementById('rp-end')   || {}).value || '';
+    if(startVal && endVal && _DV_MAP && typeof L !== 'undefined'){
+      var A = (typeof getRouteCoord === 'function') ? getRouteCoord(startVal) : null;
+      var B = (endVal === '__same__') ? A : ((typeof getRouteCoord === 'function') ? getRouteCoord(endVal) : null);
+      if(A && B && (A.lat !== B.lat || A.lng !== B.lng)){
+        var bounds = L.latLngBounds([[A.lat, A.lng], [B.lat, B.lng]]);
+        _DV_MAP.fitBounds(bounds.pad(0.25), { maxZoom: 13, animate: true });
+      } else {
+        _DV_MAP.setView([coord.lat, coord.lng], 13, { animate: true });
+      }
+    } else if(_DV_MAP) {
+      _DV_MAP.setView([coord.lat, coord.lng], 13, { animate: true });
+    }
+  } catch(_){}
+  // Refresh the centerline if both are set
+  if(typeof _rpRefreshCenterline === 'function') _rpRefreshCenterline();
+  if(typeof showToast === 'function'){
+    showToast('✓ ' + (which === 'start' ? 'Start' : 'End') + ' set: ' + name);
+  }
+  // Phase 24: AI auto-suggest when both are set
+  if(typeof _rpAutoSuggestIfReady === 'function') _rpAutoSuggestIfReady();
+}
+window._rpQuickPickPin = _rpQuickPickPin;
+
+// Phase 25: persistent BLUE halo around the picked Start/End pin so the
+// user always knows which clinic they picked even when the map moves.
+// Two separate halos — start (sapphire) + end (navy) — each tracked by
+// slot so a re-pick on the same slot replaces the old halo cleanly.
+var _RP_SELECTION_HALOS = { start: null, end: null };
+function _rpDrawSelectionHalo(which, coord, name){
+  if(!_DV_MAP || typeof L === 'undefined' || !coord) return;
+  if(_RP_SELECTION_HALOS[which]){
+    try { _DV_MAP.removeLayer(_RP_SELECTION_HALOS[which]); } catch(_){}
+    _RP_SELECTION_HALOS[which] = null;
+  }
+  // Color the halo to match the slot: bright blue for start, deep purple for end
+  var color = (which === 'start') ? '#3b82f6' : '#7c3aed';
+  // Use a divIcon so it renders ABOVE clinic divIcon markers (same pane)
+  // and we can use CSS to pulse it.
+  var pulseHtml = '<div class="rp-sel-halo" style="width:46px;height:46px;border-radius:50%;'
+    + 'border:4px solid ' + color + ';background:' + color + '22;'
+    + 'box-shadow:0 0 0 4px rgba(255,255,255,.7), 0 0 18px ' + color + ';'
+    + 'pointer-events:none;animation:rpSelHaloPulse 1.6s ease-in-out infinite"></div>';
+  _RP_SELECTION_HALOS[which] = L.marker([coord.lat, coord.lng], {
+    icon: L.divIcon({
+      className: 'rp-sel-halo-wrap',
+      html: pulseHtml,
+      iconSize: [46, 46],
+      iconAnchor: [23, 23]
+    }),
+    interactive: false,
+    zIndexOffset: 9000      // above clinic pins (no offset) but BELOW S/E (10000)
+  }).addTo(_DV_MAP);
+}
+window._rpDrawSelectionHalo = _rpDrawSelectionHalo;
+function _rpClearSelectionHalo(which){
+  if(which){
+    if(_RP_SELECTION_HALOS[which] && _DV_MAP){
+      try { _DV_MAP.removeLayer(_RP_SELECTION_HALOS[which]); } catch(_){}
+    }
+    _RP_SELECTION_HALOS[which] = null;
+    return;
+  }
+  ['start','end'].forEach(function(k){
+    if(_RP_SELECTION_HALOS[k] && _DV_MAP){
+      try { _DV_MAP.removeLayer(_RP_SELECTION_HALOS[k]); } catch(_){}
+    }
+    _RP_SELECTION_HALOS[k] = null;
+  });
+}
+window._rpClearSelectionHalo = _rpClearSelectionHalo;
 
 // Show the coverage summary inline (in the rp-results panel). Lists how many
 // clinics / MVAs are mappable, groups unresolved ones by their (unrecognized)
