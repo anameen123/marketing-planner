@@ -37821,9 +37821,85 @@ function _rpV5ShowLocked(){
 }
 window._rpV5ShowLocked = _rpV5ShowLocked;
 
+// ════════════════════════════════════════════════════════════════════════════
+// PHASE 100 (2026-05-28) — OVERRIDE-PRIOR-ROUTE CONFIRM MODAL
+// Pops before _rpV5InsertPicksIntoDay commits a new route on a day that
+// already has a saved route. Shows what's being removed (the prior
+// picks) + what's being added (the new picks). User clicks "Yes,
+// replace" to proceed; anything else bails and leaves both the prior
+// schedule + the planner state intact (so they can keep editing).
+// ════════════════════════════════════════════════════════════════════════════
+function _phase100ShowOverrideConfirm(priorSaved, newPicks, onConfirm){
+  try {
+    var modalId = 'phase100-override-modal';
+    var existing = document.getElementById(modalId);
+    if(existing) existing.remove();
+    var modal = document.createElement('div');
+    modal.id = modalId;
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99999;display:flex;align-items:center;justify-content:center;font-family:DM Sans,sans-serif;animation:fadeIn .15s ease-out';
+    document.body.appendChild(modal);
+    function esc(s){ return String(s||'').replace(/</g,'&lt;'); }
+    var priorNames = (priorSaved && priorSaved.insertedNames) || [];
+    var newNames = (newPicks || []).map(function(p){ return p && p.name; }).filter(Boolean);
+    var priorList = priorNames.length === 0 ? '<em style="color:#94a3b8">(none)</em>'
+      : priorNames.map(function(n){ return '<div style="font-size:11px;color:#7f1d1d;padding:2px 0">• ' + esc(n) + '</div>'; }).join('');
+    var newList = newNames.length === 0 ? '<em style="color:#94a3b8">(none)</em>'
+      : newNames.map(function(n){ return '<div style="font-size:11px;color:#14532d;padding:2px 0">• ' + esc(n) + '</div>'; }).join('');
+    var savedAt = priorSaved && priorSaved.savedAt
+      ? ('saved ' + new Date(priorSaved.savedAt).toLocaleString('en-US', { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' }))
+      : '';
+    var modeName = (priorSaved && priorSaved.mode === 'corridor') ? 'Corridor'
+      : (priorSaved && priorSaved.mode === 'optimize') ? 'AI Optimize'
+      : (priorSaved && priorSaved.mode) || 'planner';
+    modal.innerHTML = ''
+      + '<div style="background:#fff;border-radius:14px;padding:22px;max-width:560px;width:92%;box-shadow:0 20px 60px rgba(0,0,0,.4);max-height:80vh;overflow-y:auto">'
+      +   '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
+      +     '<div style="font-size:11px;font-weight:700;color:#b91c1c;text-transform:uppercase;letter-spacing:.05em">⚠ Replace your saved route?</div>'
+      +     '<button type="button" id="p100-x" style="background:transparent;border:0;font-size:18px;color:#94a3b8;cursor:pointer;line-height:1" title="Cancel — keep editing">&#10005;</button>'
+      +   '</div>'
+      +   '<div style="font-size:13px;font-weight:700;color:#1F3864;margin-bottom:4px">This day already has a saved <span style="color:#7030A0">' + esc(modeName) + '</span> route.</div>'
+      +   '<div style="font-size:11px;color:var(--muted);margin-bottom:14px">' + esc(savedAt) + ' · Committing will <strong>remove the prior picks</strong> and add the new ones in their place.</div>'
+      +   '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">'
+      +     '<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:10px">'
+      +       '<div style="font-size:10px;font-weight:800;color:#7f1d1d;text-transform:uppercase;letter-spacing:.04em;margin-bottom:5px">− Will remove (' + priorNames.length + ')</div>'
+      +       '<div style="max-height:160px;overflow-y:auto">' + priorList + '</div>'
+      +     '</div>'
+      +     '<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px">'
+      +       '<div style="font-size:10px;font-weight:800;color:#14532d;text-transform:uppercase;letter-spacing:.04em;margin-bottom:5px">+ Will add (' + newNames.length + ')</div>'
+      +       '<div style="max-height:160px;overflow-y:auto">' + newList + '</div>'
+      +     '</div>'
+      +   '</div>'
+      +   '<div style="font-size:10px;color:var(--muted);background:#f8fafc;border:1px dashed #e2e8f0;border-radius:6px;padding:8px;margin-bottom:14px">Pre-existing visits on this day that weren\'t inserted by the planner are <strong>kept</strong>. Only the prior planner\'s picks are removed.</div>'
+      +   '<div style="display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap">'
+      +     '<button type="button" id="p100-cancel" style="background:#fff;color:#1F3864;border:1px solid var(--border);border-radius:8px;padding:9px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">← Keep editing</button>'
+      +     '<button type="button" id="p100-confirm" style="background:linear-gradient(135deg,#b91c1c,#dc2626);color:#fff;border:none;border-radius:8px;padding:9px 22px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;box-shadow:0 2px 8px rgba(220,38,38,.35)">✓ Yes, replace the saved route</button>'
+      +   '</div>'
+      + '</div>';
+    function close(){ try { modal.remove(); } catch(_){} }
+    document.getElementById('p100-x').onclick      = close;
+    document.getElementById('p100-cancel').onclick = close;
+    document.getElementById('p100-confirm').onclick = function(){
+      close();
+      if(typeof onConfirm === 'function'){ try { onConfirm(); } catch(e){ console.error('[p100] confirm callback failed:', e); } }
+    };
+  } catch(e){
+    console.error('[_phase100ShowOverrideConfirm] failed — falling through to commit:', e);
+    if(typeof onConfirm === 'function') onConfirm();
+  }
+}
+window._phase100ShowOverrideConfirm = _phase100ShowOverrideConfirm;
+
 // Phase 44 (2026-05-28): "✓ Add to schedule" button handler. Pushes every
 // kept pick from the locked-in route into the day's visit rows in order.
 // Skips duplicates. Modeled after _rpRandomInsertIntoDay (Random Pick).
+// Phase 100 (2026-05-28): when a prior saved route exists for the day,
+// pop a confirm dialog FIRST — committing the edited route will replace
+// the prior one (its picks get removed via Phase 54 override + new ones
+// added), so the user needs a chance to bail. Without this the override
+// happened silently and the rep saw their schedule rewritten without
+// being asked. _phase100ConfirmOverrideThenInsert wraps the actual
+// insert; if there's no prior route OR the user has already confirmed
+// this turn, it calls through immediately.
 function _rpV5InsertPicksIntoDay(){
   try {
     var picks = (window._RP_V5_LAST && window._RP_V5_LAST.connectionKept) || window._RP_SLOT_PICKS || [];
@@ -37835,6 +37911,21 @@ function _rpV5InsertPicksIntoDay(){
     if(di == null || typeof S === 'undefined' || !S.days || !S.days[di]){
       if(typeof showToast === 'function') showToast('Open a day on the calendar first.');
       return;
+    }
+    // Phase 100 confirm-override gate. The flag _RP_V5_OVERRIDE_CONFIRMED
+    // is set inside the modal's "Yes, replace" handler so when we re-
+    // enter this function we skip the prompt. Reset after commit.
+    if(!window._RP_V5_OVERRIDE_CONFIRMED){
+      var priorSaved = (typeof _rpLoadCurrentRoute === 'function') ? _rpLoadCurrentRoute() : null;
+      var hasPrior = priorSaved && Array.isArray(priorSaved.insertedNames) && priorSaved.insertedNames.length > 0;
+      if(hasPrior){
+        _phase100ShowOverrideConfirm(priorSaved, picks, function(){
+          window._RP_V5_OVERRIDE_CONFIRMED = true;
+          try { _rpV5InsertPicksIntoDay(); }
+          finally { window._RP_V5_OVERRIDE_CONFIRMED = false; }
+        });
+        return;
+      }
     }
     var me = (CURRENT_USER && CURRENT_USER.name) || '';
     var added = 0, skipped = 0, removed = 0;
