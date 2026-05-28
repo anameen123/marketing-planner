@@ -3283,9 +3283,57 @@ body.role-front_desk #referrals-view {
     </div>
   </div>
   <div class="day-content">
+    <!-- Phase 62 (2026-05-28): Gmail-style inline bulk-select toolbar.
+         The "Select" button toggles select mode — when on, each row gets a
+         leading checkbox + a top action bar appears with Delete / Copy to date.
+         Mirrors Gmail inbox: click anywhere on a row to toggle its checkbox,
+         "Select all" header checkbox, side-icon actions. Replaces the old
+         modal-based bulk-actions flow with inline UX. -->
+    <div id="dv-bulk-toolbar" style="display:flex;align-items:center;gap:8px;margin:6px 0 10px;padding:7px 10px;background:#fff;border:1px solid var(--border);border-radius:8px;font-family:DM Sans,sans-serif">
+      <button id="dv-bulk-toggle-btn" type="button" onclick="_dvToggleSelectMode()"
+              title="Turn on bulk-select mode — pick multiple rows then Delete or Copy them"
+              style="background:#fff;color:#7030A0;border:1px solid #c4b5fd;border-radius:6px;padding:5px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;display:inline-flex;align-items:center;gap:5px;line-height:1.1">
+        ☐ Select
+      </button>
+      <!-- The inline action bar — only visible while select mode is on. -->
+      <div id="dv-bulk-actionbar" style="display:none;align-items:center;gap:8px;flex:1">
+        <label style="display:inline-flex;align-items:center;gap:5px;font-size:11px;color:#1F3864;font-weight:700;cursor:pointer">
+          <input type="checkbox" id="dv-bulk-select-all" onchange="_dvSelectAll(this.checked)" style="cursor:pointer;width:14px;height:14px;accent-color:#7030A0">
+          Select all
+        </label>
+        <span id="dv-bulk-count-chip" style="font-size:10px;font-weight:700;color:#5b21b6;background:#ede9fe;border:1px solid #c4b5fd;border-radius:10px;padding:3px 9px;font-family:DM Mono,monospace">0 selected</span>
+        <div style="flex:1"></div>
+        <button id="dv-bulk-copy-btn" type="button" onclick="_dvBulkCopyOpen()"
+                title="Copy the selected visits to another day (clones as fresh Pending)"
+                style="background:#fff;color:#1F3864;border:1px solid #cbd5e1;border-radius:6px;padding:5px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;display:inline-flex;align-items:center;gap:5px;line-height:1.1">
+          📋 Copy to date…
+        </button>
+        <button id="dv-bulk-delete-btn" type="button" onclick="_dvBulkDelete()"
+                title="Permanently delete the selected visits from this day"
+                style="background:#dc2626;border:none;color:#fff;border-radius:6px;padding:5px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;display:inline-flex;align-items:center;gap:5px;line-height:1.1">
+          🗑 Delete
+        </button>
+        <button id="dv-bulk-exit-btn" type="button" onclick="_dvToggleSelectMode()"
+                title="Exit select mode"
+                style="background:#f1f5f9;border:1px solid #cbd5e1;color:#475569;border-radius:6px;padding:5px 9px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;line-height:1.1">
+          ✕
+        </button>
+      </div>
+    </div>
+    <!-- Inline date-picker pane for bulk-copy — only shown after clicking "📋 Copy to date…". -->
+    <div id="dv-bulk-copy-pane" style="display:none;margin:0 0 10px;padding:10px 12px;background:#eef2ff;border:1px solid #c7d2fe;border-radius:8px;font-family:DM Sans,sans-serif">
+      <label style="font-size:11px;font-weight:700;color:#3730a3;display:block;margin-bottom:5px">📅 Copy selected visits to date</label>
+      <div style="display:flex;gap:6px;align-items:center">
+        <input type="date" id="dv-bulk-copy-date" style="flex:1;border:1px solid #c7d2fe;border-radius:6px;padding:7px 10px;font-size:12px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box">
+        <button type="button" onclick="_dvBulkCopyDo()" style="background:linear-gradient(135deg,#1F3864,#7030A0);border:none;color:#fff;border-radius:6px;padding:7px 14px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">✓ Copy</button>
+        <button type="button" onclick="_dvBulkCopyCancel()" style="background:#e5e7eb;border:none;color:#374151;border-radius:6px;padding:7px 12px;font-size:11px;font-weight:600;cursor:pointer;font-family:DM Sans,sans-serif">Cancel</button>
+      </div>
+      <div style="font-size:10px;color:#4338ca;margin-top:5px;font-style:italic">Cloned as fresh Pending rows · original day untouched · same-week dedupe still applies.</div>
+    </div>
     <div class="tbl-wrap" style="overflow-x:auto">
       <table>
-        <thead><tr>
+        <thead id="day-thead"><tr>
+          <th id="day-th-checkbox" style="width:28px;display:none"><input type="checkbox" id="dv-bulk-thead-check" onchange="_dvSelectAll(this.checked)" title="Select all" style="cursor:pointer;width:14px;height:14px;accent-color:#7030A0"></th>
           <th style="width:28px">#</th>
           <th style="width:82px">Date</th>
           <th style="width:92px">Area</th>
@@ -34317,6 +34365,227 @@ function _dvShowMapForRow(ri){
 window._dvShowMapForRow = _dvShowMapForRow;
 
 // ════════════════════════════════════════════════════════════════════════════
+// PHASE 62 (2026-05-28) — GMAIL-STYLE INLINE BULK-SELECT (DAY VIEW)
+// Toggle 'Select' on → each row gets a leading checkbox. Top toolbar shows
+// "X selected · [Copy to date…] [🗑 Delete] [✕ Exit]". Replaces the modal
+// flow with inline UX modeled on Gmail's inbox. Ownership: members can
+// only check their own rows; admin can check anything.
+// ════════════════════════════════════════════════════════════════════════════
+
+window._DV_SELECT_MODE   = false;
+window._DV_SELECTED_RIS  = {};     // map of ri → true
+
+function _dvToggleSelectMode(){
+  window._DV_SELECT_MODE = !window._DV_SELECT_MODE;
+  // Reset selection state on every toggle (entering or exiting)
+  window._DV_SELECTED_RIS = {};
+  var actionbar = document.getElementById('dv-bulk-actionbar');
+  var btn       = document.getElementById('dv-bulk-toggle-btn');
+  var checkCol  = document.getElementById('day-th-checkbox');
+  var copyPane  = document.getElementById('dv-bulk-copy-pane');
+  if(window._DV_SELECT_MODE){
+    if(actionbar) actionbar.style.display = 'flex';
+    if(btn){
+      btn.style.background = 'linear-gradient(135deg,#7030A0,#5b21b6)';
+      btn.style.color = '#fff';
+      btn.style.borderColor = '#5b21b6';
+      btn.innerHTML = '☑ Selecting…';
+    }
+    if(checkCol) checkCol.style.display = 'table-cell';
+  } else {
+    if(actionbar) actionbar.style.display = 'none';
+    if(btn){
+      btn.style.background = '#fff';
+      btn.style.color = '#7030A0';
+      btn.style.borderColor = '#c4b5fd';
+      btn.innerHTML = '☐ Select';
+    }
+    if(checkCol) checkCol.style.display = 'none';
+    if(copyPane) copyPane.style.display = 'none';
+  }
+  // Re-render rows so the leading checkbox cells appear / disappear
+  if(typeof S !== 'undefined' && typeof S.currentDay === 'number' && typeof renderDayTable === 'function'){
+    renderDayTable(S.currentDay);
+  }
+  _dvSyncBulkSelectionUI();
+}
+window._dvToggleSelectMode = _dvToggleSelectMode;
+
+function _dvToggleRowCheck(ri, on){
+  if(on) window._DV_SELECTED_RIS[ri] = true;
+  else   delete window._DV_SELECTED_RIS[ri];
+  _dvSyncBulkSelectionUI();
+}
+window._dvToggleRowCheck = _dvToggleRowCheck;
+
+function _dvSelectAll(on){
+  // Find every checkable row in the current day and toggle each
+  var di = (typeof S !== 'undefined') ? S.currentDay : null;
+  if(di == null || !S.days || !S.days[di]) return;
+  var rows = S.days[di].rows || [];
+  window._DV_SELECTED_RIS = {};
+  if(on){
+    rows.forEach(function(r, ri){
+      if(!r || !r.clinic || r.isManual || r.editing) return;
+      var canBulk = (typeof canEditVisitRow === 'function') ? canEditVisitRow(r) : true;
+      if(canBulk) window._DV_SELECTED_RIS[ri] = true;
+    });
+  }
+  // Sync checkbox DOM
+  document.querySelectorAll('.dv-bulk-row-check').forEach(function(cb){
+    var ri = parseInt(cb.getAttribute('data-ri'), 10);
+    cb.checked = !!window._DV_SELECTED_RIS[ri];
+  });
+  _dvSyncBulkSelectionUI();
+}
+window._dvSelectAll = _dvSelectAll;
+
+function _dvSyncBulkSelectionUI(){
+  var count = Object.keys(window._DV_SELECTED_RIS || {}).length;
+  var chip  = document.getElementById('dv-bulk-count-chip');
+  if(chip) chip.textContent = count + ' selected';
+  // Action buttons enabled only when ≥1 selected
+  var del = document.getElementById('dv-bulk-delete-btn');
+  var cpy = document.getElementById('dv-bulk-copy-btn');
+  [del, cpy].forEach(function(b){
+    if(!b) return;
+    b.disabled = (count === 0);
+    b.style.opacity = (count === 0) ? '0.4' : '1';
+    b.style.cursor  = (count === 0) ? 'not-allowed' : 'pointer';
+  });
+  // "Select all" header checkbox — checked if every checkable row is selected
+  var headCheck = document.getElementById('dv-bulk-select-all');
+  var theadCheck = document.getElementById('dv-bulk-thead-check');
+  var di = (typeof S !== 'undefined') ? S.currentDay : null;
+  if((headCheck || theadCheck) && di != null && S.days && S.days[di]){
+    var totalCheckable = 0;
+    (S.days[di].rows || []).forEach(function(r){
+      if(!r || !r.clinic || r.isManual || r.editing) return;
+      var canBulk = (typeof canEditVisitRow === 'function') ? canEditVisitRow(r) : true;
+      if(canBulk) totalCheckable++;
+    });
+    var allSel = totalCheckable > 0 && count === totalCheckable;
+    if(headCheck)  headCheck.checked  = allSel;
+    if(theadCheck) theadCheck.checked = allSel;
+  }
+}
+window._dvSyncBulkSelectionUI = _dvSyncBulkSelectionUI;
+
+function _dvBulkDelete(){
+  var ris = Object.keys(window._DV_SELECTED_RIS || {}).map(function(k){ return parseInt(k, 10); }).filter(function(n){ return !isNaN(n); });
+  if(ris.length === 0){ if(typeof showToast === 'function') showToast('Tick at least one row first.'); return; }
+  var di = (typeof S !== 'undefined') ? S.currentDay : null;
+  if(di == null){ return; }
+  var dayDate = S.days[di] && S.days[di].date;
+  if(typeof canEditDate === 'function' && !canEditDate(dayDate) && !(typeof isAdmin === 'function' && isAdmin())){
+    if(typeof showToast === 'function') showToast((typeof lockReason === 'function' ? lockReason(dayDate) : '') || 'This day is locked.');
+    return;
+  }
+  function _go(){
+    // Descending so splice indices stay valid
+    ris.sort(function(a, b){ return b - a; }).forEach(function(ri){
+      if(S.days[di].rows[ri]){
+        S.days[di].rows.splice(ri, 1);
+      }
+    });
+    window._DV_SELECTED_RIS = {};
+    if(typeof _saveS === 'function') _saveS();
+    if(typeof refresh === 'function') refresh(di);
+    if(typeof renderCounters === 'function') renderCounters();
+    if(typeof showToast === 'function') showToast('🗑 Deleted ' + ris.length + ' visit' + (ris.length===1?'':'s') + '.');
+    _dvSyncBulkSelectionUI();
+  }
+  if(typeof showConfirm === 'function'){
+    showConfirm({
+      icon: '!',
+      msg: 'Delete ' + ris.length + ' visit' + (ris.length===1?'':'s') + '?',
+      sub: 'This will permanently remove the selected rows from this day. Cannot be undone.',
+      yesLabel: 'Delete',
+      danger: true,
+      onConfirm: _go
+    });
+  } else {
+    if(window.confirm('Delete ' + ris.length + ' visit(s)? This cannot be undone.')) _go();
+  }
+}
+window._dvBulkDelete = _dvBulkDelete;
+
+function _dvBulkCopyOpen(){
+  var ris = Object.keys(window._DV_SELECTED_RIS || {});
+  if(ris.length === 0){ if(typeof showToast === 'function') showToast('Tick at least one row first.'); return; }
+  var pane = document.getElementById('dv-bulk-copy-pane');
+  if(pane) pane.style.display = 'block';
+  // Default the date picker to TODAY+1 if it's empty
+  var dp = document.getElementById('dv-bulk-copy-date');
+  if(dp && !dp.value){
+    var tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
+    dp.value = tomorrow.toISOString().slice(0, 10);
+  }
+  if(dp) dp.focus();
+}
+window._dvBulkCopyOpen = _dvBulkCopyOpen;
+
+function _dvBulkCopyCancel(){
+  var pane = document.getElementById('dv-bulk-copy-pane');
+  if(pane) pane.style.display = 'none';
+}
+window._dvBulkCopyCancel = _dvBulkCopyCancel;
+
+function _dvBulkCopyDo(){
+  var ris = Object.keys(window._DV_SELECTED_RIS || {}).map(function(k){ return parseInt(k, 10); }).filter(function(n){ return !isNaN(n); });
+  if(ris.length === 0){ if(typeof showToast === 'function') showToast('Tick at least one row first.'); return; }
+  var dp = document.getElementById('dv-bulk-copy-date');
+  var targetIso = dp && dp.value;
+  if(!targetIso){ if(typeof showToast === 'function') showToast('Pick a target date.'); return; }
+  var srcDi = (typeof S !== 'undefined') ? S.currentDay : null;
+  if(srcDi == null) return;
+  // Find or create the target day index
+  var tgtDi = (typeof S.days === 'object') ? S.days.findIndex(function(d){ return d && d.date === targetIso; }) : -1;
+  if(tgtDi < 0){
+    if(typeof showToast === 'function') showToast('Target date isn\'t on the planning calendar yet — open that month first.');
+    return;
+  }
+  // Lock check on the target
+  if(typeof canEditDate === 'function' && !canEditDate(targetIso) && !(typeof isAdmin === 'function' && isAdmin())){
+    if(typeof showToast === 'function') showToast((typeof lockReason === 'function' ? lockReason(targetIso) : '') || 'Target date is locked.');
+    return;
+  }
+  var me = (CURRENT_USER && CURRENT_USER.name) || '';
+  var copied = 0, dupeSkipped = 0;
+  ris.forEach(function(ri){
+    var src = S.days[srcDi].rows[ri];
+    if(!src || !src.clinic) return;
+    // Same-clinic dedupe on target day
+    var dupe = (S.days[tgtDi].rows || []).some(function(r){ return r && r.clinic === src.clinic; });
+    if(dupe){ dupeSkipped++; return; }
+    S.days[tgtDi].rows.push({
+      clinic: src.clinic,
+      doctor: src.doctor || '',
+      spec:   src.spec   || '',
+      member: me,
+      memberConfirmed: !!me,
+      status: 'Pending',
+      city: src.city || '',
+      rowConfirmed: false,
+      rd: '', relationship: '', leadNotes: '', cancelReason: '',
+      spending: null, _spId: null,
+      copiedFrom: { di: srcDi, date: S.days[srcDi].date, ri: ri }
+    });
+    copied++;
+  });
+  if(typeof _saveS === 'function') _saveS();
+  if(typeof refresh === 'function') refresh(srcDi);
+  if(typeof renderCounters === 'function') renderCounters();
+  _dvBulkCopyCancel();
+  if(typeof showToast === 'function'){
+    var msg = '📋 Copied ' + copied + ' visit' + (copied===1?'':'s') + ' to ' + targetIso;
+    if(dupeSkipped > 0) msg += ' (' + dupeSkipped + ' duplicate' + (dupeSkipped===1?'':'s') + ' skipped)';
+    showToast(msg);
+  }
+}
+window._dvBulkCopyDo = _dvBulkCopyDo;
+
+// ════════════════════════════════════════════════════════════════════════════
 // PHASE 53 (2026-05-28) — AI OPTIMIZE: CIRCLE-DRAW SUB-MODE
 // User clicks the map to drop a circle center, drags the edge handle to
 // resize, OR types a radius. Pins inside become targets automatically.
@@ -37667,7 +37936,23 @@ function rowHTML(row,di,ri){
     }
   }
 
+  // Phase 62 — Gmail-style bulk-select: inject a leading checkbox cell when
+  // select mode is on. Members can only check rows they own (admin can check
+  // anything). Empty placeholder rows + manual-edit rows aren't checkable.
+  var bulkCell = '';
+  if(window._DV_SELECT_MODE){
+    var canBulkOnThisRow = !!row.clinic && !row.isManual && !row.editing &&
+      ((typeof canEditVisitRow === 'function') ? canEditVisitRow(row) : true);
+    if(canBulkOnThisRow){
+      var isChecked = !!(window._DV_SELECTED_RIS && window._DV_SELECTED_RIS[ri]);
+      bulkCell = '<td class="num-cell" style="text-align:center"><input type="checkbox" class="dv-bulk-row-check" data-ri="'+ri+'" onchange="_dvToggleRowCheck('+ri+',this.checked)" '+(isChecked?'checked':'')+' style="cursor:pointer;width:14px;height:14px;accent-color:#7030A0"></td>';
+    } else {
+      var lockTitle = !row.clinic ? 'Empty row' : (row.isManual ? 'Row still being created' : 'Only the row owner or admin can bulk-act');
+      bulkCell = '<td class="num-cell" style="text-align:center"><span title="'+lockTitle+'" style="color:#cbd5e1;font-size:12px">🔒</span></td>';
+    }
+  }
   return '<tr class="'+rowCls+'">'
+    + bulkCell
     +'<td class="num-cell">'+num+delBtnHtml+'</td>'
     +'<td class="date-cell">'+fd(day.date)+'</td>'
     +'<td>'+areaCell+'</td>'
@@ -40897,12 +41182,14 @@ function renderDayTable(di){
     try { html += rowHTML(row, di, ri); }
     catch(rowErr){ try { console.warn('[renderDayTable] row render failed at ri='+ri, rowErr); } catch(_){} }
   });
-  html+='<tr class="add-visit-row"><td colspan="10">'
+  // Phase 62: colspan auto-bumps when select-mode adds a leading checkbox col.
+  var _colspan = window._DV_SELECT_MODE ? 12 : 11;
+  html+='<tr class="add-visit-row"><td colspan="'+_colspan+'">'
        + '<button class="add-visit-btn" onclick="addVisit('+di+')">&#43; Add Visit</button>'
        + ' <button type="button" onclick="openBulkActions('+di+')" '
-       +   'title="Copy or delete multiple visits at once — and copy them to another day" '
+       +   'title="Open the bulk-actions modal (older flow). The Gmail-style \'Select\' button above is the recommended path." '
        +   'style="background:#fff;border:1.5px solid #7030A0;color:#7030A0;border-radius:6px;padding:7px 14px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;margin-left:6px">'
-       + '📋 Bulk actions</button>'
+       + '📋 Bulk actions (legacy)</button>'
        + '</td></tr>';
   var tbody = document.getElementById('day-tbody');
   if(tbody) tbody.innerHTML = html;
