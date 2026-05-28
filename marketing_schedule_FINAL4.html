@@ -28384,13 +28384,18 @@ function _rpDrawLiveRoute(A, B, pickedClinics){
       });
     }
   } catch(_){}
-  // Sort the COMBINED set by t (projection along S→E line) ascending
+  // Phase 91 (2026-05-28): use the Hamiltonian-path TSP solver instead of
+  // sorting by t along the S→E line. Produces a much shorter total drive
+  // when picks aren't roughly collinear. Falls back to the slice as-is if
+  // the solver isn't available (shouldn't happen).
   var combined = pickedClinics.concat(preExistingInside);
-  var ordered = combined.slice().sort(function(a, b){
-    var ta = _rpV5ProjT(a.coord, A, B);
-    var tb = _rpV5ProjT(b.coord, A, B);
-    return ta - tb;
-  });
+  var ordered = (typeof _rpSolveOrderedRoute === 'function')
+    ? _rpSolveOrderedRoute(combined, A, B)
+    : combined.slice().sort(function(a, b){
+        var ta = _rpV5ProjT(a.coord, A, B);
+        var tb = _rpV5ProjT(b.coord, A, B);
+        return ta - tb;
+      });
   // Build the path: S → ordered → E
   var pts = [[A.lat, A.lng]];
   ordered.forEach(function(p){ if(p && p.coord) pts.push([p.coord.lat, p.coord.lng]); });
@@ -36374,6 +36379,69 @@ function _rpV5DistanceToSegment(P, A, B){
 }
 window._rpV5DistanceToSegment = _rpV5DistanceToSegment;
 
+// Phase 91 (2026-05-28): Hamiltonian-path solver for FIXED-start + FIXED-end
+// per user — replaces the previous "sort by t along the S→E line" hack
+// which produced obvious zigzags when picks weren't roughly collinear.
+//
+// Algorithm: nearest-neighbor from Start to seed an order, then 2-opt
+// improvement (reverse any contiguous slice if it reduces total distance).
+// 2-opt is the same heuristic _rpOptSolveTSP uses for AI Optimize —
+// produces routes within a few % of optimal at N≤10, sub-millisecond.
+//
+// The total distance being minimized is:
+//   d(Start, picks[0]) + Σ d(picks[i], picks[i+1]) + d(picks[N-1], End)
+// — i.e. a true shortest-path between the two endpoints visiting every
+// pick exactly once.
+function _rpSolveOrderedRoute(picks, startCoord, endCoord){
+  if(!Array.isArray(picks) || picks.length === 0) return [];
+  if(picks.length === 1) return picks.slice();
+  if(!startCoord || !endCoord) return picks.slice();
+  function totalDist(arr){
+    if(!arr || arr.length === 0) return _rpHaversineMiles(startCoord, endCoord);
+    var sum = _rpHaversineMiles(startCoord, arr[0].coord);
+    for(var i = 0; i < arr.length - 1; i++){
+      sum += _rpHaversineMiles(arr[i].coord, arr[i+1].coord);
+    }
+    sum += _rpHaversineMiles(arr[arr.length-1].coord, endCoord);
+    return sum;
+  }
+  // 1) Nearest-neighbor seed from Start
+  var remaining = picks.slice();
+  var ordered = [];
+  var cur = startCoord;
+  while(remaining.length > 0){
+    var bestIdx = 0;
+    var bestDist = _rpHaversineMiles(cur, remaining[0].coord);
+    for(var i = 1; i < remaining.length; i++){
+      var d = _rpHaversineMiles(cur, remaining[i].coord);
+      if(d < bestDist){ bestDist = d; bestIdx = i; }
+    }
+    ordered.push(remaining[bestIdx]);
+    cur = remaining[bestIdx].coord;
+    remaining.splice(bestIdx, 1);
+  }
+  // 2) 2-opt: reverse any [i..j] slice if total drops
+  var improved = true;
+  var safety = 0;
+  while(improved && safety < 50){
+    improved = false;
+    safety++;
+    for(var ii = 0; ii < ordered.length - 1; ii++){
+      for(var jj = ii + 1; jj < ordered.length; jj++){
+        var nextOrdered = ordered.slice(0, ii)
+          .concat(ordered.slice(ii, jj + 1).reverse())
+          .concat(ordered.slice(jj + 1));
+        if(totalDist(nextOrdered) < totalDist(ordered) - 1e-6){
+          ordered = nextOrdered;
+          improved = true;
+        }
+      }
+    }
+  }
+  return ordered;
+}
+window._rpSolveOrderedRoute = _rpSolveOrderedRoute;
+
 // Find candidates within depth-slice k (1-indexed) AND inside corridor.
 // Returns array of objects with recency color, days, signed perp, etc.
 function _rpV5FindForLevel(A, B, k, opts){
@@ -37377,8 +37445,19 @@ function _rpV5GenerateRoute(){
     if(typeof showToast === 'function') showToast('Check at least one candidate before generating the route.');
     return;
   }
-  // Sort by t (position along route, Start → End)
-  allPicks.sort(function(a, b){ return a.t - b.t; });
+  // Phase 91 (2026-05-28): swap the t-sort for the Hamiltonian-path TSP
+  // solver. Picks are ordered to MINIMIZE total drive distance from
+  // Start → ... → End, instead of just t-projection along the line.
+  // The connection rule below still runs on the resulting order — but
+  // with a TSP-optimal seed it should rarely trigger now.
+  var A = _RP_V5_LAST && _RP_V5_LAST.A;
+  var B = _RP_V5_LAST && _RP_V5_LAST.B;
+  if(A && B && typeof _rpSolveOrderedRoute === 'function'){
+    allPicks = _rpSolveOrderedRoute(allPicks, A, B);
+  } else {
+    // Fallback: t-sort
+    allPicks.sort(function(a, b){ return a.t - b.t; });
+  }
   // Phase 27: apply the connection rule. Skips picks whose y-jump from
   // the last connected pin exceeds the corridor half-width. Only the KEPT
   // picks make it into the polyline + Google Maps URL.
