@@ -228,6 +228,40 @@ const TRACE = path.resolve(__dirname, '_verify_route_planner.log');
   note('  → skipped: ' + JSON.stringify(phase27.skipped));
   note('  → expected kept: ["P1","P2","P4","P5"]  · expected skipped: ["P3"]');
 
+  // ── (6.7) Phase 28 — quantile bounds + pin state + centerline ─────────
+  note('--- Step: Phase 28 quantile slicing + pin mutation + centerline ---');
+  const phase28 = await page.evaluate(() => {
+    const out = {};
+    const last = window._RP_V5_LAST;
+    if(!last){ return { err: 'no _RP_V5_LAST' }; }
+    out.N = last.N;
+    out.quantileBounds = last.quantileBounds;
+    // Are the bounds non-uniform (quantile) or uniform (equal interval)?
+    let uniform = true;
+    if(last.quantileBounds && last.quantileBounds.length > 2){
+      const expected = 1 / last.N;
+      for(let i = 1; i < last.quantileBounds.length - 1; i++){
+        const interval = last.quantileBounds[i] - last.quantileBounds[i-1];
+        if(Math.abs(interval - expected) > 0.01){ uniform = false; break; }
+      }
+    }
+    out.boundsAreNonUniform = !uniform;   // true means quantile is working
+    // Per-level counts using new bounds
+    out.perLevelCounts = last.slices.map(s => s.candidates.length);
+    // Pin registry / state probe
+    out.pinRegistrySize = Object.keys(window._RP_PIN_REGISTRY || {}).length;
+    out.helperExists = typeof window._rpSetPinState === 'function';
+    // Centerline check (Phase 28 — now glow + main)
+    out.centerlineHasGlow = !!(window._DV_CENTERLINE && window._DV_CENTERLINE.glow);
+    out.centerlineHasMain = !!(window._DV_CENTERLINE && window._DV_CENTERLINE.main);
+    return out;
+  });
+  note('  → N=' + phase28.N + ', bounds=' + JSON.stringify(phase28.quantileBounds));
+  note('  → quantile (non-uniform): ' + phase28.boundsAreNonUniform);
+  note('  → per-level counts: ' + JSON.stringify(phase28.perLevelCounts));
+  note('  → pin registry: ' + phase28.pinRegistrySize + ' pins · helper: ' + phase28.helperExists);
+  note('  → centerline: glow=' + phase28.centerlineHasGlow + ', main=' + phase28.centerlineHasMain);
+
   // ── (7) Random Pick wizard — click pick-on-map, expect drawer stays ──
   note('--- Step: Random Pick mode + wizard pick ---');
   const randomRes = await page.evaluate(() => {

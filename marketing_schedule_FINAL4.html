@@ -24872,6 +24872,11 @@ function renderAllBusinessPins(){
     // even if the user is color-blind or zoomed-out enough that colors
     // blur).
     var typeLetter = bizType === 'mva' ? 'M' : bizType === 'outreach' ? 'O' : 'C';
+    // Phase 28 (2026-05-27): track every pin so we can MUTATE its color when
+    // it gets picked as Start/End/candidate/selected — instead of overlaying
+    // a separate halo next to it. Stored by clinic name → marker. Reset on
+    // each render of the layer (handled by the layer.clearLayers in caller).
+    if(!window._RP_PIN_REGISTRY) window._RP_PIN_REGISTRY = {};
     var marker = L.marker([lat, lng], {
       icon: L.divIcon({
         className: 'biz-type-pin',
@@ -24880,6 +24885,11 @@ function renderAllBusinessPins(){
         iconAnchor: [8, 8]
       })
     }).bindPopup(popupHtml);
+    // Stash defaults so we can revert via _rpRestorePin
+    window._RP_PIN_REGISTRY[name] = {
+      marker: marker, type: bizType, letter: typeLetter,
+      origBg: rec.color, origBorder: border
+    };
     // Phase 25 (2026-05-27): One-click commit when planner is armed.
     // If the user has clicked [📍 Map] in the planner drawer, the next
     // pin click should IMMEDIATELY commit (no popup, no preview, no
@@ -27340,18 +27350,35 @@ window._rpPickSame = _rpPickSame;
 var _DV_CENTERLINE = null;
 function _rpDrawCenterline(A, B){
   if(!_DV_MAP || typeof L === 'undefined' || !A || !B) return;
-  if(_DV_CENTERLINE){ try { _DV_MAP.removeLayer(_DV_CENTERLINE); } catch(_){} _DV_CENTERLINE = null; }
-  _DV_CENTERLINE = L.polyline(
+  if(_DV_CENTERLINE){
+    try {
+      _DV_MAP.removeLayer(_DV_CENTERLINE.glow);
+      _DV_MAP.removeLayer(_DV_CENTERLINE.main);
+    } catch(_){}
+    _DV_CENTERLINE = null;
+  }
+  // Phase 28 (2026-05-27): user couldn't see the dashed navy line. Stacking
+  // a thick semi-transparent white "glow" UNDER a bright sapphire main line
+  // makes it pop on top of the OSM tiles regardless of map background.
+  var glow = L.polyline(
     [[A.lat, A.lng], [B.lat, B.lng]],
-    { color:'#1F3864', weight:3, opacity:0.85, dashArray:'10,6', interactive:false }
+    { color:'#ffffff', weight:10, opacity:0.85, interactive:false, lineCap:'round' }
   ).addTo(_DV_MAP);
+  var main = L.polyline(
+    [[A.lat, A.lng], [B.lat, B.lng]],
+    { color:'#2563eb', weight:5, opacity:1, dashArray:'14,8', interactive:false, lineCap:'round' }
+  ).addTo(_DV_MAP);
+  _DV_CENTERLINE = { glow: glow, main: main };
   // Fit the map so both endpoints are visible (with a little padding).
-  try { _DV_MAP.fitBounds(_DV_CENTERLINE.getBounds().pad(0.25), { maxZoom: 13 }); } catch(_){}
+  try { _DV_MAP.fitBounds(main.getBounds().pad(0.25), { maxZoom: 13 }); } catch(_){}
 }
 window._rpDrawCenterline = _rpDrawCenterline;
 function _rpClearCenterline(){
   if(_DV_CENTERLINE && _DV_MAP){
-    try { _DV_MAP.removeLayer(_DV_CENTERLINE); } catch(_){}
+    try {
+      if(_DV_CENTERLINE.glow) _DV_MAP.removeLayer(_DV_CENTERLINE.glow);
+      if(_DV_CENTERLINE.main) _DV_MAP.removeLayer(_DV_CENTERLINE.main);
+    } catch(_){}
   }
   _DV_CENTERLINE = null;
 }
@@ -27390,6 +27417,8 @@ function closeRoutePlanner(){
   // Phase 25: also drop the blue selection halos around the picked pins.
   if(typeof _rpClearSelectionHalo === 'function') _rpClearSelectionHalo();
   if(typeof _rpClearPreviewRing === 'function') _rpClearPreviewRing();
+  // Phase 28: restore every pin's original colour when the planner closes.
+  if(typeof _rpResetAllPins === 'function') _rpResetAllPins();
   document.getElementById('route-planner-modal').style.display = 'none';
   // Per user 2026-05-25: release the map-function lock so Add Visit
   // popups and other handlers work again.
@@ -27660,8 +27689,13 @@ function _rpQuickPickPin(name, coord){
     } else if(which === 'end' && typeof _rpDrawEndMarker === 'function'){
       _rpDrawEndMarker(coord, name);
     }
-    // Persistent BLUE selection halo so the user can see which pin they
-    // picked even when the map is scrolled/zoomed. Drawn ABOVE clinic pins.
+    // Phase 28: also mutate the underlying clinic pin itself so it visibly
+    // turns into the S / E flag (not just a separate overlay next to it).
+    if(typeof _rpSetPinState === 'function'){
+      _rpSetPinState(name, which);    // 'start' or 'end'
+    }
+    // Persistent selection halo — kept as a backup visual indicator for the
+    // case where the picked location isn't an indexed pin (custom coord).
     if(typeof _rpDrawSelectionHalo === 'function'){
       _rpDrawSelectionHalo(which, coord, name);
     }
@@ -27722,6 +27756,79 @@ function _rpDrawSelectionHalo(which, coord, name){
   }).addTo(_DV_MAP);
 }
 window._rpDrawSelectionHalo = _rpDrawSelectionHalo;
+
+// Phase 28 (2026-05-27): Mutate the actual clinic pin's color when it gets
+// a role in the route. Replaces the "separate halo overlay" approach the
+// user complained was off to the side and unclear. Now the pin ITSELF
+// changes colour so it's unmistakable which clinic is the Start, End,
+// suggested, or picked.
+//
+// state ∈ 'start' | 'end' | 'suggested' | 'picked' | 'reset'
+var _RP_PIN_STATE = {};   // name → state
+function _rpSetPinState(name, state){
+  if(!name) return;
+  var reg = window._RP_PIN_REGISTRY && window._RP_PIN_REGISTRY[name];
+  if(!reg || !reg.marker) return;
+  // Track so we can do bulk reset later
+  if(state === 'reset'){ delete _RP_PIN_STATE[name]; }
+  else { _RP_PIN_STATE[name] = state; }
+  // Build the divIcon HTML for this state
+  var bg = reg.origBg, border = reg.origBorder, size = 16, fontSize = 9, weight = 2, scale = 1, shadow = '0 1px 3px rgba(0,0,0,.25)';
+  if(state === 'start'){
+    bg = '#16a34a'; border = '#15803d'; size = 22; fontSize = 12; weight = 3; scale = 1.4;
+    shadow = '0 0 0 4px rgba(34,197,94,.35), 0 2px 6px rgba(0,0,0,.4)';
+  } else if(state === 'end'){
+    bg = '#dc2626'; border = '#b91c1c'; size = 22; fontSize = 12; weight = 3; scale = 1.4;
+    shadow = '0 0 0 4px rgba(220,38,38,.35), 0 2px 6px rgba(0,0,0,.4)';
+  } else if(state === 'suggested'){
+    // LIGHT BLUE — candidate for the current level (temporary)
+    bg = '#93c5fd'; border = '#1d4ed8'; size = 20; fontSize = 10; weight = 3; scale = 1.25;
+    shadow = '0 0 0 3px rgba(147,197,253,.5), 0 2px 5px rgba(0,0,0,.3)';
+  } else if(state === 'picked'){
+    // DARK BLUE — selected from the candidate list (permanent until uncheck)
+    bg = '#1e3a8a'; border = '#1e3a8a'; size = 22; fontSize = 12; weight = 3; scale = 1.4;
+    shadow = '0 0 0 4px rgba(30,58,138,.45), 0 2px 8px rgba(0,0,0,.4)';
+  }
+  var letter = reg.letter;
+  // Replace S / E text for the start/end states so the pin reads as a flag.
+  if(state === 'start') letter = 'S';
+  else if(state === 'end') letter = 'E';
+  var html = '<div style="width:'+size+'px;height:'+size+'px;background:'+bg+';color:#fff;border:'+weight+'px solid '+border+';border-radius:50%;font-family:DM Sans,sans-serif;font-size:'+fontSize+'px;font-weight:800;line-height:'+(size-weight*2-1)+'px;text-align:center;box-shadow:'+shadow+';transition:all .2s">'+letter+'</div>';
+  try {
+    reg.marker.setIcon(L.divIcon({
+      className: 'biz-type-pin biz-type-pin-' + state,
+      html: html,
+      iconSize: [size, size],
+      iconAnchor: [size/2, size/2]
+    }));
+    // Make picked / start / end pins float above neighbors
+    if(state === 'start' || state === 'end' || state === 'picked'){
+      reg.marker.setZIndexOffset(8000);
+    } else if(state === 'suggested'){
+      reg.marker.setZIndexOffset(4000);
+    } else {
+      reg.marker.setZIndexOffset(0);
+    }
+  } catch(_){}
+}
+window._rpSetPinState = _rpSetPinState;
+
+// Bulk reset every pin currently in a non-default state.
+function _rpResetAllPins(){
+  Object.keys(_RP_PIN_STATE).forEach(function(name){
+    _rpSetPinState(name, 'reset');
+  });
+}
+window._rpResetAllPins = _rpResetAllPins;
+
+// Reset all 'suggested' pins (called when navigating between levels so the
+// previous level's light-blue highlights clear before the new ones paint).
+function _rpResetSuggestedPins(){
+  Object.keys(_RP_PIN_STATE).forEach(function(name){
+    if(_RP_PIN_STATE[name] === 'suggested') _rpSetPinState(name, 'reset');
+  });
+}
+window._rpResetSuggestedPins = _rpResetSuggestedPins;
 function _rpClearSelectionHalo(which){
   if(which){
     if(_RP_SELECTION_HALOS[which] && _DV_MAP){
@@ -32087,9 +32194,21 @@ function _rpV5FindForLevel(A, B, k, opts){
   var autoExpand = opts.autoExpand !== false;
   var specFilter = opts.specFilter || '';
   var skipVisited = !!opts.skipVisited;
-  // Depth-slice bounds along the Start→End line
-  var tLo = (k - 1) / N;
-  var tHi = k / N;
+  // Phase 28 (2026-05-27): QUANTILE slicing per user complaint about getting
+  // the same candidates every level. Equal t-intervals fail when clinics
+  // cluster (most US clinic banks do — a few cities dominate). Quantile
+  // boundaries guarantee each level gets ~equal candidate count regardless
+  // of geographic clustering. opts.quantileBounds is computed once in
+  // _rpV5Start and reused across levels for performance.
+  var tLo, tHi;
+  if(opts.quantileBounds && opts.quantileBounds.length === N + 1){
+    tLo = opts.quantileBounds[k - 1];
+    tHi = opts.quantileBounds[k];
+  } else {
+    // Fallback to equal-interval if the caller didn't provide quantiles.
+    tLo = (k - 1) / N;
+    tHi = k / N;
+  }
   var scheduled = _rpScheduledClinicsForActiveDay();
   function collect(width){
     var out = [];
@@ -32101,7 +32220,12 @@ function _rpV5FindForLevel(A, B, k, opts){
       var coord = (typeof getCoordForBusiness === 'function') ? getCoordForBusiness(name) : null;
       if(!coord) return;
       var t = _rpV5ProjT(coord, A, B);
-      if(t < tLo || t > tHi) return;
+      // Phase 28b: half-open intervals [tLo, tHi) so boundary clinics don't
+      // appear in two adjacent levels at once. Last level is closed-closed
+      // so t=1 still hits something.
+      var isLast = (k === N);
+      if(t < tLo) return;
+      if(isLast ? (t > tHi) : (t >= tHi)) return;
       var perp = _rpV5SignedPerp(coord, A, B);
       if(Math.abs(perp) > width) return;
       var lead = (typeof getClinicLead === 'function') ? getClinicLead(name) : null;
@@ -32210,18 +32334,77 @@ function _rpV5Start(){
   _RP_V5_STEP = 1;
   _RP_V5_PICKS = {};
   _RP_V5_EDIT_MODE = false;
+  // Phase 28: compute QUANTILE boundaries from the actual candidate t-distribution
+  // so each level has ~equal candidates instead of empty/overloaded splits.
+  var quantileBounds = (function(){
+    var allTs = [];
+    function scan(name){
+      var c = (typeof getCoordForBusiness === 'function') ? getCoordForBusiness(name) : null;
+      if(!c) return;
+      var t = _rpV5ProjT(c, A, B);
+      if(t < 0 || t > 1) return;
+      var perp = Math.abs(_rpV5SignedPerp(c, A, B));
+      if(perp > halfWidth) return;
+      var days = (typeof daysSinceLastVisit === 'function') ? daysSinceLastVisit(name) : null;
+      var rec  = (typeof recencyBucket === 'function') ? recencyBucket(days) : null;
+      if(rec && (rec.key === 'fresh' || rec.key === 'warm')) return;
+      allTs.push(t);
+    }
+    if(typeof CLINIC_BANK !== 'undefined') CLINIC_BANK.forEach(function(c){ if(c && c.n) scan(c.n); });
+    if(typeof MVA_ATTORNEYS !== 'undefined') MVA_ATTORNEYS.forEach(function(m){ if(m && m.firm) scan(m.firm); });
+    allTs.sort(function(a, b){ return a - b; });
+    var bounds = [0];
+    if(allTs.length === 0){
+      // No candidates — fall back to equal-interval so the wizard renders.
+      for(var i = 1; i <= N; i++) bounds.push(i / N);
+      return bounds;
+    }
+    var perLevel = allTs.length / N;
+    for(var i = 1; i < N; i++){
+      var idx = Math.floor(i * perLevel);
+      if(idx >= allTs.length) idx = allTs.length - 1;
+      // Midpoint between this candidate's t and the next one (cleaner cut).
+      var here = allTs[idx];
+      var next = (idx + 1 < allTs.length) ? allTs[idx + 1] : 1;
+      bounds.push((here + next) / 2);
+    }
+    bounds.push(1);
+    // Phase 28b (2026-05-27): DEDUPE adjacent bounds. The user's bank has
+    // many clinics sharing the same city-centroid coord (placeholder
+    // addresses) which collapses several quantile boundaries to the same
+    // value — so levels 2..4 would all match `tLo === tHi` and show the
+    // exact same candidates. Collapse those into a single level and reduce
+    // N accordingly. Minimum 2 levels.
+    var deduped = [bounds[0]];
+    for(var b = 1; b < bounds.length; b++){
+      if(bounds[b] - deduped[deduped.length - 1] > 0.005){
+        deduped.push(bounds[b]);
+      }
+    }
+    // Ensure last bound is 1 (might have been deduped if it was equal)
+    if(deduped[deduped.length - 1] < 1) deduped.push(1);
+    return deduped;
+  })();
+  // Recompute N from the actual deduped boundary count.
+  N = quantileBounds.length - 1;
+  if(N < 2) N = 2;
+  _RP_V5_N = N;
+  // Update the visible Number of levels input so the user sees the real N.
+  var nInpEl = document.getElementById('rp-level-count');
+  if(nInpEl) nInpEl.value = N;
   // Build all levels up front (cached so navigation is instant)
   var totalMi = _rpHaversineMiles(A, B);
   var slices = [];
   for(var k = 1; k <= N; k++){
     var lvl = _rpV5FindForLevel(A, B, k, {
       N: N, halfWidth: halfWidth, autoExpand: autoExpand,
-      specFilter: specFilter, skipVisited: skipVisited
+      specFilter: specFilter, skipVisited: skipVisited,
+      quantileBounds: quantileBounds
     });
     slices.push(lvl);
     _RP_V5_PICKS['level' + k] = [];
   }
-  _RP_V5_LAST = { A: A, B: B, totalMi: totalMi, baseWidth: halfWidth, slices: slices, N: N };
+  _RP_V5_LAST = { A: A, B: B, totalMi: totalMi, baseWidth: halfWidth, slices: slices, N: N, quantileBounds: quantileBounds };
   _rpV5ShowLevel(1);
 }
 window._rpV5Start = _rpV5Start;
@@ -32369,6 +32552,21 @@ function _rpV5ShowLevel(k){
       _rpDrawCandidateHighlights(slice, lockedSide);
     }
   } catch(_e){ /* never let highlight failure block the wizard */ }
+  // Phase 28: mutate the actual clinic pins for THIS level — light blue
+  // for candidates not yet picked, dark blue for the ones already picked.
+  // Reset everyone first so the previous level's highlights vanish cleanly.
+  try {
+    if(typeof _rpResetSuggestedPins === 'function') _rpResetSuggestedPins();
+    var allPicked = {};
+    Object.keys(_RP_V5_PICKS || {}).forEach(function(pk){
+      (_RP_V5_PICKS[pk] || []).forEach(function(p){ if(p && p.name) allPicked[p.name] = true; });
+    });
+    (slice.candidates || []).forEach(function(c){
+      if(!c || !c.name) return;
+      if(allPicked[c.name]) _rpSetPinState(c.name, 'picked');
+      else _rpSetPinState(c.name, 'suggested');
+    });
+  } catch(_e2){ /* ditto */ }
 }
 window._rpV5ShowLevel = _rpV5ShowLevel;
 
@@ -32443,6 +32641,11 @@ function _rpV5ToggleCheck(k, name, on){
   // light-blue selected ring (and dropped picks flip back to dark blue).
   if(typeof _rpRedrawHighlightsForCurrentLevel === 'function'){
     _rpRedrawHighlightsForCurrentLevel();
+  }
+  // Phase 28: also flip the actual clinic pin colour — dark blue if now
+  // picked, light blue if reverted to a suggested candidate of this level.
+  if(typeof _rpSetPinState === 'function'){
+    _rpSetPinState(name, on ? 'picked' : 'suggested');
   }
 }
 window._rpV5ToggleCheck = _rpV5ToggleCheck;
