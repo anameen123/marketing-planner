@@ -37034,6 +37034,14 @@ function _rpV5ShowFlatList(){
   if(typeof _rpV5BuildPreExistingBanner === 'function'){
     html += _rpV5BuildPreExistingBanner();
   }
+  // Phase 103 (2026-05-28): pre-existing visits OUTSIDE the corridor —
+  // case-by-case action banner (replace Start / replace End / widen
+  // corridor / add as detour). User wanted this decision made BEFORE
+  // generating the route, not at commit time. Shows old-vs-new mi for
+  // each option so the rep sees the cost upfront.
+  if(typeof _rpV5BuildOutsidersBanner === 'function'){
+    html += _rpV5BuildOutsidersBanner();
+  }
   if(list.length === 0){
     // Phase 37: explain the gap. inside-rect stats come from
     // _rpHighlightInsideRectangle (set when the rectangle was drawn).
@@ -37278,6 +37286,267 @@ function _rpV5BuildPreExistingBanner(){
     + '</div>';
 }
 window._rpV5BuildPreExistingBanner = _rpV5BuildPreExistingBanner;
+
+// ════════════════════════════════════════════════════════════════════════════
+// PHASE 103 (2026-05-28) — UPFRONT PRE-EXISTING OUTSIDER CLASSIFIER
+// Pre-existing visits OUTSIDE the corridor box (Phase 76 only finds inside)
+// get classified here at Find-candidates time so the user makes the routing
+// decision UPFRONT, not at commit time. Three cases keyed on t projection
+// along Start→End:
+//
+//   • t < 0       → "Make this the new Start" — old Start becomes a candidate
+//   • t > 1       → "Make this the new End"   — old End   becomes a candidate
+//   • 0 ≤ t ≤ 1   → ONLY happens if perp > halfWidth (otherwise it's already
+//                   inside-corridor and handled by Phase 76). Offer two
+//                   actions: expand the corridor width to cover OR force-
+//                   add as a detour candidate.
+//
+// For each action we show OLD route mi vs NEW route mi (straight-line
+// haversine approximation — cheap, no OSRM round-trip).
+// ════════════════════════════════════════════════════════════════════════════
+
+function _rpV5FindPreExistingOutsiders(){
+  if(!_RP_V5_LAST || !_RP_V5_LAST.A || !_RP_V5_LAST.B) return [];
+  var A = _RP_V5_LAST.A, B = _RP_V5_LAST.B;
+  var halfWidthMi = _RP_V5_LAST.baseWidth || 3;
+  var di = (typeof _DV_LAST_DI === 'number') ? _DV_LAST_DI : null;
+  if(di == null || typeof S === 'undefined' || !S.days || !S.days[di]) return [];
+  // Exclude clinics already in flatCandidates (Phase 76 covers those).
+  var inCandidates = {};
+  (_RP_V5_LAST.flatCandidates || []).forEach(function(c){ inCandidates[c.name] = true; });
+  // Exclude Start + End names — they ARE the endpoints, not outsider visits.
+  var startName = window._RP_START_NAME, endName = window._RP_END_NAME;
+  var out = [];
+  (S.days[di].rows || []).forEach(function(r){
+    if(!r || !r.clinic) return;
+    if((r.status || 'Pending') !== 'Pending') return;
+    if(inCandidates[r.clinic]) return;
+    if(r.clinic === startName || r.clinic === endName) return;
+    var coord = (typeof _rpGetVisualCoord === 'function') ? _rpGetVisualCoord(r.clinic) : null;
+    if(!coord && typeof getCoordForBusiness === 'function') coord = getCoordForBusiness(r.clinic);
+    if(!coord) return;
+    var t = _rpV5ProjT(coord, A, B);
+    var perp = Math.abs(_rpV5SignedPerp(coord, A, B));
+    // Phase 76 handles the t∈[0,1] AND perp≤halfWidth case. We handle the rest.
+    if(t >= 0 && t <= 1 && perp <= halfWidthMi) return;
+    // Classify
+    var kase;
+    if(t < 0)        kase = 'replaceStart';
+    else if(t > 1)   kase = 'replaceEnd';
+    else              kase = 'tooWide';      // 0≤t≤1 but perp > halfWidth
+    out.push({ name: r.clinic, coord: coord, t: t, perp: perp, kase: kase });
+  });
+  return out;
+}
+window._rpV5FindPreExistingOutsiders = _rpV5FindPreExistingOutsiders;
+
+// Sum haversine miles along a coord list.
+function _rpV5SumMiles(coords){
+  if(!Array.isArray(coords) || coords.length < 2) return 0;
+  var sum = 0;
+  for(var i = 0; i < coords.length - 1; i++){
+    sum += _rpHaversineMiles(coords[i], coords[i+1]);
+  }
+  return sum;
+}
+
+// Compute the CURRENT picked route's straight-line miles + the SAME
+// route with the outsider folded in per its case. Returns { oldMi, newMi }.
+function _rpV5OutsiderDistanceDelta(outsider){
+  var A = _RP_V5_LAST && _RP_V5_LAST.A;
+  var B = _RP_V5_LAST && _RP_V5_LAST.B;
+  if(!A || !B || !outsider) return { oldMi: 0, newMi: 0 };
+  var pickedNames = Object.keys(window._RP_V5_FLAT_PICKS || {});
+  var pickedCoords = pickedNames.map(function(n){
+    var c = (_RP_V5_LAST.flatCandidates || []).find(function(x){ return x.name === n; });
+    return c && c.coord;
+  }).filter(Boolean);
+  // Order picks by t for the straight-line approximation
+  pickedCoords.sort(function(a, b){
+    return _rpV5ProjT(a, A, B) - _rpV5ProjT(b, A, B);
+  });
+  var oldRoute = [A].concat(pickedCoords).concat([B]);
+  var oldMi = _rpV5SumMiles(oldRoute);
+  var newRoute;
+  if(outsider.kase === 'replaceStart'){
+    // New start = outsider, old Start joins picks at front
+    var newStart = outsider.coord;
+    var newPicks = [A].concat(pickedCoords);   // old Start becomes first stop
+    newRoute = [newStart].concat(newPicks).concat([B]);
+  } else if(outsider.kase === 'replaceEnd'){
+    var newEnd = outsider.coord;
+    var newPicks2 = pickedCoords.concat([B]);  // old End becomes last stop
+    newRoute = [A].concat(newPicks2).concat([newEnd]);
+  } else {
+    // tooWide: insert at best-insertion gap
+    var bestIdx = 1, bestCost = Infinity;
+    for(var i = 0; i < oldRoute.length - 1; i++){
+      var ab = _rpHaversineMiles(oldRoute[i], oldRoute[i+1]);
+      var an = _rpHaversineMiles(oldRoute[i], outsider.coord);
+      var nb = _rpHaversineMiles(outsider.coord, oldRoute[i+1]);
+      var det = (an + nb) - ab;
+      if(det < bestCost){ bestCost = det; bestIdx = i + 1; }
+    }
+    newRoute = oldRoute.slice(0, bestIdx).concat([outsider.coord]).concat(oldRoute.slice(bestIdx));
+  }
+  return { oldMi: oldMi, newMi: _rpV5SumMiles(newRoute) };
+}
+
+// Action: outsider with t < 0 becomes the new Start. The old Start
+// gets promoted into the flatCandidates as a pre-checked pick (so the
+// rep can uncheck it if they don't want to actually visit it).
+function _rpV5OutsiderReplaceStart(name){
+  if(!name || !_RP_V5_LAST) return;
+  var coord = (typeof _rpGetVisualCoord === 'function') ? _rpGetVisualCoord(name) : null;
+  if(!coord && typeof getCoordForBusiness === 'function') coord = getCoordForBusiness(name);
+  if(!coord){ if(typeof showToast === 'function') showToast('No location for ' + name); return; }
+  var oldStartName  = window._RP_START_NAME;
+  var oldStartCoord = window._RP_START_COORD;
+  // Promote outsider to Start
+  window._RP_START_NAME = name;
+  window._RP_START_COORD = { lat: coord.lat, lng: coord.lng };
+  var sInp = document.getElementById('rp-start');         if(sInp) sInp.value = name;
+  var sLbl = document.getElementById('rp-start-search');   if(sLbl) sLbl.value = name;
+  if(typeof _rpDrawStartMarker === 'function') _rpDrawStartMarker(coord, name);
+  if(typeof _rpSetPinState === 'function') _rpSetPinState(name, 'start');
+  // Demote old Start into candidates (auto-checked)
+  if(oldStartName && oldStartCoord){
+    _rpV5LAST_addOldEndpointAsCandidate(oldStartName, oldStartCoord);
+  }
+  if(typeof showToast === 'function') showToast('🚩 ' + name + ' is now the Start (old Start added as a candidate)');
+  // Re-run Find candidates so the new geometry takes effect
+  if(typeof _rpV5Start === 'function') _rpV5Start();
+}
+window._rpV5OutsiderReplaceStart = _rpV5OutsiderReplaceStart;
+
+function _rpV5OutsiderReplaceEnd(name){
+  if(!name || !_RP_V5_LAST) return;
+  var coord = (typeof _rpGetVisualCoord === 'function') ? _rpGetVisualCoord(name) : null;
+  if(!coord && typeof getCoordForBusiness === 'function') coord = getCoordForBusiness(name);
+  if(!coord){ if(typeof showToast === 'function') showToast('No location for ' + name); return; }
+  var oldEndName  = window._RP_END_NAME;
+  var oldEndCoord = window._RP_END_COORD;
+  window._RP_END_NAME = name;
+  window._RP_END_COORD = { lat: coord.lat, lng: coord.lng };
+  var eInp = document.getElementById('rp-end');           if(eInp) eInp.value = name;
+  var eLbl = document.getElementById('rp-end-search');     if(eLbl) eLbl.value = name;
+  if(typeof _rpDrawEndMarker === 'function') _rpDrawEndMarker(coord, name);
+  if(typeof _rpSetPinState === 'function') _rpSetPinState(name, 'end');
+  if(oldEndName && oldEndCoord){
+    _rpV5LAST_addOldEndpointAsCandidate(oldEndName, oldEndCoord);
+  }
+  if(typeof showToast === 'function') showToast('🏁 ' + name + ' is now the End (old End added as a candidate)');
+  if(typeof _rpV5Start === 'function') _rpV5Start();
+}
+window._rpV5OutsiderReplaceEnd = _rpV5OutsiderReplaceEnd;
+
+// Helper used by both replace-Start/End — when an old endpoint becomes
+// a candidate, slot it into flatCandidates with t computed against the
+// NEW corridor geometry + auto-check it.
+function _rpV5LAST_addOldEndpointAsCandidate(name, coord){
+  try {
+    if(!_RP_V5_LAST.flatCandidates) _RP_V5_LAST.flatCandidates = [];
+    var A = window._RP_START_COORD || _RP_V5_LAST.A;
+    var B = window._RP_END_COORD   || _RP_V5_LAST.B;
+    var t = _rpV5ProjT(coord, A, B);
+    var perp = _rpV5SignedPerp(coord, A, B);
+    var bizType = (typeof getBizTypeForName === 'function') ? getBizTypeForName(name) : 'clinic';
+    var days = (typeof daysSinceLastVisit === 'function') ? daysSinceLastVisit(name) : null;
+    var rec  = (typeof recencyBucket === 'function') ? recencyBucket(days) : { color:'#9ca3af', key:'?', label:'unknown' };
+    var exists = _RP_V5_LAST.flatCandidates.some(function(c){ return c.name === name; });
+    if(!exists){
+      _RP_V5_LAST.flatCandidates.push({
+        name: name, coord: coord, t: t, perp: perp, absPerp: Math.abs(perp),
+        bizType: bizType, days: days, rec: rec,
+        _phase103WasEndpoint: true
+      });
+      _RP_V5_LAST.flatCandidates.sort(function(a, b){ return a.t - b.t; });
+    }
+    window._RP_V5_FLAT_PICKS[name] = true;
+  } catch(_){}
+}
+
+// "Expand corridor to cover this" — widens halfWidth to the outsider's
+// perp distance + a tiny pad, then re-runs Find candidates.
+function _rpV5OutsiderExpandToCover(name){
+  var outsider = _rpV5FindPreExistingOutsiders().find(function(o){ return o.name === name; });
+  if(!outsider){ if(typeof showToast === 'function') showToast('Could not locate ' + name); return; }
+  var needed = Math.ceil((outsider.perp + 0.1) * 10) / 10;   // round up to .1 mi
+  var wIn = document.getElementById('rp-corridor');
+  if(wIn){ wIn.value = needed; }
+  if(_RP_V5_LAST) _RP_V5_LAST.baseWidth = needed;
+  if(typeof showToast === 'function') showToast('↔ Corridor widened to ' + needed + ' mi to cover ' + name);
+  if(typeof _rpV5Start === 'function') _rpV5Start();
+}
+window._rpV5OutsiderExpandToCover = _rpV5OutsiderExpandToCover;
+
+// "Add as detour" — force the outsider into flatCandidates without
+// touching the corridor width. The TSP at Generate-time will route to
+// it as best as possible.
+function _rpV5OutsiderForceAddAsDetour(name){
+  if(typeof _rpV5BringPreExistingIntoCandidates === 'function'){
+    _rpV5BringPreExistingIntoCandidates(name);
+    if(typeof showToast === 'function') showToast('➕ ' + name + ' added as a detour candidate');
+  }
+}
+window._rpV5OutsiderForceAddAsDetour = _rpV5OutsiderForceAddAsDetour;
+
+// Build the outsiders banner — case-by-case rows with old-vs-new mi.
+// Returns empty string when there are no outsiders.
+function _rpV5BuildOutsidersBanner(){
+  var outsiders = _rpV5FindPreExistingOutsiders();
+  if(outsiders.length === 0) return '';
+  function esc(s){ return String(s||'').replace(/</g,'&lt;').replace(/"/g,'&quot;').replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
+  function fmt(mi){ return mi.toFixed(1) + ' mi'; }
+  var rows = outsiders.map(function(v){
+    var safe = esc(v.name);
+    var nameDisplay = String(v.name).replace(/</g,'&lt;');
+    var delta = _rpV5OutsiderDistanceDelta(v);
+    var addMi = delta.newMi - delta.oldMi;
+    var addColor = addMi >= 0.5 ? '#dc2626' : '#16a34a';
+    var deltaBlock = '<div style="font-size:10px;color:#475569;margin-top:3px">'
+      + '<span title="Current route">Now <strong>' + fmt(delta.oldMi) + '</strong></span> → '
+      + '<span title="After this change">becomes <strong>' + fmt(delta.newMi) + '</strong></span> '
+      + '<span style="color:' + addColor + ';font-weight:700">(' + (addMi >= 0 ? '+' : '−') + fmt(Math.abs(addMi)) + ')</span>'
+      + '</div>';
+    var caseLabel, caseIcon, caseColor, primary, secondary = '';
+    if(v.kase === 'replaceStart'){
+      caseIcon = '🚩'; caseColor = '#7c3aed';
+      caseLabel = 'Before Start · t=' + v.t.toFixed(2);
+      primary = '<button type="button" onclick="_rpV5OutsiderReplaceStart(\'' + safe + '\')" style="background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#fff;border:none;border-radius:5px;padding:5px 11px;font-size:10px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;white-space:nowrap">🚩 Make this the new Start</button>';
+    } else if(v.kase === 'replaceEnd'){
+      caseIcon = '🏁'; caseColor = '#0891b2';
+      caseLabel = 'Past End · t=' + v.t.toFixed(2);
+      primary = '<button type="button" onclick="_rpV5OutsiderReplaceEnd(\'' + safe + '\')" style="background:linear-gradient(135deg,#0891b2,#0e7490);color:#fff;border:none;border-radius:5px;padding:5px 11px;font-size:10px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;white-space:nowrap">🏁 Make this the new End</button>';
+    } else {
+      // tooWide
+      caseIcon = '↔'; caseColor = '#ea580c';
+      caseLabel = 'Inside t-range but ' + v.perp.toFixed(1) + ' mi off line (width is ±' + (_RP_V5_LAST.baseWidth||3) + ' mi)';
+      primary   = '<button type="button" onclick="_rpV5OutsiderExpandToCover(\'' + safe + '\')" style="background:linear-gradient(135deg,#ea580c,#c2410c);color:#fff;border:none;border-radius:5px;padding:5px 11px;font-size:10px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;white-space:nowrap">↔ Widen corridor to ' + (Math.ceil((v.perp + 0.1) * 10) / 10) + ' mi</button>';
+      secondary = '<button type="button" onclick="_rpV5OutsiderForceAddAsDetour(\'' + safe + '\')" style="background:#fff;color:#7c2d12;border:1px solid #fed7aa;border-radius:5px;padding:5px 11px;font-size:10px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;white-space:nowrap">➕ Add as detour</button>';
+    }
+    return '<div style="background:#fff;border:1px solid ' + caseColor + '33;border-left:3px solid ' + caseColor + ';border-radius:6px;padding:8px 10px;margin-top:6px">'
+      + '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap">'
+      +   '<div style="flex:1;min-width:0">'
+      +     '<div style="font-size:11px;font-weight:700;color:' + caseColor + ';display:flex;align-items:center;gap:4px">' + caseIcon + ' ' + nameDisplay + '</div>'
+      +     '<div style="font-size:10px;color:var(--muted);margin-top:1px">' + caseLabel + '</div>'
+      +     deltaBlock
+      +   '</div>'
+      +   '<div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;flex-shrink:0">'
+      +     primary
+      +     (secondary ? secondary : '')
+      +   '</div>'
+      + '</div>'
+      + '</div>';
+  }).join('');
+  return ''
+    + '<div style="background:linear-gradient(135deg,#fef2f2,#fee2e2);border:1px solid #fecaca;border-left:4px solid #dc2626;border-radius:10px;padding:10px 12px;margin-bottom:10px">'
+    +   '<div style="font-size:12px;color:#7f1d1d;font-weight:700;margin-bottom:2px">⚠ ' + outsiders.length + ' pre-existing visit' + (outsiders.length === 1 ? '' : 's') + ' OUTSIDE the corridor</div>'
+    +   '<div style="font-size:10.5px;color:#7f1d1d;line-height:1.45;margin-bottom:4px">Pick how to handle each. Old vs new route distance shown for each option. You can also ignore — they\'ll stay on the schedule but won\'t be in the route.</div>'
+    +   rows
+    + '</div>';
+}
+window._rpV5BuildOutsidersBanner = _rpV5BuildOutsidersBanner;
 
 // Build a small HTML block that previews the connection rule on the
 // currently-checked picks. Same rule used at Generate time.
