@@ -3530,7 +3530,7 @@ body.role-front_desk #referrals-view {
             <input type="text" id="rp-start-search" placeholder="Type a clinic, MVA or facility name…"
                    autocomplete="off"
                    oninput="_rpSearchSuggest('start')" onfocus="_rpSearchSuggest('start')"
-                   onblur="setTimeout(function(){var b=document.getElementById('rp-start-suggest');if(b)b.style.display='none';},180)"
+                   onblur="setTimeout(function(){var b=document.getElementById('rp-start-suggest');if(b)b.style.display='none';if(typeof _rpClearFlashPreview==='function')_rpClearFlashPreview();},180)"
                    style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box">
             <div id="rp-start-suggest" style="display:none;position:absolute;left:0;right:0;top:100%;margin-top:2px;background:#fff;border:1px solid var(--border);border-radius:8px;max-height:260px;overflow-y:auto;z-index:10;box-shadow:0 8px 20px rgba(31,56,100,.12)"></div>
           </div>
@@ -3563,7 +3563,7 @@ body.role-front_desk #referrals-view {
             <input type="text" id="rp-end-search" placeholder="Type a clinic, MVA or facility name…"
                    autocomplete="off"
                    oninput="_rpSearchSuggest('end')" onfocus="_rpSearchSuggest('end')"
-                   onblur="setTimeout(function(){var b=document.getElementById('rp-end-suggest');if(b)b.style.display='none';},180)"
+                   onblur="setTimeout(function(){var b=document.getElementById('rp-end-suggest');if(b)b.style.display='none';if(typeof _rpClearFlashPreview==='function')_rpClearFlashPreview();},180)"
                    style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box">
             <div id="rp-end-suggest" style="display:none;position:absolute;left:0;right:0;top:100%;margin-top:2px;background:#fff;border:1px solid var(--border);border-radius:8px;max-height:260px;overflow-y:auto;z-index:10;box-shadow:0 8px 20px rgba(31,56,100,.12)"></div>
           </div>
@@ -27654,9 +27654,14 @@ function _rpSearchSuggest(which){
     var rec = p._rec || { color:'#9ca3af', short:'?', label:'unknown' };
     var staleText = (p._days == null) ? 'never visited' : (p._days + 'd ago');
     // Each row is a recency-tinted card: left border + colored dot + stale label.
+    // Phase 63 (2026-05-28): hover triggers a map preview — zoom to the
+    // clinic + flash an orange pulsing ring on its pin so the rep sees
+    // exactly where they're about to drop S/E before they commit.
     return '<div onmousedown="event.preventDefault();_rpPickEndpoint(\''+which+'\','+i+')" '
-      + 'title="'+rec.label+'" '
-      + 'style="padding:8px 12px;cursor:pointer;border-bottom:1px solid #f1f5f9;border-left:4px solid '+rec.color+';font-size:12px;display:flex;align-items:center;justify-content:space-between;gap:8px" '
+      + 'onmouseenter="_rpFlashPreviewIdx(\''+which+'\','+i+')" '
+      + 'onmouseleave="_rpClearFlashPreview()" '
+      + 'title="'+rec.label+' — hover to preview on map"'
+      + ' style="padding:8px 12px;cursor:pointer;border-bottom:1px solid #f1f5f9;border-left:4px solid '+rec.color+';font-size:12px;display:flex;align-items:center;justify-content:space-between;gap:8px" '
       + 'onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'#fff\'">'
       + '<span style="display:flex;align-items:center;gap:6px;flex:1;min-width:0">'
       +   '<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:'+rec.color+';flex-shrink:0"></span>'
@@ -27673,8 +27678,70 @@ function _rpSearchSuggest(which){
   // Stash the current match list so _rpPickEndpoint can read by index
   window['_RP_MATCHES_'+which] = matches;
   box.style.display = 'block';
+  // Phase 63: if the user is actively typing AND there's at least one match,
+  // auto-flash the TOP match so they see a map preview without having to
+  // hover the dropdown. The hover handlers above let them step through.
+  if(matches.length > 0 && q){
+    _rpFlashPreviewIdx(which, 0);
+  } else if(matches.length === 0){
+    _rpClearFlashPreview();
+  }
 }
 window._rpSearchSuggest = _rpSearchSuggest;
+
+// ── PHASE 63 (2026-05-28) — Search-hover map preview flash ────────────────
+// Resolve the picked candidate, pan/zoom the day-view map to its coord,
+// and draw a bright orange pulsing ring on top so the rep sees where
+// they're about to drop the Start / End marker. Cleared on mouseleave +
+// on commit (when _rpPickEndpoint fires, the dropdown closes).
+window._RP_FLASH_LAYER = null;
+
+function _rpFlashPreviewIdx(which, idx){
+  try {
+    var matches = window['_RP_MATCHES_'+which] || [];
+    var p = matches[idx];
+    if(!p) return;
+    // Resolve coord — prefer visual coord (jittered, matches the eye), then
+    // base coord, then facility coord. Same fallback chain as _rpPickEndpoint.
+    var coord = null;
+    if(typeof _rpGetVisualCoord === 'function') coord = _rpGetVisualCoord(p.name);
+    if(!coord && typeof getCoordForBusiness === 'function') coord = getCoordForBusiness(p.name);
+    if(!coord && typeof getRouteCoord === 'function') coord = getRouteCoord(p.value);
+    if(!coord) return;
+    _rpDrawFlashPreview(coord, p.name, which);
+  } catch(e){ try { console.warn('[rp-flash] preview failed:', e); } catch(_){} }
+}
+window._rpFlashPreviewIdx = _rpFlashPreviewIdx;
+
+function _rpDrawFlashPreview(coord, name, which){
+  if(typeof L === 'undefined' || typeof _DV_MAP === 'undefined' || !_DV_MAP || !coord) return;
+  _rpClearFlashPreview();
+  // Color hint by which slot — green for Start, blue for End, but the
+  // ring itself stays orange-pulsing so it's clearly "preview".
+  var slotLabel = (which === 'start') ? 'S' : (which === 'end') ? 'E' : '?';
+  var slotBg    = (which === 'start') ? '#16a34a' : '#1F3864';
+  var html = '<div style="position:relative;width:48px;height:48px">'
+    + '<div style="position:absolute;inset:0;border-radius:50%;border:4px solid #f59e0b;background:rgba(245,158,11,.22);box-shadow:0 0 0 4px rgba(255,255,255,.7), 0 0 22px #f59e0b;animation:rpSelHaloPulse 1.2s ease-in-out infinite;pointer-events:none"></div>'
+    + '<div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:'+slotBg+';color:#fff;width:20px;height:20px;border-radius:50%;border:2px solid #fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;font-family:DM Sans,sans-serif;box-shadow:0 2px 6px rgba(0,0,0,.35)">'+slotLabel+'</div>'
+    + '</div>';
+  window._RP_FLASH_LAYER = L.marker([coord.lat, coord.lng], {
+    icon: L.divIcon({ className:'rp-flash-preview-wrap', html: html, iconSize:[48,48], iconAnchor:[24,24] }),
+    interactive: false,
+    zIndexOffset: 9750
+  }).addTo(_DV_MAP);
+  // Zoom in so the pin is clearly visible. Use 14 — close enough to see
+  // surrounding streets but not so close that context is lost.
+  try { _DV_MAP.setView([coord.lat, coord.lng], 14, { animate: true }); } catch(_){}
+}
+window._rpDrawFlashPreview = _rpDrawFlashPreview;
+
+function _rpClearFlashPreview(){
+  if(window._RP_FLASH_LAYER && typeof _DV_MAP !== 'undefined' && _DV_MAP){
+    try { _DV_MAP.removeLayer(window._RP_FLASH_LAYER); } catch(_){}
+  }
+  window._RP_FLASH_LAYER = null;
+}
+window._rpClearFlashPreview = _rpClearFlashPreview;
 
 function _rpPickEndpoint(which, idx){
   var matches = window['_RP_MATCHES_'+which] || [];
@@ -27686,6 +27753,9 @@ function _rpPickEndpoint(which, idx){
   if(hid) hid.value = p.value;
   var box = document.getElementById('rp-'+which+'-suggest');
   if(box) box.style.display = 'none';
+  // Phase 63: commit = drop the flashing preview. The S/E marker that
+  // _rpRefreshHighlights / _rpSetPinState draws below takes over.
+  if(typeof _rpClearFlashPreview === 'function') _rpClearFlashPreview();
   // Phase 34c (2026-05-27): stash the EXACT coord for this pick into
   // _RP_START_COORD / _RP_END_COORD so downstream (line, rectangle,
   // auto-compute) get a unique per-clinic point instead of the city
