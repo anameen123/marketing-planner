@@ -3320,16 +3320,10 @@ body.role-front_desk #referrals-view {
         <span style="font-size:14px;font-weight:800">📋 Schedule</span>
         <span id="dv-schedule-count-chip" style="background:rgba(255,255,255,.22);border:1px solid rgba(255,255,255,.4);font-size:11px;font-weight:700;padding:2px 9px;border-radius:10px;font-family:DM Mono,monospace">0 visits</span>
       </div>
-      <!-- Current route chip (relocated). data-stop-click prevents the
-           header collapse from firing when the chip itself is clicked. -->
-      <button id="dv-current-route-btn" type="button" onclick="event.stopPropagation();_rpResumeSavedRoute()"
-              title="Edit the last route you generated for this day"
-              data-stop-click="1"
-              style="display:none;background:linear-gradient(135deg,#16a34a,#15803d);border:none;color:#fff;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;align-items:center;gap:5px;line-height:1.1;box-shadow:0 1px 3px rgba(0,0,0,.25)">
-        <span>📍</span>
-        <span>Current route</span>
-        <span style="background:rgba(255,255,255,.25);padding:1px 5px;border-radius:8px;font-size:10px">✏</span>
-      </button>
+      <!-- Phase 105 (2026-05-28): the Schedule-header "Current route" chip
+           was removed per user — Phase 100 had added a second copy in the
+           Day Map header to "return it" where the user remembered, and
+           the duplicate was confusing. Keep only the Day Map header chip. -->
     </div>
     <div id="dv-schedule-body">
     <!-- Phase 62 (2026-05-28): Gmail-style inline bulk-select toolbar.
@@ -38533,12 +38527,13 @@ window._rpSyncSavedRouteToSchedule = _rpSyncSavedRouteToSchedule;
 // Show / hide the "📍 Current route" chip based on whether saved state
 // exists for the currently-open day.
 function _rpSyncCurrentRouteChip(){
-  // Phase 100 (2026-05-28): there are now TWO chip elements — one in the
-  // Schedule header (Phase 75) and one in the Day-Map header (restored
-  // per user "return it"). Show/hide both off the same saved state.
+  // Phase 105 (2026-05-28): single chip in the Day Map header now (the
+  // Schedule-header duplicate was removed per user). The id list keeps
+  // dv-current-route-btn as an alias in case any older copy lingers
+  // somewhere — filter(Boolean) tolerates missing IDs.
   var btns = [
-    document.getElementById('dv-current-route-btn'),
-    document.getElementById('dv-current-route-btn-map')
+    document.getElementById('dv-current-route-btn-map'),
+    document.getElementById('dv-current-route-btn')
   ].filter(Boolean);
   if(btns.length === 0) return;
   var saved = _rpLoadCurrentRoute();
