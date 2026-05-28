@@ -3405,8 +3405,9 @@ body.role-front_desk #referrals-view {
            on the map to add stops, the TSP solver computes the optimal
            visit order. -->
       <div style="background:#f1f3f9;border-radius:12px;padding:5px;display:flex;gap:4px;margin-bottom:14px;box-shadow:inset 0 1px 2px rgba(15,23,42,.06)">
-        <button id="rp-mode-corridor" type="button" onclick="_rpSetMode('corridor')" style="flex:1;padding:9px 14px;font-size:12px;font-weight:700;color:#fff;cursor:pointer;border:none;background:var(--purple);border-radius:9px;font-family:'DM Sans',sans-serif;display:inline-flex;align-items:center;justify-content:center;gap:6px;box-shadow:0 2px 6px rgba(112,48,160,.22);transition:all .15s">🧭 Corridor — Start → End</button>
-        <button id="rp-mode-random" type="button" onclick="_rpSetMode('random')" style="flex:1;padding:9px 14px;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;border:none;background:transparent;border-radius:9px;font-family:'DM Sans',sans-serif;display:inline-flex;align-items:center;justify-content:center;gap:6px;transition:all .15s">🎲 Random Pick — TSP optimize</button>
+        <button id="rp-mode-corridor" type="button" onclick="_rpSetMode('corridor')" style="flex:1;padding:9px 14px;font-size:12px;font-weight:700;color:#fff;cursor:pointer;border:none;background:var(--purple);border-radius:9px;font-family:'DM Sans',sans-serif;display:inline-flex;align-items:center;justify-content:center;gap:6px;box-shadow:0 2px 6px rgba(112,48,160,.22);transition:all .15s">🧭 Corridor</button>
+        <button id="rp-mode-random" type="button" onclick="_rpSetMode('random')" style="flex:1;padding:9px 14px;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;border:none;background:transparent;border-radius:9px;font-family:'DM Sans',sans-serif;display:inline-flex;align-items:center;justify-content:center;gap:6px;transition:all .15s">🎲 Random Pick</button>
+        <button id="rp-mode-optimize" type="button" onclick="_rpSetMode('optimize')" style="flex:1;padding:9px 14px;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;border:none;background:transparent;border-radius:9px;font-family:'DM Sans',sans-serif;display:inline-flex;align-items:center;justify-content:center;gap:6px;transition:all .15s">🤖 AI Optimize</button>
       </div>
 
       <!-- Phase 34 (2026-05-27): per user, no more "with AI / without"
@@ -3664,6 +3665,36 @@ body.role-front_desk #referrals-view {
           <button id="rp-rw-next-btn" type="button" onclick="_rpRwNext()" style="background:#7030A0;color:#fff;border:none;border-radius:6px;padding:8px 18px;font-size:12px;font-weight:700;cursor:pointer">Continue →</button>
           <button id="rp-rw-generate-btn" type="button" onclick="_rpRwGenerate()" style="background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;border:none;border-radius:6px;padding:8px 22px;font-size:12px;font-weight:700;cursor:pointer;display:none">⚡ Generate routes</button>
         </div>
+      </div>
+
+      <!-- ── AI OPTIMIZE MODE (Phase 46, 2026-05-28) ──────────────────────
+           User clicks pins on the map to build a list of TARGETS (3-10).
+           Picks one as the Start. We solve the TSP-style optimal-order
+           problem via nearest-neighbor + 2-opt and draw the route. -->
+      <div id="rp-opt-wrap" style="display:none;margin-bottom:10px">
+        <div style="background:linear-gradient(135deg,#1e3a8a,#2563eb);color:#fff;border-radius:10px;padding:13px 15px;margin-bottom:12px">
+          <div style="font-size:13px;font-weight:800">🤖 AI Optimize — pick the stops, we find the order</div>
+          <div style="font-size:11px;opacity:.9;margin-top:3px;line-height:1.45">Click <b>3–10 pins</b> on the map. Each click previews; then ✓ Confirm to add it to your target list. When you're done, pick which one is your <b>starting point</b> and we'll compute the shortest order visiting all of them.</div>
+        </div>
+        <!-- Status panel — shows preview pin + Confirm / Cancel like Corridor -->
+        <div id="rp-opt-pick-status" style="display:none;margin-bottom:10px"></div>
+        <!-- Target list -->
+        <div style="font-size:11px;font-weight:700;color:var(--text);margin-bottom:6px">📌 Your targets <span id="rp-opt-target-count" style="color:var(--muted);font-weight:600">(0)</span></div>
+        <div id="rp-opt-target-list" style="background:#f8fafc;border:1px dashed var(--border);border-radius:8px;padding:8px;min-height:70px;font-size:11px;margin-bottom:10px">
+          <div style="color:var(--muted);font-style:italic;text-align:center;padding:8px 0">No targets yet — click a pin on the map.</div>
+        </div>
+        <!-- Start selector (visible only when ≥3 targets) -->
+        <div id="rp-opt-start-picker" style="display:none;margin-bottom:10px;padding:10px 12px;background:#f0fdf4;border:1px solid #86efac;border-left:3px solid #16a34a;border-radius:8px">
+          <div style="font-size:11px;font-weight:700;color:#14532d;margin-bottom:6px">📍 Which target is your <b>starting point</b>?</div>
+          <div id="rp-opt-start-options" style="display:flex;flex-direction:column;gap:4px"></div>
+        </div>
+        <!-- Footer buttons -->
+        <div style="display:flex;justify-content:space-between;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid var(--border);flex-wrap:wrap">
+          <button id="rp-opt-clear-btn" type="button" onclick="_rpOptClearAll()" style="background:#fff;color:#7f1d1d;border:1px solid #fecaca;border-radius:6px;padding:8px 14px;font-size:11px;font-weight:600;cursor:pointer;font-family:DM Sans,sans-serif">✕ Clear all</button>
+          <button id="rp-opt-optimize-btn" type="button" onclick="_rpOptOptimize()" disabled style="background:#cbd5e1;color:#94a3b8;border:none;border-radius:6px;padding:8px 22px;font-size:12px;font-weight:700;cursor:not-allowed;font-family:DM Sans,sans-serif">⚡ Optimize route</button>
+        </div>
+        <!-- Result panel (filled after Optimize) -->
+        <div id="rp-opt-result" style="display:none;margin-top:14px"></div>
       </div>
       <!-- Corridor controls (per user 2026-05-22 v5 design; revised 2026-05-26).
            - Number of route levels: user-supplied N. Total Start→End distance
@@ -24934,6 +24965,20 @@ function renderAllBusinessPins(){
     // S/E flag exactly where the user tapped.
     function _armedPinHandler(ev){
       try {
+        // Phase 46: AI Optimize mode armed?
+        if(window._RP_OPT_AWAITING_PICK && typeof _rpOptConsumePinClick === 'function'){
+          if(ev && ev.originalEvent){
+            if(ev.originalEvent.stopPropagation) ev.originalEvent.stopPropagation();
+            if(ev.originalEvent.preventDefault) ev.originalEvent.preventDefault();
+            if(ev.originalEvent.stopImmediatePropagation) ev.originalEvent.stopImmediatePropagation();
+          }
+          if(L && L.DomEvent && L.DomEvent.stop) L.DomEvent.stop(ev);
+          if(_DV_MAP && _DV_MAP.closePopup) _DV_MAP.closePopup();
+          marker.closePopup && marker.closePopup();
+          _rpOptConsumePinClick(name, { lat: lat, lng: lng });
+          return;
+        }
+        // Corridor S/E preview-then-confirm flow
         if(typeof _RP_DIALOG_AWAITING === 'undefined' || !_RP_DIALOG_AWAITING) return;
         if(typeof _rpDialogConsumePinClick !== 'function') return;
         if(ev && ev.originalEvent){
@@ -27156,6 +27201,12 @@ function openRoutePlanner(){
     window._RP_V5_FLAT_PICKS = {};
     window._RP_V5_PICKS = {};
     window._RP_V5_LAST = null;
+    // Phase 46: also reset AI Optimize state
+    window._RP_OPT_TARGETS = [];
+    window._RP_OPT_PENDING = null;
+    window._RP_OPT_AWAITING_PICK = false;
+    window._RP_OPT_START_NAME = null;
+    window._RP_OPT_ORDERED = null;
     if(window._RP_AI) window._RP_AI.autoSuggestLast = null;
     if(typeof _rpClearStartMarker === 'function') _rpClearStartMarker();
     if(typeof _rpClearEndMarker === 'function') _rpClearEndMarker();
@@ -31881,11 +31932,12 @@ window._rpFinalApplyMerge = _rpFinalApplyMerge;
 
 // Set the planner mode. Toggles section visibility + resets results.
 function _rpSetMode(mode){
-  if(mode !== 'corridor' && mode !== 'random') return;
+  if(mode !== 'corridor' && mode !== 'random' && mode !== 'optimize') return;
   _RP_MODE = mode;
-  // Toggle button states
+  // Toggle button states (Phase 46: optimize mode added)
   var cBtn = document.getElementById('rp-mode-corridor');
   var rBtn = document.getElementById('rp-mode-random');
+  var oBtn = document.getElementById('rp-mode-optimize');
   if(cBtn){
     var on = (mode === 'corridor');
     cBtn.style.background = on ? 'var(--purple)' : 'transparent';
@@ -31897,6 +31949,33 @@ function _rpSetMode(mode){
     rBtn.style.background = on ? 'var(--purple)' : 'transparent';
     rBtn.style.color = on ? '#fff' : 'var(--muted)';
     rBtn.style.boxShadow = on ? '0 2px 6px rgba(112,48,160,.22)' : 'none';
+  }
+  if(oBtn){
+    var on = (mode === 'optimize');
+    oBtn.style.background = on ? 'linear-gradient(135deg,#1e3a8a,#2563eb)' : 'transparent';
+    oBtn.style.color = on ? '#fff' : 'var(--muted)';
+    oBtn.style.boxShadow = on ? '0 2px 6px rgba(37,99,235,.3)' : 'none';
+  }
+  // Show/hide AI Optimize wrapper based on mode
+  var optWrap = document.getElementById('rp-opt-wrap');
+  if(optWrap) optWrap.style.display = (mode === 'optimize') ? 'block' : 'none';
+  if(mode === 'optimize'){
+    // Hide corridor-only sections + random wizard
+    ['rp-mode-corridor-blurb','rp-end-wrap','rp-corridor-controls','rp-corridor-filters','rp-results','rp-random-wizard','rp-random-results','rp-random-ai-required','rp-random-picks-wrap','rp-mode-random-blurb'].forEach(function(id){
+      var el = document.getElementById(id);
+      if(el) el.style.display = 'none';
+    });
+    // Hide the Start input row (Optimize uses its own picker)
+    try {
+      var sr = document.querySelector('#rp-start-search') ? document.querySelector('#rp-start-search').closest('.kpi-input-row') : null;
+      if(sr) sr.style.display = 'none';
+    } catch(_){}
+    // Initialize state for Optimize mode
+    if(typeof _rpOptInit === 'function') _rpOptInit();
+    return;
+  } else {
+    // Make sure Optimize wrapper is hidden + reset its state if switching away
+    if(typeof _rpOptDisarm === 'function') _rpOptDisarm();
   }
   // Show/hide sections per mode.
   // Per user 2026-05-25 Phase 3: Random Pick now uses the guided wizard
@@ -32733,6 +32812,374 @@ function _rpRandomReset(){
   if(typeof showToast === 'function') showToast('Cleared — double-click any pin to set a new start.');
 }
 window._rpRandomReset = _rpRandomReset;
+
+// ════════════════════════════════════════════════════════════════════════════
+// PHASE 46 (2026-05-28) — AI OPTIMIZE MODE
+// User picks 3–10 pins on the map. Picks one as Start. We compute the
+// optimal visit order using nearest-neighbor + 2-opt TSP (~95% of optimal,
+// sub-millisecond for N≤10). No remote AI, no Google OR-Tools — pure JS.
+// ════════════════════════════════════════════════════════════════════════════
+
+window._RP_OPT_TARGETS = [];        // [{name, coord, bizType}, ...]
+window._RP_OPT_PENDING = null;      // current preview pin (not yet confirmed)
+window._RP_OPT_AWAITING_PICK = false;
+window._RP_OPT_START_NAME = null;   // user's chosen start (one of the targets)
+window._RP_OPT_ORDERED = null;      // result after Optimize
+
+function _rpOptInit(){
+  window._RP_OPT_AWAITING_PICK = true;
+  _rpOptRenderTargetList();
+  _rpOptRenderStartPicker();
+  _rpOptRenderPickStatus();
+  if(typeof showToast === 'function') showToast('🤖 AI Optimize: click any pin on the map to add it to your targets.');
+}
+window._rpOptInit = _rpOptInit;
+
+function _rpOptDisarm(){
+  window._RP_OPT_AWAITING_PICK = false;
+  window._RP_OPT_PENDING = null;
+  _rpOptRenderPickStatus();
+}
+window._rpOptDisarm = _rpOptDisarm;
+
+// Called by the per-pin click listener (in addPin) when in Optimize mode.
+function _rpOptConsumePinClick(name, exactCoord){
+  if(!window._RP_OPT_AWAITING_PICK || !name) return false;
+  // Already in target list? Toast and bail (re-clicking same pin shouldn't dup)
+  if(window._RP_OPT_TARGETS.some(function(t){ return t.name === name; })){
+    if(typeof showToast === 'function') showToast('"' + name + '" is already in your target list.');
+    return false;
+  }
+  // Cap at 10
+  if(window._RP_OPT_TARGETS.length >= 10){
+    if(typeof showToast === 'function') showToast('Max 10 targets. Remove one to add a different pin.');
+    return false;
+  }
+  var coord = exactCoord || (typeof _rpGetVisualCoord === 'function' ? _rpGetVisualCoord(name) : null);
+  if(!coord && typeof getCoordForBusiness === 'function') coord = getCoordForBusiness(name);
+  if(!coord){
+    if(typeof showToast === 'function') showToast('No coordinates for ' + name + '. Pick another.');
+    return false;
+  }
+  // Revert any previous preview pin
+  if(window._RP_OPT_PENDING && window._RP_OPT_PENDING.name && typeof _rpSetPinState === 'function'){
+    _rpSetPinState(window._RP_OPT_PENDING.name, 'reset');
+  }
+  // Determine biz type for the marker
+  var bizType = 'clinic';
+  if(typeof MVA_ATTORNEYS !== 'undefined' && MVA_ATTORNEYS.some(function(m){ return m.firm === name; })) bizType = 'mva';
+  if(typeof OUTREACH !== 'undefined' && OUTREACH.some(function(o){ return o.name === name; })) bizType = 'outreach';
+  window._RP_OPT_PENDING = { name: name, coord: coord, bizType: bizType };
+  if(typeof _rpSetPinState === 'function') _rpSetPinState(name, 'preview');
+  if(typeof _rpDrawPreviewRing === 'function') _rpDrawPreviewRing(coord);
+  _rpOptRenderPickStatus();
+  return true;
+}
+window._rpOptConsumePinClick = _rpOptConsumePinClick;
+
+function _rpOptConfirmPending(){
+  var p = window._RP_OPT_PENDING;
+  if(!p){
+    if(typeof showToast === 'function') showToast('Click a pin first to preview, then ✓ Confirm.');
+    return;
+  }
+  window._RP_OPT_TARGETS.push({ name: p.name, coord: p.coord, bizType: p.bizType });
+  window._RP_OPT_PENDING = null;
+  if(typeof _rpClearPreviewRing === 'function') _rpClearPreviewRing();
+  if(typeof _rpSetPinState === 'function') _rpSetPinState(p.name, 'picked');
+  _rpOptRenderTargetList();
+  _rpOptRenderStartPicker();
+  _rpOptRenderPickStatus();
+  if(typeof showToast === 'function') showToast('✓ Added: ' + p.name + ' (' + window._RP_OPT_TARGETS.length + ' target' + (window._RP_OPT_TARGETS.length===1?'':'s') + ')');
+}
+window._rpOptConfirmPending = _rpOptConfirmPending;
+
+function _rpOptCancelPending(){
+  if(window._RP_OPT_PENDING && window._RP_OPT_PENDING.name && typeof _rpSetPinState === 'function'){
+    _rpSetPinState(window._RP_OPT_PENDING.name, 'reset');
+  }
+  window._RP_OPT_PENDING = null;
+  if(typeof _rpClearPreviewRing === 'function') _rpClearPreviewRing();
+  _rpOptRenderPickStatus();
+}
+window._rpOptCancelPending = _rpOptCancelPending;
+
+function _rpOptRemoveTarget(name){
+  window._RP_OPT_TARGETS = window._RP_OPT_TARGETS.filter(function(t){ return t.name !== name; });
+  if(typeof _rpSetPinState === 'function') _rpSetPinState(name, 'reset');
+  if(window._RP_OPT_START_NAME === name) window._RP_OPT_START_NAME = null;
+  _rpOptRenderTargetList();
+  _rpOptRenderStartPicker();
+}
+window._rpOptRemoveTarget = _rpOptRemoveTarget;
+
+function _rpOptClearAll(){
+  window._RP_OPT_TARGETS.forEach(function(t){
+    if(typeof _rpSetPinState === 'function') _rpSetPinState(t.name, 'reset');
+  });
+  window._RP_OPT_TARGETS = [];
+  window._RP_OPT_START_NAME = null;
+  window._RP_OPT_ORDERED = null;
+  if(window._RP_OPT_PENDING && window._RP_OPT_PENDING.name && typeof _rpSetPinState === 'function'){
+    _rpSetPinState(window._RP_OPT_PENDING.name, 'reset');
+  }
+  window._RP_OPT_PENDING = null;
+  if(typeof _rpClearPreviewRing === 'function') _rpClearPreviewRing();
+  if(typeof _rpClearLiveRoute === 'function') _rpClearLiveRoute();
+  var res = document.getElementById('rp-opt-result'); if(res){ res.style.display = 'none'; res.innerHTML = ''; }
+  _rpOptRenderTargetList();
+  _rpOptRenderStartPicker();
+  _rpOptRenderPickStatus();
+  if(typeof showToast === 'function') showToast('Cleared all targets.');
+}
+window._rpOptClearAll = _rpOptClearAll;
+
+function _rpOptRenderTargetList(){
+  var box = document.getElementById('rp-opt-target-list');
+  var count = document.getElementById('rp-opt-target-count');
+  var optBtn = document.getElementById('rp-opt-optimize-btn');
+  if(!box) return;
+  var n = window._RP_OPT_TARGETS.length;
+  if(count) count.textContent = '(' + n + ')';
+  if(optBtn){
+    var enabled = (n >= 3 && window._RP_OPT_START_NAME);
+    optBtn.disabled = !enabled;
+    optBtn.style.background = enabled ? 'linear-gradient(135deg,#1e3a8a,#2563eb)' : '#cbd5e1';
+    optBtn.style.color = enabled ? '#fff' : '#94a3b8';
+    optBtn.style.cursor = enabled ? 'pointer' : 'not-allowed';
+  }
+  if(n === 0){
+    box.innerHTML = '<div style="color:var(--muted);font-style:italic;text-align:center;padding:8px 0">No targets yet — click a pin on the map.</div>';
+    return;
+  }
+  box.innerHTML = window._RP_OPT_TARGETS.map(function(t, i){
+    var icon = t.bizType === 'mva' ? '⚖' : t.bizType === 'outreach' ? '🏘' : '🏥';
+    var safeName = String(t.name).replace(/</g,'&lt;').replace(/'/g,"\\'");
+    return '<div style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:#fff;border:1px solid var(--border);border-radius:6px;margin-bottom:4px;font-size:11px">'
+      + '<span style="width:18px;height:18px;background:#1e3a8a;color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;flex-shrink:0">' + (i+1) + '</span>'
+      + '<span>' + icon + '</span>'
+      + '<span style="flex:1;font-weight:600;color:#0f172a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + String(t.name).replace(/</g,'&lt;') + '</span>'
+      + '<button onclick="_rpOptRemoveTarget(\'' + safeName + '\')" style="background:#fff;color:#7f1d1d;border:1px solid #fecaca;border-radius:4px;padding:2px 6px;font-size:10px;font-weight:700;cursor:pointer">✕</button>'
+      + '</div>';
+  }).join('');
+}
+window._rpOptRenderTargetList = _rpOptRenderTargetList;
+
+function _rpOptRenderStartPicker(){
+  var box = document.getElementById('rp-opt-start-picker');
+  var opts = document.getElementById('rp-opt-start-options');
+  if(!box || !opts) return;
+  if(window._RP_OPT_TARGETS.length < 3){
+    box.style.display = 'none';
+    return;
+  }
+  box.style.display = 'block';
+  opts.innerHTML = window._RP_OPT_TARGETS.map(function(t){
+    var safeName = String(t.name).replace(/</g,'&lt;').replace(/'/g,"\\'");
+    var checked = (window._RP_OPT_START_NAME === t.name);
+    return '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:11px;color:#14532d;padding:3px 0">'
+      + '<input type="radio" name="rp-opt-start" value="' + safeName + '"' + (checked ? ' checked' : '') + ' onchange="_rpOptSetStart(\'' + safeName + '\')" style="accent-color:#16a34a">'
+      + '<span style="font-weight:600">' + String(t.name).replace(/</g,'&lt;') + '</span>'
+      + '</label>';
+  }).join('');
+}
+window._rpOptRenderStartPicker = _rpOptRenderStartPicker;
+
+function _rpOptSetStart(name){
+  window._RP_OPT_START_NAME = name;
+  _rpOptRenderTargetList();   // re-enables Optimize button
+}
+window._rpOptSetStart = _rpOptSetStart;
+
+function _rpOptRenderPickStatus(){
+  var st = document.getElementById('rp-opt-pick-status');
+  if(!st) return;
+  if(!window._RP_OPT_AWAITING_PICK){
+    st.style.display = 'none';
+    st.innerHTML = '';
+    return;
+  }
+  var pending = window._RP_OPT_PENDING;
+  st.style.display = 'block';
+  st.style.background = '#dbeafe';
+  st.style.border = '2px solid #93c5fd';
+  st.style.borderRadius = '10px';
+  st.style.padding = '10px 12px';
+  st.style.fontSize = '12px';
+  st.style.color = '#1e3a8a';
+  st.style.lineHeight = '1.5';
+  var head = '<div style="font-weight:800;font-size:13px">📍 Click any pin to add it to your target list (' + window._RP_OPT_TARGETS.length + '/10)</div>';
+  if(pending){
+    var safeName = String(pending.name).replace(/</g,'&lt;');
+    head += '<div style="margin-top:6px;padding:6px 8px;background:#fff;border:1px solid #93c5fd;border-radius:6px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">'
+      + '<span style="color:#1e3a8a;font-weight:700">Pending: <span style="color:#2563eb">' + safeName + '</span></span>'
+      + '<span style="display:flex;gap:5px">'
+      + '<button type="button" onclick="_rpOptConfirmPending()" style="background:#16a34a;color:#fff;border:none;border-radius:5px;padding:4px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">✓ Add</button>'
+      + '<button type="button" onclick="_rpOptCancelPending()" style="background:#fff;color:#374151;border:1px solid #cbd5e1;border-radius:5px;padding:4px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">✕ Cancel</button>'
+      + '</span></div>';
+  }
+  st.innerHTML = head;
+}
+window._rpOptRenderPickStatus = _rpOptRenderPickStatus;
+
+// ── TSP SOLVER (nearest-neighbor + 2-opt) ──────────────────────────────────
+// Pure JS. For N≤10 this is sub-millisecond and ~95% of the brute-force
+// optimal. Open path: start at fixed S, visit all others, no return.
+function _rpOptSolveTSP(targets, startName){
+  // Pull start out
+  var start = targets.find(function(t){ return t.name === startName; });
+  var rest = targets.filter(function(t){ return t.name !== startName; });
+  if(!start || rest.length === 0) return [start].filter(Boolean);
+  // Nearest neighbor seed
+  var route = [start];
+  var remaining = rest.slice();
+  while(remaining.length > 0){
+    var last = route[route.length - 1];
+    var bestIdx = 0, bestD = _rpHaversineMiles(last.coord, remaining[0].coord);
+    for(var i = 1; i < remaining.length; i++){
+      var d = _rpHaversineMiles(last.coord, remaining[i].coord);
+      if(d < bestD){ bestD = d; bestIdx = i; }
+    }
+    route.push(remaining[bestIdx]);
+    remaining.splice(bestIdx, 1);
+  }
+  // 2-opt — repeatedly try swapping segments to shorten. Open path means
+  // we keep position 0 fixed (start).
+  function legMi(a, b){ return _rpHaversineMiles(a.coord, b.coord); }
+  function totalMi(rt){
+    var s = 0;
+    for(var i = 0; i < rt.length - 1; i++) s += legMi(rt[i], rt[i+1]);
+    return s;
+  }
+  var improved = true, iter = 0;
+  while(improved && iter < 50){
+    improved = false; iter++;
+    for(var i = 1; i < route.length - 1; i++){
+      for(var j = i + 1; j < route.length; j++){
+        // 2-opt swap: reverse the segment route[i..j]
+        var before = (legMi(route[i-1], route[i]) + (j+1 < route.length ? legMi(route[j], route[j+1]) : 0));
+        var after  = (legMi(route[i-1], route[j]) + (j+1 < route.length ? legMi(route[i], route[j+1]) : 0));
+        if(after + 1e-9 < before){
+          // Reverse in place
+          var seg = route.slice(i, j+1).reverse();
+          for(var k = 0; k < seg.length; k++) route[i+k] = seg[k];
+          improved = true;
+        }
+      }
+    }
+  }
+  return route;
+}
+window._rpOptSolveTSP = _rpOptSolveTSP;
+
+function _rpOptOptimize(){
+  if(window._RP_OPT_TARGETS.length < 3){
+    if(typeof showToast === 'function') showToast('Pick at least 3 targets first.');
+    return;
+  }
+  if(!window._RP_OPT_START_NAME){
+    if(typeof showToast === 'function') showToast('Pick which target is your starting point.');
+    return;
+  }
+  var ordered = _rpOptSolveTSP(window._RP_OPT_TARGETS, window._RP_OPT_START_NAME);
+  if(!ordered || ordered.length === 0){
+    if(typeof showToast === 'function') showToast('Could not optimize the route. Try different targets.');
+    return;
+  }
+  window._RP_OPT_ORDERED = ordered;
+  // Compute total miles (haversine × 1.4 urban factor)
+  var rawMi = 0;
+  for(var i = 0; i < ordered.length - 1; i++){
+    rawMi += _rpHaversineMiles(ordered[i].coord, ordered[i+1].coord);
+  }
+  var totalMi = rawMi * 1.4;
+  var totalMin = Math.round((totalMi / 30) * 60);
+  // Draw the route on the map (reuse the Phase 39 live-route renderer with
+  // dummy A/B = first stop / last stop)
+  if(typeof _rpClearLiveRoute === 'function') _rpClearLiveRoute();
+  try {
+    if(_DV_MAP && typeof L !== 'undefined'){
+      var pts = ordered.map(function(p){ return [p.coord.lat, p.coord.lng]; });
+      var glow = L.polyline(pts, { color: '#ffffff', weight: 9, opacity: 0.85, interactive: false, lineCap: 'round', lineJoin: 'round' }).addTo(_DV_MAP);
+      var line = L.polyline(pts, { color: '#2563eb', weight: 5, opacity: 1, interactive: false, lineCap: 'round', lineJoin: 'round' }).addTo(_DV_MAP);
+      var markers = [];
+      ordered.forEach(function(p, i){
+        var label = (i === 0) ? 'S' : String(i);
+        var bg = (i === 0) ? '#16a34a' : '#2563eb';
+        var m = L.marker([p.coord.lat, p.coord.lng], {
+          icon: L.divIcon({
+            className: 'rp-opt-stop',
+            html: '<div style="background:'+bg+';color:#fff;width:24px;height:24px;border-radius:50%;border:2.5px solid #fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;font-family:DM Sans,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.45)">' + label + '</div>',
+            iconSize: [24, 24], iconAnchor: [12, 12]
+          }),
+          interactive: false,
+          zIndexOffset: 9200
+        }).addTo(_DV_MAP);
+        markers.push(m);
+      });
+      window._DV_LIVE_ROUTE = { glow: glow, line: line, markers: markers };
+      _DV_MAP.fitBounds(L.latLngBounds(pts).pad(0.15), { maxZoom: 13 });
+    }
+  } catch(_){}
+  // Render result panel
+  var res = document.getElementById('rp-opt-result');
+  if(res){
+    res.style.display = 'block';
+    var orderHtml = ordered.map(function(p, i){
+      var label = (i === 0) ? '<b>S</b>' : '<b>' + i + '</b>';
+      var icon = p.bizType === 'mva' ? '⚖' : p.bizType === 'outreach' ? '🏘' : '🏥';
+      return '<div style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:11px"><span style="width:20px;text-align:center">'+label+'</span><span>'+icon+'</span><span style="flex:1;color:#0f172a">' + String(p.name).replace(/</g,'&lt;') + '</span></div>';
+    }).join('');
+    res.innerHTML = '<div style="background:linear-gradient(135deg,#1e3a8a,#2563eb);color:#fff;border-radius:10px;padding:14px 16px;margin-bottom:10px">'
+      + '<div style="font-size:13px;font-weight:800">🤖 Route optimized</div>'
+      + '<div style="display:flex;gap:16px;margin-top:6px;font-size:11px"><div><div style="opacity:.85;font-size:9px;text-transform:uppercase;letter-spacing:.05em">Total drive</div><div style="font-size:18px;font-weight:800">'+totalMi.toFixed(1)+' mi · '+totalMin+' min</div></div><div><div style="opacity:.85;font-size:9px;text-transform:uppercase;letter-spacing:.05em">Stops</div><div style="font-size:18px;font-weight:800">'+ordered.length+'</div></div></div>'
+      + '</div>'
+      + '<div style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:10px">'
+      + '<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px">Optimized order (nearest-neighbor + 2-opt)</div>'
+      + orderHtml + '</div>'
+      + '<div style="display:flex;justify-content:flex-end;gap:8px">'
+      + '<button type="button" onclick="_rpOptInsertIntoDay()" style="background:linear-gradient(135deg,#15803d,#16a34a);color:#fff;border:none;border-radius:8px;padding:9px 22px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;box-shadow:0 2px 8px rgba(22,163,74,.35)">✓ Add to schedule →</button>'
+      + '</div>';
+  }
+  if(typeof showToast === 'function') showToast('🤖 Optimized: '+ordered.length+' stops · '+totalMi.toFixed(1)+' mi · '+totalMin+' min');
+}
+window._rpOptOptimize = _rpOptOptimize;
+
+function _rpOptInsertIntoDay(){
+  var ordered = window._RP_OPT_ORDERED;
+  if(!Array.isArray(ordered) || ordered.length === 0){
+    if(typeof showToast === 'function') showToast('Click Optimize first.');
+    return;
+  }
+  var di = (typeof _DV_LAST_DI === 'number') ? _DV_LAST_DI : null;
+  if(di == null || typeof S === 'undefined' || !S.days || !S.days[di]){
+    if(typeof showToast === 'function') showToast('Open a day on the calendar first.');
+    return;
+  }
+  var me = (CURRENT_USER && CURRENT_USER.name) || '';
+  var added = 0, skipped = 0;
+  ordered.forEach(function(p){
+    if(!p || !p.name) return;
+    var exists = (S.days[di].rows || []).some(function(r){ return r && r.clinic === p.name; });
+    if(exists){ skipped++; return; }
+    S.days[di].rows.push({
+      clinic: p.name, member: me, memberConfirmed: !!me,
+      status: 'Pending', city: '', rowConfirmed: false,
+      rd: '', relationship: '', leadNotes: '', cancelReason: '',
+      spending: null, _spId: null
+    });
+    added++;
+  });
+  if(typeof _saveS === 'function') _saveS();
+  if(typeof refresh === 'function') refresh(di);
+  if(typeof showToast === 'function'){
+    var msg = '✓ Added ' + added + ' stop' + (added===1?'':'s') + ' to the schedule';
+    if(skipped > 0) msg += ' (' + skipped + ' already there, skipped)';
+    showToast(msg);
+  }
+  if(typeof closeRoutePlanner === 'function') closeRoutePlanner();
+}
+window._rpOptInsertIntoDay = _rpOptInsertIntoDay;
 
 // Map double-click listener — per user 2026-05-23 this is now a guided
 // two-step flow (start, then stops). All dispatch lives in _rpHandleRandom-

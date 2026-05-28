@@ -220,6 +220,50 @@ const TRACE_LOG   = path.resolve(__dirname, '_visual_trace.log');
   });
   note('[auto-compute test] ' + JSON.stringify(autoTest, null, 2));
 
+  // Phase 46: AI Optimize TSP solver unit test
+  note('--- Step: Phase 46 AI Optimize TSP solver ---');
+  const phase46 = await page.evaluate(() => {
+    if(typeof _rpOptSolveTSP !== 'function') return { err: 'solver missing' };
+    // 5-point synthetic test: pentagon with known optimal tour.
+    // Points placed at approx pentagon vertices. Optimal tour visits
+    // them in order. Nearest neighbor + 2-opt should find this.
+    const tgts = [
+      { name: 'A', coord: { lat: 33.0,   lng: -96.8 } },
+      { name: 'B', coord: { lat: 33.1,   lng: -96.7 } },
+      { name: 'C', coord: { lat: 33.2,   lng: -96.75 } },
+      { name: 'D', coord: { lat: 33.2,   lng: -96.85 } },
+      { name: 'E', coord: { lat: 33.1,   lng: -96.9 } }
+    ];
+    const result = _rpOptSolveTSP(tgts, 'A');
+    const totalMi = (() => {
+      let s = 0;
+      for(let i = 0; i < result.length - 1; i++){
+        s += _rpHaversineMiles(result[i].coord, result[i+1].coord);
+      }
+      return s;
+    })();
+    return {
+      order: result.map(p => p.name),
+      totalMi: totalMi.toFixed(2),
+      startsWithA: result[0] && result[0].name === 'A',
+      length: result.length
+    };
+  });
+  note('  → TSP order: ' + JSON.stringify(phase46.order));
+  note('  → total ' + phase46.totalMi + ' mi, starts with A: ' + phase46.startsWithA + ', length: ' + phase46.length);
+  // Optimize button + state machinery
+  const phase46ui = await page.evaluate(() => {
+    return {
+      modeButton: !!document.getElementById('rp-mode-optimize'),
+      wrapper: !!document.getElementById('rp-opt-wrap'),
+      optimizeBtn: !!document.getElementById('rp-opt-optimize-btn'),
+      consumeFn: typeof window._rpOptConsumePinClick === 'function',
+      solverFn: typeof window._rpOptSolveTSP === 'function',
+      insertFn: typeof window._rpOptInsertIntoDay === 'function'
+    };
+  });
+  note('  → UI: ' + JSON.stringify(phase46ui));
+
   fs.writeFileSync(TRACE_LOG, log.join('\n'), 'utf8');
   await browser.close();
 })().catch(e => { console.error(e); process.exit(1); });
