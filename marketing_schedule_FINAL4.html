@@ -10190,6 +10190,125 @@ function voidVisitSpending(di, ri){
 }
 window.voidVisitSpending = voidVisitSpending;
 
+// ── PHASE 61 (2026-05-28) ──────────────────────────────────────────────────
+// Clear a row's follow-up data back to a fresh Pending state. Per user spec:
+// wipes status (back to Pending), spending log entry, lead status (relationship),
+// reschedule date, lead notes, outreach engagement contacts, and ALL follow-up
+// fields between "status" and "additional notes". The row's existence + clinic
+// identity + member assignment + memberConfirmed are kept (the rep still owns
+// it — they just want to redo the follow-up from blank).
+//
+// SAFETY: caller must enforce ownership (canEditVisitRow + canEditDate || admin)
+// and double-confirm the action BEFORE invoking. This helper does the data
+// wipe only; the UI handles permission + confirmation.
+// ─────────────────────────────────────────────────────────────────────────────
+function clearVisitRow(di, ri){
+  var row = S.days[di] && S.days[di].rows[ri];
+  if(!row) return { ok:false, error:'Visit not found' };
+  // Snapshot for audit + toast
+  var before = {
+    status: row.status || 'Pending',
+    hadSpending: !!(row.spending && (row.spending.zeroSpending || (row.spending.items && row.spending.items.length))),
+    hadLead: !!(row.relationship && String(row.relationship).trim()),
+    hadNotes: !!(row.leadNotes && String(row.leadNotes).trim()),
+    hadOutreach: !!(row.outreachContacts && row.outreachContacts.total != null),
+    hadRd: !!row.rd
+  };
+  // Reset the lifecycle gate FIRST so cell renderers fall back to "Not
+  // determined" pre-confirm placeholders.
+  row.rowConfirmed = false;
+  // Status → Pending. setSt() has business-rule guards (e.g. blocking Completed
+  // for future dates) which don't apply here because Pending is always valid.
+  row.status = 'Pending';
+  // 💰 Spending — full wipe. The Finances log derives from row.spending so
+  // clearing the field removes the entry from the spending log too.
+  if(row.spending) row.spending = null;
+  // 🎯 Lead status (relationship) + any established level + status meta.
+  if(row.relationship) row.relationship = '';
+  if(row.establishedLevel != null) row.establishedLevel = null;
+  // 📝 Lead notes / additional notes.
+  if(row.leadNotes) row.leadNotes = '';
+  // 📅 Reschedule date — only meaningful for Postponed; Pending shouldn't have one.
+  if(row.rd) row.rd = '';
+  // Cancel reason metadata — clear so a future re-cancel doesn't show a stale
+  // reason. Same for completedAt / postponedAt timestamps.
+  if(row.cancelReason) row.cancelReason = '';
+  if(row.cancelBy)     row.cancelBy     = '';
+  if(row.cancelAt)     row.cancelAt     = '';
+  // 🤝 Outreach engagement contacts (the alternative to lead-status for outreach
+  // visits). Same wipe-back-to-blank principle.
+  if(row.outreachContacts) row.outreachContacts = null;
+  // Audit log entry — keep history of who cleared what, when. The Edit /
+  // Cancel paths use the same auditLog pattern (Phase 4) so we follow suit.
+  row.auditLog = row.auditLog || [];
+  row.auditLog.push({
+    ts: new Date().toISOString(),
+    by: (typeof CURRENT_USER !== 'undefined' && CURRENT_USER) ? CURRENT_USER.name : '',
+    admin: (typeof isAdmin === 'function' && isAdmin()) ? ((CURRENT_USER && CURRENT_USER.name) || 'Admin') : null,
+    action: 'clear',
+    field: 'follow-up',
+    before: before,
+    note: 'Follow-up data cleared — row reset to Pending.'
+  });
+  return { ok:true, before: before };
+}
+window.clearVisitRow = clearVisitRow;
+
+// Phase 61 UI handler — double-confirm + permission check + wipe + refresh.
+// Called from the ↩ Clear button on the visit row's confirmCell.
+function clearVisitRowWithConfirm(di, ri){
+  var row = S.days[di] && S.days[di].rows[ri];
+  if(!row){ if(typeof showToast === 'function') showToast('Visit not found.'); return; }
+  // Permission: same as edit (own rows + admin). Members past the edit window
+  // are blocked by canEditDate; admin can always clear.
+  var dayDate = (S.days[di] && S.days[di].date) || '';
+  var canEdit = (typeof canEditVisitRow === 'function') ? canEditVisitRow(row) : true;
+  var dateOpen = (typeof canEditDate === 'function') ? canEditDate(dayDate) : true;
+  var amAdmin = (typeof isAdmin === 'function') && isAdmin();
+  if(!canEdit){
+    var owner = row.addedBy || row.member || 'another member';
+    if(typeof showToast === 'function') showToast('Only ' + owner + ' or admin can clear this visit.');
+    return;
+  }
+  if(!dateOpen && !amAdmin){
+    if(typeof showToast === 'function') showToast('This visit is past the edit window — admin only.');
+    return;
+  }
+  // What we're about to wipe (so the confirms can be specific)
+  var willWipe = [];
+  if(row.status && row.status !== 'Pending') willWipe.push('status (' + row.status + ' → Pending)');
+  if(row.spending && (row.spending.zeroSpending || (row.spending.items && row.spending.items.length))) willWipe.push('💰 spending entry');
+  if(row.relationship) willWipe.push('🎯 lead status');
+  if(row.rd) willWipe.push('📅 reschedule date');
+  if(row.leadNotes && row.leadNotes.trim()) willWipe.push('📝 notes');
+  if(row.outreachContacts && row.outreachContacts.total != null) willWipe.push('🤝 outreach contacts');
+  if(willWipe.length === 0){
+    if(typeof showToast === 'function') showToast('Nothing to clear — this row has no follow-up data yet.');
+    return;
+  }
+  // FIRST confirm — show exactly what will be wiped
+  var msg1 = 'Clear follow-up for "' + (row.clinic || 'this visit') + '"?\n\n'
+           + 'This will wipe:\n  • ' + willWipe.join('\n  • ')
+           + '\n\nThe visit itself + assigned member stay. The row goes back to Pending so you can re-fill the follow-up.';
+  if(!window.confirm(msg1)) return;
+  // SECOND confirm — final
+  var msg2 = 'Are you sure?\n\nThis cannot be undone — the cleared spending entry will be removed from the Finances log and counters.';
+  if(!window.confirm(msg2)) return;
+  // Do the wipe
+  var result = clearVisitRow(di, ri);
+  if(!result.ok){
+    if(typeof showToast === 'function') showToast('Clear failed: ' + (result.error || 'unknown error'));
+    return;
+  }
+  // Refresh everything that derives from the row's follow-up data
+  if(typeof refresh === 'function') refresh(di);
+  if(typeof renderCounters === 'function') renderCounters();
+  if(typeof renderAnnouncements === 'function') renderAnnouncements();
+  if(typeof renderCanceledVisits === 'function') renderCanceledVisits();
+  if(typeof showToast === 'function') showToast('↩ Cleared — row reset to Pending. You can re-fill the follow-up.');
+}
+window.clearVisitRowWithConfirm = clearVisitRowWithConfirm;
+
 // ── SPENDING EDIT WINDOW ───────────────────────────────────────────────
 // Members can edit a visit's spending until 5 PM on the 3rd day after the
 // visit (visit_date + 3 days @ 17:00). After that window closes, only admin
@@ -36746,11 +36865,17 @@ function rowHTML(row,di,ri){
     var _lockHint = (!_dateOpen2 && !amAdmin)
       ? '<div style="font-size:9px;color:var(--muted);font-style:italic;margin-top:2px">🔒 locked — past edit window</div>'
       : '';
+    // Phase 61: ↩ Clear — wipes follow-up data back to Pending. Same ownership
+    // rules as Edit (own rows + admin). Double-confirm in the handler.
+    var _clearBtnLvl3 = _showEditBtn
+      ? '<button onclick="clearVisitRowWithConfirm('+di+','+ri+')" style="background:#fff;color:#991b1b;border:1px solid #fecaca;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;margin-top:1px;white-space:nowrap" title="Clear follow-up — resets status to Pending, removes spending log entry, lead status, notes. Double-confirms before wiping.">↩ Clear</button>'
+      : '';
     confirmCell = '<div style="display:flex;flex-direction:column;align-items:center;gap:3px">'
       +'<span style="background:#f0fdf4;color:#166534;border:1px solid #86efac;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px">&#10003; Done</span>'
       +(_showEditBtn
           ? '<button onclick="openEditVisit('+di+','+ri+')" style="background:var(--purple);color:#fff;border:none;border-radius:6px;padding:3px 10px;font-size:10px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;margin-top:1px;white-space:nowrap" title="Edit follow-up — opens the full dialog. Overrides prior data and all derived counters/charts.">&#9998; Edit follow-up</button>'
           : '')
+      + _clearBtnLvl3
       + _lockHint
       +'</div>';
   } else if(!row.memberConfirmed){
@@ -36788,10 +36913,18 @@ function rowHTML(row,di,ri){
       var _btnTitle = _hasFilledData
         ? 'Open the dialog to review or change status / lead / spending / notes. Final Confirm locks the row.'
         : 'Step 2 of 2 — open a single dialog to set status, lead and spending, then confirm';
-      confirmCell = '<button onclick="openVisitConfirmFlow('+di+','+ri+')" '
+      // Phase 61: ↩ Clear — only meaningful when there's actually data to wipe,
+      // so we only render it for the _hasFilledData branch at Level 2.
+      var _clearBtnLvl2 = _hasFilledData
+        ? '<button onclick="clearVisitRowWithConfirm('+di+','+ri+')" style="background:#fff;color:#991b1b;border:1px solid #fecaca;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;margin-top:3px;white-space:nowrap" title="Clear follow-up — wipes the partial data so you start blank. Double-confirms before wiping.">↩ Clear</button>'
+        : '';
+      confirmCell = '<div style="display:flex;flex-direction:column;align-items:center;gap:3px">'
+        +'<button onclick="openVisitConfirmFlow('+di+','+ri+')" '
         +'title="'+_btnTitle+'" '
         +'style="background:linear-gradient(135deg,#7030A0,#1F3864);color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;white-space:nowrap;box-shadow:0 2px 6px rgba(31,56,100,.25)">' + _btnLabel + '</button>'
-        +'<div style="font-size:8px;color:var(--muted);text-align:center;margin-top:3px;font-style:italic;text-transform:uppercase;letter-spacing:.04em">' + _stepHint + '</div>';
+        +'<div style="font-size:8px;color:var(--muted);text-align:center;margin-top:3px;font-style:italic;text-transform:uppercase;letter-spacing:.04em">' + _stepHint + '</div>'
+        + _clearBtnLvl2
+        + '</div>';
     } else {
       confirmCell = '<span class="lead-locked" title="This visit is assigned to ' + (row.member || 'someone else') + '. Only they (or admin) can fill the follow-up.">&#128274; assigned</span>';
     }
