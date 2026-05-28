@@ -28452,15 +28452,10 @@ function _rpRefreshCorridorBox(){
     // when the input value differs.
     window._RP_APPLIED_HALFWIDTH = halfW;
     if(typeof _rpRenderApplyWidthBtn === 'function') _rpRenderApplyWidthBtn();
-    // Phase 83 (2026-05-28): removed the auto-highlight of every pin
-    // inside the rectangle. The Phase 37 visual aid lit up the entire
-    // metro when the corridor was wide — overwhelming visual noise per
-    // user. Pins now only get colored when the rep clicks "Find
-    // candidates" (which routes through _rpV5ShowFlatList → proper
-    // suggested / picked states for the filtered candidate set).
-    // The manual drag-resize path (Phase 71) still calls the highlight
-    // because the rep is actively dragging — they WANT to see what's
-    // inside the rectangle as they resize.
+    // Phase 37: light up every pin inside the rectangle (light blue), no
+    // matter what filters Find Candidates would later apply. Pure visual
+    // aid so the user can see what the rectangle covers.
+    if(typeof _rpHighlightInsideRectangle === 'function') _rpHighlightInsideRectangle(A, B, halfW);
   } catch(_){}
 }
 
