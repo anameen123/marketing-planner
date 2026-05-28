@@ -3409,19 +3409,21 @@ body.role-front_desk #referrals-view {
         <button id="rp-mode-random" type="button" onclick="_rpSetMode('random')" style="flex:1;padding:9px 14px;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;border:none;background:transparent;border-radius:9px;font-family:'DM Sans',sans-serif;display:inline-flex;align-items:center;justify-content:center;gap:6px;transition:all .15s">🎲 Random Pick — TSP optimize</button>
       </div>
 
-      <!-- ── ADMIN-ONLY AI TOGGLE ──────────────────────────────────────
-           Per user 2026-05-25 Phase 8. Lets admin (Mahmoud) enable a
-           Gemini-powered alternative planner alongside the hardcoded
-           algorithm so results can be compared side-by-side.
-           Hidden for non-admin members. The whole block (#rp-ai-toggle-wrap)
-           can be deleted as one chunk along with the AI module JS section
-           to fully remove the feature. -->
-      <div id="rp-ai-toggle-wrap" style="display:none;margin-bottom:14px;background:linear-gradient(135deg,#faf5ff,#f0fdfa);border:1px solid #d8b4fe;border-radius:10px;padding:10px 12px">
-        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none">
-          <input type="checkbox" id="rp-ai-toggle" onchange="_rpAiOnToggleChange(this.checked)" style="width:16px;height:16px;cursor:pointer;accent-color:#7c3aed">
-          <span style="font-size:12px;font-weight:700;color:#581c87">🤖 Use AI planning <span style="background:#7c3aed;color:#fff;font-size:9px;padding:1px 5px;border-radius:3px;margin-left:4px;font-weight:700">ADMIN · EXPERIMENTAL</span></span>
-        </label>
-        <div id="rp-ai-status-hint" style="font-size:10px;color:#64748b;margin-top:4px;line-height:1.4;font-style:italic">AI planning OFF — using hardcoded algorithm.</div>
+      <!-- Phase 34 (2026-05-27): per user, no more "with AI / without"
+           toggle — AI math is the default and only mode. The old AI
+           toggle wrapper is removed; the auto-compute button now lives
+           as a prominent top banner (see #rp-auto-banner below). -->
+      <div id="rp-ai-toggle-wrap" style="display:none"></div>
+      <!-- The big auto banner. Renders prominently at the top of the
+           corridor section the moment Start AND End are both set. Click
+           the button to recompute N + corridor half-width using the
+           "max(min|perp|)" formula on local data — no remote AI call. -->
+      <div id="rp-auto-banner" style="display:none;margin-bottom:14px;background:linear-gradient(135deg,#dbeafe,#bfdbfe);border:1px solid #93c5fd;border-left:4px solid #2563eb;border-radius:10px;padding:11px 13px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12px;font-weight:800;color:#1e3a8a">🧮 Auto-compute is ON</div>
+          <div style="font-size:10.5px;color:#1e3a8a;opacity:.85;margin-top:2px;line-height:1.4">N levels = round(count/4) clamped 3–8.  Half-width = max(closest-perp per level), capped at 25% of straight-line miles.</div>
+        </div>
+        <button type="button" onclick="event.stopPropagation();_rpRunAutoCompute()" style="background:linear-gradient(135deg,#1e3a8a,#2563eb);color:#fff;border:none;border-radius:8px;padding:9px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;white-space:nowrap;box-shadow:0 2px 8px rgba(37,99,235,.4)">🧮 Run auto-compute</button>
       </div>
 
       <div id="rp-mode-corridor-blurb" style="font-size:11px;color:var(--muted);margin-bottom:14px;line-height:1.45">
@@ -29727,14 +29729,16 @@ window._rpAiOnToggleChange = _rpAiOnToggleChange;
 // Shown only when: AI toggle is ON + a token is set + both Start + End are
 // resolved (so the AI has real geometry to reason about).
 function _rpAiSuggestBtnSync(){
-  // Phase 30: button is now the deterministic auto-compute (no remote AI,
-  // no token needed). Show it whenever both Start and End are set.
-  var btn = document.getElementById('rp-ai-suggest-n-btn');
-  if(!btn) return;
+  // Phase 30 / 34: button is the deterministic auto-compute (no remote AI,
+  // no token needed). Show it whenever both Start and End are set. Also
+  // sync the prominent top banner that shows the same affordance.
   var startVal = (document.getElementById('rp-start') || {}).value || '';
   var endVal   = (document.getElementById('rp-end')   || {}).value || '';
   var bothSet = !!(startVal && endVal);
-  btn.style.display = bothSet ? 'inline-flex' : 'none';
+  var btn = document.getElementById('rp-ai-suggest-n-btn');
+  if(btn) btn.style.display = bothSet ? 'inline-flex' : 'none';
+  var banner = document.getElementById('rp-auto-banner');
+  if(banner) banner.style.display = bothSet ? 'flex' : 'none';
 }
 window._rpAiSuggestBtnSync = _rpAiSuggestBtnSync;
 
@@ -29945,8 +29949,16 @@ function _rpAutoSuggestIfReady(){
     var pairKey = startVal + '|' + endVal;
     if(_RP_AI && _RP_AI.autoSuggestLast === pairKey) return;
     if(_RP_AI) _RP_AI.autoSuggestLast = pairKey;
-    var A = (typeof getRouteCoord === 'function') ? getRouteCoord(startVal) : null;
-    var B = (endVal === '__same__') ? A : ((typeof getRouteCoord === 'function') ? getRouteCoord(endVal) : null);
+    // Phase 34b: clinic-name fallback so the auto-fire works when the user
+    // picked from the map (which writes clinic name to the hidden input).
+    function _resolveAny(val){
+      if(!val) return null;
+      var c = (typeof getRouteCoord === 'function') ? getRouteCoord(val) : null;
+      if(!c && typeof getCoordForBusiness === 'function') c = getCoordForBusiness(val);
+      return c;
+    }
+    var A = _resolveAny(startVal);
+    var B = (endVal === '__same__') ? A : _resolveAny(endVal);
     if(!A || !B) return;
     var params = _rpComputeOptimalParams(A, B);
     if(!params) return;
@@ -29976,23 +29988,69 @@ function _rpAutoSuggestIfReady(){
 }
 window._rpAutoSuggestIfReady = _rpAutoSuggestIfReady;
 
-// Phase 30: button handler that force-runs the deterministic compute,
-// bypassing the (start,end) throttle. Also redraws the corridor rectangle
-// using the new halfWidth.
+// Phase 30 / 34: button handler that force-runs the deterministic compute,
+// bypassing the (start,end) throttle. Also redraws the corridor rectangle.
+// Phase 34 (2026-05-27): always shows visible feedback — toast + console
+// log + status banner — even when nothing changed, so the user knows the
+// click registered.
 function _rpRunAutoCompute(){
+  console.log('[_rpRunAutoCompute] click received');
   try {
     var startVal = (document.getElementById('rp-start') || {}).value || '';
     var endVal   = (document.getElementById('rp-end')   || {}).value || '';
     if(!startVal || !endVal){
-      if(typeof showToast === 'function') showToast('Pick Start and End first.');
+      if(typeof showToast === 'function') showToast('🧮 Pick Start AND End first, then I can compute.');
+      return;
+    }
+    // Phase 34b: getRouteCoord only knows city + facility keys. Fall back
+    // to getCoordForBusiness so clinic-name picks resolve too.
+    function resolveAny(val){
+      if(!val) return null;
+      var c = (typeof getRouteCoord === 'function') ? getRouteCoord(val) : null;
+      if(!c && typeof getCoordForBusiness === 'function'){
+        c = getCoordForBusiness(val);
+      }
+      return c;
+    }
+    var A = resolveAny(startVal);
+    var B = (endVal === '__same__') ? A : resolveAny(endVal);
+    if(!A || !B){
+      if(typeof showToast === 'function') showToast('🧮 Could not resolve Start/End coordinates. Try re-picking from the map.');
+      console.log('[_rpRunAutoCompute] resolve failed', { startVal: startVal, endVal: endVal, A: A, B: B });
       return;
     }
     if(_RP_AI) _RP_AI.autoSuggestLast = null;   // reset throttle so it always runs
-    _rpAutoSuggestIfReady();
-    // Redraw the corridor rectangle with the new half-width
+    var params = _rpComputeOptimalParams(A, B);
+    if(!params){
+      if(typeof showToast === 'function') showToast('🧮 Start and End are too close to compute (need >0.5 mi apart).');
+      return;
+    }
+    // Apply
+    var nInp = document.getElementById('rp-level-count');
+    if(nInp) nInp.value = params.N;
+    var wInp = document.getElementById('rp-corridor');
+    if(wInp){
+      wInp.value = params.halfWidth;
+      if(typeof _rpV4OnWidthChange === 'function') _rpV4OnWidthChange();
+    }
+    // Inline hint with the formula breakdown
+    var hint = document.getElementById('rp-ai-suggest-n-hint');
+    if(hint){
+      hint.style.display = 'block';
+      hint.style.color = '#1e3a8a';
+      hint.style.background = '#dbeafe';
+      hint.style.border = '1px solid #93c5fd';
+      hint.innerHTML = '🧮 Auto: <b>' + params.N + ' levels</b> · <b>±' + params.halfWidth + ' mi</b> corridor — '
+        + params.totalCandidates + ' stale clinics in the corridor cap. '
+        + 'Levels = round(count/4) clamped 3–8. Half-width = max(closest-perp per level), capped at 25% of ' + (params.maxHalfCap ? params.maxHalfCap.toFixed(1) : '?') + ' mi.';
+    }
+    if(typeof showToast === 'function'){
+      showToast('🧮 ' + params.N + ' levels · ±' + params.halfWidth + ' mi corridor');
+    }
     if(typeof _rpRefreshCorridorBox === 'function') _rpRefreshCorridorBox();
   } catch(e){
-    if(typeof showToast === 'function') showToast('Auto-compute failed: ' + (e && e.message));
+    console.error('[_rpRunAutoCompute] error:', e);
+    if(typeof showToast === 'function') showToast('🧮 Auto-compute failed: ' + (e && e.message));
   }
 }
 window._rpRunAutoCompute = _rpRunAutoCompute;

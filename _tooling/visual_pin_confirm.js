@@ -144,6 +144,48 @@ const TRACE_LOG   = path.resolve(__dirname, '_visual_trace.log');
     note('  S at:    ' + JSON.stringify(afterState.sMarkerLatLng));
   }
 
+  // Phase 34: also pick an End and verify the auto-compute banner +
+  // button click actually fire the deterministic compute.
+  const autoTest = await page.evaluate(() => {
+    const out = {};
+    // Pick a second clinic for End ~5 km from the first
+    const reg = window._RP_PIN_REGISTRY || {};
+    const names = Object.keys(reg);
+    if(names.length < 2) return { err: 'need 2 pins' };
+    // Find a pin notably distant from the Start we just confirmed
+    const sLL = window._RP_RANDOM_S_MARKER && window._RP_RANDOM_S_MARKER.getLatLng();
+    if(!sLL) return { err: 'no start marker' };
+    let endName = null, endLat, endLng, bestD = -1;
+    names.forEach(n => {
+      const m = reg[n] && reg[n].marker;
+      if(!m) return;
+      const ll = m.getLatLng();
+      const d = Math.abs(ll.lat - sLL.lat) + Math.abs(ll.lng - sLL.lng);
+      if(d > bestD){ bestD = d; endName = n; endLat = ll.lat; endLng = ll.lng; }
+    });
+    // Arm End, fire its click, confirm
+    rpPickFromMapMode('end');
+    reg[endName].marker.fire('click', {
+      originalEvent: { stopPropagation: () => {} },
+      latlng: { lat: endLat, lng: endLng }
+    });
+    _rpConfirmPendingPick();
+    // After end-confirm, check the banner visibility + N/halfWidth inputs
+    out.endName = endName;
+    out.bannerVisible = (document.getElementById('rp-auto-banner') || {}).style?.display === 'flex';
+    out.nValueBeforeClick = (document.getElementById('rp-level-count') || {}).value;
+    out.halfValueBeforeClick = (document.getElementById('rp-corridor') || {}).value;
+    // Now simulate a click on the auto-compute button
+    if(window._RP_AI) window._RP_AI.autoSuggestLast = null;
+    try { _rpRunAutoCompute(); out.runAutoOk = true; }
+    catch(e){ out.runAutoErr = e.message; }
+    out.nValueAfterClick = (document.getElementById('rp-level-count') || {}).value;
+    out.halfValueAfterClick = (document.getElementById('rp-corridor') || {}).value;
+    out.hintHasText = (document.getElementById('rp-ai-suggest-n-hint') || {}).innerText || '';
+    return out;
+  });
+  note('[auto-compute test] ' + JSON.stringify(autoTest, null, 2));
+
   fs.writeFileSync(TRACE_LOG, log.join('\n'), 'utf8');
   await browser.close();
 })().catch(e => { console.error(e); process.exit(1); });
