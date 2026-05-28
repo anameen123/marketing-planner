@@ -33239,13 +33239,37 @@ function _rpOptOptimize(){
       + '<div style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:10px">'
       + '<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px">Optimized order (nearest-neighbor + 2-opt)</div>'
       + orderHtml + '</div>'
-      + '<div style="display:flex;justify-content:flex-end;gap:8px">'
+      + '<div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap">'
+      + '<button type="button" onclick="_rpOptEditPicks()" style="background:#fff;color:#1F3864;border:1px solid var(--border);border-radius:8px;padding:9px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">✏ Edit picks</button>'
       + '<button type="button" onclick="_rpOptInsertIntoDay()" style="background:linear-gradient(135deg,#15803d,#16a34a);color:#fff;border:none;border-radius:8px;padding:9px 22px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;box-shadow:0 2px 8px rgba(22,163,74,.35)">✓ Add to schedule →</button>'
       + '</div>';
   }
   if(typeof showToast === 'function') showToast('🤖 Optimized: '+ordered.length+' stops · '+totalMi.toFixed(1)+' mi · '+totalMin+' min');
 }
 window._rpOptOptimize = _rpOptOptimize;
+
+// Phase 54 (2026-05-28): "✏ Edit picks" — back out of the generated-route
+// state to the picking phase. Clears the route polyline + result panel,
+// flips ordered pins back to 'suggested' so the user can remove or
+// add more before re-running ⚡ Optimize.
+function _rpOptEditPicks(){
+  try {
+    if(typeof _rpClearLiveRoute === 'function') _rpClearLiveRoute();
+    var res = document.getElementById('rp-opt-result');
+    if(res){ res.style.display = 'none'; res.innerHTML = ''; }
+    // Flip all picked-state pins back to suggested (light blue) — but keep
+    // the start as 'start' (green S) so the user still sees their choice.
+    if(window._RP_OPT_TARGETS && typeof _rpSetPinState === 'function'){
+      window._RP_OPT_TARGETS.forEach(function(t){
+        var state = (t.name === window._RP_OPT_START_NAME) ? 'start' : 'suggested';
+        _rpSetPinState(t.name, state);
+      });
+    }
+    window._RP_OPT_ORDERED = null;
+    if(typeof showToast === 'function') showToast('✏ Edit mode: add, remove, or re-pick start, then ⚡ Optimize again.');
+  } catch(e){ console.error('[_rpOptEditPicks] failed:', e); }
+}
+window._rpOptEditPicks = _rpOptEditPicks;
 
 function _rpOptInsertIntoDay(){
   var ordered = window._RP_OPT_ORDERED;
@@ -33259,7 +33283,19 @@ function _rpOptInsertIntoDay(){
     return;
   }
   var me = (CURRENT_USER && CURRENT_USER.name) || '';
-  var added = 0, skipped = 0;
+  var added = 0, skipped = 0, removed = 0;
+  // Phase 54: OVERRIDE — remove prior-route's inserted rows from this day
+  // before adding the new ones, so re-generating fully replaces.
+  try {
+    var priorSaved = (typeof _rpLoadCurrentRoute === 'function') ? _rpLoadCurrentRoute() : null;
+    if(priorSaved && Array.isArray(priorSaved.insertedNames) && priorSaved.insertedNames.length > 0){
+      var priorSet = {}; priorSaved.insertedNames.forEach(function(n){ priorSet[n] = true; });
+      var beforeLen = S.days[di].rows.length;
+      S.days[di].rows = (S.days[di].rows || []).filter(function(r){ return !(r && r.clinic && priorSet[r.clinic]); });
+      removed = beforeLen - S.days[di].rows.length;
+    }
+  } catch(_){}
+  var insertedNames = [];
   ordered.forEach(function(p){
     if(!p || !p.name) return;
     var exists = (S.days[di].rows || []).some(function(r){ return r && r.clinic === p.name; });
@@ -33271,23 +33307,28 @@ function _rpOptInsertIntoDay(){
       spending: null, _spId: null
     });
     added++;
+    insertedNames.push(p.name);
   });
   if(typeof _saveS === 'function') _saveS();
   if(typeof refresh === 'function') refresh(di);
-  // Phase 52: save Optimize state so the user can resume + edit later
+  // Phase 52 / 54: save Optimize state + inserted-names list
   try {
     if(typeof _rpSaveCurrentRoute === 'function'){
       _rpSaveCurrentRoute({
         mode: 'optimize',
         optTargets: (window._RP_OPT_TARGETS || []).slice(),
         optStartName: window._RP_OPT_START_NAME || null,
-        optOrdered: ordered.map(function(p){ return p.name; })
+        optOrdered: ordered.map(function(p){ return p.name; }),
+        insertedNames: insertedNames
       });
     }
   } catch(_){}
   if(typeof showToast === 'function'){
     var msg = '✓ Added ' + added + ' stop' + (added===1?'':'s') + ' to the schedule';
-    if(skipped > 0) msg += ' (' + skipped + ' already there, skipped)';
+    var extras = [];
+    if(removed > 0) extras.push('replaced ' + removed + ' previous');
+    if(skipped > 0) extras.push(skipped + ' already there, skipped');
+    if(extras.length) msg += ' (' + extras.join(' · ') + ')';
     showToast(msg);
   }
   if(typeof closeRoutePlanner === 'function') closeRoutePlanner();
@@ -34796,8 +34837,21 @@ function _rpV5InsertPicksIntoDay(){
       return;
     }
     var me = (CURRENT_USER && CURRENT_USER.name) || '';
-    var added = 0, skipped = 0;
+    var added = 0, skipped = 0, removed = 0;
+    // Phase 54 (2026-05-28): if a prior route exists for this day,
+    // OVERRIDE it — remove the previously-inserted rows by name so the
+    // re-generated route fully replaces it (no leftover stale stops).
+    try {
+      var priorSaved = (typeof _rpLoadCurrentRoute === 'function') ? _rpLoadCurrentRoute() : null;
+      if(priorSaved && Array.isArray(priorSaved.insertedNames) && priorSaved.insertedNames.length > 0){
+        var priorSet = {}; priorSaved.insertedNames.forEach(function(n){ priorSet[n] = true; });
+        var beforeLen = S.days[di].rows.length;
+        S.days[di].rows = (S.days[di].rows || []).filter(function(r){ return !(r && r.clinic && priorSet[r.clinic]); });
+        removed = beforeLen - S.days[di].rows.length;
+      }
+    } catch(_){}
     // Picks should already be in t-order from _rpV5GenerateRoute
+    var insertedNames = [];
     picks.forEach(function(p){
       if(!p || !p.name) return;
       var exists = (S.days[di].rows || []).some(function(r){ return r && r.clinic === p.name; });
@@ -34813,10 +34867,12 @@ function _rpV5InsertPicksIntoDay(){
         spending: null, _spId: null
       });
       added++;
+      insertedNames.push(p.name);
     });
     if(typeof _saveS === 'function') _saveS();
     if(typeof refresh === 'function') refresh(di);
-    // Phase 52: save the planner state so the user can resume + edit later
+    // Phase 52 / 54: save the planner state + the inserted-names list so
+    // the next override can clean up cleanly.
     try {
       if(typeof _rpSaveCurrentRoute === 'function'){
         var payload = {
@@ -34830,14 +34886,18 @@ function _rpV5InsertPicksIntoDay(){
           corridorMode: window._RP_CORRIDOR_MODE || 'visits',
           targetVisits: parseInt((document.getElementById('rp-target-visits') || {}).value, 10) || 5,
           halfWidth:    parseFloat((document.getElementById('rp-corridor') || {}).value) || 3,
-          flatPicks:    Object.keys(window._RP_V5_FLAT_PICKS || {})
+          flatPicks:    Object.keys(window._RP_V5_FLAT_PICKS || {}),
+          insertedNames: insertedNames
         };
         _rpSaveCurrentRoute(payload);
       }
     } catch(_){}
     if(typeof showToast === 'function'){
       var msg = '✓ Added ' + added + ' stop' + (added===1?'':'s') + ' to the schedule';
-      if(skipped > 0) msg += ' (' + skipped + ' already there, skipped)';
+      var extras = [];
+      if(removed > 0) extras.push('replaced ' + removed + ' previous');
+      if(skipped > 0) extras.push(skipped + ' already there, skipped');
+      if(extras.length) msg += ' (' + extras.join(' · ') + ')';
       showToast(msg);
     }
     if(typeof closeRoutePlanner === 'function') closeRoutePlanner();
