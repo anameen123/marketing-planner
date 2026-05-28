@@ -27543,8 +27543,50 @@ function _rpRefreshCorridorBox(){
     // when the input value differs.
     window._RP_APPLIED_HALFWIDTH = halfW;
     if(typeof _rpRenderApplyWidthBtn === 'function') _rpRenderApplyWidthBtn();
+    // Phase 37: light up every pin inside the rectangle (light blue), no
+    // matter what filters Find Candidates would later apply. Pure visual
+    // aid so the user can see what the rectangle covers.
+    if(typeof _rpHighlightInsideRectangle === 'function') _rpHighlightInsideRectangle(A, B, halfW);
   } catch(_){}
 }
+
+// Phase 37 (2026-05-28): mutate every clinic pin that geometrically falls
+// inside the corridor rectangle to the 'suggested' (light blue) state.
+// No recency filter, no schedule filter — purely "this is inside the
+// rectangle". Returns { total, byFilter: {...} } so callers can show
+// transparency about why fewer are in the final candidate list.
+function _rpHighlightInsideRectangle(A, B, halfW){
+  if(!A || !B || !halfW) return { total: 0 };
+  if(typeof _rpResetSuggestedPins === 'function') _rpResetSuggestedPins();
+  var total = 0, recent = 0, scheduled = 0, deadEnd = 0, alreadyVisitedPeriod = 0;
+  function check(name){
+    if(!name) return;
+    var coord = (typeof getCoordForBusiness === 'function') ? getCoordForBusiness(name) : null;
+    if(!coord) return;
+    var t = _rpV5ProjT(coord, A, B);
+    if(t < 0 || t > 1) return;
+    var perp = Math.abs(_rpV5SignedPerp(coord, A, B));
+    if(perp > halfW) return;
+    total++;
+    // Diagnostic: how many would Find Candidates filter out?
+    var days = (typeof daysSinceLastVisit === 'function') ? daysSinceLastVisit(name) : null;
+    var rec  = (typeof recencyBucket === 'function') ? recencyBucket(days) : null;
+    if(rec && (rec.key === 'fresh' || rec.key === 'warm')) recent++;
+    if(typeof BUSINESS_REFERRALS !== 'undefined' && BUSINESS_REFERRALS[name] && (BUSINESS_REFERRALS[name].currentCount || 0) > 0) alreadyVisitedPeriod++;
+    var lead = (typeof getClinicLead === 'function') ? getClinicLead(name) : null;
+    if(lead && lead.status === 'dead_end') deadEnd++;
+    // Light it up regardless of those filters
+    if(typeof _rpSetPinState === 'function') _rpSetPinState(name, 'suggested');
+  }
+  if(typeof CLINIC_BANK !== 'undefined') CLINIC_BANK.forEach(function(c){ if(c && c.n) check(c.n); });
+  if(typeof MVA_ATTORNEYS !== 'undefined') MVA_ATTORNEYS.forEach(function(m){ if(m && m.firm) check(m.firm); });
+  if(typeof OUTREACH !== 'undefined') OUTREACH.forEach(function(o){ if(o && o.name) check(o.name); });
+  var stats = { total: total, recent: recent, scheduled: scheduled, deadEnd: deadEnd, alreadyVisitedPeriod: alreadyVisitedPeriod };
+  window._RP_INSIDE_RECT_STATS = stats;
+  console.log('[corridor rectangle] inside =', total, '· recently visited =', recent, '· already visited this period =', alreadyVisitedPeriod, '· dead-end leads =', deadEnd);
+  return stats;
+}
+window._rpHighlightInsideRectangle = _rpHighlightInsideRectangle;
 window._rpRefreshCorridorBox = _rpRefreshCorridorBox;
 window._rpClearCenterline = _rpClearCenterline;
 // Read current rp-start/rp-end, resolve their coords, draw the centerline
@@ -32894,7 +32936,20 @@ function _rpV5ShowFlatList(){
     + '<div style="background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.4);border-radius:20px;padding:5px 14px;font-size:11px;font-weight:700"><span id="rp-flat-picked-count">' + pickedCount + '</span> picked</div>'
     + '</div>';
   if(list.length === 0){
-    html += '<div style="padding:14px 16px;background:#fff7ed;border:1px solid #fed7aa;border-left:3px solid #f59e0b;border-radius:8px;font-size:12px;color:#7c2d12">No stale clinics inside the ±' + halfW + ' mi corridor. Try a different Start/End or widen the corridor manually.</div>';
+    // Phase 37: explain the gap. inside-rect stats come from
+    // _rpHighlightInsideRectangle (set when the rectangle was drawn).
+    var stats = window._RP_INSIDE_RECT_STATS || { total: 0, recent: 0, alreadyVisitedPeriod: 0, deadEnd: 0 };
+    var lines = [];
+    if(stats.total > 0){
+      lines.push('<b>' + stats.total + ' clinic' + (stats.total===1?'':'s') + ' inside the ±' + halfW + ' mi corridor</b>, but all were excluded:');
+      if(stats.recent > 0) lines.push('• <b>' + stats.recent + '</b> visited in the last 13 days (fresh/warm)');
+      if(stats.alreadyVisitedPeriod > 0) lines.push('• <b>' + stats.alreadyVisitedPeriod + '</b> already visited this period (uncheck "Skip clinics already visited this period" to include)');
+      if(stats.deadEnd > 0) lines.push('• <b>' + stats.deadEnd + '</b> marked as dead-end leads');
+      lines.push('<div style="margin-top:6px;font-style:italic">Light-blue pins on the map show what\'s inside the rectangle. Loosen filters above to include them.</div>');
+    } else {
+      lines.push('No clinics inside the ±' + halfW + ' mi corridor. Try a wider corridor (Apply button) or different Start/End.');
+    }
+    html += '<div style="padding:14px 16px;background:#fff7ed;border:1px solid #fed7aa;border-left:3px solid #f59e0b;border-radius:8px;font-size:12px;color:#7c2d12;line-height:1.55">' + lines.join('<br>') + '</div>';
   } else {
     // The flat list — one row per candidate, in t order
     html += '<div style="background:#fff;border:1px solid var(--border);border-radius:8px;overflow:hidden">';

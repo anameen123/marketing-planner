@@ -21,7 +21,7 @@ const TRACE_LOG   = path.resolve(__dirname, '_visual_trace.log');
     if(m.type() === 'error') note('[js-error] ' + m.text().slice(0, 200));
     // Capture corridor diagnostic logs for verification
     const txt = m.text();
-    if(/corridor box|_rpRefreshCenterline|_rpPickEndpoint/i.test(txt)){
+    if(/corridor/i.test(txt) || /_rp/i.test(txt)){
       note('[diag] ' + txt.slice(0, 220));
     }
   });
