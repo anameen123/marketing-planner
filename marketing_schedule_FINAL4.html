@@ -24890,26 +24890,31 @@ function renderAllBusinessPins(){
       marker: marker, type: bizType, letter: typeLetter,
       origBg: rec.color, origBorder: border
     };
-    // Phase 31 (2026-05-27): PREVIEW-then-confirm flow (replaces the
-    // Phase 25 one-click commit per user). When the planner has armed a
-    // slot via [📍 Map], a pin click sets a PREVIEW only — the user must
-    // then click ✓ Confirm in the drawer to actually commit. Clicking
-    // ANOTHER pin overrides the preview (first pin deselects, second
-    // becomes the new preview). Popup is suppressed in this mode.
-    // Phase 32: pass the ACTUAL rendered lat/lng (jitter included) into
-    // the handler so Confirm drops the S/E flag exactly where the pin
-    // appears on screen — not at the un-jittered city centroid that
-    // getRouteCoord would return.
-    marker.on('click', function(ev){
+    // Phase 31 (2026-05-27) / Phase 32b: PREVIEW-then-confirm flow. When
+    // the planner has armed a slot via [📍 Map], a pin click sets a
+    // PREVIEW only — clicking another pin overrides. ✓ Confirm in the
+    // drawer commits. Both 'click' (the commit) and 'mousedown' (to beat
+    // the popup auto-open) are listened to and aggressively suppressed
+    // when armed. The pin's actual rendered lat/lng (with jitter applied)
+    // is captured at click time and passed through so Confirm drops the
+    // S/E flag exactly where the user tapped.
+    function _armedPinHandler(ev){
       try {
-        if(typeof _RP_DIALOG_AWAITING !== 'undefined' && _RP_DIALOG_AWAITING && typeof _rpDialogConsumePinClick === 'function'){
-          if(ev && ev.originalEvent && ev.originalEvent.stopPropagation) ev.originalEvent.stopPropagation();
-          if(_DV_MAP && _DV_MAP.closePopup) _DV_MAP.closePopup();
-          marker.closePopup && marker.closePopup();
-          _rpDialogConsumePinClick(name, { lat: lat, lng: lng });
+        if(typeof _RP_DIALOG_AWAITING === 'undefined' || !_RP_DIALOG_AWAITING) return;
+        if(typeof _rpDialogConsumePinClick !== 'function') return;
+        if(ev && ev.originalEvent){
+          if(ev.originalEvent.stopPropagation) ev.originalEvent.stopPropagation();
+          if(ev.originalEvent.preventDefault) ev.originalEvent.preventDefault();
+          if(ev.originalEvent.stopImmediatePropagation) ev.originalEvent.stopImmediatePropagation();
         }
+        if(L && L.DomEvent && L.DomEvent.stop) L.DomEvent.stop(ev);
+        if(_DV_MAP && _DV_MAP.closePopup) _DV_MAP.closePopup();
+        marker.closePopup && marker.closePopup();
+        _rpDialogConsumePinClick(name, { lat: lat, lng: lng });
       } catch(_){}
-    });
+    }
+    marker.on('mousedown', _armedPinHandler);
+    marker.on('click',     _armedPinHandler);
     layer.addLayer(marker);
   }
   // ── ZOOM-AWARE RENDERING ────────────────────────────────────────────
@@ -25217,8 +25222,19 @@ function _rpPickFromMap(name, slot){
   // Dialog-mode interception (per user 2026-05-22) — when the dialog's
   // 📍 Map button is armed, ANY pin click (regardless of which popup
   // button was tapped) fills the awaiting field and reopens the dialog.
+  // Phase 32b (2026-05-27): also pass the marker's ACTUAL position (jitter
+  // included) from the pin registry so the popup-button path drops S/E
+  // at the visible pin location — not the un-jittered city centroid.
   if(typeof _rpDialogConsumePinClick === 'function' && _RP_DIALOG_AWAITING){
-    if(_rpDialogConsumePinClick(name)){
+    var exactCoord = null;
+    try {
+      var reg = window._RP_PIN_REGISTRY && window._RP_PIN_REGISTRY[name];
+      if(reg && reg.marker && reg.marker.getLatLng){
+        var ll = reg.marker.getLatLng();
+        exactCoord = { lat: ll.lat, lng: ll.lng };
+      }
+    } catch(_){}
+    if(_rpDialogConsumePinClick(name, exactCoord)){
       if(_DV_MAP) _DV_MAP.closePopup();
       return;
     }
