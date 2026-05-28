@@ -31353,7 +31353,16 @@ function _rpRunAutoCompute(){
       }
     }
     if(typeof _rpRefreshCorridorBox === 'function') _rpRefreshCorridorBox();
-    if(typeof runRoutePlannerV4 === 'function' && window._RP_V4_LAST) runRoutePlannerV4();
+    // Phase 80 (2026-05-28): auto-render the candidate list AFTER the
+    // corridor fits. Skips the rep having to also click "Find candidates"
+    // — they get a complete proposal in one shot. Only runs in visits
+    // mode (width mode lets the rep size the corridor manually first).
+    if(window._RP_CORRIDOR_MODE === 'visits' && typeof runRoutePlannerV4 === 'function'){
+      try { runRoutePlannerV4(); } catch(_){}
+    } else if(typeof runRoutePlannerV4 === 'function' && window._RP_V4_LAST){
+      // Legacy refresh path for width mode after width changes
+      runRoutePlannerV4();
+    }
   } catch(e){
     console.error('[_rpRunAutoCompute] error:', e);
     if(typeof showToast === 'function') showToast('🎯 Auto-compute failed: ' + (e && e.message));
@@ -36477,9 +36486,33 @@ function _rpV5Start(){
     slices: slices, N: N, quantileBounds: quantileBounds,
     flatCandidates: flatCandidates
   };
-  // Reset flat-picks set (Set of clinic names)
+  // Phase 80 (2026-05-28): in VISITS mode, auto-CHECK every candidate so
+  // the rep sees a complete default route immediately (live polyline +
+  // numbered stops on the map). They can then uncheck any they don't
+  // want, or change # of visits. In WIDTH mode we keep the previous
+  // "all unchecked" behavior so the rep deliberately picks from the
+  // wider candidate pool.
   _RP_V5_FLAT_PICKS = {};
+  if(window._RP_CORRIDOR_MODE === 'visits'){
+    flatCandidates.forEach(function(c){
+      if(c && c.name) _RP_V5_FLAT_PICKS[c.name] = true;
+    });
+  }
   _rpV5ShowFlatList();
+  // Draw the live route line immediately so the auto-built route is
+  // visible on the map without an extra refresh.
+  if(typeof _rpRefreshLiveRoute === 'function'){
+    try { _rpRefreshLiveRoute(); } catch(_){}
+  }
+  // Mutate map pins to 'picked' state for the auto-checked ones so the
+  // visual matches the candidate-list checkboxes.
+  if(window._RP_CORRIDOR_MODE === 'visits'){
+    try {
+      flatCandidates.forEach(function(c){
+        if(c && c.name && typeof _rpSetPinState === 'function') _rpSetPinState(c.name, 'picked');
+      });
+    } catch(_){}
+  }
 }
 window._rpV5Start = _rpV5Start;
 
