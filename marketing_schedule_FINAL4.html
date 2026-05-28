@@ -3461,6 +3461,15 @@ body.role-front_desk #referrals-view {
           <button type="button" onclick="event.stopPropagation();rpPickFromMapMode('start')" title="Pick the Start by clicking a pin on the map — the drawer stays open" style="background:#7030A0;color:#fff;border:none;border-radius:8px;padding:9px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;white-space:nowrap">📍 Map</button>
         </div>
         <input type="hidden" id="rp-start">
+        <!-- Phase 33: confirmed-chip with Edit + Clear, only visible once
+             a Start is set. Lets the user re-pick or wipe the slot. -->
+        <div id="rp-start-chip" style="display:none;margin-top:6px;padding:7px 10px;background:#dcfce7;border:1px solid #86efac;border-left:3px solid #16a34a;border-radius:6px;font-size:11px;color:#14532d;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
+          <span>✓ Start: <b id="rp-start-chip-name"></b></span>
+          <span style="display:flex;gap:5px">
+            <button type="button" onclick="event.stopPropagation();rpPickFromMapMode('start')" style="background:#16a34a;color:#fff;border:none;border-radius:5px;padding:4px 9px;font-size:10px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">✏ Change</button>
+            <button type="button" onclick="event.stopPropagation();_rpClearStartSlot()" style="background:#fff;color:#7f1d1d;border:1px solid #fecaca;border-radius:5px;padding:4px 9px;font-size:10px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">✕ Clear</button>
+          </span>
+        </div>
         <div style="font-size:10px;color:var(--muted);margin-top:3px;font-style:italic">Type to search, or tap <b>📍 Map</b> to pick a pin on the map.</div>
         <div id="rp-start-err" style="font-size:10px;color:#ef4444;margin-top:4px;display:none;font-weight:600">Pick a Start point before running Find candidates.</div>
       </div>
@@ -3488,6 +3497,14 @@ body.role-front_desk #referrals-view {
         <!-- Round Trip removed 2026-05-27 per user. Hidden input keeps the
              id around so legacy code reading it doesn't crash. -->
         <input type="checkbox" id="rp-round-trip" style="display:none">
+        <!-- Phase 33: confirmed-chip for End (purple to match the E flag). -->
+        <div id="rp-end-chip" style="display:none;margin-top:6px;padding:7px 10px;background:#fef2f2;border:1px solid #fca5a5;border-left:3px solid #dc2626;border-radius:6px;font-size:11px;color:#7f1d1d;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
+          <span>✓ End: <b id="rp-end-chip-name"></b></span>
+          <span style="display:flex;gap:5px">
+            <button type="button" onclick="event.stopPropagation();rpPickFromMapMode('end')" style="background:#dc2626;color:#fff;border:none;border-radius:5px;padding:4px 9px;font-size:10px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">✏ Change</button>
+            <button type="button" onclick="event.stopPropagation();_rpClearEndSlot()" style="background:#fff;color:#7f1d1d;border:1px solid #fecaca;border-radius:5px;padding:4px 9px;font-size:10px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">✕ Clear</button>
+          </span>
+        </div>
         <div id="rp-end-err" style="font-size:10px;color:#ef4444;margin-top:4px;display:none;font-weight:600">Pick an End before running Find candidates.</div>
       </div>
       <!-- Pin-pick status panel (per user 2026-05-26) — shows "👆 Click a
@@ -27528,6 +27545,25 @@ function closeRoutePlanner(){
   if(typeof _rpResetAllPins === 'function') _rpResetAllPins();
   // Phase 30: clear the corridor rectangle too.
   if(typeof _rpClearCorridorBox === 'function') _rpClearCorridorBox();
+  // Phase 33 (2026-05-27): per user, closing the planner WITHOUT generating
+  // a route wipes ALL transient state — Start/End inputs, dialog pending,
+  // flat picks, level picks, AI throttle. "If I get out, the start will
+  // disappear." Reopening the planner starts fresh.
+  try {
+    _RP_DIALOG_AWAITING = null;
+    _RP_DIALOG_PENDING  = null;
+    var sInp = document.getElementById('rp-start');       if(sInp) sInp.value = '';
+    var sLbl = document.getElementById('rp-start-search'); if(sLbl) sLbl.value = '';
+    var eInp = document.getElementById('rp-end');         if(eInp) eInp.value = '';
+    var eLbl = document.getElementById('rp-end-search');   if(eLbl) eLbl.value = '';
+    if(typeof window._RP_START_NAME !== 'undefined') window._RP_START_NAME = '';
+    if(typeof window._RP_END_NAME   !== 'undefined') window._RP_END_NAME   = '';
+    if(typeof window._RP_V5_FLAT_PICKS !== 'undefined') window._RP_V5_FLAT_PICKS = {};
+    if(typeof window._RP_V5_PICKS      !== 'undefined') window._RP_V5_PICKS = {};
+    if(window._RP_AI) window._RP_AI.autoSuggestLast = null;
+    if(typeof _rpRenderPickStatus === 'function') _rpRenderPickStatus();
+    if(typeof _rpRenderStartEndChips === 'function') _rpRenderStartEndChips();
+  } catch(_){}
   document.getElementById('route-planner-modal').style.display = 'none';
   // Per user 2026-05-25: release the map-function lock so Add Visit
   // popups and other handlers work again.
@@ -27755,6 +27791,9 @@ function _rpConfirmPendingPick(){
   if(typeof showToast === 'function'){
     showToast('✓ ' + (which === 'start' ? 'Start' : 'End') + ' set: ' + pending.name);
   }
+  // Phase 33: refresh the confirmed-chip so the user sees the new state +
+  // gets the ✏ Change / ✕ Clear buttons.
+  if(typeof _rpRenderStartEndChips === 'function') _rpRenderStartEndChips();
   // Phase 24: AI is default — if both Start + End are now set, auto-fire
   // the suggest so N levels + half-width get filled in without a click.
   if(typeof _rpAutoSuggestIfReady === 'function') _rpAutoSuggestIfReady();
@@ -27775,6 +27814,86 @@ function _rpCancelPinMode(){
   if(typeof showToast === 'function') showToast('Pin-pick canceled.');
 }
 window._rpCancelPinMode = _rpCancelPinMode;
+
+// Phase 33 (2026-05-27): show / hide the confirmed-chip for Start/End so
+// the user can re-pick or clear after committing. Called from confirm,
+// clear, and on planner open to sync with current state.
+function _rpRenderStartEndChips(){
+  try {
+    var startVal = (document.getElementById('rp-start') || {}).value || '';
+    var endVal   = (document.getElementById('rp-end')   || {}).value || '';
+    var sChip = document.getElementById('rp-start-chip');
+    var sName = document.getElementById('rp-start-chip-name');
+    if(sChip){
+      if(startVal){
+        var startLbl = (document.getElementById('rp-start-search') || {}).value || startVal;
+        sChip.style.display = 'flex';
+        if(sName) sName.textContent = startLbl.replace(/^[^A-Za-z0-9]+/, '');
+      } else {
+        sChip.style.display = 'none';
+      }
+    }
+    var eChip = document.getElementById('rp-end-chip');
+    var eName = document.getElementById('rp-end-chip-name');
+    if(eChip){
+      if(endVal){
+        var endLbl = (document.getElementById('rp-end-search') || {}).value || endVal;
+        eChip.style.display = 'flex';
+        if(eName) eName.textContent = endLbl.replace(/^[^A-Za-z0-9]+/, '');
+      } else {
+        eChip.style.display = 'none';
+      }
+    }
+  } catch(_){}
+}
+window._rpRenderStartEndChips = _rpRenderStartEndChips;
+
+// Phase 33: wipe a single slot — input value, hidden input, S/E marker,
+// halo, pin state, plus any pending pick-mode pointing at it.
+function _rpClearStartSlot(){
+  try {
+    if(_RP_DIALOG_AWAITING === 'start' && _RP_DIALOG_PENDING && _RP_DIALOG_PENDING.name && typeof _rpSetPinState === 'function'){
+      _rpSetPinState(_RP_DIALOG_PENDING.name, 'reset');
+    }
+    if(_RP_DIALOG_AWAITING === 'start'){ _RP_DIALOG_AWAITING = null; _RP_DIALOG_PENDING = null; _rpRenderPickStatus(); }
+    var startName = (typeof window._RP_START_NAME !== 'undefined') ? window._RP_START_NAME : null;
+    if(startName && typeof _rpSetPinState === 'function') _rpSetPinState(startName, 'reset');
+    var sInp = document.getElementById('rp-start');       if(sInp) sInp.value = '';
+    var sLbl = document.getElementById('rp-start-search'); if(sLbl) sLbl.value = '';
+    if(typeof _RP_START_NAME !== 'undefined') window._RP_START_NAME = '';
+    if(typeof _rpClearStartMarker === 'function') _rpClearStartMarker();
+    if(typeof _rpClearSelectionHalo === 'function') _rpClearSelectionHalo('start');
+    if(typeof _rpClearPreviewRing === 'function') _rpClearPreviewRing();
+    if(typeof _rpRefreshCenterline === 'function') _rpRefreshCenterline();
+    _rpRenderStartEndChips();
+    // Reset the AI auto-suggest throttle so next pick re-triggers
+    if(window._RP_AI) window._RP_AI.autoSuggestLast = null;
+    if(typeof showToast === 'function') showToast('Start cleared.');
+  } catch(e){ console.error('_rpClearStartSlot failed:', e); }
+}
+window._rpClearStartSlot = _rpClearStartSlot;
+
+function _rpClearEndSlot(){
+  try {
+    if(_RP_DIALOG_AWAITING === 'end' && _RP_DIALOG_PENDING && _RP_DIALOG_PENDING.name && typeof _rpSetPinState === 'function'){
+      _rpSetPinState(_RP_DIALOG_PENDING.name, 'reset');
+    }
+    if(_RP_DIALOG_AWAITING === 'end'){ _RP_DIALOG_AWAITING = null; _RP_DIALOG_PENDING = null; _rpRenderPickStatus(); }
+    var endName = (typeof window._RP_END_NAME !== 'undefined') ? window._RP_END_NAME : null;
+    if(endName && typeof _rpSetPinState === 'function') _rpSetPinState(endName, 'reset');
+    var eInp = document.getElementById('rp-end');       if(eInp) eInp.value = '';
+    var eLbl = document.getElementById('rp-end-search'); if(eLbl) eLbl.value = '';
+    if(typeof _RP_END_NAME !== 'undefined') window._RP_END_NAME = '';
+    if(typeof _rpClearEndMarker === 'function') _rpClearEndMarker();
+    if(typeof _rpClearSelectionHalo === 'function') _rpClearSelectionHalo('end');
+    if(typeof _rpClearPreviewRing === 'function') _rpClearPreviewRing();
+    if(typeof _rpRefreshCenterline === 'function') _rpRefreshCenterline();
+    _rpRenderStartEndChips();
+    if(window._RP_AI) window._RP_AI.autoSuggestLast = null;
+    if(typeof showToast === 'function') showToast('End cleared.');
+  } catch(e){ console.error('_rpClearEndSlot failed:', e); }
+}
+window._rpClearEndSlot = _rpClearEndSlot;
 
 // Phase 25 (2026-05-27): ONE-CLICK pin pick. Called by the per-pin click
 // listener attached in the addPin loop. Skips the popup + preview-confirm
