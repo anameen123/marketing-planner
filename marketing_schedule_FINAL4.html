@@ -25268,6 +25268,59 @@ function renderAllBusinessPins(){
     }
     marker.on('mousedown', _armedPinHandler);
     marker.on('click',     _armedPinHandler);
+    // ── PHASE 66 (2026-05-28) — Double-click opens the clinic card ─────
+    // When NO mode is active (no planner armed, no show-on-map, no
+    // bulk-select, no Add-Visit map pick, no AI Optimize wait), a
+    // double-click on the pin opens the same card modal you'd get by
+    // clicking the clinic NAME in the day's visit table. Lets the rep
+    // jump straight from "I see this pin" to "show me its history /
+    // address / leads" without going through the popup → Add Visit
+    // flow first.
+    marker.on('dblclick', function(ev){
+      try {
+        // Guard against firing during ANY active mode — those modes are
+        // already binding click/mousedown for their own purposes.
+        var planneOpen = (typeof _isRoutePlannerOpen === 'function') && _isRoutePlannerOpen();
+        var optArmed   = !!window._RP_OPT_AWAITING_PICK;
+        var optCircle  = (window._RP_OPT_SUB_MODE === 'circle');
+        var optStartPhase = window._RP_OPT_TARGETS && window._RP_OPT_TARGETS.length >= 3;
+        var dialogArmed = !!window._RP_DIALOG_AWAITING;
+        var rwActive   = (typeof _RP_RW_MAP_PICK_ACTIVE !== 'undefined') && _RP_RW_MAP_PICK_ACTIVE;
+        var avPick     = !!window._AV_MAP_PICK_MODE;
+        var showOnMap  = !!window._DV_SHOWMAP_ACTIVE;
+        var selectMode = !!window._DV_SELECT_MODE;
+        if(planneOpen || optArmed || optCircle || optStartPhase || dialogArmed || rwActive || avPick || showOnMap || selectMode) return;
+        // Stop the click + popup chain so this doesn't ALSO open the
+        // popup and trigger downstream handlers
+        if(ev && ev.originalEvent){
+          if(ev.originalEvent.stopPropagation) ev.originalEvent.stopPropagation();
+          if(ev.originalEvent.preventDefault) ev.originalEvent.preventDefault();
+        }
+        if(L && L.DomEvent && L.DomEvent.stop) L.DomEvent.stop(ev);
+        if(_DV_MAP && _DV_MAP.closePopup) _DV_MAP.closePopup();
+        marker.closePopup && marker.closePopup();
+        // Resolve city / contact / spec from the matching bank entry —
+        // same lookup _addVisitFromMapPin uses.
+        var city = '', contact = '', spec = '';
+        try {
+          if(bizType === 'clinic' && typeof CLINIC_BANK !== 'undefined'){
+            var hit = CLINIC_BANK.find(function(c){ return c && c.n === name; });
+            if(hit){ city = hit.c || ''; contact = hit.d || ''; spec = hit.s || ''; }
+          } else if(bizType === 'mva' && typeof MVA_ATTORNEYS !== 'undefined'){
+            var mva = MVA_ATTORNEYS.find(function(m){ return m && m.firm === name; });
+            if(mva){ city = mva.city || ''; contact = mva.attorney || ''; spec = 'MVA Attorney'; }
+          } else if(bizType === 'outreach' && typeof OUTREACH !== 'undefined'){
+            var o = OUTREACH.find(function(x){ return x && x.name === name; });
+            if(o){ city = o.city || ''; contact = o.contact || ''; spec = (o.type || '') + ' — Community Outreach'; }
+          }
+        } catch(_){}
+        if(typeof openClinicHistory === 'function'){
+          openClinicHistory(name, city, contact, spec);
+        } else if(typeof showToast === 'function'){
+          showToast('Clinic card view not available.');
+        }
+      } catch(e){ try { console.warn('[pin-dblclick] failed:', e); } catch(_){} }
+    });
     layer.addLayer(marker);
   }
   // ── ZOOM-AWARE RENDERING ────────────────────────────────────────────
