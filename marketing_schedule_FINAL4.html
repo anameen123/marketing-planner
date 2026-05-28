@@ -32490,7 +32490,14 @@ function _rpV5ShowSummary(){
     // Total route estimate — Start → picks (in t order) → End, straight-line
     // haversine × 1.4 urban factor, @ 30 mph average. Same model used by the
     // existing route-planner summary so the numbers are consistent.
-    var orderedPicks = allPicks.slice().sort(function(a, b){ return a.t - b.t; });
+    // Phase 27: preview the connection rule on the summary so users see which
+    // of their picks will actually be connected vs skipped BEFORE Generate.
+    var orderedPicksAll = allPicks.slice().sort(function(a, b){ return a.t - b.t; });
+    var halfWForRule = (_RP_V5_LAST && _RP_V5_LAST.baseWidth) || 3;
+    var connectionPreview = (typeof _rpV5ApplyConnectionRule === 'function')
+      ? _rpV5ApplyConnectionRule(orderedPicksAll, halfWForRule)
+      : { kept: orderedPicksAll, skipped: [] };
+    var orderedPicks = connectionPreview.kept;     // only the kept ones contribute to mileage
     var totalMi = 0;
     var prev = _RP_V5_LAST.A;
     orderedPicks.forEach(function(p){
@@ -32511,6 +32518,27 @@ function _rpV5ShowSummary(){
     if(hasCrossSide){
       html += '<div style="background:#fff7ed;border:1px solid #fed7aa;border-left:3px solid #f59e0b;border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:#7c2d12;line-height:1.45">'
         + '<strong>⚠ Cross-side deroute (between levels):</strong> '+posCount+' pick'+(posCount===1?'':'s')+' on the <span style="color:#3b82f6;font-weight:700">+ side</span> and '+negCount+' on the <span style="color:#ef4444;font-weight:700">− side</span> of the Start→End line. Total already includes this — the deroute portion is roughly <strong>'+derouteMi.toFixed(1)+' mi · ~'+derouteMin+' min</strong>.'
+        + '</div>';
+    }
+    // Phase 27: connection-rule preview. Tell the user which picks made the
+    // route + which were dropped because their y-jump from the prior pin
+    // exceeded the corridor half-width.
+    if(connectionPreview && connectionPreview.skipped.length > 0){
+      html += '<div style="background:#fef2f2;border:1px solid #fca5a5;border-left:3px solid #dc2626;border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:#7f1d1d;line-height:1.5">'
+        + '<div style="font-weight:800;margin-bottom:5px">🔗 Connection rule skipped ' + connectionPreview.skipped.length + ' pick' + (connectionPreview.skipped.length===1?'':'s') + '</div>'
+        + '<div style="font-size:11px;color:#991b1b;margin-bottom:6px;font-style:italic">A pick is skipped when its perpendicular distance (Δy) from the last connected pin exceeds the corridor half-width (±' + halfWForRule + ' mi). Skipped pins stay visible on the map but aren\'t in the drawn route or the Google Maps URL.</div>';
+      connectionPreview.skipped.forEach(function(s){
+        html += '<div style="background:#fff;border:1px solid #fecaca;border-radius:5px;padding:5px 8px;margin-top:4px;font-size:11px">'
+          + '✗ <b>' + s.name.replace(/</g,'&lt;') + '</b> · ' + s._skipReason
+          + '</div>';
+      });
+      html += '<div style="margin-top:6px;font-size:11px"><b>To include them</b>: pick fewer outlying stops, or widen the corridor (the +1mi / +2mi buttons on each level).</div>'
+        + '</div>';
+    }
+    if(connectionPreview && connectionPreview.kept.length > 0){
+      html += '<div style="background:#f0fdf4;border:1px solid #86efac;border-left:3px solid #16a34a;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:12px;color:#14532d">'
+        + '🔗 <b>' + connectionPreview.kept.length + ' connected</b> — these will be in the drawn route + Google Maps URL, in order: '
+        + connectionPreview.kept.map(function(p){ return '<b>' + p.name.replace(/</g,'&lt;') + '</b>'; }).join(' → ')
         + '</div>';
     }
     html += '<div style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:var(--text)">'
@@ -32544,6 +32572,39 @@ function _rpV5ShowSummary(){
 }
 window._rpV5ShowSummary = _rpV5ShowSummary;
 
+// ── PHASE 27 (2026-05-27): CONNECTION RULE ────────────────────────────────
+// Per user's spec: walk the picks in x-order (their t projection). The
+// FIRST pick is checked against Start (which sits on the line, y=0). Each
+// subsequent pick is checked against the LAST CONNECTED pin's y. If
+// |delta_y| <= halfWidth, include it in the route. Otherwise skip (the
+// pin stays visible but isn't in the drawn polyline or the Google Maps URL).
+//
+// This runs across all levels with ONE unified loop — same rule whether
+// you're moving within a level or crossing a level boundary.
+//
+// Returns { kept: [pickObj, ...], skipped: [{...pickObj, _skipReason: ...}] }
+function _rpV5ApplyConnectionRule(orderedPicks, halfWidth){
+  var kept = [], skipped = [];
+  // Start is on the line, so initial reference perp = 0.
+  var lastPerp = 0;
+  var lastName = '(Start)';
+  orderedPicks.forEach(function(p){
+    var deltaY = Math.abs((p.perp || 0) - lastPerp);
+    if(deltaY <= halfWidth + 1e-6){    // tiny epsilon for float compare
+      kept.push(p);
+      lastPerp = p.perp || 0;
+      lastName = p.name;
+    } else {
+      skipped.push(Object.assign({}, p, {
+        _skipReason: 'Δy ' + deltaY.toFixed(1) + ' mi > corridor ±' + halfWidth + ' mi (from "' + lastName + '")',
+        _deltaY: deltaY
+      }));
+    }
+  });
+  return { kept: kept, skipped: skipped };
+}
+window._rpV5ApplyConnectionRule = _rpV5ApplyConnectionRule;
+
 // Compile picks across all levels, order them along the Start→End line,
 // and run the existing finalize flow which sets up _RP_SLOT_PICKS and
 // triggers the OSRM review pane.
@@ -32567,6 +32628,27 @@ function _rpV5GenerateRoute(){
   }
   // Sort by t (position along route, Start → End)
   allPicks.sort(function(a, b){ return a.t - b.t; });
+  // Phase 27: apply the connection rule. Skips picks whose y-jump from
+  // the last connected pin exceeds the corridor half-width. Only the KEPT
+  // picks make it into the polyline + Google Maps URL.
+  var halfWidthMi = (_RP_V5_LAST && _RP_V5_LAST.baseWidth) || 3;
+  var connection = (typeof _rpV5ApplyConnectionRule === 'function')
+    ? _rpV5ApplyConnectionRule(allPicks, halfWidthMi)
+    : { kept: allPicks, skipped: [] };
+  // Stash on _RP_V5_LAST so the locked-in screen + edit mode can read it.
+  _RP_V5_LAST.connectionKept    = connection.kept;
+  _RP_V5_LAST.connectionSkipped = connection.skipped;
+  // Substitute kept picks for everything downstream.
+  allPicks = connection.kept;
+  if(allPicks.length === 0){
+    if(typeof showToast === 'function'){
+      showToast('All picks were skipped by the connection rule (Δy > ±' + halfWidthMi + ' mi from "Start"). Widen the corridor or pick stops closer to the centerline.');
+    }
+    return;
+  }
+  if(connection.skipped.length > 0 && typeof showToast === 'function'){
+    showToast('🔗 Connected ' + allPicks.length + ' · skipped ' + connection.skipped.length + ' (Δy > ±' + halfWidthMi + ' mi)');
+  }
   // Compute fresh total for this generation
   var prev = _RP_V5_LAST.A;
   var rawMi = 0;

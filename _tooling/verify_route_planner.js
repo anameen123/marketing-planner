@@ -202,6 +202,32 @@ const TRACE = path.resolve(__dirname, '_verify_route_planner.log');
   note('  → per-level: ' + JSON.stringify(phase26.perLevel));
   note('  → cross-level dupes: ' + phase26.crossLevelDupes + ' (should be 0)');
 
+  // ── (6.6) Phase 27 — connection rule unit test ───────────────────────
+  note('--- Step: Phase 27 connection-rule unit test ---');
+  const phase27 = await page.evaluate(() => {
+    // Synthetic picks along x=0..1 with varying perp distances.
+    // halfWidth = 2 mi. Sequence: y = 0 (start), 0.5, 1.0, 4.0, 1.5, 0.8
+    // Walk: 0->0.5 (Δ=0.5 ✓), 0.5->1.0 (Δ=0.5 ✓), 1.0->4.0 (Δ=3.0 ✗ SKIP),
+    //       1.0->1.5 (Δ=0.5 ✓), 1.5->0.8 (Δ=0.7 ✓).
+    // Expected: kept = [p1, p2, p4, p5], skipped = [p3].
+    const picks = [
+      { name: 'P1', t: 0.1, perp:  0.5, coord:{lat:0,lng:0} },
+      { name: 'P2', t: 0.3, perp:  1.0, coord:{lat:0,lng:0} },
+      { name: 'P3', t: 0.5, perp:  4.0, coord:{lat:0,lng:0} },
+      { name: 'P4', t: 0.7, perp:  1.5, coord:{lat:0,lng:0} },
+      { name: 'P5', t: 0.9, perp:  0.8, coord:{lat:0,lng:0} }
+    ];
+    if(typeof _rpV5ApplyConnectionRule !== 'function') return { err: 'fn missing' };
+    const r = _rpV5ApplyConnectionRule(picks, 2);
+    return {
+      kept:    r.kept.map(p => p.name),
+      skipped: r.skipped.map(p => p.name + ' (' + p._skipReason + ')')
+    };
+  });
+  note('  → kept:    ' + JSON.stringify(phase27.kept));
+  note('  → skipped: ' + JSON.stringify(phase27.skipped));
+  note('  → expected kept: ["P1","P2","P4","P5"]  · expected skipped: ["P3"]');
+
   // ── (7) Random Pick wizard — click pick-on-map, expect drawer stays ──
   note('--- Step: Random Pick mode + wizard pick ---');
   const randomRes = await page.evaluate(() => {
