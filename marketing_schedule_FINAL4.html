@@ -34454,29 +34454,14 @@ function _rpV5ComputeCurrentTotal(){
   };
 })();
 
-// Render the planned route on the day map: start pin, end pin, recommendation
-// pins in order, and a dashed polyline through them.
+// Phase 47 (2026-05-28): legacy purple route + purple numbered markers —
+// the v1 route planner pre-corridor/random. Replaced by _rpDrawLiveRoute
+// (Phase 39, green) + the AI Optimize blue polyline (Phase 46). Neutered
+// so it no longer paints purple visuals on top of the new ones.
 function _drawPlannedRouteOnMap(A, B, picks){
-  if(!_DV_MAP || !_DV_RECS) return;
-  _DV_RECS.clearLayers();
-  if(_DV_ROUTELINE){ _DV_MAP.removeLayer(_DV_ROUTELINE); _DV_ROUTELINE = null; }
-  var route = [[A.lat, A.lng]];
-  picks.forEach(function(p, i){
-    var stop = [p.coord.lat + (i*0.002), p.coord.lng + (i*0.002)];
-    route.push(stop);
-    var m = L.marker(stop, {
-      icon: L.divIcon({
-        className: 'route-rec-pin',
-        html: '<div style="background:#7030A0;color:#fff;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:11px;border:2px solid #fff;box-shadow:0 2px 5px rgba(0,0,0,.3)">' + (i+1) + '</div>',
-        iconSize: [24, 24], iconAnchor: [12, 12]
-      })
-    }).bindPopup('<b>' + p.name.replace(/</g,'&lt;') + '</b><br>📍 ' + p.city + '<br>↗ ' + p._detour.toFixed(1) + ' mi detour');
-    _DV_RECS.addLayer(m);
-  });
-  route.push([B.lat, B.lng]);
-  _DV_ROUTELINE = L.polyline(route, { color:'#7030A0', weight:3, dashArray:'6,8', opacity:0.85 });
-  _DV_MAP.addLayer(_DV_ROUTELINE);
-  try { _DV_MAP.fitBounds(_DV_ROUTELINE.getBounds().pad(0.2), { maxZoom: 12 }); } catch(e){}
+  if(!_DV_MAP) return;
+  if(_DV_RECS) _DV_RECS.clearLayers();
+  if(_DV_ROUTELINE){ try { _DV_MAP.removeLayer(_DV_ROUTELINE); } catch(_){} _DV_ROUTELINE = null; }
 }
 
 // Add a recommendation to the currently-open day as a new visit row.
