@@ -3696,15 +3696,14 @@ body.role-front_desk #referrals-view {
         </div>
         <div id="rp-opt-circle-controls" style="display:none;margin-bottom:10px;padding:10px 12px;background:#dbeafe;border:1px solid #93c5fd;border-left:3px solid #2563eb;border-radius:8px">
           <div style="font-size:11px;font-weight:700;color:#1e3a8a;margin-bottom:6px">⭕ Circle selection</div>
-          <div id="rp-opt-circle-step" style="font-size:11px;color:#1e3a8a;margin-bottom:8px;line-height:1.45">1) Click anywhere on the map to set the <b>center</b>. 2) Drag the small blue handle on the edge to resize, OR type a radius below.</div>
+          <!-- Phase 55: staged guidance — each step explains what to do now. -->
+          <div id="rp-opt-circle-step" style="font-size:11px;color:#1e3a8a;margin-bottom:8px;line-height:1.5"><b>Step 1.</b> Click anywhere on the map to drop the <b>center</b> (burgundy dot). You can re-click to move it, or drag the dot itself.</div>
+          <button id="rp-opt-circle-center-confirm-btn" type="button" onclick="_rpOptConfirmCenter()" style="display:none;width:100%;margin-bottom:8px;background:linear-gradient(135deg,#7f1d1d,#991b1b);color:#fff;border:none;border-radius:6px;padding:7px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">✓ Confirm center</button>
           <div id="rp-opt-circle-radius-row" style="display:none;align-items:center;gap:8px;margin-top:4px">
             <label style="font-size:11px;font-weight:700;color:#1e3a8a">Radius (mi):</label>
             <input type="number" id="rp-opt-circle-radius" value="1" min="0.1" max="20" step="0.1" oninput="_rpOptOnRadiusInputChange()" style="flex:1;border:1px solid #93c5fd;border-radius:6px;padding:6px 9px;font-size:12px;background:#fff;text-align:center">
             <span id="rp-opt-circle-count" style="font-size:11px;font-weight:700;color:#1e3a8a;background:#fff;border:1px solid #93c5fd;border-radius:14px;padding:3px 10px"></span>
           </div>
-          <div style="font-size:10px;color:#1e3a8a;opacity:.85;margin-top:6px;font-style:italic">Click any pin inside the circle to exclude it. Click again to include.</div>
-          <!-- Phase 53b (2026-05-28): explicit confirm step — only after the
-               user clicks this do the highlighted pins become candidates. -->
           <button id="rp-opt-circle-confirm-btn" type="button" onclick="_rpOptConfirmCircle()" disabled style="display:none;width:100%;margin-top:8px;background:linear-gradient(135deg,#15803d,#16a34a);color:#fff;border:none;border-radius:6px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">✓ Confirm selection</button>
         </div>
         <!-- Status panel — shows preview pin + Confirm / Cancel like Corridor -->
@@ -24996,6 +24995,24 @@ function renderAllBusinessPins(){
     // S/E flag exactly where the user tapped.
     function _armedPinHandler(ev){
       try {
+        // Phase 55: AI Optimize — if targets are already confirmed (we're in
+        // start-pick phase), clicking a target pin sets it as the start.
+        // Works for BOTH pin sub-mode and circle sub-mode.
+        if(window._RP_OPT_TARGETS && window._RP_OPT_TARGETS.length >= 3){
+          var isTarget = window._RP_OPT_TARGETS.some(function(t){ return t.name === name; });
+          if(isTarget && typeof _rpOptSetStart === 'function'){
+            if(ev && ev.originalEvent){
+              if(ev.originalEvent.stopPropagation) ev.originalEvent.stopPropagation();
+              if(ev.originalEvent.preventDefault) ev.originalEvent.preventDefault();
+              if(ev.originalEvent.stopImmediatePropagation) ev.originalEvent.stopImmediatePropagation();
+            }
+            if(L && L.DomEvent && L.DomEvent.stop) L.DomEvent.stop(ev);
+            if(_DV_MAP && _DV_MAP.closePopup) _DV_MAP.closePopup();
+            marker.closePopup && marker.closePopup();
+            _rpOptSetStart(name);
+            return;
+          }
+        }
         // Phase 53: AI Optimize CIRCLE sub-mode — pin click toggles include/exclude
         if(window._RP_OPT_SUB_MODE === 'circle' && typeof _rpOptCircleTogglePin === 'function'){
           if(_rpOptCircleTogglePin(name)){
@@ -33031,12 +33048,16 @@ function _rpOptRenderTargetList(){
   box.innerHTML = window._RP_OPT_TARGETS.map(function(t, i){
     var icon = t.bizType === 'mva' ? '⚖' : t.bizType === 'outreach' ? '🏘' : '🏥';
     var safeName = String(t.name).replace(/</g,'&lt;').replace(/'/g,"\\'");
-    return '<div style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:#fff;border:1px solid var(--border);border-radius:6px;margin-bottom:4px;font-size:11px">'
+    var displayName = String(t.name).replace(/</g,'&lt;');
+    // Phase 55: checkbox-style row. Click anywhere to toggle the pin off
+    // the target list (same as clicking the pin on the map). The number
+    // badge updates with the current order.
+    return '<label data-rp-opt-name="' + safeName + '" style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:#fff;border:1px solid var(--border);border-radius:6px;margin-bottom:4px;font-size:11px;cursor:pointer;transition:background .12s" onmouseover="this.style.background=\'#f0f9ff\'" onmouseout="this.style.background=\'#fff\'">'
+      + '<input type="checkbox" checked onchange="_rpOptRemoveTarget(\'' + safeName + '\')" style="cursor:pointer;flex-shrink:0;accent-color:#2563eb">'
       + '<span style="width:18px;height:18px;background:#1e3a8a;color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;flex-shrink:0">' + (i+1) + '</span>'
       + '<span>' + icon + '</span>'
-      + '<span style="flex:1;font-weight:600;color:#0f172a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + String(t.name).replace(/</g,'&lt;') + '</span>'
-      + '<button onclick="_rpOptRemoveTarget(\'' + safeName + '\')" style="background:#fff;color:#7f1d1d;border:1px solid #fecaca;border-radius:4px;padding:2px 6px;font-size:10px;font-weight:700;cursor:pointer">✕</button>'
-      + '</div>';
+      + '<span style="flex:1;font-weight:600;color:#0f172a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + displayName + '</span>'
+      + '</label>';
   }).join('');
 }
 window._rpOptRenderTargetList = _rpOptRenderTargetList;
@@ -33050,12 +33071,20 @@ function _rpOptRenderStartPicker(){
     return;
   }
   box.style.display = 'block';
+  // Phase 55: full-row clickable (not just radio). Clicking anywhere on
+  // the row sets that target as the candidate start — same as clicking
+  // the pin on the map. Highlight the picked row so the bidirectional
+  // sync is visible.
   opts.innerHTML = window._RP_OPT_TARGETS.map(function(t){
     var safeName = String(t.name).replace(/</g,'&lt;').replace(/'/g,"\\'");
     var checked = (window._RP_OPT_START_NAME === t.name);
-    return '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:11px;color:#14532d;padding:3px 0">'
-      + '<input type="radio" name="rp-opt-start" value="' + safeName + '"' + (checked ? ' checked' : '') + ' onchange="_rpOptSetStart(\'' + safeName + '\')" style="accent-color:#16a34a">'
-      + '<span style="font-weight:600">' + String(t.name).replace(/</g,'&lt;') + '</span>'
+    var bg = checked ? '#16a34a' : '#fff';
+    var fg = checked ? '#fff'    : '#14532d';
+    var border = checked ? '2px solid #14532d' : '1px solid #86efac';
+    return '<label data-rp-opt-start-row="' + safeName + '" onclick="_rpOptSetStart(\'' + safeName + '\')" style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:11px;color:' + fg + ';padding:6px 9px;border:' + border + ';background:' + bg + ';border-radius:6px;margin-bottom:3px;transition:background .12s">'
+      + '<input type="radio" name="rp-opt-start" value="' + safeName + '"' + (checked ? ' checked' : '') + ' style="accent-color:#16a34a;pointer-events:none">'
+      + '<span style="font-weight:700;flex:1">' + String(t.name).replace(/</g,'&lt;') + '</span>'
+      + (checked ? '<span style="font-size:13px">⭐</span>' : '')
       + '</label>';
   }).join('');
 }
@@ -33383,31 +33412,103 @@ function _rpOptSetSubMode(sub){
 }
 window._rpOptSetSubMode = _rpOptSetSubMode;
 
+// Phase 55: TWO-STAGE flow.
+//  Stage 1: user drops the center (burgundy dot). Can re-click or drag it
+//           to move. "✓ Confirm center" button finalizes this step.
+//  Stage 2: radius row + drag handle activate. User shapes the circle.
+//           "✓ Confirm selection" commits the staged inside-pins.
+var _DV_OPT_CIRCLE_CENTER_MARKER = null;
+window._RP_OPT_CIRCLE_CENTER_CONFIRMED = false;
+
 function _rpOptArmCircleMode(){
   if(!_DV_MAP) return;
+  window._RP_OPT_CIRCLE_CENTER_CONFIRMED = false;
   if(_DV_OPT_CIRCLE_MAP_CLICK_HANDLER){
     try { _DV_MAP.off('click', _DV_OPT_CIRCLE_MAP_CLICK_HANDLER); } catch(_){}
   }
   _DV_OPT_CIRCLE_MAP_CLICK_HANDLER = function(ev){
     if(window._RP_OPT_SUB_MODE !== 'circle') return;
     if(!ev || !ev.latlng) return;
-    // First click sets center + default radius. Subsequent clicks MOVE the center.
+    // Phase 55: in Stage 1, click sets/moves the center. After the user
+    // hits "Confirm center" (Stage 2), further map clicks MOVE the center
+    // (still ok per user — they can keep adjusting).
     var existingRadius = (window._RP_OPT_CIRCLE && window._RP_OPT_CIRCLE.radius) || 1;
     window._RP_OPT_CIRCLE = {
       center: { lat: ev.latlng.lat, lng: ev.latlng.lng },
       radius: existingRadius
     };
     _rpOptDrawCircle();
-    _rpOptRecomputeCircleTargets();
-    var stepEl = document.getElementById('rp-opt-circle-step');
-    if(stepEl) stepEl.innerHTML = '✓ Center set. Drag the small blue handle on the edge to resize, OR type a radius below.';
-    var radiusRow = document.getElementById('rp-opt-circle-radius-row');
-    if(radiusRow) radiusRow.style.display = 'flex';
-    var radiusInp = document.getElementById('rp-opt-circle-radius');
-    if(radiusInp) radiusInp.value = existingRadius;
+    _rpOptDrawCenterMarker();
+    if(window._RP_OPT_CIRCLE_CENTER_CONFIRMED){
+      // Already past stage 1 — recompute the targets for the new center.
+      _rpOptRecomputeCircleTargets();
+    } else {
+      // Stage 1: show the Confirm Center button so user can lock the center.
+      var btn = document.getElementById('rp-opt-circle-center-confirm-btn');
+      if(btn) btn.style.display = 'block';
+      var stepEl = document.getElementById('rp-opt-circle-step');
+      if(stepEl) stepEl.innerHTML = '✓ Center dropped. <b>Re-click</b> or <b>drag the burgundy dot</b> to move it. Then click <b>✓ Confirm center</b> to set the radius.';
+    }
   };
   _DV_MAP.on('click', _DV_OPT_CIRCLE_MAP_CLICK_HANDLER);
 }
+
+// Phase 55: burgundy translucent-circle center marker. Visible, draggable.
+function _rpOptDrawCenterMarker(){
+  if(!_DV_MAP || typeof L === 'undefined') return;
+  if(!window._RP_OPT_CIRCLE || !window._RP_OPT_CIRCLE.center) return;
+  if(_DV_OPT_CIRCLE_CENTER_MARKER){
+    try { _DV_MAP.removeLayer(_DV_OPT_CIRCLE_CENTER_MARKER); } catch(_){}
+    _DV_OPT_CIRCLE_CENTER_MARKER = null;
+  }
+  var c = window._RP_OPT_CIRCLE.center;
+  _DV_OPT_CIRCLE_CENTER_MARKER = L.marker([c.lat, c.lng], {
+    icon: L.divIcon({
+      className: 'rp-opt-circle-center',
+      html: '<div style="width:20px;height:20px;background:#7f1d1d;border:3px solid #fff;border-radius:50%;box-shadow:0 0 0 2px #7f1d1d, 0 2px 8px rgba(0,0,0,.5);cursor:move"></div>',
+      iconSize: [20, 20], iconAnchor: [10, 10]
+    }),
+    draggable: true,
+    zIndexOffset: 9400
+  }).addTo(_DV_MAP);
+  _DV_OPT_CIRCLE_CENTER_MARKER.on('drag', function(ev){
+    var ll = ev.target.getLatLng();
+    window._RP_OPT_CIRCLE.center = { lat: ll.lat, lng: ll.lng };
+    if(_DV_OPT_CIRCLE_LAYER) _DV_OPT_CIRCLE_LAYER.setLatLng([ll.lat, ll.lng]);
+    // Move the edge handle too
+    if(_DV_OPT_CIRCLE_HANDLE){
+      var newH = _rpOptOffsetEast(window._RP_OPT_CIRCLE.center, window._RP_OPT_CIRCLE.radius);
+      _DV_OPT_CIRCLE_HANDLE.setLatLng([newH.lat, newH.lng]);
+    }
+  });
+  _DV_OPT_CIRCLE_CENTER_MARKER.on('dragend', function(){
+    if(window._RP_OPT_CIRCLE_CENTER_CONFIRMED){
+      _rpOptRecomputeCircleTargets();
+    }
+  });
+}
+window._rpOptDrawCenterMarker = _rpOptDrawCenterMarker;
+
+// Phase 55: lock the center (Stage 1 → Stage 2). Activate the radius row,
+// recompute targets, hide the center-confirm button.
+function _rpOptConfirmCenter(){
+  if(!window._RP_OPT_CIRCLE || !window._RP_OPT_CIRCLE.center){
+    if(typeof showToast === 'function') showToast('Click the map first to drop the center.');
+    return;
+  }
+  window._RP_OPT_CIRCLE_CENTER_CONFIRMED = true;
+  var btn = document.getElementById('rp-opt-circle-center-confirm-btn');
+  if(btn) btn.style.display = 'none';
+  var stepEl = document.getElementById('rp-opt-circle-step');
+  if(stepEl) stepEl.innerHTML = '<b>Step 2.</b> Drag the small blue handle on the circle edge to resize, OR type a radius below. Pins inside light up. Click any inside pin (or its checkbox) to exclude.';
+  var radiusRow = document.getElementById('rp-opt-circle-radius-row');
+  if(radiusRow) radiusRow.style.display = 'flex';
+  var radiusInp = document.getElementById('rp-opt-circle-radius');
+  if(radiusInp) radiusInp.value = window._RP_OPT_CIRCLE.radius || 1;
+  _rpOptRecomputeCircleTargets();
+  if(typeof showToast === 'function') showToast('✓ Center locked. Set the radius next.');
+}
+window._rpOptConfirmCenter = _rpOptConfirmCenter;
 window._rpOptArmCircleMode = _rpOptArmCircleMode;
 
 function _rpOptDisarmCircleMode(){
@@ -33431,12 +33532,17 @@ function _rpOptDisarmCircleMode(){
   window._RP_OPT_CIRCLE = null;
   window._RP_OPT_CIRCLE_EXCLUDED = {};
   window._RP_OPT_CIRCLE_STAGED = [];
+  window._RP_OPT_CIRCLE_CENTER_CONFIRMED = false;
   _rpOptRenderTargetList();
   _rpOptRenderStartPicker();
   var radiusRow = document.getElementById('rp-opt-circle-radius-row');
   if(radiusRow) radiusRow.style.display = 'none';
   var confirmBtn = document.getElementById('rp-opt-circle-confirm-btn');
   if(confirmBtn) confirmBtn.style.display = 'none';
+  var ccBtn = document.getElementById('rp-opt-circle-center-confirm-btn');
+  if(ccBtn) ccBtn.style.display = 'none';
+  var stepEl = document.getElementById('rp-opt-circle-step');
+  if(stepEl) stepEl.innerHTML = '<b>Step 1.</b> Click anywhere on the map to drop the <b>center</b> (burgundy dot). You can re-click to move it, or drag the dot itself.';
 }
 window._rpOptDisarmCircleMode = _rpOptDisarmCircleMode;
 
@@ -33449,6 +33555,11 @@ function _rpOptClearCircleLayer(){
     try { _DV_MAP.removeLayer(_DV_OPT_CIRCLE_HANDLE); } catch(_){}
   }
   _DV_OPT_CIRCLE_HANDLE = null;
+  // Phase 55: also clear the burgundy center marker
+  if(_DV_OPT_CIRCLE_CENTER_MARKER && _DV_MAP){
+    try { _DV_MAP.removeLayer(_DV_OPT_CIRCLE_CENTER_MARKER); } catch(_){}
+  }
+  _DV_OPT_CIRCLE_CENTER_MARKER = null;
 }
 
 function _rpOptDrawCircle(){
@@ -33591,19 +33702,24 @@ function _rpOptConfirmCircle(){
   window._RP_OPT_TARGETS = picks.map(function(p){
     return { name: p.name, coord: p.coord, bizType: p.bizType };
   });
-  // Pin states: targets stay 'suggested' (light blue), non-target inside-circle pins reset
+  // Phase 55: at Confirm-selection time, targets become 'picked' (DARK blue)
+  // per user — "once I confirm the list all the pins will turn into dark blue".
+  // Non-picked staged pins reset to default.
   var picked = {};
   picks.forEach(function(p){ picked[p.name] = true; });
   staged.forEach(function(s){
     if(typeof _rpSetPinState === 'function'){
-      _rpSetPinState(s.name, picked[s.name] ? 'suggested' : 'reset');
+      _rpSetPinState(s.name, picked[s.name] ? 'picked' : 'reset');
     }
   });
+  // Update the step indicator so the user knows what comes next.
+  var stepEl = document.getElementById('rp-opt-circle-step');
+  if(stepEl) stepEl.innerHTML = '✓ Targets locked in. <b>Step 3.</b> Pick your starting point — click a row in the list OR click the pin on the map. The chosen one becomes the green <b>S</b> flag.';
   _rpOptRenderTargetList();
   _rpOptRenderStartPicker();
   if(typeof showToast === 'function'){
-    var msg = '✓ ' + picks.length + ' stop' + (picks.length===1?'':'s') + ' confirmed.';
-    if(staged.length > picks.length) msg += ' (' + (staged.length - picks.length) + ' skipped — too many, kept the closest 10)';
+    var msg = '✓ ' + picks.length + ' stop' + (picks.length===1?'':'s') + ' locked in.';
+    if(staged.length > picks.length) msg += ' (' + (staged.length - picks.length) + ' skipped — kept the closest 10)';
     msg += ' Pick which one is your start.';
     showToast(msg);
   }
