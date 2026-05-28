@@ -3695,6 +3695,10 @@ body.role-front_desk #referrals-view {
             <input type="number" id="rp-corridor" value="3" min="1" max="12" oninput="_rpV4OnWidthChange()" style="flex:1;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box;text-align:center">
             <button type="button" onclick="_rpV4AdjustWidth(1)" style="background:#e5e7eb;border:none;color:#374151;width:30px;height:36px;border-radius:6px;font-size:14px;font-weight:700;cursor:pointer">+</button>
           </div>
+          <!-- Phase 35: Apply button — only visible when input value differs
+               from the rectangle's currently-applied width. Click to commit
+               the new half-width (redraws rect + re-runs corridor algorithm). -->
+          <button id="rp-apply-width-btn" type="button" onclick="_rpApplyHalfWidth()" style="display:none;margin-top:6px;background:linear-gradient(135deg,#1e3a8a,#2563eb);color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;width:100%">✓ Apply</button>
         </div>
       </div>
       <div style="font-size:10px;color:var(--muted);margin:-4px 0 10px 0;font-style:italic;line-height:1.4">
@@ -27493,6 +27497,15 @@ function _rpDrawCorridorBox(A, B, halfWidthMi){
     dashArray: '6,4', interactive: false
   }).addTo(_DV_MAP);
   _DV_CORRIDOR_BOX = { fill: fill, edge: edge };
+  // Phase 35: verify dimensions. Distance from corner 0 (A+side) to corner 3
+  // (A-side) is the FULL width across the rectangle = 2 * halfWidth.
+  try {
+    var widthMi = _rpHaversineMiles(
+      { lat: corners[0][0], lng: corners[0][1] },
+      { lat: corners[3][0], lng: corners[3][1] }
+    );
+    console.log('[corridor box] line length =', lenMi.toFixed(2), 'mi · rectangle width =', widthMi.toFixed(2), 'mi (expected', (halfWidthMi * 2).toFixed(2) + ' mi) · halfWidth =', halfWidthMi.toFixed(2), 'mi');
+  } catch(_){}
 }
 window._rpDrawCorridorBox = _rpDrawCorridorBox;
 
@@ -27526,6 +27539,10 @@ function _rpRefreshCorridorBox(){
     if(!A || !B || (A.lat === B.lat && A.lng === B.lng)){ _rpClearCorridorBox(); return; }
     var halfW = parseFloat((document.getElementById('rp-corridor') || {}).value) || 3;
     _rpDrawCorridorBox(A, B, halfW);
+    // Phase 35: track what's been applied so the Apply button only shows
+    // when the input value differs.
+    window._RP_APPLIED_HALFWIDTH = halfW;
+    if(typeof _rpRenderApplyWidthBtn === 'function') _rpRenderApplyWidthBtn();
   } catch(_){}
 }
 window._rpRefreshCorridorBox = _rpRefreshCorridorBox;
@@ -28705,14 +28722,51 @@ function _rpV4OnWidthChange(){
     var hint = document.getElementById('rp-base-width-hint');
     if(hint) hint.textContent = String(w);
   } catch(_){}
-  // Phase 30: redraw the corridor rectangle live as the user types.
-  if(typeof _rpRefreshCorridorBox === 'function') _rpRefreshCorridorBox();
-  if(_rpV4Timer) clearTimeout(_rpV4Timer);
-  _rpV4Timer = setTimeout(function(){
-    if(_RP_V4_LAST) runRoutePlannerV4();
-  }, 200);
+  // Phase 35 (2026-05-27): per user, DO NOT redraw the rectangle on every
+  // keystroke. Show an "Apply" button instead. The user types, sees the
+  // pending value, clicks Apply, THEN the rectangle redraws + corridor
+  // re-runs. Avoids the rectangle flickering as they type 3 → 30 → 300.
+  if(typeof _rpRenderApplyWidthBtn === 'function') _rpRenderApplyWidthBtn();
 }
 window._rpV4OnWidthChange = _rpV4OnWidthChange;
+
+// Phase 35: shows / hides the "Apply width" button based on whether the
+// input's current value differs from the rectangle's currently-applied one.
+function _rpRenderApplyWidthBtn(){
+  try {
+    var btn = document.getElementById('rp-apply-width-btn');
+    var inpEl = document.getElementById('rp-corridor');
+    if(!btn || !inpEl) return;
+    var pending = parseFloat(inpEl.value) || 0;
+    var applied = (window._RP_APPLIED_HALFWIDTH != null) ? window._RP_APPLIED_HALFWIDTH : pending;
+    if(Math.abs(pending - applied) > 0.001){
+      btn.style.display = 'inline-block';
+      btn.textContent = '✓ Apply ±' + pending + ' mi';
+    } else {
+      btn.style.display = 'none';
+    }
+  } catch(_){}
+}
+window._rpRenderApplyWidthBtn = _rpRenderApplyWidthBtn;
+
+// Called by the Apply button. Commits the pending half-width: redraws
+// the rectangle, re-runs the candidate finder, and re-runs the corridor
+// algorithm if the user has already started picking levels.
+function _rpApplyHalfWidth(){
+  try {
+    var inpEl = document.getElementById('rp-corridor');
+    var halfW = parseFloat(inpEl && inpEl.value) || 3;
+    window._RP_APPLIED_HALFWIDTH = halfW;
+    if(typeof _rpRefreshCorridorBox === 'function') _rpRefreshCorridorBox();
+    _rpRenderApplyWidthBtn();
+    if(_RP_V4_LAST) runRoutePlannerV4();
+    if(typeof showToast === 'function') showToast('🟦 Corridor width applied: ±' + halfW + ' mi (total width ' + (halfW * 2) + ' mi)');
+    // Verification log so the user / devtools can see the actual dimensions
+    var totalMi = (window._RP_V5_LAST && window._RP_V5_LAST.totalMi) || null;
+    console.log('[corridor box] length(line) =', totalMi ? totalMi.toFixed(2) + ' mi' : '?', '· width(rect) =', (halfW * 2).toFixed(2) + ' mi', '· halfWidth =', halfW.toFixed(2) + ' mi');
+  } catch(e){ console.error('_rpApplyHalfWidth failed:', e); }
+}
+window._rpApplyHalfWidth = _rpApplyHalfWidth;
 
 // Generate route — order checked candidates by position along A→B, build
 // the slot picks the existing finalize flow consumes, then run OSRM review.

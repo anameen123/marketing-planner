@@ -17,7 +17,14 @@ const TRACE_LOG   = path.resolve(__dirname, '_visual_trace.log');
   const browser = await chromium.launch({ headless: true });
   const ctx     = await browser.newContext({ viewport: { width: 1600, height: 1400 } });
   const page    = await ctx.newPage();
-  page.on('console', m => { if(m.type() === 'error') note('[js-error] ' + m.text().slice(0, 200)); });
+  page.on('console', m => {
+    if(m.type() === 'error') note('[js-error] ' + m.text().slice(0, 200));
+    // Capture corridor diagnostic logs for verification
+    const txt = m.text();
+    if(/corridor box|_rpRefreshCenterline|_rpPickEndpoint/i.test(txt)){
+      note('[diag] ' + txt.slice(0, 220));
+    }
+  });
   page.on('pageerror', e => note('[pageerror] ' + e.message));
 
   await page.goto('file:///' + HTML.replace(/\\/g, '/'));
