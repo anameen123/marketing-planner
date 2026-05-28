@@ -41313,13 +41313,11 @@ function renderDayTable(di){
     catch(rowErr){ try { console.warn('[renderDayTable] row render failed at ri='+ri, rowErr); } catch(_){} }
   });
   // Phase 62: colspan auto-bumps when select-mode adds a leading checkbox col.
+  // Phase 65 (2026-05-28): removed the "📋 Bulk actions (legacy)" button —
+  // superseded by the Gmail-style "☐ Select" toolbar above the table.
   var _colspan = window._DV_SELECT_MODE ? 12 : 11;
   html+='<tr class="add-visit-row"><td colspan="'+_colspan+'">'
        + '<button class="add-visit-btn" onclick="addVisit('+di+')">&#43; Add Visit</button>'
-       + ' <button type="button" onclick="openBulkActions('+di+')" '
-       +   'title="Open the bulk-actions modal (older flow). The Gmail-style \'Select\' button above is the recommended path." '
-       +   'style="background:#fff;border:1.5px solid #7030A0;color:#7030A0;border-radius:6px;padding:7px 14px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;margin-left:6px">'
-       + '📋 Bulk actions (legacy)</button>'
        + '</td></tr>';
   var tbody = document.getElementById('day-tbody');
   if(tbody) tbody.innerHTML = html;
