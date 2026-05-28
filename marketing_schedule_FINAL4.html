@@ -28863,19 +28863,29 @@ function _rpConfirmPendingPick(){
       } else if(which === 'end' && typeof _rpDrawEndMarker === 'function'){
         _rpDrawEndMarker(coord, pending.name);
       }
-      // Auto-fit: if both Start + End are now resolvable, fit to both;
-      // otherwise zoom to the single confirmed point. Use the exact coord
-      // we just dropped for one end + look up the other end from inputs.
+      // Phase 87 (2026-05-28): preserve the rep's zoom on Start/End confirm.
+      // Previous behavior forced zoom 13 even when the rep was already
+      // zoomed in to see a pin — they'd lose context every time they
+      // confirmed. New rule:
+      //   • BOTH Start + End set → fit bounds (so both are visible) only
+      //     if the current view doesn't already contain both points.
+      //   • Just one end set → leave zoom alone. The marker is already
+      //     visible on the user's current view (they clicked it).
       var startVal = (document.getElementById('rp-start') || {}).value || '';
       var endVal   = (document.getElementById('rp-end')   || {}).value || '';
       var A = (which === 'start') ? coord : (startVal ? getRouteCoord(startVal) : null);
       var B = (which === 'end')   ? coord : ((endVal === '__same__') ? A : (endVal ? getRouteCoord(endVal) : null));
       if(A && B && (A.lat !== B.lat || A.lng !== B.lng)){
-        var bounds = L.latLngBounds([[A.lat, A.lng], [B.lat, B.lng]]);
-        _DV_MAP.fitBounds(bounds.pad(0.25), { maxZoom: 13, animate: true });
-      } else {
-        _DV_MAP.setView([coord.lat, coord.lng], 13, { animate: true });
+        try {
+          var curBounds = _DV_MAP.getBounds();
+          var needsFit = !curBounds.contains([A.lat, A.lng]) || !curBounds.contains([B.lat, B.lng]);
+          if(needsFit){
+            var bounds = L.latLngBounds([[A.lat, A.lng], [B.lat, B.lng]]);
+            _DV_MAP.fitBounds(bounds.pad(0.25), { maxZoom: 14, animate: true });
+          }
+        } catch(_){}
       }
+      // Single-end confirm: do nothing — preserve the user's current zoom.
     }
   } catch(_){}
   if(typeof _rpRefreshCenterline === 'function') _rpRefreshCenterline();
@@ -29051,21 +29061,26 @@ function _rpQuickPickPin(name, coord){
     // Phase 40 (2026-05-28): selection halo DISABLED — it was producing a
     // stray purple ring + small "E" icon visible to the user. The pin
     // itself + S/E flag give enough visual signal; halo was redundant.
-    // Auto-fit if both ends are set
+    // Phase 87 (2026-05-28): preserve the rep's zoom — same logic as
+    // _rpDialogConfirm. Single-end confirm leaves zoom alone; both-ends
+    // confirm only fits if the current view doesn't already contain both.
     var startVal = (document.getElementById('rp-start') || {}).value || '';
     var endVal   = (document.getElementById('rp-end')   || {}).value || '';
     if(startVal && endVal && _DV_MAP && typeof L !== 'undefined'){
       var A = (typeof getRouteCoord === 'function') ? getRouteCoord(startVal) : null;
       var B = (endVal === '__same__') ? A : ((typeof getRouteCoord === 'function') ? getRouteCoord(endVal) : null);
       if(A && B && (A.lat !== B.lat || A.lng !== B.lng)){
-        var bounds = L.latLngBounds([[A.lat, A.lng], [B.lat, B.lng]]);
-        _DV_MAP.fitBounds(bounds.pad(0.25), { maxZoom: 13, animate: true });
-      } else {
-        _DV_MAP.setView([coord.lat, coord.lng], 13, { animate: true });
+        try {
+          var curBounds2 = _DV_MAP.getBounds();
+          var needsFit2 = !curBounds2.contains([A.lat, A.lng]) || !curBounds2.contains([B.lat, B.lng]);
+          if(needsFit2){
+            var bounds = L.latLngBounds([[A.lat, A.lng], [B.lat, B.lng]]);
+            _DV_MAP.fitBounds(bounds.pad(0.25), { maxZoom: 14, animate: true });
+          }
+        } catch(_){}
       }
-    } else if(_DV_MAP) {
-      _DV_MAP.setView([coord.lat, coord.lng], 13, { animate: true });
     }
+    // Single-end confirm: do nothing — preserve the user's current zoom.
   } catch(_){}
   // Refresh the centerline if both are set
   if(typeof _rpRefreshCenterline === 'function') _rpRefreshCenterline();
