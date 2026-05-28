@@ -3412,15 +3412,34 @@ body.role-front_desk #referrals-view {
       <!-- Phase 75 (2026-05-28): collapsible Day Map header. Click the title
            row to toggle the body. Defaults to COLLAPSED so reps see the
            schedule first; clicking expand also scrolls the map into view. -->
-      <div id="dv-daymap-header" style="background:linear-gradient(135deg,#1F3864,#3b5fa3);color:#fff;padding:12px 18px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;cursor:pointer;user-select:none" onclick="_dvToggleDayMap(event)">
+      <!-- Phase 100 (2026-05-28): NO MORE click-to-collapse on the whole
+           header bar. Only the explicit chevron button toggles the body.
+           User reported clicking anywhere in the map area was collapsing
+           it (the header is sometimes the top of the viewport after a
+           scrollIntoView, and the user perceived it as "the map"). The
+           "Current route" edit chip lives here on the right per user. -->
+      <div id="dv-daymap-header" style="background:linear-gradient(135deg,#1F3864,#3b5fa3);color:#fff;padding:12px 18px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;user-select:none">
         <div style="display:flex;align-items:center;gap:10px">
-          <span id="dv-daymap-chevron" style="font-size:14px;width:16px;display:inline-block;text-align:center;transition:transform .2s;transform:rotate(90deg)">▶</span>
+          <button id="dv-daymap-chevron-btn" type="button" onclick="_dvToggleDayMap(event)" title="Collapse / expand the map body" style="background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.4);color:#fff;border-radius:6px;width:28px;height:28px;font-size:14px;font-weight:800;cursor:pointer;font-family:DM Sans,sans-serif;display:inline-flex;align-items:center;justify-content:center;line-height:1">
+            <span id="dv-daymap-chevron" style="display:inline-block;transition:transform .2s;transform:rotate(90deg)">▶</span>
+          </button>
           <div>
             <div style="font-size:14px;font-weight:700">🗺️ Day Map</div>
-            <div style="font-size:11px;opacity:.85;margin-top:2px">Today's visits · tap to collapse</div>
+            <div style="font-size:11px;opacity:.85;margin-top:2px">Today's visits · use the chevron to collapse</div>
           </div>
         </div>
-        <!-- Route Planner v1 + v2 + Smart Plan removed per user 2026-05-21. -->
+        <!-- Phase 100 (2026-05-28): "📍 Current route · ✏" chip restored
+             here next to the map header per user (Phase 75 had moved it up
+             to the Schedule header; user wants it where they remember it
+             from before). Same handler as the Schedule-header copy — both
+             chips reflect the same saved state, both call _rpResumeSavedRoute. -->
+        <button id="dv-current-route-btn-map" type="button" onclick="event.stopPropagation();_rpResumeSavedRoute()"
+                title="Edit the last route you generated for this day"
+                style="display:none;background:linear-gradient(135deg,#16a34a,#15803d);border:none;color:#fff;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;align-items:center;gap:5px;line-height:1.1;box-shadow:0 1px 3px rgba(0,0,0,.25)">
+          <span>📍</span>
+          <span>Current route</span>
+          <span style="background:rgba(255,255,255,.25);padding:1px 5px;border-radius:8px;font-size:10px">✏</span>
+        </button>
       </div>
       <!-- Phase 77b (2026-05-28): controls bar stays OUTSIDE the collapsible
            body so the option buttons (Plan a Route, Show on map, Open in
@@ -34533,14 +34552,18 @@ function _phase59ShowReviewModal(outsiders, routeStopNames, onComplete){
     var beforeStop = (v.idx > 0) ? (routeStopNames[v.idx - 1] || 'Start') : 'Start';
     var afterStop  = (v.idx < routeStopNames.length) ? (routeStopNames[v.idx] || 'End') : 'End';
     var deltaMiFmt = (v.deltaMi >= 10) ? v.deltaMi.toFixed(0) : v.deltaMi.toFixed(1);
-    // Phase 98 (2026-05-28): branch on t (projection on Start→End line).
-    //   t < -0.02 → "before Start" → action becomes "replace Start"
-    //   t >  1.02 → "past End"     → action becomes "replace End"
-    //   else      → "between"       → insert as a stop (existing behavior)
+    // Phase 98/100 (2026-05-28): branch on t (projection on Start→End line).
+    //   t < 0 → "before Start" → action becomes "replace Start"
+    //   t > 1 → "past End"     → action becomes "replace End"
+    //   else  → "between"       → insert as a stop (existing behavior)
+    // Phase 100: tightened thresholds from ±0.02 to strict 0/1 per user
+    // ("the x value is negative so it should become our new start point"
+    // — even tiny negatives should count).
     var t = (typeof v.t === 'number') ? v.t : 0.5;
     var mode98 = 'insert';
-    if(t < -0.02)     mode98 = 'replaceStart';
-    else if(t > 1.02) mode98 = 'replaceEnd';
+    if(t < 0)      mode98 = 'replaceStart';
+    else if(t > 1) mode98 = 'replaceEnd';
+    try { console.log('[phase98] outsider', v.name, 't=', t.toFixed(3), '→ mode98=', mode98); } catch(_){}
     var oldStartName = window._RP_START_NAME || 'old Start';
     var oldEndName   = window._RP_END_NAME   || 'old End';
     var actionLine, actionLabel;
@@ -38049,18 +38072,27 @@ window._rpClearCurrentRoute = _rpClearCurrentRoute;
 // Show / hide the "📍 Current route" chip based on whether saved state
 // exists for the currently-open day.
 function _rpSyncCurrentRouteChip(){
-  var btn = document.getElementById('dv-current-route-btn');
-  if(!btn) return;
+  // Phase 100 (2026-05-28): there are now TWO chip elements — one in the
+  // Schedule header (Phase 75) and one in the Day-Map header (restored
+  // per user "return it"). Show/hide both off the same saved state.
+  var btns = [
+    document.getElementById('dv-current-route-btn'),
+    document.getElementById('dv-current-route-btn-map')
+  ].filter(Boolean);
+  if(btns.length === 0) return;
   var saved = _rpLoadCurrentRoute();
   if(saved && saved.mode){
-    btn.style.display = 'inline-flex';
     var modeName = saved.mode === 'corridor' ? 'Corridor' : saved.mode === 'optimize' ? 'AI Optimize' : saved.mode;
     var stopCount = 0;
     if(saved.mode === 'corridor') stopCount = (saved.flatPicks || []).length;
     else if(saved.mode === 'optimize') stopCount = (saved.optTargets || []).length;
-    btn.title = 'Edit your ' + modeName + ' route (' + stopCount + ' stops)';
+    var title = 'Edit your ' + modeName + ' route (' + stopCount + ' stops)';
+    btns.forEach(function(b){
+      b.style.display = 'inline-flex';
+      b.title = title;
+    });
   } else {
-    btn.style.display = 'none';
+    btns.forEach(function(b){ b.style.display = 'none'; });
   }
 }
 window._rpSyncCurrentRouteChip = _rpSyncCurrentRouteChip;
