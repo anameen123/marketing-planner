@@ -1175,6 +1175,14 @@ body.member-view .btn-save{background:linear-gradient(135deg,#3b82f6,#1d4ed8);co
   nav button, .nav-btn{font-size:12px !important; padding:8px 10px !important}
   /* Day view: tighten the page padding */
   #day-view .day-content{padding:12px !important}
+  /* Phase 70c (2026-05-28): mobile-only sub-tabs (📋 List / 🗺️ Map) — show
+     the toggle and apply visibility based on the active tab. The default
+     active tab on mobile open is 'list'. */
+  #dv-mobile-tabs{display:flex !important}
+  body.dv-mtab-list #day-route-panel{display:none !important}
+  body.dv-mtab-map  #dv-bulk-toolbar,
+  body.dv-mtab-map  #dv-bulk-copy-pane,
+  body.dv-mtab-map  #dv-tbl-wrap{display:none !important}
   /* Modals: take most of the screen on phone */
   .modal-box{width:96vw !important; max-width:96vw !important; max-height:90vh !important}
   .modal-top{padding:14px 16px !important; font-size:14px !important}
@@ -3283,6 +3291,15 @@ body.role-front_desk #referrals-view {
     </div>
   </div>
   <div class="day-content">
+    <!-- Phase 70c (2026-05-28): Mobile-only sub-tabs (📋 List / 🗺️ Map).
+         Desktop shows everything stacked as before. On screens < 768px, only
+         the selected sub-section renders so the rep isn't fighting both for
+         vertical space. The toggle buttons are hidden on desktop via CSS;
+         they default to 'list' on mobile when the day opens. -->
+    <div id="dv-mobile-tabs" style="display:none;background:#f1f3f9;border-radius:10px;padding:4px;gap:4px;margin-bottom:10px;box-shadow:inset 0 1px 2px rgba(15,23,42,.06)">
+      <button type="button" id="dv-mtab-list" onclick="_dvSetMobileTab('list')" style="flex:1;padding:8px 12px;font-size:12px;font-weight:700;color:#fff;cursor:pointer;border:none;background:var(--purple);border-radius:7px;font-family:DM Sans,sans-serif">📋 List</button>
+      <button type="button" id="dv-mtab-map"  onclick="_dvSetMobileTab('map')"  style="flex:1;padding:8px 12px;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;border:none;background:transparent;border-radius:7px;font-family:DM Sans,sans-serif">🗺️ Map</button>
+    </div>
     <!-- Phase 62 (2026-05-28): Gmail-style inline bulk-select toolbar.
          The "Select" button toggles select mode — when on, each row gets a
          leading checkbox + a top action bar appears with Delete / Copy to date.
@@ -3330,7 +3347,7 @@ body.role-front_desk #referrals-view {
       </div>
       <div style="font-size:10px;color:#4338ca;margin-top:5px;font-style:italic">Cloned as fresh Pending rows · original day untouched · same-week dedupe still applies.</div>
     </div>
-    <div class="tbl-wrap" style="overflow-x:auto">
+    <div id="dv-tbl-wrap" class="tbl-wrap" style="overflow-x:auto">
       <table>
         <thead id="day-thead"><tr>
           <th id="day-th-checkbox" style="width:28px;display:none"><input type="checkbox" id="dv-bulk-thead-check" onchange="_dvSelectAll(this.checked)" title="Select all" style="cursor:pointer;width:14px;height:14px;accent-color:#7030A0"></th>
@@ -34717,6 +34734,44 @@ function _dvShowMapForRow(ri){
   _dvShowMapJumpTo(fi);
 }
 window._dvShowMapForRow = _dvShowMapForRow;
+
+// ── PHASE 70c (2026-05-28): Mobile sub-tab toggle (📋 List / 🗺️ Map) ──
+// On phones the day view shows the visit table AND the map stacked — too
+// much vertical fight. The mobile-only sub-tab bar lets the rep choose one
+// at a time. The CSS hides the other section. We also flip the visual
+// state of the two buttons (active = purple bg) when toggling. Desktop
+// ignores this entirely (CSS @media display:none on #dv-mobile-tabs).
+function _dvSetMobileTab(tab){
+  if(tab !== 'list' && tab !== 'map') tab = 'list';
+  document.body.classList.remove('dv-mtab-list', 'dv-mtab-map');
+  document.body.classList.add('dv-mtab-' + tab);
+  // Update toggle button visuals
+  var listBtn = document.getElementById('dv-mtab-list');
+  var mapBtn  = document.getElementById('dv-mtab-map');
+  [['list', listBtn], ['map', mapBtn]].forEach(function(pair){
+    var key = pair[0], btn = pair[1];
+    if(!btn) return;
+    var on = (tab === key);
+    btn.style.background = on ? 'var(--purple)' : 'transparent';
+    btn.style.color      = on ? '#fff' : 'var(--muted)';
+    btn.style.boxShadow  = on ? '0 1px 3px rgba(112,48,160,.25)' : 'none';
+  });
+  // When switching to the map tab, kick the map's invalidateSize so Leaflet
+  // recomputes tile layout — otherwise tiles render greyed-out until the
+  // user pans or zooms.
+  if(tab === 'map' && typeof _DV_MAP !== 'undefined' && _DV_MAP){
+    try { setTimeout(function(){ _DV_MAP.invalidateSize(); }, 50); } catch(_){}
+  }
+}
+window._dvSetMobileTab = _dvSetMobileTab;
+// Default mobile state on first paint: list tab active. (Class is a no-op
+// on desktop since the sub-tab bar + section overrides are inside a
+// @media max-width:768px block.)
+try {
+  if(typeof document !== 'undefined' && document.body && !document.body.classList.contains('dv-mtab-list') && !document.body.classList.contains('dv-mtab-map')){
+    document.body.classList.add('dv-mtab-list');
+  }
+} catch(_){}
 
 // ════════════════════════════════════════════════════════════════════════════
 // PHASE 62 (2026-05-28) — GMAIL-STYLE INLINE BULK-SELECT (DAY VIEW)
