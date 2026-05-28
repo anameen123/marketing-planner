@@ -197,6 +197,14 @@ const TRACE_LOG   = path.resolve(__dirname, '_visual_trace.log');
     // Phase 36: run Find Candidates and check the flat list count
     try { _rpV5Start(); } catch(e){ out.startErr = e.message; }
     out.flatCandidateCount = (window._RP_V5_LAST && window._RP_V5_LAST.flatCandidates) ? window._RP_V5_LAST.flatCandidates.length : null;
+    // Phase 39: pick the first 3 candidates and verify the live route draws
+    if(typeof _rpV5ToggleFlat === 'function' && window._RP_V5_LAST && window._RP_V5_LAST.flatCandidates){
+      const first3 = window._RP_V5_LAST.flatCandidates.slice(0, 3);
+      first3.forEach(c => _rpV5ToggleFlat(c.name, true));
+      out.liveRouteHasLine = !!(window._DV_LIVE_ROUTE && window._DV_LIVE_ROUTE.line);
+      out.liveRouteHasGlow = !!(window._DV_LIVE_ROUTE && window._DV_LIVE_ROUTE.glow);
+      out.liveRouteMarkerCount = (window._DV_LIVE_ROUTE && window._DV_LIVE_ROUTE.markers) ? window._DV_LIVE_ROUTE.markers.length : 0;
+    }
     return out;
   });
   note('[auto-compute test] ' + JSON.stringify(autoTest, null, 2));

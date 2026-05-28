@@ -27520,6 +27520,82 @@ function _rpClearCorridorBox(){
 }
 window._rpClearCorridorBox = _rpClearCorridorBox;
 
+// Phase 39 (2026-05-28): LIVE ROUTE polyline. As the user checks/unchecks
+// candidates from the flat list, draw S → picks (sorted by ascending t
+// along the S→E line) → E on the map in real time. Different visual style
+// from the centerline (which is the imaginary guideline) — this is solid
+// thick green with numbered stop markers, the "actual planned route".
+var _DV_LIVE_ROUTE = null;       // { line, glow, markers: [] }
+function _rpDrawLiveRoute(A, B, pickedClinics){
+  if(!_DV_MAP || typeof L === 'undefined' || !A || !B) return;
+  _rpClearLiveRoute();
+  if(!Array.isArray(pickedClinics) || pickedClinics.length === 0) return;
+  // Sort by t (projection along S→E line) ascending — lowest x first.
+  var ordered = pickedClinics.slice().sort(function(a, b){
+    var ta = _rpV5ProjT(a.coord, A, B);
+    var tb = _rpV5ProjT(b.coord, A, B);
+    return ta - tb;
+  });
+  // Build the path: S → picks → E
+  var pts = [[A.lat, A.lng]];
+  ordered.forEach(function(p){ if(p && p.coord) pts.push([p.coord.lat, p.coord.lng]); });
+  pts.push([B.lat, B.lng]);
+  // Stacked white glow + bright green solid line — distinct from the
+  // sapphire dashed centerline so the user sees them as two different things.
+  var glow = L.polyline(pts, {
+    color: '#ffffff', weight: 9, opacity: 0.85, interactive: false, lineCap: 'round', lineJoin: 'round'
+  }).addTo(_DV_MAP);
+  var line = L.polyline(pts, {
+    color: '#16a34a', weight: 5, opacity: 1, interactive: false, lineCap: 'round', lineJoin: 'round'
+  }).addTo(_DV_MAP);
+  // Numbered stop markers at each pick (1, 2, 3, ...)
+  var markers = [];
+  ordered.forEach(function(p, i){
+    if(!p || !p.coord) return;
+    var num = i + 1;
+    var m = L.marker([p.coord.lat, p.coord.lng], {
+      icon: L.divIcon({
+        className: 'rp-route-stop',
+        html: '<div style="background:#16a34a;color:#fff;width:22px;height:22px;border-radius:50%;border:2.5px solid #fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;font-family:DM Sans,sans-serif;box-shadow:0 2px 6px rgba(0,0,0,.45)">' + num + '</div>',
+        iconSize: [22, 22], iconAnchor: [11, 11]
+      }),
+      interactive: false,
+      zIndexOffset: 9200
+    }).addTo(_DV_MAP);
+    markers.push(m);
+  });
+  _DV_LIVE_ROUTE = { glow: glow, line: line, markers: markers };
+  console.log('[live route] drawn', ordered.length, 'stops · order:', ordered.map(function(p){ return p.name; }));
+}
+window._rpDrawLiveRoute = _rpDrawLiveRoute;
+
+function _rpClearLiveRoute(){
+  if(_DV_LIVE_ROUTE && _DV_MAP){
+    try {
+      if(_DV_LIVE_ROUTE.glow) _DV_MAP.removeLayer(_DV_LIVE_ROUTE.glow);
+      if(_DV_LIVE_ROUTE.line) _DV_MAP.removeLayer(_DV_LIVE_ROUTE.line);
+      (_DV_LIVE_ROUTE.markers || []).forEach(function(m){
+        try { _DV_MAP.removeLayer(m); } catch(_){}
+      });
+    } catch(_){}
+  }
+  _DV_LIVE_ROUTE = null;
+}
+window._rpClearLiveRoute = _rpClearLiveRoute;
+
+// Refresh helper — reads current Start, End, flat picks; redraws.
+function _rpRefreshLiveRoute(){
+  try {
+    if(!window._RP_V5_LAST || !window._RP_V5_LAST.A || !window._RP_V5_LAST.B){ _rpClearLiveRoute(); return; }
+    if(!window._RP_V5_FLAT_PICKS){ _rpClearLiveRoute(); return; }
+    var pickedNames = Object.keys(window._RP_V5_FLAT_PICKS);
+    if(pickedNames.length === 0){ _rpClearLiveRoute(); return; }
+    var picks = (_RP_V5_LAST.flatCandidates || []).filter(function(c){ return window._RP_V5_FLAT_PICKS[c.name]; });
+    _rpDrawLiveRoute(_RP_V5_LAST.A, _RP_V5_LAST.B, picks);
+  } catch(e){ console.error('[_rpRefreshLiveRoute] failed:', e); }
+}
+window._rpRefreshLiveRoute = _rpRefreshLiveRoute;
+
 // Re-read Start, End, and the current half-width input and (re)draw the
 // box. Called any time an endpoint OR the half-width changes.
 function _rpRefreshCorridorBox(){
@@ -27662,6 +27738,8 @@ function closeRoutePlanner(){
   if(typeof _rpResetAllPins === 'function') _rpResetAllPins();
   // Phase 30: clear the corridor rectangle too.
   if(typeof _rpClearCorridorBox === 'function') _rpClearCorridorBox();
+  // Phase 39: clear the live route polyline too.
+  if(typeof _rpClearLiveRoute === 'function') _rpClearLiveRoute();
   // Phase 33 (2026-05-27): per user, closing the planner WITHOUT generating
   // a route wipes ALL transient state — Start/End inputs, dialog pending,
   // flat picks, level picks, AI throttle. "If I get out, the start will
@@ -33040,6 +33118,9 @@ function _rpV5ToggleFlat(name, on){
     _rpSetPinState(name, on ? 'picked' : 'suggested');
   }
   _rpV5ShowFlatList();
+  // Phase 39: redraw the live route polyline so the user sees the S→picks→E
+  // chain update in real time as they check/uncheck candidates.
+  if(typeof _rpRefreshLiveRoute === 'function') _rpRefreshLiveRoute();
 }
 window._rpV5ToggleFlat = _rpV5ToggleFlat;
 
@@ -33049,6 +33130,8 @@ function _rpV5ClearAllPicks(){
     if(typeof _rpSetPinState === 'function') _rpSetPinState(n, 'suggested');
   });
   _rpV5ShowFlatList();
+  // Phase 39: clear the live route polyline.
+  if(typeof _rpClearLiveRoute === 'function') _rpClearLiveRoute();
 }
 window._rpV5ClearAllPicks = _rpV5ClearAllPicks;
 
