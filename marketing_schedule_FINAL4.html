@@ -3672,8 +3672,16 @@ body.role-front_desk #referrals-view {
            - Corridor half-width: perpendicular miles each side of the
              Start→End line. Per user 2026-05-26: NO auto-expand. Each empty
              level gets per-level "+1 mi" / "+2 mi" buttons (capped at base+2). -->
+      <!-- Phase 42 (2026-05-28): mutual-exclusive mode toggle. The user
+           either fixes the number of visits (corridor width auto-fits) OR
+           fixes the corridor width (visits count is whatever fits). Default:
+           visits — the new flow per user. The inactive input is greyed out. -->
+      <div style="display:flex;gap:5px;margin-bottom:10px;background:#f1f5f9;padding:4px;border-radius:8px;font-family:DM Sans,sans-serif">
+        <button id="rp-mode-visits" type="button" onclick="_rpSetCorridorMode('visits')" style="flex:1;background:#fff;color:#1F3864;border:none;padding:7px 12px;font-size:11px;font-weight:700;cursor:pointer;border-radius:6px;box-shadow:0 1px 3px rgba(31,56,100,.15)">🎯 Fix # of visits</button>
+        <button id="rp-mode-width" type="button" onclick="_rpSetCorridorMode('width')" style="flex:1;background:transparent;color:#64748b;border:none;padding:7px 12px;font-size:11px;font-weight:600;cursor:pointer;border-radius:6px">📐 Fix corridor width</button>
+      </div>
       <div id="rp-corridor-controls" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
-        <div>
+        <div id="rp-visits-cell">
           <!-- Phase 41 (2026-05-28): "Number of route levels" was confusing
                and didn't affect output meaningfully (flat-list mode renders
                every candidate). Replaced with "Number of visits (target)"
@@ -3690,7 +3698,7 @@ body.role-front_desk #referrals-view {
           <!-- Hidden legacy field — keeps any straggler readers from crashing -->
           <input type="hidden" id="rp-level-count" value="5">
         </div>
-        <div>
+        <div id="rp-width-cell">
           <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Corridor half-width <span style="color:var(--muted);font-weight:400">(±miles)</span></label>
           <div style="display:flex;align-items:center;gap:5px">
             <button type="button" onclick="_rpV4AdjustWidth(-1)" style="background:#e5e7eb;border:none;color:#374151;width:30px;height:36px;border-radius:6px;font-size:14px;font-weight:700;cursor:pointer">−</button>
@@ -3701,6 +3709,7 @@ body.role-front_desk #referrals-view {
                from the rectangle's currently-applied width. Click to commit
                the new half-width (redraws rect + re-runs corridor algorithm). -->
           <button id="rp-apply-width-btn" type="button" onclick="_rpApplyHalfWidth()" style="display:none;margin-top:6px;background:linear-gradient(135deg,#1e3a8a,#2563eb);color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;width:100%">✓ Apply</button>
+          <div id="rp-width-derived-hint" style="display:none;font-size:10px;color:#475569;margin-top:6px;font-style:italic">Driven by # of visits</div>
         </div>
       </div>
       <div style="font-size:10px;color:var(--muted);margin:-4px 0 10px 0;font-style:italic;line-height:1.4">
@@ -27156,6 +27165,9 @@ function openRoutePlanner(){
     if(typeof _rpClearPreviewRing === 'function') _rpClearPreviewRing();
     if(typeof _rpClearLiveRoute === 'function') _rpClearLiveRoute();
   } catch(_){}
+  // Phase 42: init the corridor mode pills so the default visual state is
+  // correct (visits mode active, width cell greyed).
+  try { if(typeof _rpSetCorridorMode === 'function') _rpSetCorridorMode(window._RP_CORRIDOR_MODE || 'visits'); } catch(_){}
   // ── Build the candidate pool (each entry: name, city, kind, value) ──
   // value = the key getRouteCoord() resolves on (city key for clinics/MVAs;
   // facility key for WCG locations).
@@ -30204,7 +30216,10 @@ function _rpAutoSuggestIfReady(){
     var pairKey = startVal + '|' + endVal;
     if(_RP_AI && _RP_AI.autoSuggestLast === pairKey) return;
     if(_RP_AI) _RP_AI.autoSuggestLast = pairKey;
-    // Phase 41: use the target-visits fit instead of the old N+halfWidth compute
+    // Phase 41 / 42: in 'visits' mode, auto-fire the fit so the corridor
+    // matches the target N. In 'width' mode, the user is steering width
+    // manually — don't override their setting.
+    if(window._RP_CORRIDOR_MODE === 'width') return;
     setTimeout(function(){ if(typeof _rpRunAutoCompute === 'function') _rpRunAutoCompute(); }, 80);
     return;
     // Phase 34b: clinic-name fallback so the auto-fire works when the user
@@ -30295,6 +30310,56 @@ function _rpComputeWidthForVisits(A, B, targetN){
   return { halfWidth: halfWidth, available: totalAvail, asked: targetN, exact: (targetN <= totalAvail), totalMi: totalMi };
 }
 window._rpComputeWidthForVisits = _rpComputeWidthForVisits;
+
+// Phase 42 (2026-05-28): mutually-exclusive mode for corridor sizing.
+//   'visits' — user fixes # of visits, width auto-fits (default, new flow)
+//   'width'  — user fixes corridor half-width, visit count is whatever fits
+// State lives on window._RP_CORRIDOR_MODE.
+window._RP_CORRIDOR_MODE = 'visits';
+function _rpSetCorridorMode(mode){
+  if(mode !== 'visits' && mode !== 'width') return;
+  window._RP_CORRIDOR_MODE = mode;
+  // Toggle pill styles
+  var visitsBtn = document.getElementById('rp-mode-visits');
+  var widthBtn  = document.getElementById('rp-mode-width');
+  if(visitsBtn && widthBtn){
+    var active   = 'background:#fff;color:#1F3864;border:none;padding:7px 12px;font-size:11px;font-weight:700;cursor:pointer;border-radius:6px;box-shadow:0 1px 3px rgba(31,56,100,.15);flex:1';
+    var inactive = 'background:transparent;color:#64748b;border:none;padding:7px 12px;font-size:11px;font-weight:600;cursor:pointer;border-radius:6px;flex:1';
+    visitsBtn.setAttribute('style', mode === 'visits' ? active : inactive);
+    widthBtn.setAttribute('style',  mode === 'width'  ? active : inactive);
+  }
+  // Grey out the inactive input cell + show its "derived" hint
+  var visitsInp = document.getElementById('rp-target-visits');
+  var widthInp  = document.getElementById('rp-corridor');
+  var visitsCell = document.getElementById('rp-visits-cell');
+  var widthCell  = document.getElementById('rp-width-cell');
+  var widthHint  = document.getElementById('rp-width-derived-hint');
+  if(mode === 'visits'){
+    if(visitsInp){ visitsInp.disabled = false; }
+    if(widthInp){ widthInp.disabled = true; }
+    if(visitsCell) visitsCell.style.opacity = '1';
+    if(widthCell)  widthCell.style.opacity  = '0.55';
+    if(widthHint){ widthHint.style.display = 'block'; widthHint.textContent = 'Driven by # of visits'; }
+    // Apply button + AdjustWidth buttons disabled
+    var aw = document.getElementById('rp-apply-width-btn'); if(aw) aw.style.display = 'none';
+  } else {
+    if(visitsInp){ visitsInp.disabled = true; }
+    if(widthInp){ widthInp.disabled = false; }
+    if(visitsCell) visitsCell.style.opacity = '0.55';
+    if(widthCell)  widthCell.style.opacity  = '1';
+    if(widthHint){ widthHint.style.display = 'none'; }
+  }
+  // Recompute immediately if both ends are set so the rectangle reflects
+  // the new mode without an extra click.
+  var startVal = (document.getElementById('rp-start') || {}).value || '';
+  var endVal   = (document.getElementById('rp-end')   || {}).value || '';
+  if(startVal && endVal){
+    if(mode === 'visits' && typeof _rpRunAutoCompute === 'function') _rpRunAutoCompute();
+    else if(mode === 'width' && typeof _rpRefreshCorridorBox === 'function') _rpRefreshCorridorBox();
+  }
+  console.log('[_rpSetCorridorMode] →', mode);
+}
+window._rpSetCorridorMode = _rpSetCorridorMode;
 
 function _rpAdjustTargetVisits(delta){
   var inp = document.getElementById('rp-target-visits');
