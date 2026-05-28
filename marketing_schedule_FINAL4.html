@@ -3892,7 +3892,7 @@ body.role-front_desk #referrals-view {
            fixes the corridor width (visits count is whatever fits). Default:
            visits — the new flow per user. The inactive input is greyed out. -->
       <div style="display:flex;gap:5px;margin-bottom:10px;background:#f1f5f9;padding:4px;border-radius:8px;font-family:DM Sans,sans-serif">
-        <button id="rp-mode-visits" type="button" onclick="_rpSetCorridorMode('visits')" style="flex:1;background:#fff;color:#1F3864;border:none;padding:7px 12px;font-size:11px;font-weight:700;cursor:pointer;border-radius:6px;box-shadow:0 1px 3px rgba(31,56,100,.15)">🎯 Fix # of visits</button>
+        <button id="rp-mode-visits" type="button" onclick="_rpSetCorridorMode('visits')" style="flex:1;background:#fff;color:#1F3864;border:none;padding:7px 12px;font-size:11px;font-weight:700;cursor:pointer;border-radius:6px;box-shadow:0 1px 3px rgba(31,56,100,.15)" title="Cap the visit count — the corridor width auto-fits to include that many candidates. You can still deselect any you don't want.">🎯 Fix max visits</button>
         <button id="rp-mode-width" type="button" onclick="_rpSetCorridorMode('width')" style="flex:1;background:transparent;color:#64748b;border:none;padding:7px 12px;font-size:11px;font-weight:600;cursor:pointer;border-radius:6px">📐 Fix corridor width</button>
       </div>
       <div id="rp-corridor-controls" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
@@ -3902,7 +3902,12 @@ body.role-front_desk #referrals-view {
                every candidate). Replaced with "Number of visits (target)"
                which directly drives the corridor width — the algorithm
                expands width until N green/yellow pins fit. -->
-          <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Number of visits <span style="color:var(--muted);font-weight:400">(target)</span></label>
+          <!-- Phase 82 (2026-05-28): renamed per user — "Number of visits"
+               was misleading because the rep can deselect candidates after
+               the route is built. The value drives the corridor width as a
+               CAP / ceiling, not a fixed count, so "Max number of visits"
+               is the accurate label. -->
+          <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Max number of visits <span style="color:var(--muted);font-weight:400">(cap)</span></label>
           <!-- Phase 81 (2026-05-28): the +/- buttons are the only stepper.
                Native input-number arrows are hidden via the rp-no-spinner
                class so the rep has one unambiguous way to change the count.
