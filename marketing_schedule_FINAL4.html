@@ -33490,11 +33490,13 @@ function _rpOptInsertIntoDay(){
       removed = beforeLen - S.days[di].rows.length;
     }
   } catch(_){}
-  // ── PHASE 59 (2026-05-28) — Smart pre-existing integration ─────────────
-  // Mirror of the Corridor scan. AI Optimize uses geometry from
-  // _phase59GetGeometry('optimize') — either the circle (if a confirmed
-  // circle exists) or the ordered-points heuristic (within 1.5 mi of any
-  // pick).
+  // ── PHASE 59 + 59b (2026-05-28) — Smart pre-existing integration ───────
+  // Two flavors:
+  //   • CIRCLE mode (Phase 59b — user has drawn an AI Optimize circle):
+  //     INSIDE pins get a before/after preview modal (with red delta) per
+  //     pin; OUTSIDE pins get a single "expand circle & regenerate" dialog.
+  //   • POINT mode (no circle, just hand-picked targets): falls back to the
+  //     Phase 59 corridor-style review modal (insert / skip / remove).
   var phase59ExtraInserted = [];
   var phase59Removed = 0;
   try {
@@ -33505,6 +33507,32 @@ function _rpOptInsertIntoDay(){
       var routeCoords = ordered.map(function(p){ return p && p.coord; }).filter(Boolean);
       var routeStopNames = ordered.map(function(p){ return p && p.name; });
       var classified = _phase59Classify(preExisting, geom, routeCoords);
+      var isCircleMode = !!(geom && geom.kind === 'circle');
+      if(isCircleMode){
+        // ── Phase 59b — circle-aware review with before/after + expand-circle.
+        _phase59RunOptimizeReview(classified, ordered, function(result){
+          var finalOrdered = result.ordered;
+          // Tally decisions for the commit toast + handle 'remove' actions
+          var removeRis = [];
+          (result.decisions || []).forEach(function(d){
+            if(d.action === 'insert')        phase59ExtraInserted.push(d.visit.name);
+            else if(d.action === 'expand-insert') phase59ExtraInserted.push(d.visit.name);
+            else if(d.action === 'remove')   removeRis.push(d.visit.ri);
+          });
+          if(removeRis.length > 0){
+            removeRis.sort(function(a, b){ return b - a; });
+            try { removeRis.forEach(function(ri){
+              if(S.days[di] && S.days[di].rows && S.days[di].rows[ri]){
+                S.days[di].rows.splice(ri, 1);
+              }
+            }); } catch(_){}
+            phase59Removed += removeRis.length;
+          }
+          _rpOptCommitOrderedToDay(finalOrdered, di, me, removed, phase59Removed, phase59ExtraInserted);
+        });
+        return;   // wait for review chain
+      }
+      // ── POINT mode (no circle): keep the original Phase 59 behavior ─────
       // CASE 1 — insiders: fold into ordered with best-insertion (no t to sort by)
       classified.insiders.forEach(function(ins){
         var best = _phase59BestInsertion(routeCoords, ins.coord);
@@ -33533,7 +33561,7 @@ function _rpOptInsertIntoDay(){
       }
     }
   } catch(e){
-    console.warn('[phase59] optimize pre-existing scan failed:', e);
+    console.warn('[phase59/59b] optimize pre-existing scan failed:', e);
   }
   _rpOptCommitOrderedToDay(ordered, di, me, removed, phase59Removed, phase59ExtraInserted);
 }
@@ -33877,6 +33905,290 @@ function _phase59ApplyDecisions(picks, decisions, di){
   return { picks: picks, removedCount: removeRis.length, insertedNames: insertedExtra };
 }
 window._phase59ApplyDecisions = _phase59ApplyDecisions;
+
+// ════════════════════════════════════════════════════════════════════════════
+// PHASE 59b (2026-05-28) — AI OPTIMIZE-SPECIFIC INTEGRATION
+// Refines Phase 59 for the AI Optimize circle mode per user spec:
+//   • INSIDE the circle → before/after preview modal showing route cost
+//     before and after the pin is folded in, with the delta highlighted RED.
+//     User picks: ✓ Add to route / → Skip / ✗ Remove from calendar.
+//   • OUTSIDE the circle → batch dialog offers to EXPAND THE CIRCLE so it
+//     covers all outside pins, then regenerate the route with the same TSP
+//     algorithm. User picks: ✓ Expand & regenerate / → Skip (leave off).
+//
+// Corridor and AI Optimize POINT mode (no circle) still use the original
+// Phase 59 modal flow (insert / skip / remove per visit).
+// ════════════════════════════════════════════════════════════════════════════
+
+// Compute the total mi + min for a coord sequence. 1.4× urban factor + 30 mph
+// matches the rest of the planner.
+function _phase59ComputeRouteCost(coords){
+  if(!Array.isArray(coords) || coords.length < 2) return { mi: 0, min: 0 };
+  var rawMi = 0;
+  for(var i = 0; i < coords.length - 1; i++){
+    rawMi += _rpHaversineMiles(coords[i], coords[i + 1]);
+  }
+  var mi = rawMi * 1.4;
+  var min = Math.round((mi / 30) * 60);
+  return { mi: mi, min: min };
+}
+window._phase59ComputeRouteCost = _phase59ComputeRouteCost;
+
+// Show the before/after preview modal for ONE inside-circle pre-existing
+// visit (AI Optimize mode). The user sees:
+//   • Current route cost (before)
+//   • Proposed route cost with this pin folded in (after)
+//   • The delta in RED so the cost of inclusion pops
+//   • Three buttons — Add / Skip / Remove
+function _phase59ShowOptInsidePreview(visit, idx, total, currentOrdered, onAction){
+  var modalId = 'phase59opt-inside-modal';
+  var existing = document.getElementById(modalId);
+  if(existing) existing.remove();
+  var modal = document.createElement('div');
+  modal.id = modalId;
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99999;display:flex;align-items:center;justify-content:center;font-family:DM Sans,sans-serif';
+  document.body.appendChild(modal);
+  // Compute before/after costs
+  var beforeCoords = currentOrdered.map(function(p){ return p && p.coord; }).filter(Boolean);
+  var beforeCost = _phase59ComputeRouteCost(beforeCoords);
+  var best = _phase59BestInsertion(beforeCoords, visit.coord);
+  var afterCoords = beforeCoords.slice();
+  afterCoords.splice(best.idx, 0, visit.coord);
+  var afterCost = _phase59ComputeRouteCost(afterCoords);
+  var dMi  = afterCost.mi  - beforeCost.mi;
+  var dMin = afterCost.min - beforeCost.min;
+  // Determine the two adjacent stops in the proposed route
+  var beforeStopName = (best.idx > 0 && currentOrdered[best.idx - 1])
+    ? currentOrdered[best.idx - 1].name
+    : 'Start';
+  var afterStopName  = (best.idx < currentOrdered.length && currentOrdered[best.idx])
+    ? currentOrdered[best.idx].name
+    : 'End';
+  // RED delta block
+  var deltaHtml = ''
+    + '<div style="margin-top:10px;padding:10px 12px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px">'
+    +   '<div style="font-size:10px;font-weight:700;color:#991b1b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Detour cost (added to the route)</div>'
+    +   '<div style="font-size:14px;font-weight:800;color:#dc2626">+' + dMi.toFixed(1) + ' mi · +' + dMin + ' min</div>'
+    + '</div>';
+  var html = ''
+    + '<div style="background:#fff;border-radius:14px;padding:22px;max-width:540px;width:92%;box-shadow:0 20px 60px rgba(0,0,0,.4)">'
+    +   '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
+    +     '<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Inside the circle · ' + (idx + 1) + ' of ' + total + '</div>'
+    +     '<button type="button" onclick="document.getElementById(\''+modalId+'\').remove()" style="background:transparent;border:0;font-size:18px;color:#94a3b8;cursor:pointer;line-height:1" title="Cancel — leave remaining visits untouched">&#10005;</button>'
+    +   '</div>'
+    +   '<div style="font-size:15px;font-weight:800;color:#1F3864;margin-bottom:4px">' + (visit.name || 'Visit') + '</div>'
+    +   '<div style="font-size:11px;color:var(--muted);margin-bottom:14px">Pre-existing Pending visit · inside your route circle. Insert between <strong>' + beforeStopName + '</strong> and <strong>' + afterStopName + '</strong>?</div>'
+    +   '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:6px">'
+    +     '<div style="background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;padding:10px">'
+    +       '<div style="font-size:9px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Before</div>'
+    +       '<div style="font-size:16px;font-weight:800;color:#1e293b">' + beforeCost.mi.toFixed(1) + ' mi</div>'
+    +       '<div style="font-size:12px;color:#475569">' + beforeCost.min + ' min · ' + (currentOrdered.length) + ' stops</div>'
+    +     '</div>'
+    +     '<div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:10px">'
+    +       '<div style="font-size:9px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">After</div>'
+    +       '<div style="font-size:16px;font-weight:800;color:#7c2d12">' + afterCost.mi.toFixed(1) + ' mi</div>'
+    +       '<div style="font-size:12px;color:#9a3412">' + afterCost.min + ' min · ' + (currentOrdered.length + 1) + ' stops</div>'
+    +     '</div>'
+    +   '</div>'
+    +   deltaHtml
+    +   '<div style="display:flex;flex-direction:column;gap:8px;margin-top:14px">'
+    +     '<button type="button" id="p59opt-add"    style="background:linear-gradient(135deg,#15803d,#16a34a);color:#fff;border:none;border-radius:8px;padding:11px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">✓ Add "' + (visit.name || 'this visit') + '" to the route</button>'
+    +     '<button type="button" id="p59opt-skip"   style="background:#fff;color:#1F3864;border:1px solid var(--border);border-radius:8px;padding:10px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">→ Skip — leave on the calendar but not in the route</button>'
+    +     '<button type="button" id="p59opt-remove" style="background:#fff;color:#991b1b;border:1px solid #fecaca;border-radius:8px;padding:10px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">✗ Remove from today\'s calendar</button>'
+    +   '</div>'
+    + '</div>';
+  modal.innerHTML = html;
+  document.getElementById('p59opt-add').onclick = function(){
+    modal.remove(); onAction('insert');
+  };
+  document.getElementById('p59opt-skip').onclick = function(){
+    modal.remove(); onAction('skip');
+  };
+  document.getElementById('p59opt-remove').onclick = function(){
+    var msg = 'Remove "' + (visit.name || 'this visit') + '" from today\'s calendar?\n\n'
+            + 'The row will be deleted. If it has follow-up data it will be lost.';
+    if(!window.confirm(msg)) return;
+    modal.remove(); onAction('remove');
+  };
+}
+window._phase59ShowOptInsidePreview = _phase59ShowOptInsidePreview;
+
+// Show the BATCH expand-circle dialog for outside-circle pre-existing visits.
+// Pre-computes: new radius needed, the regenerated route (TSP w/ outsiders
+// added to targets), and the cost delta. User confirms or skips.
+function _phase59ShowOptOutsideExpandDialog(outsiders, currentOrdered, onAction){
+  var modalId = 'phase59opt-outside-modal';
+  var existing = document.getElementById(modalId);
+  if(existing) existing.remove();
+  var modal = document.createElement('div');
+  modal.id = modalId;
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99999;display:flex;align-items:center;justify-content:center;font-family:DM Sans,sans-serif';
+  document.body.appendChild(modal);
+  var circ = window._RP_OPT_CIRCLE;
+  var currentRadius = (circ && circ.radius) || 0;
+  // New radius = max distance from circle center to any outside pin (+ small margin)
+  var maxDist = currentRadius;
+  outsiders.forEach(function(o){
+    if(circ && circ.center){
+      var d = _rpHaversineMiles(circ.center, o.coord);
+      if(d > maxDist) maxDist = d;
+    }
+  });
+  var newRadius = +(maxDist + 0.1).toFixed(1);   // small margin
+  var dRadius = +(newRadius - currentRadius).toFixed(1);
+  // Pre-compute the regenerated route: combine current ordered targets +
+  // outsiders, re-run TSP using existing start.
+  var combinedTargets = currentOrdered.slice();
+  outsiders.forEach(function(o){
+    combinedTargets.push({ name: o.name, coord: o.coord, _phase59FromExisting: true, _phase59ExistingRi: o.ri });
+  });
+  var startName = window._RP_OPT_START_NAME || (combinedTargets[0] && combinedTargets[0].name);
+  var newOrdered = combinedTargets;
+  try {
+    if(typeof _rpOptSolveTSP === 'function' && startName){
+      newOrdered = _rpOptSolveTSP(combinedTargets, startName) || combinedTargets;
+    }
+  } catch(_){}
+  var beforeCost = _phase59ComputeRouteCost(currentOrdered.map(function(p){ return p && p.coord; }).filter(Boolean));
+  var afterCost  = _phase59ComputeRouteCost(newOrdered.map(function(p){ return p && p.coord; }).filter(Boolean));
+  var dMi  = afterCost.mi  - beforeCost.mi;
+  var dMin = afterCost.min - beforeCost.min;
+  // Build the list of outside pins with their distance from circle edge
+  var listHtml = outsiders.map(function(o){
+    var dFromCenter = (circ && circ.center) ? _rpHaversineMiles(circ.center, o.coord) : 0;
+    var dFromEdge   = Math.max(0, dFromCenter - currentRadius);
+    return '<div style="font-size:11px;color:#1e293b;padding:3px 0">'
+      + '<strong>' + (o.name || 'Visit') + '</strong>'
+      + ' <span style="color:var(--muted);font-size:10px">· ' + dFromEdge.toFixed(1) + ' mi outside the circle</span>'
+      + '</div>';
+  }).join('');
+  // RED delta block
+  var deltaHtml = ''
+    + '<div style="margin-top:10px;padding:10px 12px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px">'
+    +   '<div style="font-size:10px;font-weight:700;color:#991b1b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Detour cost (added to the route)</div>'
+    +   '<div style="font-size:14px;font-weight:800;color:#dc2626">+' + dMi.toFixed(1) + ' mi · +' + dMin + ' min</div>'
+    + '</div>';
+  var html = ''
+    + '<div style="background:#fff;border-radius:14px;padding:22px;max-width:580px;width:92%;box-shadow:0 20px 60px rgba(0,0,0,.4)">'
+    +   '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
+    +     '<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Outside the circle</div>'
+    +     '<button type="button" onclick="document.getElementById(\''+modalId+'\').remove()" style="background:transparent;border:0;font-size:18px;color:#94a3b8;cursor:pointer;line-height:1" title="Cancel">&#10005;</button>'
+    +   '</div>'
+    +   '<div style="font-size:15px;font-weight:800;color:#1F3864;margin-bottom:8px">'
+    +     outsiders.length + ' pre-existing visit' + (outsiders.length===1?'':'s') + ' outside your route circle'
+    +   '</div>'
+    +   '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px 12px;margin-bottom:14px">'
+    +     listHtml
+    +   '</div>'
+    +   '<div style="font-size:12px;color:#1e293b;line-height:1.55;margin-bottom:10px">'
+    +     '<strong>Expand the circle</strong> from <strong style="color:#7030A0">' + currentRadius.toFixed(1) + ' mi</strong> to <strong style="color:#16a34a">' + newRadius.toFixed(1) + ' mi</strong> '
+    +     '<span style="color:var(--muted)">(+' + dRadius.toFixed(1) + ' mi)</span> '
+    +     'so the route covers them, then regenerate using the same TSP algorithm.'
+    +   '</div>'
+    +   '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:6px">'
+    +     '<div style="background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;padding:10px">'
+    +       '<div style="font-size:9px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Before</div>'
+    +       '<div style="font-size:16px;font-weight:800;color:#1e293b">' + beforeCost.mi.toFixed(1) + ' mi</div>'
+    +       '<div style="font-size:12px;color:#475569">' + beforeCost.min + ' min · ' + currentOrdered.length + ' stops</div>'
+    +     '</div>'
+    +     '<div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:10px">'
+    +       '<div style="font-size:9px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">After</div>'
+    +       '<div style="font-size:16px;font-weight:800;color:#7c2d12">' + afterCost.mi.toFixed(1) + ' mi</div>'
+    +       '<div style="font-size:12px;color:#9a3412">' + afterCost.min + ' min · ' + newOrdered.length + ' stops</div>'
+    +     '</div>'
+    +   '</div>'
+    +   deltaHtml
+    +   '<div style="display:flex;flex-direction:column;gap:8px;margin-top:14px">'
+    +     '<button type="button" id="p59opt-expand" style="background:linear-gradient(135deg,#15803d,#16a34a);color:#fff;border:none;border-radius:8px;padding:11px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">✓ Expand circle &amp; regenerate route</button>'
+    +     '<button type="button" id="p59opt-noexp"  style="background:#fff;color:#1F3864;border:1px solid var(--border);border-radius:8px;padding:10px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">→ Skip — leave them off the route (still on the calendar)</button>'
+    +   '</div>'
+    + '</div>';
+  modal.innerHTML = html;
+  document.getElementById('p59opt-expand').onclick = function(){
+    modal.remove();
+    onAction({ action: 'expand', newRadius: newRadius, newOrdered: newOrdered });
+  };
+  document.getElementById('p59opt-noexp').onclick = function(){
+    modal.remove();
+    onAction({ action: 'skip' });
+  };
+}
+window._phase59ShowOptOutsideExpandDialog = _phase59ShowOptOutsideExpandDialog;
+
+// Orchestrate Phase 59b for AI Optimize circle mode. Walks insiders one at
+// a time (before/after preview each), then shows the outsider expand dialog
+// once for the whole batch. Calls onComplete with final {ordered, decisions}.
+function _phase59RunOptimizeReview(classified, currentOrdered, onComplete){
+  var insiders  = (classified && classified.insiders)  || [];
+  var outsiders = (classified && classified.outsiders) || [];
+  var ordered   = currentOrdered.slice();
+  var decisions = [];
+  var insiderIdx = 0;
+  function nextInsider(){
+    if(insiderIdx >= insiders.length){
+      handleOutsiders();
+      return;
+    }
+    var v = insiders[insiderIdx];
+    _phase59ShowOptInsidePreview(v, insiderIdx, insiders.length, ordered, function(action){
+      decisions.push({ visit: v, action: action, kind: 'insider' });
+      if(action === 'insert'){
+        // Splice into ordered at best insertion idx
+        var coords = ordered.map(function(p){ return p && p.coord; }).filter(Boolean);
+        var best = _phase59BestInsertion(coords, v.coord);
+        var at = Math.max(0, Math.min(ordered.length, best.idx));
+        ordered.splice(at, 0, {
+          name: v.name, coord: v.coord,
+          _phase59FromExisting: true, _phase59ExistingRi: v.ri
+        });
+      }
+      insiderIdx++;
+      nextInsider();
+    });
+  }
+  function handleOutsiders(){
+    if(outsiders.length === 0){
+      onComplete({ ordered: ordered, decisions: decisions });
+      return;
+    }
+    _phase59ShowOptOutsideExpandDialog(outsiders, ordered, function(result){
+      if(result.action === 'expand'){
+        // Apply the expansion: update circle radius, update _RP_OPT_TARGETS,
+        // adopt the pre-computed newOrdered as the route.
+        try {
+          if(window._RP_OPT_CIRCLE){
+            window._RP_OPT_CIRCLE.radius = result.newRadius;
+          }
+          // Add outsiders to _RP_OPT_TARGETS (so save-state captures them)
+          window._RP_OPT_TARGETS = (window._RP_OPT_TARGETS || []).slice();
+          outsiders.forEach(function(o){
+            var already = window._RP_OPT_TARGETS.some(function(t){ return t && t.name === o.name; });
+            if(!already){
+              window._RP_OPT_TARGETS.push({ name: o.name, coord: o.coord, _phase59FromExisting: true, _phase59ExistingRi: o.ri });
+            }
+            decisions.push({ visit: o, action: 'expand-insert', kind: 'outsider' });
+          });
+          // Adopt the regenerated route
+          ordered = result.newOrdered || ordered;
+          window._RP_OPT_ORDERED = ordered;
+          // Re-draw circle + route if the planner is still open. Best-effort —
+          // these helpers may not be available if the planner already closed.
+          try { if(typeof _rpOptDrawCircle === 'function') _rpOptDrawCircle(); } catch(_){}
+          try { if(typeof _rpOptRedrawRoute === 'function') _rpOptRedrawRoute(); } catch(_){}
+        } catch(e){
+          console.warn('[phase59b] expand failed:', e);
+        }
+      } else {
+        outsiders.forEach(function(o){
+          decisions.push({ visit: o, action: 'skip', kind: 'outsider' });
+        });
+      }
+      onComplete({ ordered: ordered, decisions: decisions });
+    });
+  }
+  nextInsider();
+}
+window._phase59RunOptimizeReview = _phase59RunOptimizeReview;
 
 // ════════════════════════════════════════════════════════════════════════════
 // PHASE 58 (2026-05-28) — "🔦 SHOW ON MAP" stepper
