@@ -28239,11 +28239,12 @@ function _rpDrawCorridorBox(A, B, halfWidthMi){
   //   • On dragend — snap handles back to the new edge midpoint and run
   //     the full redraw (which re-creates handles cleanly).
   // Cursor: 'ns-resize' (single double-arrow) instead of 'move' (4-way).
-  // Phase 85 (2026-05-28): handles available in BOTH modes per user. In
-  // visits mode, manual drag overrides the auto-fit width (the rep can
-  // mix the two — change # of visits OR drag the edge, whichever feels
-  // right).
-  var manualMode = true;
+  // Phase 89 (2026-05-28): STRICT mutual exclusivity per user — when
+  // "Fix max visits" is active, the corridor-width controls (including
+  // the drag handles) are deactivated. When "Fix corridor width" is
+  // active, the max-visits input is disabled (already handled by
+  // _rpSetCorridorMode). One mode at a time, no mixing.
+  var manualMode = (window._RP_CORRIDOR_MODE === 'width');
   if(manualMode){
     var midA = { lat: (A.lat + B.lat) / 2, lng: (A.lng + B.lng) / 2 };
     var handlePos1 = { lat: midA.lat + offLat, lng: midA.lng + offLng };
@@ -28334,6 +28335,14 @@ function _rpClearCorridorBox(){
     } catch(_){}
   }
   _DV_CORRIDOR_BOX = null;
+  // Phase 89 (2026-05-28): also reset any 'suggested' (light-blue) pin
+  // states. When the rectangle goes away (e.g. endpoint cleared), the
+  // light-blue inside-pins were lingering — they had no rectangle to
+  // belong to anymore. Per user: "if the rectangular can't be created
+  // the pins with the light blue should not stay."
+  if(typeof _rpResetSuggestedPins === 'function'){
+    try { _rpResetSuggestedPins(); } catch(_){}
+  }
 }
 window._rpClearCorridorBox = _rpClearCorridorBox;
 
