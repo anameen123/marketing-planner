@@ -27138,6 +27138,34 @@ function openRoutePlanner(){
     if(typeof _rpClearPreviewRing === 'function') _rpClearPreviewRing();
     if(typeof _rpClearLiveRoute === 'function') _rpClearLiveRoute();
   } catch(_){}
+  // Phase 45 (2026-05-28): browsers (esp. Firefox) auto-restore form
+  // input values across page reloads. So after refresh, opening the
+  // planner showed the previous Start + End as already-picked. Wipe
+  // ALL transient state on open so every planner session starts blank.
+  try {
+    var sInpRP = document.getElementById('rp-start');         if(sInpRP) sInpRP.value = '';
+    var sLblRP = document.getElementById('rp-start-search');   if(sLblRP) sLblRP.value = '';
+    var eInpRP = document.getElementById('rp-end');           if(eInpRP) eInpRP.value = '';
+    var eLblRP = document.getElementById('rp-end-search');     if(eLblRP) eLblRP.value = '';
+    window._RP_START_NAME = '';
+    window._RP_END_NAME = '';
+    window._RP_START_COORD = null;
+    window._RP_END_COORD = null;
+    window._RP_DIALOG_AWAITING = null;
+    window._RP_DIALOG_PENDING = null;
+    window._RP_V5_FLAT_PICKS = {};
+    window._RP_V5_PICKS = {};
+    window._RP_V5_LAST = null;
+    if(window._RP_AI) window._RP_AI.autoSuggestLast = null;
+    if(typeof _rpClearStartMarker === 'function') _rpClearStartMarker();
+    if(typeof _rpClearEndMarker === 'function') _rpClearEndMarker();
+    if(typeof _rpClearCenterline === 'function') _rpClearCenterline();
+    if(typeof _rpClearCorridorBox === 'function') _rpClearCorridorBox();
+    if(typeof _rpClearCandidateHighlights === 'function') _rpClearCandidateHighlights();
+    if(typeof _rpResetAllPins === 'function') _rpResetAllPins();
+    if(typeof _rpRenderStartEndChips === 'function') _rpRenderStartEndChips();
+    if(typeof _rpRenderPickStatus === 'function') _rpRenderPickStatus();
+  } catch(_){}
   // Phase 42: init the corridor mode pills so the default visual state is
   // correct (visits mode active, width cell greyed).
   try { if(typeof _rpSetCorridorMode === 'function') _rpSetCorridorMode(window._RP_CORRIDOR_MODE || 'visits'); } catch(_){}
