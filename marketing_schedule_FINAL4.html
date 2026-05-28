@@ -33006,6 +33006,19 @@ function _rpOptRenderStartPicker(){
 window._rpOptRenderStartPicker = _rpOptRenderStartPicker;
 
 function _rpOptSetStart(name){
+  // Phase 51 (2026-05-28): when a target is picked as Start, mutate its pin
+  // to the 'start' state (green S flag) IMMEDIATELY — matches Corridor's
+  // convention where the S/E flag drops on confirm, not on Generate.
+  // Revert any previously-picked Start pin back to 'suggested' (light blue).
+  try {
+    var prev = window._RP_OPT_START_NAME;
+    if(prev && prev !== name && typeof _rpSetPinState === 'function'){
+      _rpSetPinState(prev, 'suggested');
+    }
+    if(name && typeof _rpSetPinState === 'function'){
+      _rpSetPinState(name, 'start');
+    }
+  } catch(_){}
   window._RP_OPT_START_NAME = name;
   _rpOptRenderTargetList();   // re-enables Optimize button
 }
