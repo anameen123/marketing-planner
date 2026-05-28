@@ -27330,6 +27330,23 @@ function _rpPickEndpoint(which, idx){
   if(hid) hid.value = p.value;
   var box = document.getElementById('rp-'+which+'-suggest');
   if(box) box.style.display = 'none';
+  // Phase 34c (2026-05-27): stash the EXACT coord for this pick into
+  // _RP_START_COORD / _RP_END_COORD so downstream (line, rectangle,
+  // auto-compute) get a unique per-clinic point instead of the city
+  // centroid that p.value resolves to. For facility picks (p.kind is
+  // missing for facilities, value is _facility_*) we use getRouteCoord
+  // which returns the facility's real coord. For clinics + MVAs we use
+  // getCoordForBusiness(p.name) which returns the clinic's own coord.
+  var coord = null;
+  if(typeof getCoordForBusiness === 'function') coord = getCoordForBusiness(p.name);
+  if(!coord && typeof getRouteCoord === 'function') coord = getRouteCoord(p.value);
+  if(coord){
+    if(which === 'start') window._RP_START_COORD = { lat: coord.lat, lng: coord.lng };
+    else if(which === 'end') window._RP_END_COORD = { lat: coord.lat, lng: coord.lng };
+    console.log('[_rpPickEndpoint] stashed', which, 'coord:', coord);
+  } else {
+    console.warn('[_rpPickEndpoint] could not resolve coord for', p.name, '(value=' + p.value + ')');
+  }
   // Per user 2026-05-24: update the route-planner globals + the map.
   // Without this, picking from the search dropdown only wrote the hidden
   // value — the map never zoomed to show the corridor between Start and
@@ -27519,8 +27536,10 @@ function _rpRefreshCenterline(){
   try {
     var startVal = (document.getElementById('rp-start') || {}).value || '';
     var endVal   = (document.getElementById('rp-end')   || {}).value || '';
-    if(!startVal || !endVal){ _rpClearCenterline(); _rpClearCorridorBox(); }
-    else {
+    if(!startVal || !endVal){
+      console.log('[_rpRefreshCenterline] missing input', { startVal: startVal, endVal: endVal });
+      _rpClearCenterline(); _rpClearCorridorBox();
+    } else {
       // Phase 34b: prefer the EXACT jittered coords stashed at click time
       // (window._RP_START_COORD / _RP_END_COORD). Fall back to lookup chain
       // for keyboard picks where no jitter was captured.
@@ -27531,11 +27550,15 @@ function _rpRefreshCenterline(){
       }
       var A = window._RP_START_COORD || _rs(startVal);
       var B = (endVal === '__same__') ? A : (window._RP_END_COORD || _rs(endVal));
+      console.log('[_rpRefreshCenterline] resolved', { startVal: startVal, endVal: endVal, A: A, B: B, stashedA: !!window._RP_START_COORD, stashedB: !!window._RP_END_COORD });
       if(A && B && (A.lat !== B.lat || A.lng !== B.lng)){
         _rpDrawCenterline(A, B);
         // Phase 30: also draw the corridor rectangle the moment both are set.
         if(typeof _rpRefreshCorridorBox === 'function') _rpRefreshCorridorBox();
       } else {
+        if(A && B && A.lat === B.lat && A.lng === B.lng){
+          console.warn('[_rpRefreshCenterline] A === B (both points map to same coord — usually means city centroid for two clinics in the same city). Skipping line.');
+        }
         _rpClearCenterline();
         _rpClearCorridorBox();
       }
@@ -27543,7 +27566,7 @@ function _rpRefreshCenterline(){
     // Per user 2026-05-26: keep the "🤖 AI suggest" button in sync — show
     // it the moment both endpoints are set (with AI toggle on + key set).
     if(typeof _rpAiSuggestBtnSync === 'function') _rpAiSuggestBtnSync();
-  } catch(_){}
+  } catch(e){ console.error('[_rpRefreshCenterline] failed:', e); }
 }
 window._rpRefreshCenterline = _rpRefreshCenterline;
 
