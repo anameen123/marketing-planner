@@ -32739,34 +32739,37 @@ function _rpV5Start(){
     if(typeof showToast === 'function') showToast('Fill the required fields before finding candidates.');
     return;
   }
-  // Resolve Start + End
+  // Resolve Start + End — Phase 36 (2026-05-28): same coord-resolution
+  // chain as the line/rectangle (Phase 34b). Use the stashed jittered
+  // coord captured at pin-click / dropdown-pick time; fall back to
+  // getRouteCoord → getCoordForBusiness so clinic NAME values resolve.
+  // Was the reason Find Candidates returned 0 — getRouteCoord returns
+  // null for clinic names, so the function bailed at the gate.
   var startKey = (document.getElementById('rp-start') || {}).value || '';
   var endKey   = (document.getElementById('rp-end')   || {}).value || '';
-  var A = (typeof getRouteCoord === 'function') ? getRouteCoord(startKey) : null;
+  function _rsAny(val){
+    var c = (typeof getRouteCoord === 'function') ? getRouteCoord(val) : null;
+    if(!c && typeof getCoordForBusiness === 'function') c = getCoordForBusiness(val);
+    return c;
+  }
+  var A = window._RP_START_COORD || _rsAny(startKey);
   if(!A){ if(typeof showToast === 'function') showToast('Start point not resolvable on the map — re-pick from suggestions.'); return; }
   var B;
   if(endKey === '__same__'){ B = A; }
-  else { B = (typeof getRouteCoord === 'function') ? getRouteCoord(endKey) : null; }
+  else { B = window._RP_END_COORD || _rsAny(endKey); }
   if(!B){ if(typeof showToast === 'function') showToast('End point not resolvable on the map — re-pick from suggestions.'); return; }
+  console.log('[_rpV5Start] resolved A,B', { A: A, B: B });
   // Read params
   var N = parseInt((document.getElementById('rp-level-count') || {}).value, 10) || 5;
   if(N < 1) N = 1; if(N > 12) N = 12;
   var halfWidth = parseFloat((document.getElementById('rp-corridor') || {}).value) || 3;
-  // Per user 2026-05-26: corridor half-width must be < 25% of the straight-
-  // line Start→End length. Clamp + toast if exceeded so the user sees what
-  // was applied.
   var straightMi = _rpHaversineMiles(A, B);
-  var maxHalfWidth = straightMi * 0.25;
-  if(maxHalfWidth < 0.5) maxHalfWidth = 0.5;   // avoid sub-half-mile for tiny round-trips
-  if(halfWidth > maxHalfWidth){
-    var capped = Math.floor(maxHalfWidth * 10) / 10;
-    var inp = document.getElementById('rp-corridor');
-    if(inp) inp.value = capped;
-    if(typeof showToast === 'function'){
-      showToast('Corridor half-width capped at ' + capped.toFixed(1) + ' mi (25% of the ' + straightMi.toFixed(1) + ' mi Start→End length).');
-    }
-    halfWidth = capped;
-  }
+  // Phase 36: trust the applied half-width. The previous 25% cap silently
+  // overrode the user's value, which made "find candidates" use a smaller
+  // corridor than the visible rectangle. If the user picked a wide
+  // corridor, honor it — clamping is the user's call via the Apply button.
+  if(halfWidth > 12){ halfWidth = 12; }
+  console.log('[_rpV5Start] using halfWidth =', halfWidth, '· straight-line =', straightMi.toFixed(2), 'mi');
   var autoExpand = !!(document.getElementById('rp-auto-expand') && document.getElementById('rp-auto-expand').checked);
   var specFilter = (document.getElementById('rp-specialty') || {}).value || '';
   var skipVisited = !!(document.getElementById('rp-skip-visited') && document.getElementById('rp-skip-visited').checked);

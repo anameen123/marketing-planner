@@ -194,6 +194,9 @@ const TRACE_LOG   = path.resolve(__dirname, '_visual_trace.log');
     out.corridorBoxDrawn = !!(window._DV_CORRIDOR_BOX && window._DV_CORRIDOR_BOX.fill);
     out.startCoordStashed = !!window._RP_START_COORD;
     out.endCoordStashed   = !!window._RP_END_COORD;
+    // Phase 36: run Find Candidates and check the flat list count
+    try { _rpV5Start(); } catch(e){ out.startErr = e.message; }
+    out.flatCandidateCount = (window._RP_V5_LAST && window._RP_V5_LAST.flatCandidates) ? window._RP_V5_LAST.flatCandidates.length : null;
     return out;
   });
   note('[auto-compute test] ' + JSON.stringify(autoTest, null, 2));
