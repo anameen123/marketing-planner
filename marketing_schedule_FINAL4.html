@@ -38342,9 +38342,26 @@ function openAddVisitFromPage(){
   if(lbl) lbl.textContent = '(pick a date below)';
   var pickerRow = document.getElementById('av-date-picker-row');
   if(pickerRow) pickerRow.style.display = 'block';
-  // Default the date to today
-  var today = new Date();
-  var iso = today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-'+String(today.getDate()).padStart(2,'0');
+  // Phase 97 (2026-05-28): default to the day the rep is VIEWING (if
+  // any) instead of today. If they opened the May 30 page and clicked
+  // Add Visit (via map pin, Bank card, etc.), the date picker should
+  // start on May 30 — not on today (which might be a completely
+  // different day). Falls back to today when no day is open.
+  var iso;
+  try {
+    var dvOpenIso = (typeof S !== 'undefined' && S.currentDay != null && S.days && S.days[S.currentDay])
+      ? S.days[S.currentDay].date
+      : null;
+    if(dvOpenIso){
+      iso = dvOpenIso;
+    } else {
+      var today = new Date();
+      iso = today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-'+String(today.getDate()).padStart(2,'0');
+    }
+  } catch(_){
+    var t2 = new Date();
+    iso = t2.getFullYear()+'-'+String(t2.getMonth()+1).padStart(2,'0')+'-'+String(t2.getDate()).padStart(2,'0');
+  }
   var dp = document.getElementById('av-date-picker');
   if(dp){
     dp.value = iso;
