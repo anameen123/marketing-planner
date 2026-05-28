@@ -28528,37 +28528,88 @@ window._rpGetVisualCoord = _rpGetVisualCoord;
 function _rpHighlightInsideRectangle(A, B, halfW){
   if(!A || !B || !halfW) return { total: 0 };
   if(typeof _rpResetSuggestedPins === 'function') _rpResetSuggestedPins();
-  var total = 0, recent = 0, scheduled = 0, deadEnd = 0, alreadyVisitedPeriod = 0;
-  function check(name){
+  // Phase 107 (2026-05-28): track WHY each inside-rectangle pin gets
+  // excluded from the candidate list. User saw a green pin inside the
+  // box and asked "why didn't this make it?" — the candidate-finder
+  // applies more filters than the visual highlighter, and we never told
+  // them. Now we track each exclusion category with the actual names so
+  // the candidate-list footer can show a breakdown + DevTools can show
+  // exactly which pin was filtered for what reason.
+  var total = 0;
+  var ex = {                       // names lost to each filter
+    recent: [], scheduled: [], deadEnd: [], alreadyVisitedPeriod: [],
+    isEndpoint: [], specMismatch: []
+  };
+  // Resolve once so we can dedupe Start/End by name.
+  var startName = (window._RP_START_NAME || '').toString();
+  var endName   = (window._RP_END_NAME   || '').toString();
+  var scheduledSet = (typeof _rpScheduledClinicsForActiveDay === 'function')
+    ? _rpScheduledClinicsForActiveDay()
+    : {};
+  var specFilter = '';
+  try { specFilter = (document.getElementById('rp-spec') || {}).value || ''; } catch(_){}
+  function check(name, bizSpec){
     if(!name) return;
-    // Phase 38: visual coord (jittered) — matches the on-screen pin
     var coord = _rpGetVisualCoord(name);
     if(!coord) return;
-    // Phase 90 (2026-05-28): distance-to-segment — covers the case
-    // where S ≈ E (search becomes a circle around the point).
     var dist = _rpV5DistanceToSegment(coord, A, B);
     if(dist > halfW) return;
     total++;
-    // Phase 41: ONLY light up green/yellow per user. Skip red (fresh) and
-    // orange (warm). Tally what's filtered for the explainer message.
+    // Recency — fresh/warm excluded from BOTH lit-up + candidates.
     var days = (typeof daysSinceLastVisit === 'function') ? daysSinceLastVisit(name) : null;
     var rec  = (typeof recencyBucket === 'function') ? recencyBucket(days) : null;
     if(rec && (rec.key === 'fresh' || rec.key === 'warm')){
-      recent++;
+      ex.recent.push(name);
       return;   // don't light it up
     }
-    if(typeof BUSINESS_REFERRALS !== 'undefined' && BUSINESS_REFERRALS[name] && (BUSINESS_REFERRALS[name].currentCount || 0) > 0) alreadyVisitedPeriod++;
+    // Track the OTHER filters that the candidate-finder applies but the
+    // visual highlight doesn't — these pins still get lit up but they
+    // won't make it into the list.
+    if(name === startName || name === endName){
+      ex.isEndpoint.push(name);
+    }
+    if(scheduledSet[name]){
+      ex.scheduled.push(name);
+    }
+    if(typeof BUSINESS_REFERRALS !== 'undefined' && BUSINESS_REFERRALS[name] && (BUSINESS_REFERRALS[name].currentCount || 0) > 0){
+      ex.alreadyVisitedPeriod.push(name);
+    }
     var lead = (typeof getClinicLead === 'function') ? getClinicLead(name) : null;
-    if(lead && lead.status === 'dead_end') deadEnd++;
-    // Green/yellow inside the rectangle → light it up
+    if(lead && lead.status === 'dead_end'){
+      ex.deadEnd.push(name);
+    }
+    if(specFilter && bizSpec && bizSpec !== specFilter){
+      ex.specMismatch.push(name);
+    }
     if(typeof _rpSetPinState === 'function') _rpSetPinState(name, 'suggested');
   }
-  if(typeof CLINIC_BANK !== 'undefined') CLINIC_BANK.forEach(function(c){ if(c && c.n) check(c.n); });
-  if(typeof MVA_ATTORNEYS !== 'undefined') MVA_ATTORNEYS.forEach(function(m){ if(m && m.firm) check(m.firm); });
-  if(typeof OUTREACH !== 'undefined') OUTREACH.forEach(function(o){ if(o && o.name) check(o.name); });
-  var stats = { total: total, recent: recent, scheduled: scheduled, deadEnd: deadEnd, alreadyVisitedPeriod: alreadyVisitedPeriod };
+  if(typeof CLINIC_BANK !== 'undefined') CLINIC_BANK.forEach(function(c){ if(c && c.n) check(c.n, c.s || ''); });
+  if(typeof MVA_ATTORNEYS !== 'undefined') MVA_ATTORNEYS.forEach(function(m){ if(m && m.firm) check(m.firm, 'MVA'); });
+  if(typeof OUTREACH !== 'undefined') OUTREACH.forEach(function(o){ if(o && o.name) check(o.name, ''); });
+  // Legacy shape kept for back-compat with code that read .recent etc.
+  var stats = {
+    total: total,
+    recent: ex.recent.length,
+    scheduled: ex.scheduled.length,
+    deadEnd: ex.deadEnd.length,
+    alreadyVisitedPeriod: ex.alreadyVisitedPeriod.length,
+    isEndpoint: ex.isEndpoint.length,
+    specMismatch: ex.specMismatch.length,
+    excludedNames: ex                       // {category: [names]}
+  };
   window._RP_INSIDE_RECT_STATS = stats;
-  console.log('[corridor rectangle] inside =', total, '· recently visited =', recent, '· already visited this period =', alreadyVisitedPeriod, '· dead-end leads =', deadEnd);
+  try {
+    console.log('[corridor rectangle] inside=' + total
+      + ' · recent=' + stats.recent
+      + ' · alreadyScheduled=' + stats.scheduled
+      + ' · alreadyVisitedThisPeriod=' + stats.alreadyVisitedPeriod
+      + ' · deadEnd=' + stats.deadEnd
+      + ' · isEndpoint=' + stats.isEndpoint
+      + ' · specMismatch=' + stats.specMismatch);
+    Object.keys(ex).forEach(function(k){
+      if(ex[k].length > 0) console.log('  excluded by ' + k + ':', ex[k].slice(0, 10).join(', ') + (ex[k].length > 10 ? '...' : ''));
+    });
+  } catch(_){}
   return stats;
 }
 window._rpHighlightInsideRectangle = _rpHighlightInsideRectangle;
@@ -37102,6 +37153,37 @@ function _rpV5ShowFlatList(){
         + '</label>';
     });
     html += '</div>';
+    // Phase 107 (2026-05-28): "why isn't pin X in this list?" — show the
+    // breakdown of inside-rectangle pins that were filtered out. User
+    // reported seeing a green C pin inside the box that wasn't a
+    // candidate; this footer makes the gap explicit so they can decide
+    // whether to loosen the filter or just leave it.
+    try {
+      var s = window._RP_INSIDE_RECT_STATS || null;
+      var excluded = s ? (s.total - list.length) : 0;
+      if(s && excluded > 0){
+        var ln = [];
+        function add(label, names){
+          if(names && names.length > 0){
+            ln.push('• <b>' + names.length + '</b> ' + label + ' <span style="color:#94a3b8">(' + names.slice(0,3).map(function(n){return String(n).replace(/</g,'&lt;');}).join(', ') + (names.length > 3 ? ', +' + (names.length - 3) + ' more' : '') + ')</span>');
+          }
+        }
+        var ex = s.excludedNames || {};
+        add('already on this day\'s schedule', ex.scheduled);
+        add('visited recently (red/orange)',   ex.recent);
+        add('already visited this period',     ex.alreadyVisitedPeriod);
+        add('dead-end leads',                  ex.deadEnd);
+        add('marked as Start or End',          ex.isEndpoint);
+        add('specialty filter mismatch',       ex.specMismatch);
+        if(ln.length > 0){
+          html += '<div style="margin-top:10px;padding:10px 12px;background:#f8fafc;border:1px solid #e2e8f0;border-left:3px solid #94a3b8;border-radius:6px;font-size:11px;color:#475569;line-height:1.55">'
+            + '<div style="font-weight:700;color:#1F3864;margin-bottom:4px">ℹ ' + s.total + ' pins lit inside the corridor · ' + list.length + ' shown as candidates · ' + excluded + ' filtered:</div>'
+            + ln.join('<br>')
+            + '<div style="margin-top:6px;font-style:italic;color:#94a3b8">Pre-existing scheduled visits show up in the orange / red banners above (Phase 76 + 103) where you can fold them into the route or swap an endpoint.</div>'
+            + '</div>';
+        }
+      }
+    } catch(_){}
     // Live connection-rule preview (if any picks)
     var preview = _rpV5BuildConnectionPreview();
     if(preview){
