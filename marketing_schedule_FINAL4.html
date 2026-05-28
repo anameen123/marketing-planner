@@ -27146,6 +27146,14 @@ function openRoutePlanner(){
   var endInp   = document.getElementById('rp-end');
   var specSel  = document.getElementById('rp-specialty');
   if(!startInp || !endInp) return;
+  // Phase 40: nuke any stale selection halos / preview rings / live route
+  // before the planner shows. Prevents leftovers from a previous session
+  // (e.g. the stray purple "E" the user reported).
+  try {
+    if(typeof _rpClearSelectionHalo === 'function') _rpClearSelectionHalo();
+    if(typeof _rpClearPreviewRing === 'function') _rpClearPreviewRing();
+    if(typeof _rpClearLiveRoute === 'function') _rpClearLiveRoute();
+  } catch(_){}
   // ── Build the candidate pool (each entry: name, city, kind, value) ──
   // value = the key getRouteCoord() resolves on (city key for clinics/MVAs;
   // facility key for WCG locations).
@@ -28153,11 +28161,9 @@ function _rpQuickPickPin(name, coord){
     if(typeof _rpSetPinState === 'function'){
       _rpSetPinState(name, which);    // 'start' or 'end'
     }
-    // Persistent selection halo — kept as a backup visual indicator for the
-    // case where the picked location isn't an indexed pin (custom coord).
-    if(typeof _rpDrawSelectionHalo === 'function'){
-      _rpDrawSelectionHalo(which, coord, name);
-    }
+    // Phase 40 (2026-05-28): selection halo DISABLED — it was producing a
+    // stray purple ring + small "E" icon visible to the user. The pin
+    // itself + S/E flag give enough visual signal; halo was redundant.
     // Auto-fit if both ends are set
     var startVal = (document.getElementById('rp-start') || {}).value || '';
     var endVal   = (document.getElementById('rp-end')   || {}).value || '';
