@@ -3405,20 +3405,24 @@ body.role-front_desk #referrals-view {
            schedule first; clicking expand also scrolls the map into view. -->
       <div id="dv-daymap-header" style="background:linear-gradient(135deg,#1F3864,#3b5fa3);color:#fff;padding:12px 18px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;cursor:pointer;user-select:none" onclick="_dvToggleDayMap(event)">
         <div style="display:flex;align-items:center;gap:10px">
-          <span id="dv-daymap-chevron" style="font-size:14px;width:16px;display:inline-block;text-align:center;transition:transform .2s">▶</span>
+          <span id="dv-daymap-chevron" style="font-size:14px;width:16px;display:inline-block;text-align:center;transition:transform .2s;transform:rotate(90deg)">▶</span>
           <div>
             <div style="font-size:14px;font-weight:700">🗺️ Day Map</div>
-            <div style="font-size:11px;opacity:.85;margin-top:2px">Today's visits · tap to expand</div>
+            <div style="font-size:11px;opacity:.85;margin-top:2px">Today's visits · tap to collapse</div>
           </div>
         </div>
         <!-- Route Planner v1 + v2 + Smart Plan removed per user 2026-05-21. -->
       </div>
-      <div id="dv-daymap-body" style="display:none">
+      <!-- Phase 77b (2026-05-28): controls bar stays OUTSIDE the collapsible
+           body so the option buttons (Plan a Route, Show on map, Open in
+           Google Maps, Expand, etc.) are always reachable even when the
+           map tiles are collapsed. The body wrapper now only contains the
+           actual map + smart-plan panel + route summary. -->
       <!-- ── BUSINESS LAYER + RECENCY LEGEND ──────────────────────────
            Filter chips toggle clinic / MVA / outreach pin visibility.
            Recency legend shows what each fill color means. Smart Plan
            button starts the click-to-pick Start/End workflow. -->
-      <div id="dv-map-controls" style="background:#f8fafc;border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:10px 18px;display:flex;flex-wrap:wrap;align-items:center;gap:10px;justify-content:space-between">
+      <div id="dv-map-controls" data-stop-click="1" style="background:#f8fafc;border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:10px 18px;display:flex;flex-wrap:wrap;align-items:center;gap:10px;justify-content:space-between">
         <div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px">
           <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-right:4px">Show:</span>
           <button id="biz-layer-chip-clinic"   onclick="toggleBusinessLayer('clinic')"   style="background:#fff;border:1.5px solid #eab308;color:#854d0e;border-radius:14px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">🏥 Clinics</button>
@@ -3496,6 +3500,9 @@ body.role-front_desk #referrals-view {
           </button>
         </div>
       </div>
+      <!-- Phase 77b: collapsible body starts HERE — controls above stay
+           visible at all times so the rep can always reach the buttons. -->
+      <div id="dv-daymap-body" style="display:block">
       <div style="background:#fffbeb;border-top:1px solid #fcd34d;padding:5px 18px;font-size:10px;color:#92400e;font-style:italic;text-align:center">💡 At wide zoom: <b>clinic city counts</b> (e.g. "Frisco · 84"). Zoom in (scroll wheel) past city level to see <b>individual clinic pins</b>. MVAs + outreach with real addresses stay individual at all zooms.</div>
       <div id="dv-map" style="height:320px;background:#e2e8f0"></div>
       <div id="dv-map-fallback" style="display:none;padding:30px 20px;text-align:center;font-size:12px;color:var(--muted);font-style:italic">Map will appear here once the library loads (a few seconds after sign-in).</div>
@@ -35142,7 +35149,13 @@ window._dvSetMobileTab = _dvSetMobileTab;
 // event.stopPropagation() so they don't bubble into the toggle.
 
 window._DV_SCHEDULE_COLLAPSED = false;   // expanded by default
-window._DV_DAYMAP_COLLAPSED   = true;    // collapsed by default
+// Phase 77b (2026-05-28): default the map body to EXPANDED. Phase 75 had
+// it collapsed which made sense visually but the controls were inside it
+// — so the rep saw NO option buttons until clicking expand. Controls are
+// now outside the body (always visible); the body wraps only the tiles
+// + smart-plan + summary. Default expanded gives the rep an immediate
+// map view; they can still click to collapse for a compact look.
+window._DV_DAYMAP_COLLAPSED   = false;
 
 function _dvToggleSchedule(ev){
   // If the click bubbled from a button with data-stop-click, ignore.
