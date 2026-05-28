@@ -3460,15 +3460,10 @@ body.role-front_desk #referrals-view {
                discoverable. The dv-current-route-btn element is recreated
                in the new location below. -->
 
-          <!-- Phase 10b (per user 2026-05-25): one-click export of the day's
-               visits as a Google Maps directions deep link. On phones it
-               opens the Google Maps app directly with the route preloaded;
-               on desktop it opens maps.google.com with the same route. -->
-          <button id="dv-gmaps-export-btn" type="button" onclick="exportDayRouteToGoogleMaps();_dvScrollToMap();"
-                  title="Open the day's route in Google Maps for navigation. Builds a deep link with all stops in order; opens the Google Maps app on phone."
-                  style="background:#1e40af;border:none;color:#fff;border-radius:6px;padding:5px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;display:inline-flex;align-items:center;gap:5px;line-height:1.1">
-            🗺️ Open in Google Maps
-          </button>
+          <!-- Phase 94 (2026-05-28): "Open in Google Maps" moved to the far
+               right below — user wanted it isolated from the other clicks
+               to avoid misclicking it (it's the only one that navigates
+               away from the page). -->
           <!-- Phase 58 (2026-05-28): "🔦 Show on map" toggle + Prev/Next stepper.
                Lets the user step through every row in the day's visit table
                and see each clinic's pin lit up + map zoomed in. Useful when
@@ -3503,16 +3498,26 @@ body.role-front_desk #referrals-view {
           <button id="dv-reset-map-btn" type="button" onclick="_dvResetMapView();_dvScrollToMap();" title="Reset zoom + center to the default view (route if any, else today's visits)" style="background:#fff;border:1px solid #cbd5e1;color:#1F3864;border-radius:6px;padding:5px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;display:inline-flex;align-items:center;gap:5px;line-height:1.1">
             🔄 Reset
           </button>
-          <!-- Admin-only Map v2 settings opener. Hidden by default; revealed
-               by JS in renderDayMap when isAdmin() returns true. Opens the
-               existing settings modal where the Google Maps + Gemini keys
-               + daily quota caps are configured. -->
-          <button id="dv-mapv2-settings-btn" type="button" onclick="openMapV2Settings()" title="Map v2 settings — paste Google Maps API key for real driving directions, traffic-aware ETA, and AI auto-fill" style="display:inline-flex;align-items:center;gap:4px;background:#7030A0;border:1px solid #fff;color:#fff;border-radius:6px;padding:5px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;line-height:1.1">⚙ Map v2</button>
+          <!-- Phase 94 (2026-05-28): Map v2 settings button removed from
+               the top toolbar — relocated BELOW the map (small admin
+               link, lower visual weight). It's an admin config panel
+               (API keys + quota caps), not a daily-use control. -->
           <button id="dv-map-expand-btn" type="button" onclick="toggleDayMapExpanded();_dvScrollToMap();"
                   title="Expand the map to full height — easier to see the route"
                   style="background:#1F3864;border:none;color:#fff;border-radius:6px;padding:5px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;display:inline-flex;align-items:center;gap:5px;line-height:1.1">
             <span id="dv-map-expand-icon">↔</span>
             <span id="dv-map-expand-label">Expand</span>
+          </button>
+          <!-- Phase 94 (2026-05-28): "Open in Google Maps" isolated on the
+               FAR RIGHT per user — it's the only control that navigates
+               away from the page (opens an external tab), so putting
+               distance between it and the other clicks reduces misclick
+               risk. The spacer pushes it to the edge of the flex row. -->
+          <span style="flex:1 1 auto;min-width:8px"></span>
+          <button id="dv-gmaps-export-btn" type="button" onclick="exportDayRouteToGoogleMaps();_dvScrollToMap();"
+                  title="Open the day's route in Google Maps for navigation. Builds a deep link with all stops in order; opens the Google Maps app on phone."
+                  style="background:#1e40af;border:none;color:#fff;border-radius:6px;padding:5px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;display:inline-flex;align-items:center;gap:5px;line-height:1.1">
+            🗺️ Open in Google Maps
           </button>
         </div>
       </div>
@@ -3525,6 +3530,14 @@ body.role-front_desk #referrals-view {
       <div id="dv-route-summary" style="display:none;padding:10px 18px;background:#f8fafc;border-top:1px solid var(--border);font-size:12px;color:var(--text)"></div>
       <!-- Smart Plan working area — appears below the map once Start + End are picked -->
       <div id="rp-smart-panel" style="display:none;background:#f8fafc;border-top:1px solid var(--border);padding:14px 18px"></div>
+      <!-- Phase 94 (2026-05-28): Map v2 settings entry — relocated here
+           from the top toolbar per user. It's an admin-only config panel
+           for the Google Maps API key + GitHub Models token + daily
+           quota caps. Lower visual weight (text link, not a button)
+           since reps don't touch it day-to-day. Hidden for non-admin. -->
+      <div id="dv-mapv2-settings-row" style="display:none;background:#f8fafc;border-top:1px solid var(--border);padding:8px 18px;text-align:right;font-size:11px;color:var(--muted);font-family:DM Sans,sans-serif">
+        <a href="#" onclick="event.preventDefault();openMapV2Settings();" title="Admin: configure the Google Maps API key for real driving directions + traffic-aware ETA, the GitHub Models token for AI auto-fill, and daily quota caps." style="color:#7030A0;text-decoration:none;font-weight:600">⚙ Map v2 settings (admin)</a>
+      </div>
       </div><!-- /dv-daymap-body (Phase 75) -->
     </div>
   </div>
@@ -27332,24 +27345,13 @@ function renderDayMap(di){
         ? 'Planning is for today or future days only — this day is in the past.'
         : 'Pick a Start and End pin on the map — get a corridor of clinics to visit between them, ranked by longest-since-visited.';
     }
-    // Map v2 settings button — always visible (admins manage keys, non-admins
-    // get an "Only admin can change" toast on click, so it's safe to show).
-    // Green dot indicates a Maps key is configured (admin only — non-admin
-    // doesn't need to know whether the key is set).
-    var mv2Btn = document.getElementById('dv-mapv2-settings-btn');
-    if(mv2Btn){
-      mv2Btn.style.display = 'inline-flex';
+    // Phase 94 (2026-05-28): Map v2 settings entry — relocated from a
+    // top-bar button to a small admin-only link BELOW the map. Visible
+    // only when isAdmin() since reps never need to touch the config.
+    var mv2Row = document.getElementById('dv-mapv2-settings-row');
+    if(mv2Row){
       var canSeeKeys = (typeof isAdmin === 'function') && isAdmin();
-      if(canSeeKeys){
-        var keyActive = (typeof hasMapsKey === 'function') && hasMapsKey();
-        mv2Btn.innerHTML = '⚙ Map v2' + (keyActive ? ' <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#22c55e;margin-left:3px"></span>' : '');
-        mv2Btn.title = keyActive
-          ? 'Map v2 active — Google driving directions + traffic-aware ETA. Click to manage keys + quota.'
-          : 'Map v2 settings — paste your Google Maps API key for real driving directions + traffic-aware ETA.';
-      } else {
-        mv2Btn.innerHTML = '⚙ Map v2';
-        mv2Btn.title = 'Map v2 settings — admin only.';
-      }
+      mv2Row.style.display = canSeeKeys ? 'block' : 'none';
     }
   } catch(_){}
   // Try to init; if Leaflet isn't loaded yet, retry shortly.
