@@ -25289,33 +25289,13 @@ function _rpPickFromMap(name, slot){
 window._rpPickFromMap = _rpPickFromMap;
 
 function _rpRefreshHighlights(){
+  // Phase 44 (2026-05-28): legacy S/E badge drawer — was drawing a stray
+  // PURPLE "E" pendant on top of the legitimate red E from _rpDrawEndMarker.
+  // Replaced by _rpSetPinState(name,'start'|'end') (Phase 28) which mutates
+  // the underlying clinic pin itself + _rpDrawStartMarker/_rpDrawEndMarker
+  // for the big S/E flag. Neutered — just clear any leftover layers.
   if(!_RP_HIGHLIGHTS) return;
   _RP_HIGHLIGHTS.clearLayers();
-  function addHighlight(name, letter, fullLabel, color){
-    if(!name) return;
-    var c = _rpResolveCoord(name);
-    if(!c) return;
-    // Dashed ring around the pin so the location is clearly marked
-    var ring = L.circleMarker([c.lat, c.lng], {
-      radius: 16, color: color, weight: 3, fillOpacity: 0, dashArray: '4,3'
-    });
-    ring.bindPopup('<b>' + fullLabel + ':</b> ' + String(name).replace(/</g,'&lt;'));
-    _RP_HIGHLIGHTS.addLayer(ring);
-    // Big, visible S/E badge marker so the user can tell at a glance
-    // which pin is Start and which is End (without hovering or zooming in).
-    var badge = L.marker([c.lat, c.lng], {
-      icon: L.divIcon({
-        className: 'rp-se-badge',
-        html: '<div style="background:' + color + ';color:#fff;width:28px;height:28px;border-radius:50%;border:3px solid #fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;font-family:DM Sans,sans-serif;box-shadow:0 2px 8px rgba(15,23,42,.4)">' + letter + '</div>',
-        iconSize: [28, 28],
-        iconAnchor: [14, 36]   // anchor BELOW the pin so the badge sits above it
-      }),
-      interactive: false   // clicks pass through to the underlying pin
-    });
-    _RP_HIGHLIGHTS.addLayer(badge);
-  }
-  addHighlight(_RP_START_NAME, 'S', 'Start', '#1F3864');
-  addHighlight(_RP_END_NAME,   'E', 'End',   '#7030A0');
 }
 
 function _rpUpdateStatus(){
@@ -30150,8 +30130,21 @@ function _rpComputeOptimalParams(A, B){
   // Gather every candidate's (t, |perp|) once.
   // Phase 38: visual coord (jittered) — keeps the math consistent with what
   // the user sees AND with _rpHighlightInsideRectangle / _rpV5FindForLevel.
+  // Phase 44 (2026-05-28): exclude the picked Start + End clinics from
+  // the candidate pool so target=5 means 5 STOPS BETWEEN start and end —
+  // not 5 including start+end themselves. Both are in the bank with t≈0
+  // and t≈1 + perp=0, so without this exclusion the smallest 2 perps
+  // would always be Start + End.
+  var excludeName = {};
+  try {
+    var sName = (typeof window._RP_START_NAME !== 'undefined' && window._RP_START_NAME) ? String(window._RP_START_NAME).toLowerCase() : null;
+    var eName = (typeof window._RP_END_NAME   !== 'undefined' && window._RP_END_NAME)   ? String(window._RP_END_NAME).toLowerCase()   : null;
+    if(sName) excludeName[sName] = true;
+    if(eName) excludeName[eName] = true;
+  } catch(_){}
   var pool = [];
   function consider(name){
+    if(name && excludeName[String(name).toLowerCase()]) return;
     var c = (typeof _rpGetVisualCoord === 'function') ? _rpGetVisualCoord(name) : null;
     if(!c && typeof getCoordForBusiness === 'function') c = getCoordForBusiness(name);
     if(!c) return;
@@ -32940,6 +32933,16 @@ function _rpV5FindForLevel(A, B, k, opts){
     var out = [];
     function consider(name, bizType, spec){
       if(!name) return;
+      // Phase 44: exclude the picked Start + End themselves from the
+      // candidate list. They're the route's endpoints — not stops in
+      // between.
+      try {
+        var sNm = (window._RP_START_NAME || '').toString().toLowerCase();
+        var eNm = (window._RP_END_NAME   || '').toString().toLowerCase();
+        var nLc = String(name).toLowerCase();
+        if(sNm && nLc === sNm) return;
+        if(eNm && nLc === eNm) return;
+      } catch(_){}
       if(specFilter && spec !== specFilter) return;
       // Per user 2026-05-24: skip clinics already on today's schedule.
       if(scheduled[name]) return;
@@ -33885,11 +33888,60 @@ function _rpV5ShowLocked(){
     + '</div>'
     + '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">'
     +   '<button type="button" onclick="_rpV5EditPicks()" style="background:#fff;color:#1F3864;border:1px solid var(--border);border-radius:8px;padding:9px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">✏ Edit picks per level</button>'
-    +   '<button type="button" onclick="closeRoutePlanner()" style="background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;border:none;border-radius:8px;padding:9px 22px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">Done →</button>'
+    +   '<button type="button" onclick="_rpV5InsertPicksIntoDay()" style="background:linear-gradient(135deg,#15803d,#16a34a);color:#fff;border:none;border-radius:8px;padding:9px 22px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;box-shadow:0 2px 8px rgba(22,163,74,.35)">✓ Add to schedule →</button>'
     + '</div>';
   box.innerHTML = html;
 }
 window._rpV5ShowLocked = _rpV5ShowLocked;
+
+// Phase 44 (2026-05-28): "✓ Add to schedule" button handler. Pushes every
+// kept pick from the locked-in route into the day's visit rows in order.
+// Skips duplicates. Modeled after _rpRandomInsertIntoDay (Random Pick).
+function _rpV5InsertPicksIntoDay(){
+  try {
+    var picks = (window._RP_V5_LAST && window._RP_V5_LAST.connectionKept) || window._RP_SLOT_PICKS || [];
+    if(!Array.isArray(picks) || picks.length === 0){
+      if(typeof showToast === 'function') showToast('No stops to insert. Pick at least one candidate.');
+      return;
+    }
+    var di = (typeof _DV_LAST_DI === 'number') ? _DV_LAST_DI : null;
+    if(di == null || typeof S === 'undefined' || !S.days || !S.days[di]){
+      if(typeof showToast === 'function') showToast('Open a day on the calendar first.');
+      return;
+    }
+    var me = (CURRENT_USER && CURRENT_USER.name) || '';
+    var added = 0, skipped = 0;
+    // Picks should already be in t-order from _rpV5GenerateRoute
+    picks.forEach(function(p){
+      if(!p || !p.name) return;
+      var exists = (S.days[di].rows || []).some(function(r){ return r && r.clinic === p.name; });
+      if(exists){ skipped++; return; }
+      S.days[di].rows.push({
+        clinic: p.name,
+        member: me,
+        memberConfirmed: !!me,
+        status: 'Pending',
+        city: '',
+        rowConfirmed: false,
+        rd: '', relationship: '', leadNotes: '', cancelReason: '',
+        spending: null, _spId: null
+      });
+      added++;
+    });
+    if(typeof _saveS === 'function') _saveS();
+    if(typeof refresh === 'function') refresh(di);
+    if(typeof showToast === 'function'){
+      var msg = '✓ Added ' + added + ' stop' + (added===1?'':'s') + ' to the schedule';
+      if(skipped > 0) msg += ' (' + skipped + ' already there, skipped)';
+      showToast(msg);
+    }
+    if(typeof closeRoutePlanner === 'function') closeRoutePlanner();
+  } catch(e){
+    console.error('[_rpV5InsertPicksIntoDay] failed:', e);
+    if(typeof showToast === 'function') showToast('Failed to add stops: ' + (e && e.message));
+  }
+}
+window._rpV5InsertPicksIntoDay = _rpV5InsertPicksIntoDay;
 
 function _rpV5EditPicks(){
   _RP_V5_EDIT_MODE = true;
