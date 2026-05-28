@@ -3348,6 +3348,17 @@ body.role-front_desk #referrals-view {
                   style="background:linear-gradient(135deg,#7030A0,#9333ea);border:none;color:#fff;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;display:inline-flex;align-items:center;gap:5px;line-height:1.1;box-shadow:0 1px 3px rgba(112,48,160,.3)">
             🧭 Plan a Route
           </button>
+          <!-- Phase 52 (2026-05-28): "Current route" chip — only visible if
+               the user has saved a planner state for this day. Click to
+               re-open the planner in the saved mode with Start/End/picks
+               restored, so they can edit instead of starting from zero. -->
+          <button id="dv-current-route-btn" type="button" onclick="_rpResumeSavedRoute()"
+                  title="Edit the last route you generated for this day"
+                  style="display:none;background:linear-gradient(135deg,#16a34a,#15803d);border:none;color:#fff;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;align-items:center;gap:5px;line-height:1.1;box-shadow:0 1px 3px rgba(22,163,74,.3)">
+            <span>📍</span>
+            <span>Current route</span>
+            <span style="background:rgba(255,255,255,.25);padding:1px 5px;border-radius:8px;font-size:10px">✏</span>
+          </button>
           <!-- Phase 10b (per user 2026-05-25): one-click export of the day's
                visits as a Google Maps directions deep link. On phones it
                opens the Google Maps app directly with the route preloaded;
@@ -33218,6 +33229,17 @@ function _rpOptInsertIntoDay(){
   });
   if(typeof _saveS === 'function') _saveS();
   if(typeof refresh === 'function') refresh(di);
+  // Phase 52: save Optimize state so the user can resume + edit later
+  try {
+    if(typeof _rpSaveCurrentRoute === 'function'){
+      _rpSaveCurrentRoute({
+        mode: 'optimize',
+        optTargets: (window._RP_OPT_TARGETS || []).slice(),
+        optStartName: window._RP_OPT_START_NAME || null,
+        optOrdered: ordered.map(function(p){ return p.name; })
+      });
+    }
+  } catch(_){}
   if(typeof showToast === 'function'){
     var msg = '✓ Added ' + added + ' stop' + (added===1?'':'s') + ' to the schedule';
     if(skipped > 0) msg += ' (' + skipped + ' already there, skipped)';
@@ -34451,6 +34473,25 @@ function _rpV5InsertPicksIntoDay(){
     });
     if(typeof _saveS === 'function') _saveS();
     if(typeof refresh === 'function') refresh(di);
+    // Phase 52: save the planner state so the user can resume + edit later
+    try {
+      if(typeof _rpSaveCurrentRoute === 'function'){
+        var payload = {
+          mode: 'corridor',
+          startName:  window._RP_START_NAME || (document.getElementById('rp-start') || {}).value || null,
+          startLabel: (document.getElementById('rp-start-search') || {}).value || null,
+          startCoord: window._RP_START_COORD || null,
+          endName:    window._RP_END_NAME || (document.getElementById('rp-end') || {}).value || null,
+          endLabel:   (document.getElementById('rp-end-search') || {}).value || null,
+          endCoord:   window._RP_END_COORD || null,
+          corridorMode: window._RP_CORRIDOR_MODE || 'visits',
+          targetVisits: parseInt((document.getElementById('rp-target-visits') || {}).value, 10) || 5,
+          halfWidth:    parseFloat((document.getElementById('rp-corridor') || {}).value) || 3,
+          flatPicks:    Object.keys(window._RP_V5_FLAT_PICKS || {})
+        };
+        _rpSaveCurrentRoute(payload);
+      }
+    } catch(_){}
     if(typeof showToast === 'function'){
       var msg = '✓ Added ' + added + ' stop' + (added===1?'':'s') + ' to the schedule';
       if(skipped > 0) msg += ' (' + skipped + ' already there, skipped)';
@@ -34463,6 +34504,184 @@ function _rpV5InsertPicksIntoDay(){
   }
 }
 window._rpV5InsertPicksIntoDay = _rpV5InsertPicksIntoDay;
+
+// ════════════════════════════════════════════════════════════════════════════
+// PHASE 52 (2026-05-28) — RESUMABLE "CURRENT ROUTE"
+// After Add-to-schedule, persist the planner state to localStorage keyed
+// by day ISO. Show a "📍 Current route · ✏" chip on the day-view that
+// re-opens the planner in the same mode with Start/End/picks restored,
+// so the user can edit instead of starting from zero.
+// ════════════════════════════════════════════════════════════════════════════
+
+function _rpSavedRouteKey(dayIso){
+  return 'wcg_saved_route_v1_' + (dayIso || 'unknown');
+}
+
+function _rpGetCurrentDayIso(){
+  try {
+    var di = (typeof _DV_LAST_DI === 'number') ? _DV_LAST_DI : null;
+    if(di == null || typeof S === 'undefined' || !S.days || !S.days[di]) return null;
+    return S.days[di].date || null;
+  } catch(_){ return null; }
+}
+window._rpGetCurrentDayIso = _rpGetCurrentDayIso;
+
+function _rpSaveCurrentRoute(payload){
+  try {
+    var iso = _rpGetCurrentDayIso();
+    if(!iso) return;
+    payload.savedAt = new Date().toISOString();
+    payload.dayIso  = iso;
+    localStorage.setItem(_rpSavedRouteKey(iso), JSON.stringify(payload));
+    console.log('[savedRoute] saved for', iso, payload);
+    if(typeof _rpSyncCurrentRouteChip === 'function') _rpSyncCurrentRouteChip();
+  } catch(e){ console.warn('[savedRoute] save failed:', e); }
+}
+window._rpSaveCurrentRoute = _rpSaveCurrentRoute;
+
+function _rpLoadCurrentRoute(){
+  try {
+    var iso = _rpGetCurrentDayIso();
+    if(!iso) return null;
+    var raw = localStorage.getItem(_rpSavedRouteKey(iso));
+    return raw ? JSON.parse(raw) : null;
+  } catch(_){ return null; }
+}
+window._rpLoadCurrentRoute = _rpLoadCurrentRoute;
+
+function _rpClearCurrentRoute(){
+  try {
+    var iso = _rpGetCurrentDayIso();
+    if(!iso) return;
+    localStorage.removeItem(_rpSavedRouteKey(iso));
+    if(typeof _rpSyncCurrentRouteChip === 'function') _rpSyncCurrentRouteChip();
+  } catch(_){}
+}
+window._rpClearCurrentRoute = _rpClearCurrentRoute;
+
+// Show / hide the "📍 Current route" chip based on whether saved state
+// exists for the currently-open day.
+function _rpSyncCurrentRouteChip(){
+  var btn = document.getElementById('dv-current-route-btn');
+  if(!btn) return;
+  var saved = _rpLoadCurrentRoute();
+  if(saved && saved.mode){
+    btn.style.display = 'inline-flex';
+    var modeName = saved.mode === 'corridor' ? 'Corridor' : saved.mode === 'optimize' ? 'AI Optimize' : saved.mode;
+    var stopCount = 0;
+    if(saved.mode === 'corridor') stopCount = (saved.flatPicks || []).length;
+    else if(saved.mode === 'optimize') stopCount = (saved.optTargets || []).length;
+    btn.title = 'Edit your ' + modeName + ' route (' + stopCount + ' stops)';
+  } else {
+    btn.style.display = 'none';
+  }
+}
+window._rpSyncCurrentRouteChip = _rpSyncCurrentRouteChip;
+
+// Click handler for the chip — opens the planner + restores state.
+function _rpResumeSavedRoute(){
+  var saved = _rpLoadCurrentRoute();
+  if(!saved){
+    if(typeof showToast === 'function') showToast('No saved route for this day.');
+    return;
+  }
+  if(typeof openRoutePlanner !== 'function'){ return; }
+  // Open the planner first (which wipes state, then we restore on top)
+  openRoutePlanner();
+  // Defer the restore so openRoutePlanner's wipe completes first
+  setTimeout(function(){
+    try {
+      if(typeof _rpSetMode === 'function') _rpSetMode(saved.mode);
+      if(saved.mode === 'corridor'){
+        _rpRestoreCorridorState(saved);
+      } else if(saved.mode === 'optimize'){
+        _rpRestoreOptimizeState(saved);
+      }
+      if(typeof showToast === 'function') showToast('📍 Resumed your ' + saved.mode + ' route from ' + (saved.savedAt ? new Date(saved.savedAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : 'earlier'));
+    } catch(e){
+      console.error('[resumeSavedRoute] restore failed:', e);
+      if(typeof showToast === 'function') showToast('Resume failed: ' + (e && e.message));
+    }
+  }, 150);
+}
+window._rpResumeSavedRoute = _rpResumeSavedRoute;
+
+function _rpRestoreCorridorState(saved){
+  if(!saved) return;
+  // Restore Start
+  if(saved.startName){
+    var sInp = document.getElementById('rp-start');         if(sInp) sInp.value = saved.startName;
+    var sLbl = document.getElementById('rp-start-search');   if(sLbl) sLbl.value = saved.startLabel || saved.startName;
+    window._RP_START_NAME = saved.startName;
+    if(saved.startCoord){
+      window._RP_START_COORD = { lat: saved.startCoord.lat, lng: saved.startCoord.lng };
+      if(typeof _rpDrawStartMarker === 'function') _rpDrawStartMarker(saved.startCoord, saved.startName);
+      if(typeof _rpSetPinState === 'function') _rpSetPinState(saved.startName, 'start');
+    }
+  }
+  // Restore End
+  if(saved.endName){
+    var eInp = document.getElementById('rp-end');           if(eInp) eInp.value = saved.endName;
+    var eLbl = document.getElementById('rp-end-search');     if(eLbl) eLbl.value = saved.endLabel || saved.endName;
+    window._RP_END_NAME = saved.endName;
+    if(saved.endCoord){
+      window._RP_END_COORD = { lat: saved.endCoord.lat, lng: saved.endCoord.lng };
+      if(typeof _rpDrawEndMarker === 'function') _rpDrawEndMarker(saved.endCoord, saved.endName);
+      if(typeof _rpSetPinState === 'function') _rpSetPinState(saved.endName, 'end');
+    }
+  }
+  // Re-render chips
+  if(typeof _rpRenderStartEndChips === 'function') _rpRenderStartEndChips();
+  // Restore corridor mode + width / visits
+  if(saved.corridorMode && typeof _rpSetCorridorMode === 'function') _rpSetCorridorMode(saved.corridorMode);
+  if(saved.targetVisits){
+    var tv = document.getElementById('rp-target-visits');
+    if(tv) tv.value = saved.targetVisits;
+  }
+  if(saved.halfWidth){
+    var wi = document.getElementById('rp-corridor');
+    if(wi) wi.value = saved.halfWidth;
+    window._RP_APPLIED_HALFWIDTH = saved.halfWidth;
+  }
+  // Refresh line + rectangle + auto-compute hint
+  if(typeof _rpRefreshCenterline === 'function') _rpRefreshCenterline();
+  if(typeof _rpRefreshCorridorBox === 'function') _rpRefreshCorridorBox();
+  // Re-run Find Candidates so the flat list is populated, then restore picks
+  if(typeof _rpV5Start === 'function'){
+    setTimeout(function(){
+      try {
+        _rpV5Start();
+        // Restore the flat picks
+        if(Array.isArray(saved.flatPicks)){
+          window._RP_V5_FLAT_PICKS = {};
+          saved.flatPicks.forEach(function(name){ window._RP_V5_FLAT_PICKS[name] = true; });
+          if(typeof _rpV5ShowFlatList === 'function') _rpV5ShowFlatList();
+          if(typeof _rpRefreshLiveRoute === 'function') _rpRefreshLiveRoute();
+        }
+      } catch(e){ console.error('[restoreCorridor] post-Find failed:', e); }
+    }, 200);
+  }
+}
+window._rpRestoreCorridorState = _rpRestoreCorridorState;
+
+function _rpRestoreOptimizeState(saved){
+  if(!saved || !Array.isArray(saved.optTargets)) return;
+  // Initialize the optimize state
+  if(typeof _rpOptInit === 'function') _rpOptInit();
+  // Push back the saved targets
+  window._RP_OPT_TARGETS = saved.optTargets.slice();
+  window._RP_OPT_TARGETS.forEach(function(t){
+    if(typeof _rpSetPinState === 'function') _rpSetPinState(t.name, 'suggested');
+  });
+  window._RP_OPT_START_NAME = saved.optStartName || null;
+  if(saved.optStartName && typeof _rpSetPinState === 'function'){
+    _rpSetPinState(saved.optStartName, 'start');
+  }
+  if(typeof _rpOptRenderTargetList === 'function') _rpOptRenderTargetList();
+  if(typeof _rpOptRenderStartPicker === 'function') _rpOptRenderStartPicker();
+  if(typeof _rpOptRenderPickStatus === 'function') _rpOptRenderPickStatus();
+}
+window._rpRestoreOptimizeState = _rpRestoreOptimizeState;
 
 function _rpV5EditPicks(){
   _RP_V5_EDIT_MODE = true;
@@ -35874,6 +36093,9 @@ function openDay(di){
   // Render the day's route-map panel (lazy; if Leaflet isn't loaded yet it
   // retries automatically). Showing this for everyone — admin + members.
   if(typeof renderDayMap === 'function') renderDayMap(di);
+  // Phase 52: show / hide the "📍 Current route" chip based on whether a
+  // saved planner state exists for this day.
+  if(typeof _rpSyncCurrentRouteChip === 'function') _rpSyncCurrentRouteChip();
 }
 function showLanding(){
   window.scrollTo(0,0);
