@@ -3485,11 +3485,10 @@ body.role-front_desk #referrals-view {
           <button type="button" onclick="event.stopPropagation();rpPickFromMapMode('end')" title="Pick the End by clicking a pin on the map — the drawer stays open" style="background:#1F3864;color:#fff;border:none;border-radius:8px;padding:9px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;white-space:nowrap">📍 Map</button>
         </div>
         <input type="hidden" id="rp-end" value="">
-        <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text);margin-top:6px;cursor:pointer">
-          <input type="checkbox" id="rp-round-trip" onchange="_rpToggleRoundTrip()" style="cursor:pointer">
-          <span><b>Round trip</b> — return to the Start (skips the End picker)</span>
-        </label>
-        <div id="rp-end-err" style="font-size:10px;color:#ef4444;margin-top:4px;display:none;font-weight:600">Pick an End — or tick <b>Round trip</b> to return to Start.</div>
+        <!-- Round Trip removed 2026-05-27 per user. Hidden input keeps the
+             id around so legacy code reading it doesn't crash. -->
+        <input type="checkbox" id="rp-round-trip" style="display:none">
+        <div id="rp-end-err" style="font-size:10px;color:#ef4444;margin-top:4px;display:none;font-weight:600">Pick an End before running Find candidates.</div>
       </div>
       <!-- Pin-pick status panel (per user 2026-05-26) — shows "👆 Click a
            pin to set START/END" + the pending preview + ✓ Confirm / ✕ Cancel
@@ -29502,23 +29501,113 @@ function _rpAiSuggestLevelCount(){
 }
 window._rpAiSuggestLevelCount = _rpAiSuggestLevelCount;
 
-// Phase 24 (2026-05-26): AI is the default. Whenever Start + End are both
-// set, automatically run the AI suggest so N + half-width get pre-filled.
-// Throttle: skip if we just ran this exact (startVal, endVal) pair.
+// Phase 26 (2026-05-27): DETERMINISTIC auto-compute of N + halfWidth per
+// user's spec. Strategy:
+//   • Start->End line = the x-axis. Each clinic's t = projection along
+//     this line, normalized 0..1 (0 = at Start, 1 = at End).
+//   • Each clinic's perp = signed perpendicular distance in miles. We use
+//     |perp| (amplitude) since left vs right of the line doesn't matter.
+//   • Group clinics by level: clinic in level k iff (k-1)/N <= t < k/N.
+//   • For each level, find minAbsPerp = the closest clinic to the
+//     centerline. The chosen halfWidth = max(minAbsPerp across levels) so
+//     EVERY level has at least one candidate. If a level is geographically
+//     empty (no clinics in its t-range), we skip it from the max calc.
+//   • N picked from total in-corridor density: aim for ~4 candidates per
+//     level. min 3 levels, max 8.
+// No remote call, no token needed — pure JS, instant.
+function _rpComputeOptimalParams(A, B){
+  if(!A || !B) return null;
+  var totalMi = _rpHaversineMiles(A, B);
+  if(totalMi < 0.5) return null;
+  var maxHalfCap = Math.min(12, Math.max(1, totalMi * 0.25));   // 25% rule
+  // Gather every candidate's (t, |perp|) once.
+  var pool = [];
+  function consider(name){
+    var c = (typeof getCoordForBusiness === 'function') ? getCoordForBusiness(name) : null;
+    if(!c) return;
+    var t = _rpV5ProjT(c, A, B);
+    if(t < 0 || t > 1) return;
+    var perp = Math.abs(_rpV5SignedPerp(c, A, B));
+    if(perp > maxHalfCap) return;   // too far off-route even at the cap
+    // Match the corridor filter — skip fresh/warm (recently visited)
+    var days = (typeof daysSinceLastVisit === 'function') ? daysSinceLastVisit(name) : null;
+    var rec = (typeof recencyBucket === 'function') ? recencyBucket(days) : null;
+    if(rec && (rec.key === 'fresh' || rec.key === 'warm')) return;
+    pool.push({ name: name, t: t, perp: perp });
+  }
+  if(typeof CLINIC_BANK !== 'undefined') CLINIC_BANK.forEach(function(c){ if(c && c.n) consider(c.n); });
+  if(typeof MVA_ATTORNEYS !== 'undefined') MVA_ATTORNEYS.forEach(function(m){ if(m && m.firm) consider(m.firm); });
+  if(pool.length === 0){
+    // No candidates at all inside the corridor cap — default to a generous
+    // half-width so the wizard still shows something.
+    return { N: 5, halfWidth: maxHalfCap, totalCandidates: 0, perLevel: [] };
+  }
+  // Pick N from total density: aim ~4 per level, clamp [3, 8].
+  var N = Math.max(3, Math.min(8, Math.round(pool.length / 4)));
+  // Compute per-level minAbsPerp.
+  function levelStats(N){
+    var perLevel = [];
+    for(var k = 1; k <= N; k++){
+      var tLo = (k - 1) / N, tHi = k / N;
+      var inLvl = pool.filter(function(p){ return p.t >= tLo && (k === N ? p.t <= tHi : p.t < tHi); });
+      var minAbs = Infinity;
+      inLvl.forEach(function(p){ if(p.perp < minAbs) minAbs = p.perp; });
+      perLevel.push({ k: k, count: inLvl.length, minAbsPerp: isFinite(minAbs) ? minAbs : null });
+    }
+    return perLevel;
+  }
+  var perLevel = levelStats(N);
+  // halfWidth = the largest finite minAbsPerp across levels (guarantees
+  // every non-empty level has >=1 candidate). Cap at maxHalfCap.
+  var halfWidth = 0;
+  perLevel.forEach(function(lvl){
+    if(lvl.minAbsPerp != null && lvl.minAbsPerp > halfWidth) halfWidth = lvl.minAbsPerp;
+  });
+  // Floor at 0.5 mi so it's never trivially small; ceiling at 25% rule.
+  halfWidth = Math.max(0.5, Math.min(maxHalfCap, Math.ceil(halfWidth * 2) / 2));   // round up to 0.5
+  return { N: N, halfWidth: halfWidth, totalCandidates: pool.length, perLevel: perLevel, maxHalfCap: maxHalfCap };
+}
+window._rpComputeOptimalParams = _rpComputeOptimalParams;
+
+// Phase 26: replaces the remote AI call. Computes deterministically + writes
+// into the rp-level-count + rp-corridor inputs. Runs whenever Start + End
+// are both set. Throttled by (start, end) key so it doesn't refire
+// identically.
 function _rpAutoSuggestIfReady(){
   try {
-    if(!_RP_AI || !_RP_AI.enabled) return;
-    if(typeof hasGeminiKey !== 'function' || !hasGeminiKey()) return;
     var startVal = (document.getElementById('rp-start') || {}).value || '';
     var endVal   = (document.getElementById('rp-end')   || {}).value || '';
     if(!startVal || !endVal) return;
     var pairKey = startVal + '|' + endVal;
-    if(_RP_AI.autoSuggestLast === pairKey) return;   // already ran for this pair
-    _RP_AI.autoSuggestLast = pairKey;
-    // Defer to next tick so the confirm flow finishes painting first.
-    setTimeout(function(){
-      if(typeof _rpAiSuggestLevelCount === 'function') _rpAiSuggestLevelCount();
-    }, 80);
+    if(_RP_AI && _RP_AI.autoSuggestLast === pairKey) return;
+    if(_RP_AI) _RP_AI.autoSuggestLast = pairKey;
+    var A = (typeof getRouteCoord === 'function') ? getRouteCoord(startVal) : null;
+    var B = (endVal === '__same__') ? A : ((typeof getRouteCoord === 'function') ? getRouteCoord(endVal) : null);
+    if(!A || !B) return;
+    var params = _rpComputeOptimalParams(A, B);
+    if(!params) return;
+    // Write into the inputs
+    var nInp = document.getElementById('rp-level-count');
+    if(nInp) nInp.value = params.N;
+    var wInp = document.getElementById('rp-corridor');
+    if(wInp){
+      wInp.value = params.halfWidth;
+      if(typeof _rpV4OnWidthChange === 'function') _rpV4OnWidthChange();
+    }
+    // Render an inline hint so the user sees the math
+    var hint = document.getElementById('rp-ai-suggest-n-hint');
+    if(hint){
+      hint.style.display = 'block';
+      hint.style.color = '#1e3a8a';
+      hint.style.background = '#dbeafe';
+      hint.style.border = '1px solid #93c5fd';
+      hint.innerHTML = '🧮 Auto: <b>' + params.N + ' levels</b> · <b>±' + params.halfWidth + ' mi</b> corridor — '
+        + params.totalCandidates + ' stale clinics in the corridor, half-width chosen so every level has >=1 candidate'
+        + ' <span style="color:#475569">(max of per-level closest-perpendicular distances)</span>';
+    }
+    if(typeof showToast === 'function'){
+      showToast('🧮 Auto: ' + params.N + ' levels · +-' + params.halfWidth + ' mi corridor');
+    }
   } catch(_){}
 }
 window._rpAutoSuggestIfReady = _rpAutoSuggestIfReady;
@@ -31277,10 +31366,9 @@ function _rpClearEndMarker(){
 window._rpClearEndMarker = _rpClearEndMarker;
 
 // ── PHASE 17 — CANDIDATE PIN HIGHLIGHTS (per user 2026-05-26) ─────────────
-// Phase 24 (2026-05-26): switched to a 3-state BLUE scheme per user.
-//   • Suggested for this level (not yet picked) → DARK BLUE ring (#1e3a8a)
-//   • Picked for this level                     → LIGHT BLUE ring (#60a5fa)
-//     filled to clearly show it's the chosen one
+// Phase 26 (2026-05-27): user clarified — INVERT the scheme.
+//   • Suggested for this level (not yet picked) → LIGHT BLUE ring (#93c5fd, temporary)
+//   • Picked for this level                     → DARK BLUE ring (#1e3a8a, filled, permanent)
 //   • Same-side rule excludes it                → grey dashed (dim)
 // The earlier blue/red per-side scheme was confusing — red signalled "bad"
 // when it just meant the other geographic side. Blue everywhere keeps the
@@ -31305,9 +31393,9 @@ function _rpDrawCandidateHighlights(slice, lockedSide){
     if(!c || !c.coord) return;
     var isLocked = (lockedSide && lockedSide !== sideKey);
     var isPicked = !!pickedNames[c.name];
-    // Default — suggested for this level
-    var color      = '#1e3a8a';   // dark blue
-    var fillColor  = '#1e3a8a';
+    // Default — LIGHT BLUE (suggested for this level, temporary)
+    var color      = '#93c5fd';   // light blue
+    var fillColor  = '#93c5fd';
     var fillOpac   = 0.12;
     var weight     = 3;
     var opacity    = 0.95;
@@ -31316,8 +31404,8 @@ function _rpDrawCandidateHighlights(slice, lockedSide){
       color = '#cbd5e1'; fillColor = '#cbd5e1';
       weight = 2; opacity = 0.5; fillOpac = 0.05; dash = '4,4';
     } else if(isPicked){
-      color = '#60a5fa'; fillColor = '#60a5fa';   // light blue (selected)
-      weight = 4; opacity = 1; fillOpac = 0.45;
+      color = '#1e3a8a'; fillColor = '#1e3a8a';   // DARK BLUE (picked, permanent)
+      weight = 5; opacity = 1; fillOpac = 0.55;
     }
     var marker = L.circleMarker([c.coord.lat, c.coord.lng], {
       radius: isPicked ? 16 : 14,
@@ -32063,21 +32151,17 @@ function _rpV5FindForLevel(A, B, k, opts){
     if(aD !== bD) return bD - aD;   // stalest first within bucket
     return a.absPerp - b.absPerp;
   });
-  // Per user 2026-05-26: split into +side and -side, take top 5 from each.
-  // The wizard surfaces max 10 candidates per level (5 per side).
+  // Phase 26 (2026-05-27): per user "give me ALL the candidates in each
+  // level". Removed the per-side 5-cap. We still split into +/- side for
+  // the same-side rule, but no slice() — every in-corridor clinic shows.
   var POSITIVE = [], NEGATIVE = [];
   cands.forEach(function(c){
     if(c.perp >= 0) POSITIVE.push(c); else NEGATIVE.push(c);
   });
-  var positiveSide = POSITIVE.slice(0, 5);
-  var negativeSide = NEGATIVE.slice(0, 5);
-  // Keep `candidates` as the flat combined list (positive first, then
-  // negative) so any older code path that reads .candidates still works.
-  var combined = positiveSide.concat(negativeSide);
   return {
-    candidates: combined,
-    positiveSide: positiveSide,
-    negativeSide: negativeSide,
+    candidates: cands,             // full sorted list
+    positiveSide: POSITIVE,
+    negativeSide: NEGATIVE,
     effectiveWidth: effectiveWidth,
     tLo: tLo, tHi: tHi
   };

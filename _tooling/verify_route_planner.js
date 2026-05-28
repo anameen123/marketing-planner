@@ -137,6 +137,71 @@ const TRACE = path.resolve(__dirname, '_verify_route_planner.log');
   });
   note('  → ' + JSON.stringify(endRes));
 
+  // ── (6.5) Phase 26 — verify deterministic auto + per-level uniqueness ─
+  note('--- Step: verify Phase 26 auto-compute + per-level candidates ---');
+  const phase26 = await page.evaluate(() => {
+    const out = {};
+    // Pick two clinics that are geographically far apart. Use the bank
+    // entries with the most extreme lat or lng diff so totalMi > 0.
+    let start = null, end = null, startCoord = null, endCoord = null;
+    if(typeof CLINIC_BANK !== 'undefined' && typeof getCoordForBusiness === 'function'){
+      const withCoords = [];
+      for(const c of CLINIC_BANK){
+        if(c && c.n){
+          const co = getCoordForBusiness(c.n);
+          if(co) withCoords.push({ name: c.n, coord: co });
+        }
+      }
+      // Sort by lng to find east-most + west-most
+      withCoords.sort((a, b) => a.coord.lng - b.coord.lng);
+      if(withCoords.length >= 2){
+        start = withCoords[0].name; startCoord = withCoords[0].coord;
+        end   = withCoords[withCoords.length - 1].name; endCoord = withCoords[withCoords.length - 1].coord;
+      }
+    }
+    if(!start || !end){ out.err = 'no clinics'; return out; }
+    out.startCoord = startCoord; out.endCoord = endCoord;
+    // Reset planner state
+    window._RP_AI && (window._RP_AI.autoSuggestLast = null);
+    // Use _rpQuickPickPin to commit Start then End — pass real coords
+    if(typeof rpPickFromMapMode === 'function') rpPickFromMapMode('start');
+    if(typeof _rpQuickPickPin === 'function') _rpQuickPickPin(start, startCoord);
+    if(typeof rpPickFromMapMode === 'function') rpPickFromMapMode('end');
+    if(typeof _rpQuickPickPin === 'function') _rpQuickPickPin(end, endCoord);
+    out.startLabel = start; out.endLabel = end;
+    out.nVal = (document.getElementById('rp-level-count') || {}).value;
+    out.halfWidthVal = (document.getElementById('rp-corridor') || {}).value;
+    // Run the corridor algorithm
+    if(typeof _rpV5Start === 'function'){
+      try { _rpV5Start(); } catch(e){ out.runErr = e.message; }
+    }
+    const last = window._RP_V5_LAST;
+    if(!last){ out.err2 = 'no _RP_V5_LAST'; return out; }
+    out.N = last.N;
+    out.baseWidth = last.baseWidth;
+    out.totalMi = Math.round(last.totalMi * 10) / 10;
+    // Per-level snapshot
+    out.perLevel = last.slices.map((s, i) => ({
+      k: i + 1,
+      n: s.candidates.length,
+      first3: s.candidates.slice(0, 3).map(c => c.name)
+    }));
+    // Cross-level uniqueness check: any clinic in 2+ levels?
+    const seen = {};
+    let dupes = 0;
+    last.slices.forEach((s, i) => {
+      s.candidates.forEach(c => {
+        if(seen[c.name] != null && seen[c.name] !== i) dupes++;
+        seen[c.name] = i;
+      });
+    });
+    out.crossLevelDupes = dupes;
+    return out;
+  });
+  note('  → N=' + phase26.N + ', halfWidth=' + phase26.baseWidth + ' mi, totalMi=' + phase26.totalMi);
+  note('  → per-level: ' + JSON.stringify(phase26.perLevel));
+  note('  → cross-level dupes: ' + phase26.crossLevelDupes + ' (should be 0)');
+
   // ── (7) Random Pick wizard — click pick-on-map, expect drawer stays ──
   note('--- Step: Random Pick mode + wizard pick ---');
   const randomRes = await page.evaluate(() => {
