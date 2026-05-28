@@ -33477,57 +33477,406 @@ function _rpOptInsertIntoDay(){
     return;
   }
   var me = (CURRENT_USER && CURRENT_USER.name) || '';
-  var added = 0, skipped = 0, removed = 0;
+  var removed = 0;
   // Phase 54: OVERRIDE — remove prior-route's inserted rows from this day
   // before adding the new ones, so re-generating fully replaces.
+  var priorSet = {};
   try {
     var priorSaved = (typeof _rpLoadCurrentRoute === 'function') ? _rpLoadCurrentRoute() : null;
     if(priorSaved && Array.isArray(priorSaved.insertedNames) && priorSaved.insertedNames.length > 0){
-      var priorSet = {}; priorSaved.insertedNames.forEach(function(n){ priorSet[n] = true; });
+      priorSaved.insertedNames.forEach(function(n){ priorSet[n] = true; });
       var beforeLen = S.days[di].rows.length;
       S.days[di].rows = (S.days[di].rows || []).filter(function(r){ return !(r && r.clinic && priorSet[r.clinic]); });
       removed = beforeLen - S.days[di].rows.length;
     }
   } catch(_){}
-  var insertedNames = [];
-  ordered.forEach(function(p){
-    if(!p || !p.name) return;
-    var exists = (S.days[di].rows || []).some(function(r){ return r && r.clinic === p.name; });
-    if(exists){ skipped++; return; }
-    S.days[di].rows.push({
-      clinic: p.name, member: me, memberConfirmed: !!me,
-      status: 'Pending', city: '', rowConfirmed: false,
-      rd: '', relationship: '', leadNotes: '', cancelReason: '',
-      spending: null, _spId: null
-    });
-    added++;
-    insertedNames.push(p.name);
-  });
-  if(typeof _saveS === 'function') _saveS();
-  if(typeof refresh === 'function') refresh(di);
-  // Phase 52 / 54: save Optimize state + inserted-names list
+  // ── PHASE 59 (2026-05-28) — Smart pre-existing integration ─────────────
+  // Mirror of the Corridor scan. AI Optimize uses geometry from
+  // _phase59GetGeometry('optimize') — either the circle (if a confirmed
+  // circle exists) or the ordered-points heuristic (within 1.5 mi of any
+  // pick).
+  var phase59ExtraInserted = [];
+  var phase59Removed = 0;
   try {
-    if(typeof _rpSaveCurrentRoute === 'function'){
-      _rpSaveCurrentRoute({
-        mode: 'optimize',
-        optTargets: (window._RP_OPT_TARGETS || []).slice(),
-        optStartName: window._RP_OPT_START_NAME || null,
-        optOrdered: ordered.map(function(p){ return p.name; }),
-        insertedNames: insertedNames
+    var pickNameSet = ordered.map(function(p){ return p && p.name; });
+    var preExisting = _phase59FindPreExistingPending(di, pickNameSet, priorSet);
+    if(preExisting.length > 0){
+      var geom = _phase59GetGeometry('optimize');
+      var routeCoords = ordered.map(function(p){ return p && p.coord; }).filter(Boolean);
+      var routeStopNames = ordered.map(function(p){ return p && p.name; });
+      var classified = _phase59Classify(preExisting, geom, routeCoords);
+      // CASE 1 — insiders: fold into ordered with best-insertion (no t to sort by)
+      classified.insiders.forEach(function(ins){
+        var best = _phase59BestInsertion(routeCoords, ins.coord);
+        var insertAt = Math.max(0, best.idx);
+        if(insertAt > ordered.length) insertAt = ordered.length;
+        ordered.splice(insertAt, 0, {
+          name: ins.name, coord: ins.coord,
+          _phase59FromExisting: true, _phase59ExistingRi: ins.ri
+        });
+        routeCoords.splice(insertAt, 0, ins.coord);
+        routeStopNames.splice(insertAt, 0, ins.name);
+        phase59ExtraInserted.push(ins.name);
       });
+      // CASE 2 — outsiders: defer to review modal
+      if(classified.outsiders.length > 0){
+        if(typeof showToast === 'function' && classified.insiders.length > 0){
+          showToast('🛣️ ' + classified.insiders.length + ' pre-existing visit' + (classified.insiders.length===1?'':'s') + ' folded into the route (inside geometry)');
+        }
+        _phase59ShowReviewModal(classified.outsiders, routeStopNames, function(decisions){
+          var applied = _phase59ApplyDecisions(ordered, decisions, di);
+          phase59Removed += applied.removedCount;
+          applied.insertedNames.forEach(function(n){ phase59ExtraInserted.push(n); });
+          _rpOptCommitOrderedToDay(ordered, di, me, removed, phase59Removed, phase59ExtraInserted);
+        });
+        return;   // wait for modal
+      }
     }
-  } catch(_){}
-  if(typeof showToast === 'function'){
-    var msg = '✓ Added ' + added + ' stop' + (added===1?'':'s') + ' to the schedule';
-    var extras = [];
-    if(removed > 0) extras.push('replaced ' + removed + ' previous');
-    if(skipped > 0) extras.push(skipped + ' already there, skipped');
-    if(extras.length) msg += ' (' + extras.join(' · ') + ')';
-    showToast(msg);
+  } catch(e){
+    console.warn('[phase59] optimize pre-existing scan failed:', e);
   }
-  if(typeof closeRoutePlanner === 'function') closeRoutePlanner();
+  _rpOptCommitOrderedToDay(ordered, di, me, removed, phase59Removed, phase59ExtraInserted);
 }
 window._rpOptInsertIntoDay = _rpOptInsertIntoDay;
+
+// Phase 59 — extracted commit helper for the AI Optimize path. Mirrors the
+// _rpV5CommitPicksToDay helper for Corridor — keeps both commit paths in sync.
+function _rpOptCommitOrderedToDay(ordered, di, me, removed, phase59Removed, phase59ExtraInserted){
+  try {
+    var added = 0, skipped = 0;
+    var insertedNames = [];
+    ordered.forEach(function(p){
+      if(!p || !p.name) return;
+      var exists = (S.days[di].rows || []).some(function(r){ return r && r.clinic === p.name; });
+      if(exists){ skipped++; return; }
+      S.days[di].rows.push({
+        clinic: p.name, member: me, memberConfirmed: !!me,
+        status: 'Pending', city: '', rowConfirmed: false,
+        rd: '', relationship: '', leadNotes: '', cancelReason: '',
+        spending: null, _spId: null
+      });
+      added++;
+      insertedNames.push(p.name);
+    });
+    if(typeof _saveS === 'function') _saveS();
+    if(typeof refresh === 'function') refresh(di);
+    // Phase 52 / 54: save Optimize state + inserted-names list
+    try {
+      if(typeof _rpSaveCurrentRoute === 'function'){
+        _rpSaveCurrentRoute({
+          mode: 'optimize',
+          optTargets: (window._RP_OPT_TARGETS || []).slice(),
+          optStartName: window._RP_OPT_START_NAME || null,
+          optOrdered: ordered.map(function(p){ return p.name; }),
+          insertedNames: insertedNames
+        });
+      }
+    } catch(_){}
+    if(typeof showToast === 'function'){
+      var msg = '✓ Added ' + added + ' stop' + (added===1?'':'s') + ' to the schedule';
+      var extras = [];
+      if(removed > 0) extras.push('replaced ' + removed + ' previous');
+      if(skipped > 0) extras.push(skipped + ' already there, skipped');
+      if(phase59Removed > 0) extras.push(phase59Removed + ' removed by review');
+      if(phase59ExtraInserted && phase59ExtraInserted.length > 0) extras.push(phase59ExtraInserted.length + ' folded in (pre-existing)');
+      if(extras.length) msg += ' (' + extras.join(' · ') + ')';
+      showToast(msg);
+    }
+    if(typeof closeRoutePlanner === 'function') closeRoutePlanner();
+  } catch(e){
+    console.error('[_rpOptInsertIntoDay] failed:', e);
+    if(typeof showToast === 'function') showToast('Failed to add stops: ' + (e && e.message));
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// PHASE 59 (2026-05-28) — SMART INTEGRATION OF PRE-EXISTING VISITS
+// When the rep clicks "Add to schedule" on a planned route, scan day.rows
+// for pre-existing Pending visits that aren't part of the new picks. Then:
+//   • CASE 1 — visit coord is INSIDE the route geometry (corridor box or AI
+//     circle) → silently auto-fold it into the picks list in t-order.
+//   • CASE 2 — visit coord is OUTSIDE the geometry → show a per-visit review
+//     modal. The rep sees the best insertion position + delta distance/time.
+//       Confirm  → insert at that position.
+//       Decline  → second-confirm to REMOVE the visit from today's calendar.
+//                  (Reasoning: if they don't want it on this route AND don't
+//                  want it on the calendar at all, the route is effectively
+//                  voting it out.)
+//       Cancel   → skip — leave the visit untouched, don't insert.
+//
+// "Pre-existing" means: row exists in day.rows now, has a clinic name, status
+// is Pending (Completed/Postponed/Canceled aren't re-routed), the clinic isn't
+// in the new picks, and the clinic isn't in priorSaved.insertedNames (those
+// are auto-replaced by the override mechanism from Phase 54).
+// ════════════════════════════════════════════════════════════════════════════
+
+// Get the active route geometry from window globals based on mode.
+// Returns one of:
+//   { kind:'corridor', A:{lat,lng}, B:{lat,lng}, halfWidthMi:N }
+//   { kind:'circle',   center:{lat,lng}, radiusMi:N }
+//   { kind:'optimize-points', coords:[{lat,lng},...] }   // fallback for AI Optimize without circle
+//   null if no resolvable geometry
+function _phase59GetGeometry(mode){
+  try {
+    if(mode === 'corridor'){
+      var A = window._RP_START_COORD;
+      var B = window._RP_END_COORD;
+      var halfWidthMi = (window._RP_V5_LAST && window._RP_V5_LAST.baseWidth)
+        || parseFloat((document.getElementById('rp-corridor') || {}).value)
+        || 3;
+      if(!A || !B) return null;
+      return { kind:'corridor', A:A, B:B, halfWidthMi: halfWidthMi };
+    }
+    if(mode === 'optimize'){
+      // Prefer the explicit circle if it exists + has a confirmed center
+      var circ = window._RP_OPT_CIRCLE;
+      if(circ && circ.center && circ.radius){
+        return { kind:'circle', center: circ.center, radiusMi: circ.radius };
+      }
+      // Fall back to the ordered target list — geometry is the convex sweep
+      // of the picks. We'll use a coarse "inside if within 0.5 mi of any
+      // pick OR within 1 mi of any leg" heuristic.
+      var ordered = window._RP_OPT_ORDERED || window._RP_OPT_TARGETS || [];
+      var coords = ordered.map(function(p){ return p && p.coord; }).filter(Boolean);
+      if(coords.length === 0) return null;
+      return { kind:'optimize-points', coords: coords };
+    }
+  } catch(_){}
+  return null;
+}
+window._phase59GetGeometry = _phase59GetGeometry;
+
+// Returns true if `coord` is inside the supplied geometry.
+function _phase59IsInsideGeometry(coord, geom){
+  if(!coord || !geom) return false;
+  try {
+    if(geom.kind === 'corridor'){
+      // Inside the rectangle: perpendicular distance ≤ halfWidth AND t ∈ [0, 1]
+      var t = (typeof _rpV5ProjT === 'function') ? _rpV5ProjT(coord, geom.A, geom.B) : -1;
+      if(t < 0 || t > 1) return false;
+      var perp = (typeof _rpV5SignedPerp === 'function') ? Math.abs(_rpV5SignedPerp(coord, geom.A, geom.B)) : Infinity;
+      return perp <= geom.halfWidthMi;
+    }
+    if(geom.kind === 'circle'){
+      var d = (typeof _rpHaversineMiles === 'function') ? _rpHaversineMiles(coord, geom.center) : Infinity;
+      return d <= geom.radiusMi;
+    }
+    if(geom.kind === 'optimize-points'){
+      // Inside if within 1.5 mi of any pick (loose — these are explicit picks
+      // not a bounded region so we want to err toward "outside" → Case 2)
+      for(var i = 0; i < geom.coords.length; i++){
+        if(typeof _rpHaversineMiles === 'function'
+          && _rpHaversineMiles(coord, geom.coords[i]) <= 1.5){ return true; }
+      }
+      return false;
+    }
+  } catch(_){}
+  return false;
+}
+window._phase59IsInsideGeometry = _phase59IsInsideGeometry;
+
+// Find the best insertion position for `newCoord` into the ordered route.
+// Returns { idx, deltaMi, deltaMin }. idx is the position where the new stop
+// would land (i.e., picks.splice(idx, 0, newPick) in the picks array).
+//
+// `routeCoords` is the FULL ordered coord sequence including Start and End
+// (or Start-only for AI Optimize without a fixed end). We try every gap
+// [i, i+1] and pick the one with minimum extra distance: d(i, new) + d(new, i+1) − d(i, i+1).
+function _phase59BestInsertion(routeCoords, newCoord){
+  if(!Array.isArray(routeCoords) || routeCoords.length < 2 || !newCoord){
+    return { idx: 1, deltaMi: 0, deltaMin: 0 };
+  }
+  var bestIdx  = 1;
+  var bestCost = Infinity;
+  for(var i = 0; i < routeCoords.length - 1; i++){
+    var a = routeCoords[i];
+    var b = routeCoords[i + 1];
+    if(!a || !b) continue;
+    var ab = _rpHaversineMiles(a, b);
+    var an = _rpHaversineMiles(a, newCoord);
+    var nb = _rpHaversineMiles(newCoord, b);
+    var detour = (an + nb) - ab;
+    if(detour < bestCost){
+      bestCost = detour;
+      bestIdx  = i + 1;   // insert AFTER index i
+    }
+  }
+  var deltaMi  = bestCost * 1.4;            // urban factor (matches the rest of the planner)
+  var deltaMin = Math.round((deltaMi / 30) * 60);
+  return { idx: bestIdx, deltaMi: deltaMi, deltaMin: deltaMin };
+}
+window._phase59BestInsertion = _phase59BestInsertion;
+
+// Scan the day for pre-existing Pending visits that need integration.
+// Returns array of { ri, name, coord, row } sorted by row index.
+function _phase59FindPreExistingPending(di, newPickNames, priorInsertedSet){
+  var out = [];
+  try {
+    var day = (typeof S !== 'undefined' && S.days) ? S.days[di] : null;
+    if(!day || !Array.isArray(day.rows)) return out;
+    var skipSet = {};
+    (newPickNames || []).forEach(function(n){ if(n) skipSet[n] = true; });
+    Object.keys(priorInsertedSet || {}).forEach(function(n){ skipSet[n] = true; });
+    day.rows.forEach(function(r, ri){
+      if(!r || !r.clinic) return;
+      if((r.status || 'Pending') !== 'Pending') return;   // only re-route Pending visits
+      if(skipSet[r.clinic]) return;
+      var coord = (typeof _rpGetVisualCoord === 'function') ? _rpGetVisualCoord(r.clinic) : null;
+      if(!coord && typeof getCoordForBusiness === 'function') coord = getCoordForBusiness(r.clinic);
+      if(!coord) return;   // no location → can't classify
+      out.push({ ri: ri, name: r.clinic, coord: coord, row: r });
+    });
+  } catch(_){}
+  return out;
+}
+window._phase59FindPreExistingPending = _phase59FindPreExistingPending;
+
+// Phase 59 — classify pre-existing visits as inside-geometry vs outside.
+// Returns { insiders: [...], outsiders: [...] } where each entry includes
+// the t-projection (for ordering) or insertion idx + delta cost.
+function _phase59Classify(preExisting, geom, routeCoords){
+  var insiders = [], outsiders = [];
+  preExisting.forEach(function(p){
+    var isInside = _phase59IsInsideGeometry(p.coord, geom);
+    if(isInside){
+      // For corridor, compute t so we can sort into the route order
+      var t = (geom.kind === 'corridor' && typeof _rpV5ProjT === 'function')
+        ? _rpV5ProjT(p.coord, geom.A, geom.B)
+        : 0.5;
+      insiders.push(Object.assign({}, p, { t: t }));
+    } else {
+      var best = _phase59BestInsertion(routeCoords, p.coord);
+      outsiders.push(Object.assign({}, p, best));
+    }
+  });
+  insiders.sort(function(a, b){ return a.t - b.t; });
+  return { insiders: insiders, outsiders: outsiders };
+}
+window._phase59Classify = _phase59Classify;
+
+// Phase 59 — show the per-visit review modal for OUTSIDER pre-existing visits.
+// Walks through `outsiders` one at a time. For each, the user sees:
+//   • Clinic name + city + status
+//   • The best insertion position (between which two stops) + delta mi/min
+//   • [✓ Bring into route] [✗ Remove from calendar] [→ Skip — leave alone]
+// onComplete(decisions) is called with [{ visit, action: 'insert'|'remove'|'skip' }, ...]
+function _phase59ShowReviewModal(outsiders, routeStopNames, onComplete){
+  if(!Array.isArray(outsiders) || outsiders.length === 0){
+    onComplete([]);
+    return;
+  }
+  var decisions = [];
+  var idx = 0;
+  // Build (or re-use) a modal shell
+  var modalId = 'phase59-review-modal';
+  var existing = document.getElementById(modalId);
+  if(existing) existing.remove();
+  var modal = document.createElement('div');
+  modal.id = modalId;
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99999;display:flex;align-items:center;justify-content:center;font-family:DM Sans,sans-serif;animation:fadeIn .15s ease-out';
+  document.body.appendChild(modal);
+  function render(){
+    if(idx >= outsiders.length){
+      modal.remove();
+      onComplete(decisions);
+      return;
+    }
+    var v = outsiders[idx];
+    var beforeStop = (v.idx > 0) ? (routeStopNames[v.idx - 1] || 'Start') : 'Start';
+    var afterStop  = (v.idx < routeStopNames.length) ? (routeStopNames[v.idx] || 'End') : 'End';
+    var deltaMiFmt = (v.deltaMi >= 10) ? v.deltaMi.toFixed(0) : v.deltaMi.toFixed(1);
+    var html = ''
+      + '<div style="background:#fff;border-radius:14px;padding:22px;max-width:520px;width:92%;box-shadow:0 20px 60px rgba(0,0,0,.4)">'
+      +   '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
+      +     '<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Smart route integration · ' + (idx + 1) + ' of ' + outsiders.length + '</div>'
+      +     '<button type="button" onclick="document.getElementById(\''+modalId+'\').remove()" style="background:transparent;border:0;font-size:18px;color:#94a3b8;cursor:pointer;line-height:1" title="Cancel — leave remaining visits untouched">&#10005;</button>'
+      +   '</div>'
+      +   '<div style="font-size:15px;font-weight:800;color:#1F3864;margin-bottom:4px">' + (v.name || 'Visit') + '</div>'
+      +   '<div style="font-size:11px;color:var(--muted);margin-bottom:14px">Pre-existing Pending visit on this day · outside the planned route geometry.</div>'
+      +   '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px;margin-bottom:14px">'
+      +     '<div style="font-size:11px;font-weight:700;color:#475569;margin-bottom:6px">If you bring it in, the route detours:</div>'
+      +     '<div style="font-size:12px;color:#1e293b;line-height:1.55">'
+      +       '<div>📍 Insert between <strong>' + beforeStop + '</strong> and <strong>' + afterStop + '</strong></div>'
+      +       '<div style="margin-top:6px">⛽ Extra distance: <strong style="color:#dc2626">+' + deltaMiFmt + ' mi</strong> · <strong style="color:#dc2626">+' + v.deltaMin + ' min</strong></div>'
+      +     '</div>'
+      +   '</div>'
+      +   '<div style="display:flex;flex-direction:column;gap:8px">'
+      +     '<button type="button" id="p59-btn-insert" style="background:linear-gradient(135deg,#15803d,#16a34a);color:#fff;border:none;border-radius:8px;padding:11px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">✓ Bring "' + (v.name || 'this visit') + '" into the route</button>'
+      +     '<button type="button" id="p59-btn-skip"   style="background:#fff;color:#1F3864;border:1px solid var(--border);border-radius:8px;padding:10px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">→ Skip — leave on the calendar but not in the route</button>'
+      +     '<button type="button" id="p59-btn-remove" style="background:#fff;color:#991b1b;border:1px solid #fecaca;border-radius:8px;padding:10px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">✗ Remove from today\'s calendar</button>'
+      +   '</div>'
+      + '</div>';
+    modal.innerHTML = html;
+    document.getElementById('p59-btn-insert').onclick = function(){
+      decisions.push({ visit: v, action: 'insert' });
+      idx++; render();
+    };
+    document.getElementById('p59-btn-skip').onclick = function(){
+      decisions.push({ visit: v, action: 'skip' });
+      idx++; render();
+    };
+    document.getElementById('p59-btn-remove').onclick = function(){
+      // Double-confirm before deleting
+      var msg = 'Remove "' + (v.name || 'this visit') + '" from today\'s calendar?\n\n'
+              + 'The row will be deleted from this day. If it has follow-up data it will be lost.';
+      if(!window.confirm(msg)) return;
+      decisions.push({ visit: v, action: 'remove' });
+      idx++; render();
+    };
+  }
+  render();
+}
+window._phase59ShowReviewModal = _phase59ShowReviewModal;
+
+// Phase 59 — apply the decisions:
+//   - 'insert' visits get folded into `picks` at their best idx (preserving order)
+//   - 'remove' visits get deleted from day.rows
+//   - 'skip' visits are left alone (no row change, not in picks)
+// Returns { picks, removedCount, insertedNames } so the caller can continue.
+function _phase59ApplyDecisions(picks, decisions, di){
+  var insertedExtra = [];
+  var removeRis = [];
+  // For 'insert' decisions, we want to splice them into picks in the right
+  // order. Sort by idx descending so earlier splices don't shift later ones.
+  var insertDecs = decisions.filter(function(d){ return d.action === 'insert'; });
+  insertDecs.sort(function(a, b){ return b.visit.idx - a.visit.idx; });
+  insertDecs.forEach(function(d){
+    var v = d.visit;
+    // Convert the day-row visit into a pick-shaped object
+    var pick = {
+      name: v.name,
+      coord: v.coord,
+      // Mark so downstream code knows this came from a pre-existing row
+      _phase59FromExisting: true,
+      _phase59ExistingRi: v.ri
+    };
+    // picks.length+1 == routeCoords.length-1; the idx in best-insertion was
+    // computed against [Start, ...picks, End]. picks idx == best.idx - 1.
+    // For AI Optimize w/o end, routeCoords = ordered list; idx maps to picks idx.
+    var pickIdx = Math.max(0, v.idx - 1);   // best.idx - 1 (best was relative to Start)
+    if(pickIdx > picks.length) pickIdx = picks.length;
+    picks.splice(pickIdx, 0, pick);
+    insertedExtra.push(v.name);
+  });
+  decisions.filter(function(d){ return d.action === 'remove'; }).forEach(function(d){
+    removeRis.push(d.visit.ri);
+  });
+  // Auto-insiders that came from caller's pre-fold are already in `picks`;
+  // we just track the names here so the caller can report.
+  // Delete removeRis from day.rows (descending index order to avoid shifts)
+  if(removeRis.length > 0){
+    removeRis.sort(function(a, b){ return b - a; });
+    try {
+      removeRis.forEach(function(ri){
+        if(S.days[di] && S.days[di].rows && S.days[di].rows[ri]){
+          S.days[di].rows.splice(ri, 1);
+        }
+      });
+    } catch(_){}
+  }
+  return { picks: picks, removedCount: removeRis.length, insertedNames: insertedExtra };
+}
+window._phase59ApplyDecisions = _phase59ApplyDecisions;
 
 // ════════════════════════════════════════════════════════════════════════════
 // PHASE 58 (2026-05-28) — "🔦 SHOW ON MAP" stepper
@@ -35341,16 +35690,90 @@ function _rpV5InsertPicksIntoDay(){
     // Phase 54 (2026-05-28): if a prior route exists for this day,
     // OVERRIDE it — remove the previously-inserted rows by name so the
     // re-generated route fully replaces it (no leftover stale stops).
+    var priorSet = {};
     try {
       var priorSaved = (typeof _rpLoadCurrentRoute === 'function') ? _rpLoadCurrentRoute() : null;
       if(priorSaved && Array.isArray(priorSaved.insertedNames) && priorSaved.insertedNames.length > 0){
-        var priorSet = {}; priorSaved.insertedNames.forEach(function(n){ priorSet[n] = true; });
+        priorSaved.insertedNames.forEach(function(n){ priorSet[n] = true; });
         var beforeLen = S.days[di].rows.length;
         S.days[di].rows = (S.days[di].rows || []).filter(function(r){ return !(r && r.clinic && priorSet[r.clinic]); });
         removed = beforeLen - S.days[di].rows.length;
       }
     } catch(_){}
-    // Picks should already be in t-order from _rpV5GenerateRoute
+    // ── PHASE 59 (2026-05-28) — Smart pre-existing integration ─────────────
+    // Before committing picks, look for pre-existing Pending visits on this
+    // day that aren't already part of the picks or the prior-route remove
+    // set. Auto-fold insiders (inside corridor) into picks in t-order. Send
+    // outsiders to a sequential review modal — user can bring each in, skip,
+    // or remove it from the calendar entirely.
+    var phase59ExtraInserted = [];
+    var phase59Removed = 0;
+    try {
+      var pickNameSet = picks.map(function(p){ return p && p.name; });
+      var preExisting = _phase59FindPreExistingPending(di, pickNameSet, priorSet);
+      if(preExisting.length > 0){
+        var geom = _phase59GetGeometry('corridor');
+        // Build the ordered coord sequence Start → picks → End so the
+        // best-insertion math has the full route to consider.
+        var routeCoords = [];
+        if(geom && geom.A) routeCoords.push(geom.A);
+        picks.forEach(function(p){ if(p && p.coord) routeCoords.push(p.coord); });
+        if(geom && geom.B) routeCoords.push(geom.B);
+        var routeStopNames = ['Start']
+          .concat(picks.map(function(p){ return p && p.name; }))
+          .concat(['End']);
+        var classified = _phase59Classify(preExisting, geom, routeCoords);
+        // CASE 1 — insiders fold in by t order (silently — they're literally
+        // on the way; the rep would expect the planner to grab them).
+        classified.insiders.forEach(function(ins){
+          // Splice into picks where t fits — picks already share the same
+          // t-order convention. We find the index by t.
+          var insertAt = picks.length;
+          for(var i = 0; i < picks.length; i++){
+            var pt = (geom && typeof _rpV5ProjT === 'function')
+              ? _rpV5ProjT(picks[i].coord, geom.A, geom.B)
+              : 1;
+            if(pt > ins.t){ insertAt = i; break; }
+          }
+          picks.splice(insertAt, 0, {
+            name: ins.name, coord: ins.coord,
+            _phase59FromExisting: true, _phase59ExistingRi: ins.ri
+          });
+          phase59ExtraInserted.push(ins.name);
+        });
+        // CASE 2 — outsiders: defer the commit until the modal completes.
+        if(classified.outsiders.length > 0){
+          var insiderCount = classified.insiders.length;
+          if(typeof showToast === 'function' && insiderCount > 0){
+            showToast('🛣️ ' + insiderCount + ' pre-existing visit' + (insiderCount===1?'':'s') + ' folded into the route (inside corridor)');
+          }
+          _phase59ShowReviewModal(classified.outsiders, routeStopNames, function(decisions){
+            var applied = _phase59ApplyDecisions(picks, decisions, di);
+            phase59Removed += applied.removedCount;
+            applied.insertedNames.forEach(function(n){ phase59ExtraInserted.push(n); });
+            _rpV5CommitPicksToDay(picks, di, me, removed, phase59Removed, phase59ExtraInserted);
+          });
+          return;   // wait for modal — commit happens in onComplete
+        }
+      }
+    } catch(e){
+      console.warn('[phase59] corridor pre-existing scan failed:', e);
+    }
+    // No outsiders → commit immediately
+    _rpV5CommitPicksToDay(picks, di, me, removed, phase59Removed, phase59ExtraInserted);
+  } catch(e){
+    console.error('[_rpV5InsertPicksIntoDay] failed:', e);
+    if(typeof showToast === 'function') showToast('Failed to add stops: ' + (e && e.message));
+  }
+}
+window._rpV5InsertPicksIntoDay = _rpV5InsertPicksIntoDay;
+
+// Phase 59 — extracted commit helper for the Corridor path so both the
+// "no-outsiders → commit now" and the "after-modal → commit now" branches
+// share the exact same insertion logic (no drift between paths).
+function _rpV5CommitPicksToDay(picks, di, me, removed, phase59Removed, phase59ExtraInserted){
+  try {
+    var added = 0, skipped = 0;
     var insertedNames = [];
     picks.forEach(function(p){
       if(!p || !p.name) return;
@@ -35397,6 +35820,8 @@ function _rpV5InsertPicksIntoDay(){
       var extras = [];
       if(removed > 0) extras.push('replaced ' + removed + ' previous');
       if(skipped > 0) extras.push(skipped + ' already there, skipped');
+      if(phase59Removed > 0) extras.push(phase59Removed + ' removed by review');
+      if(phase59ExtraInserted && phase59ExtraInserted.length > 0) extras.push(phase59ExtraInserted.length + ' folded in (pre-existing)');
       if(extras.length) msg += ' (' + extras.join(' · ') + ')';
       showToast(msg);
     }
