@@ -27497,8 +27497,15 @@ function _rpRefreshCorridorBox(){
     var startVal = (document.getElementById('rp-start') || {}).value || '';
     var endVal   = (document.getElementById('rp-end')   || {}).value || '';
     if(!startVal || !endVal){ _rpClearCorridorBox(); return; }
-    var A = (typeof getRouteCoord === 'function') ? getRouteCoord(startVal) : null;
-    var B = (endVal === '__same__') ? A : ((typeof getRouteCoord === 'function') ? getRouteCoord(endVal) : null);
+    // Phase 34b: same coord-resolution chain as _rpRefreshCenterline so
+    // clinic-name picks work, with priority to the stashed jittered coord.
+    function _rs(val){
+      var c = (typeof getRouteCoord === 'function') ? getRouteCoord(val) : null;
+      if(!c && typeof getCoordForBusiness === 'function') c = getCoordForBusiness(val);
+      return c;
+    }
+    var A = window._RP_START_COORD || _rs(startVal);
+    var B = (endVal === '__same__') ? A : (window._RP_END_COORD || _rs(endVal));
     if(!A || !B || (A.lat === B.lat && A.lng === B.lng)){ _rpClearCorridorBox(); return; }
     var halfW = parseFloat((document.getElementById('rp-corridor') || {}).value) || 3;
     _rpDrawCorridorBox(A, B, halfW);
@@ -27514,8 +27521,16 @@ function _rpRefreshCenterline(){
     var endVal   = (document.getElementById('rp-end')   || {}).value || '';
     if(!startVal || !endVal){ _rpClearCenterline(); _rpClearCorridorBox(); }
     else {
-      var A = (typeof getRouteCoord === 'function') ? getRouteCoord(startVal) : null;
-      var B = (endVal === '__same__') ? A : ((typeof getRouteCoord === 'function') ? getRouteCoord(endVal) : null);
+      // Phase 34b: prefer the EXACT jittered coords stashed at click time
+      // (window._RP_START_COORD / _RP_END_COORD). Fall back to lookup chain
+      // for keyboard picks where no jitter was captured.
+      function _rs(val){
+        var c = (typeof getRouteCoord === 'function') ? getRouteCoord(val) : null;
+        if(!c && typeof getCoordForBusiness === 'function') c = getCoordForBusiness(val);
+        return c;
+      }
+      var A = window._RP_START_COORD || _rs(startVal);
+      var B = (endVal === '__same__') ? A : (window._RP_END_COORD || _rs(endVal));
       if(A && B && (A.lat !== B.lat || A.lng !== B.lng)){
         _rpDrawCenterline(A, B);
         // Phase 30: also draw the corridor rectangle the moment both are set.
@@ -27560,6 +27575,8 @@ function closeRoutePlanner(){
     var eLbl = document.getElementById('rp-end-search');   if(eLbl) eLbl.value = '';
     if(typeof window._RP_START_NAME !== 'undefined') window._RP_START_NAME = '';
     if(typeof window._RP_END_NAME   !== 'undefined') window._RP_END_NAME   = '';
+    window._RP_START_COORD = null;   // Phase 34b
+    window._RP_END_COORD = null;
     if(typeof window._RP_V5_FLAT_PICKS !== 'undefined') window._RP_V5_FLAT_PICKS = {};
     if(typeof window._RP_V5_PICKS      !== 'undefined') window._RP_V5_PICKS = {};
     if(window._RP_AI) window._RP_AI.autoSuggestLast = null;
@@ -27759,6 +27776,14 @@ function _rpConfirmPendingPick(){
     var coord = (pending && pending.coord) ? pending.coord : null;
     if(!coord) coord = (typeof getCoordForBusiness === 'function') ? getCoordForBusiness(pending.name) : null;
     if(!coord) coord = (typeof getRouteCoord === 'function') ? getRouteCoord(hid && hid.value) : null;
+    // Phase 34b: stash the EXACT confirmed coord (jitter included) on a
+    // global so the line + rectangle + candidate compute all use the same
+    // point the user actually sees on the map — never the un-jittered
+    // city centroid.
+    if(coord){
+      if(which === 'start') window._RP_START_COORD = { lat: coord.lat, lng: coord.lng };
+      else if(which === 'end') window._RP_END_COORD = { lat: coord.lat, lng: coord.lng };
+    }
     if(coord && _DV_MAP && typeof L !== 'undefined'){
       if(which === 'start' && typeof _rpDrawStartMarker === 'function'){
         _rpDrawStartMarker(coord, pending.name);
@@ -27863,6 +27888,7 @@ function _rpClearStartSlot(){
     var sInp = document.getElementById('rp-start');       if(sInp) sInp.value = '';
     var sLbl = document.getElementById('rp-start-search'); if(sLbl) sLbl.value = '';
     if(typeof _RP_START_NAME !== 'undefined') window._RP_START_NAME = '';
+    window._RP_START_COORD = null;   // Phase 34b
     if(typeof _rpClearStartMarker === 'function') _rpClearStartMarker();
     if(typeof _rpClearSelectionHalo === 'function') _rpClearSelectionHalo('start');
     if(typeof _rpClearPreviewRing === 'function') _rpClearPreviewRing();
@@ -27886,6 +27912,7 @@ function _rpClearEndSlot(){
     var eInp = document.getElementById('rp-end');       if(eInp) eInp.value = '';
     var eLbl = document.getElementById('rp-end-search'); if(eLbl) eLbl.value = '';
     if(typeof _RP_END_NAME !== 'undefined') window._RP_END_NAME = '';
+    window._RP_END_COORD = null;   // Phase 34b
     if(typeof _rpClearEndMarker === 'function') _rpClearEndMarker();
     if(typeof _rpClearSelectionHalo === 'function') _rpClearSelectionHalo('end');
     if(typeof _rpClearPreviewRing === 'function') _rpClearPreviewRing();
@@ -30012,8 +30039,9 @@ function _rpRunAutoCompute(){
       }
       return c;
     }
-    var A = resolveAny(startVal);
-    var B = (endVal === '__same__') ? A : resolveAny(endVal);
+    // Prefer the stashed jittered coord from confirm time (Phase 34b)
+    var A = window._RP_START_COORD || resolveAny(startVal);
+    var B = (endVal === '__same__') ? A : (window._RP_END_COORD || resolveAny(endVal));
     if(!A || !B){
       if(typeof showToast === 'function') showToast('🧮 Could not resolve Start/End coordinates. Try re-picking from the map.');
       console.log('[_rpRunAutoCompute] resolve failed', { startVal: startVal, endVal: endVal, A: A, B: B });

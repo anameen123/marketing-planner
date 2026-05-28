@@ -182,6 +182,11 @@ const TRACE_LOG   = path.resolve(__dirname, '_visual_trace.log');
     out.nValueAfterClick = (document.getElementById('rp-level-count') || {}).value;
     out.halfValueAfterClick = (document.getElementById('rp-corridor') || {}).value;
     out.hintHasText = (document.getElementById('rp-ai-suggest-n-hint') || {}).innerText || '';
+    // Phase 34b: verify the centerline + corridor box actually got drawn
+    out.centerlineDrawn = !!(window._DV_CENTERLINE && window._DV_CENTERLINE.main);
+    out.corridorBoxDrawn = !!(window._DV_CORRIDOR_BOX && window._DV_CORRIDOR_BOX.fill);
+    out.startCoordStashed = !!window._RP_START_COORD;
+    out.endCoordStashed   = !!window._RP_END_COORD;
     return out;
   });
   note('[auto-compute test] ' + JSON.stringify(autoTest, null, 2));
