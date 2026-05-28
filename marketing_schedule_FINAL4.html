@@ -28059,8 +28059,18 @@ function _rpDrawCenterline(A, B){
     { color:'#2563eb', weight:5, opacity:1, dashArray:'14,8', interactive:false, lineCap:'round' }
   ).addTo(_DV_MAP);
   _DV_CENTERLINE = { glow: glow, main: main };
-  // Fit the map so both endpoints are visible (with a little padding).
-  try { _DV_MAP.fitBounds(main.getBounds().pad(0.25), { maxZoom: 13 }); } catch(_){}
+  // Phase 74 (2026-05-28): fit ONLY when A or B actually changed — not on
+  // every refresh. The previous version called fitBounds on every redraw,
+  // which fires on every pick-toggle → kept zooming the user out while they
+  // were trying to read the map. The key here is a stable hash of (A, B)
+  // so a re-render with the same endpoints is a no-op for the viewport.
+  try {
+    var abKey = A.lat.toFixed(4) + ',' + A.lng.toFixed(4) + '|' + B.lat.toFixed(4) + ',' + B.lng.toFixed(4);
+    if(window._RP_CENTERLINE_AB_KEY !== abKey){
+      window._RP_CENTERLINE_AB_KEY = abKey;
+      _DV_MAP.fitBounds(main.getBounds().pad(0.25), { maxZoom: 13 });
+    }
+  } catch(_){}
 }
 window._rpDrawCenterline = _rpDrawCenterline;
 function _rpClearCenterline(){
@@ -28071,6 +28081,9 @@ function _rpClearCenterline(){
     } catch(_){}
   }
   _DV_CENTERLINE = null;
+  // Phase 74: reset the fit-on-change key so the NEXT centerline draw
+  // (after a fresh planner open) does its one-time fitBounds again.
+  window._RP_CENTERLINE_AB_KEY = null;
 }
 
 // Phase 30 (2026-05-27): visible CORRIDOR RECTANGLE on the map. Width =
@@ -28237,13 +28250,42 @@ function _rpDrawLiveRoute(A, B, pickedClinics){
   if(!_DV_MAP || typeof L === 'undefined' || !A || !B) return;
   _rpClearLiveRoute();
   if(!Array.isArray(pickedClinics) || pickedClinics.length === 0) return;
-  // Sort by t (projection along S→E line) ascending — lowest x first.
-  var ordered = pickedClinics.slice().sort(function(a, b){
+  // Phase 74 (2026-05-28): merge in PRE-EXISTING Pending visits on this day
+  // that are inside the corridor — show them as auto-folded stops on the
+  // live route so the rep can see the integration BEFORE clicking Add to
+  // schedule (instead of only at commit time via Phase 59). Marked with
+  // _phase59FromExisting so we render them in ORANGE instead of green.
+  var preExistingInside = [];
+  try {
+    var halfWidthMi = (window._RP_V5_LAST && window._RP_V5_LAST.baseWidth) || 3;
+    var di = (typeof _DV_LAST_DI === 'number') ? _DV_LAST_DI : null;
+    if(di != null && typeof S !== 'undefined' && S.days && S.days[di]){
+      var pickedNames = {};
+      pickedClinics.forEach(function(p){ if(p && p.name) pickedNames[p.name] = true; });
+      (S.days[di].rows || []).forEach(function(r){
+        if(!r || !r.clinic) return;
+        if((r.status || 'Pending') !== 'Pending') return;
+        if(pickedNames[r.clinic]) return;
+        var coord = (typeof _rpGetVisualCoord === 'function') ? _rpGetVisualCoord(r.clinic) : null;
+        if(!coord && typeof getCoordForBusiness === 'function') coord = getCoordForBusiness(r.clinic);
+        if(!coord) return;
+        // Inside the corridor box?
+        var t = _rpV5ProjT(coord, A, B);
+        if(t < 0 || t > 1) return;
+        var perp = Math.abs(_rpV5SignedPerp(coord, A, B));
+        if(perp > halfWidthMi) return;
+        preExistingInside.push({ name: r.clinic, coord: coord, _phase59FromExisting: true });
+      });
+    }
+  } catch(_){}
+  // Sort the COMBINED set by t (projection along S→E line) ascending
+  var combined = pickedClinics.concat(preExistingInside);
+  var ordered = combined.slice().sort(function(a, b){
     var ta = _rpV5ProjT(a.coord, A, B);
     var tb = _rpV5ProjT(b.coord, A, B);
     return ta - tb;
   });
-  // Build the path: S → picks → E
+  // Build the path: S → ordered → E
   var pts = [[A.lat, A.lng]];
   ordered.forEach(function(p){ if(p && p.coord) pts.push([p.coord.lat, p.coord.lng]); });
   pts.push([B.lat, B.lng]);
@@ -28255,15 +28297,21 @@ function _rpDrawLiveRoute(A, B, pickedClinics){
   var line = L.polyline(pts, {
     color: '#16a34a', weight: 5, opacity: 1, interactive: false, lineCap: 'round', lineJoin: 'round'
   }).addTo(_DV_MAP);
-  // Numbered stop markers at each pick (1, 2, 3, ...)
+  // Numbered stop markers at each pick (1, 2, 3, ...).
+  // Phase 74: pre-existing (auto-folded) stops render in ORANGE so the rep
+  // can tell them apart from regular green picks at a glance.
   var markers = [];
   ordered.forEach(function(p, i){
     if(!p || !p.coord) return;
     var num = i + 1;
+    var isFold = !!p._phase59FromExisting;
+    var bg     = isFold ? '#f59e0b' : '#16a34a';
+    var border = isFold ? '#fff'    : '#fff';
+    var title  = isFold ? 'Pre-existing visit auto-folded into route' : '';
     var m = L.marker([p.coord.lat, p.coord.lng], {
       icon: L.divIcon({
         className: 'rp-route-stop',
-        html: '<div style="background:#16a34a;color:#fff;width:22px;height:22px;border-radius:50%;border:2.5px solid #fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;font-family:DM Sans,sans-serif;box-shadow:0 2px 6px rgba(0,0,0,.45)">' + num + '</div>',
+        html: '<div title="' + title + '" style="background:' + bg + ';color:#fff;width:22px;height:22px;border-radius:50%;border:2.5px solid ' + border + ';display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;font-family:DM Sans,sans-serif;box-shadow:0 2px 6px rgba(0,0,0,.45)">' + num + '</div>',
         iconSize: [22, 22], iconAnchor: [11, 11]
       }),
       interactive: false,
@@ -28272,7 +28320,7 @@ function _rpDrawLiveRoute(A, B, pickedClinics){
     markers.push(m);
   });
   _DV_LIVE_ROUTE = { glow: glow, line: line, markers: markers };
-  console.log('[live route] drawn', ordered.length, 'stops · order:', ordered.map(function(p){ return p.name; }));
+  console.log('[live route] drawn', ordered.length, 'stops (' + pickedClinics.length + ' picks + ' + preExistingInside.length + ' auto-folded) · order:', ordered.map(function(p){ return p.name + (p._phase59FromExisting ? ' ★' : ''); }));
 }
 window._rpDrawLiveRoute = _rpDrawLiveRoute;
 
