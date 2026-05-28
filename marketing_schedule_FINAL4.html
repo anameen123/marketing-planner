@@ -32903,7 +32903,10 @@ function _rpOptConfirmPending(){
   window._RP_OPT_TARGETS.push({ name: p.name, coord: p.coord, bizType: p.bizType });
   window._RP_OPT_PENDING = null;
   if(typeof _rpClearPreviewRing === 'function') _rpClearPreviewRing();
-  if(typeof _rpSetPinState === 'function') _rpSetPinState(p.name, 'picked');
+  // Phase 50 (2026-05-28): per user, while still building the target list
+  // pins stay LIGHT BLUE ('suggested'). They flip to DARK BLUE ('picked')
+  // only once the route gets generated — matches Corridor's convention.
+  if(typeof _rpSetPinState === 'function') _rpSetPinState(p.name, 'suggested');
   _rpOptRenderTargetList();
   _rpOptRenderStartPicker();
   _rpOptRenderPickStatus();
@@ -33104,6 +33107,19 @@ function _rpOptOptimize(){
     return;
   }
   window._RP_OPT_ORDERED = ordered;
+  // Phase 50 (2026-05-28): once the route is generated, flip every target
+  // pin from 'suggested' (light blue) to 'picked' (dark blue) so the user
+  // can tell at a glance which pins are committed to the route. Matches
+  // Corridor's convention. The start pin gets the explicit 'start' state
+  // so it visually pops as the route's origin.
+  try {
+    if(typeof _rpSetPinState === 'function'){
+      ordered.forEach(function(p, i){
+        if(!p || !p.name) return;
+        _rpSetPinState(p.name, i === 0 ? 'start' : 'picked');
+      });
+    }
+  } catch(_){}
   // Compute total miles (haversine × 1.4 urban factor)
   var rawMi = 0;
   for(var i = 0; i < ordered.length - 1; i++){
