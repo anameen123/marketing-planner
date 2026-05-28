@@ -27538,13 +27538,14 @@ function openRoutePlanner(){
       + areaList.map(function(a){ return '<option value="'+a.replace(/"/g,'&quot;')+'">'+a+'</option>'; }).join('');
   });
   // Reset the search inputs + hidden values
+  // Per user 2026-05-28: planner opens BLANK — no Frisco ER default + no
+  // round-trip default. Removed legacy seeding that auto-populated the
+  // Start with Frisco ER on every open; left a stale trace where the rep
+  // had to clear it before picking their real start.
   var sIn = document.getElementById('rp-start-search'); if(sIn) sIn.value = '';
   var eIn = document.getElementById('rp-end-search');   if(eIn) eIn.value = '';
-  // Default start = Frisco ER (matches prior behavior); end = same as start
-  startInp.value = '_facility_frisco_er';
-  var friscoFacility = pool.find(function(p){ return p.value === '_facility_frisco_er'; });
-  if(friscoFacility && sIn) sIn.value = friscoFacility.icon + ' ' + friscoFacility.name;
-  endInp.value = '__same__';
+  startInp.value = '';
+  endInp.value   = '';
 
   // Populate specialty filter from the actual specialties in the bank
   var specs = {};
