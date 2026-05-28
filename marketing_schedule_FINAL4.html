@@ -27761,6 +27761,13 @@ function openRoutePlanner(){
   if(res){ res.style.display = 'none'; res.innerHTML = ''; }
 
   document.getElementById('route-planner-modal').style.display = 'flex';
+  // Phase 102 (2026-05-28): start with Generate route DISABLED — user has
+  // to pick Start, End, run Find candidates, then check at least one pick
+  // before they can generate. _rpV5SyncGenerateBtn reads picks + endpoints
+  // and flips the button accordingly.
+  setTimeout(function(){
+    if(typeof _rpV5SyncGenerateBtn === 'function') _rpV5SyncGenerateBtn();
+  }, 50);
   // Phase 70b (2026-05-28): restore the last drag position (desktop only).
   if(typeof _rpRestoreDragPos === 'function') _rpRestoreDragPos();
   // Per user 2026-05-25: when the planner is open, the rest of the map
@@ -28095,6 +28102,8 @@ function _rpPickEndpoint(which, idx){
     // Phase 24: auto-trigger AI suggest now that both endpoints are set.
     if(typeof _rpAutoSuggestIfReady === 'function') _rpAutoSuggestIfReady();
   } else if(_RP_START_NAME || _RP_END_NAME){
+    // Phase 102: keep the Generate button gated as endpoints come in.
+    if(typeof _rpV5SyncGenerateBtn === 'function') _rpV5SyncGenerateBtn();
     // Only one endpoint chosen — pan/zoom the map to it so the user sees
     // where they just picked and can visually plan the other end.
     try {
@@ -36995,6 +37004,8 @@ function _rpV5Start(){
   if(typeof _rpRefreshLiveRoute === 'function'){
     try { _rpRefreshLiveRoute(); } catch(_){}
   }
+  // Phase 102: now that picks are auto-checked, enable Generate route.
+  if(typeof _rpV5SyncGenerateBtn === 'function') _rpV5SyncGenerateBtn();
 }
 window._rpV5Start = _rpV5Start;
 
@@ -37110,6 +37121,8 @@ function _rpV5ToggleFlat(name, on){
   // Phase 39: redraw the live route polyline so the user sees the S→picks→E
   // chain update in real time as they check/uncheck candidates.
   if(typeof _rpRefreshLiveRoute === 'function') _rpRefreshLiveRoute();
+  // Phase 102 (2026-05-28): gate Generate route on having ≥1 pick.
+  if(typeof _rpV5SyncGenerateBtn === 'function') _rpV5SyncGenerateBtn();
 }
 window._rpV5ToggleFlat = _rpV5ToggleFlat;
 
@@ -37121,7 +37134,42 @@ function _rpV5ClearAllPicks(){
   _rpV5ShowFlatList();
   // Phase 39: clear the live route polyline.
   if(typeof _rpClearLiveRoute === 'function') _rpClearLiveRoute();
+  if(typeof _rpV5SyncGenerateBtn === 'function') _rpV5SyncGenerateBtn();
 }
+
+// Phase 102 (2026-05-28): Generate-route button is DISABLED until the
+// user has picked at least one candidate. User: "find candidates should
+// be before creating a route and once i select tha candidates then the
+// generate a route is available before that it csn't be". Without this
+// gate, hitting Generate with zero picks gives a confusing toast or a
+// broken Add-to-schedule. Visual + functional disable here.
+function _rpV5SyncGenerateBtn(){
+  try {
+    var btn = document.getElementById('rp-v4-generate-btn');
+    if(!btn) return;
+    var pickCount = Object.keys(window._RP_V5_FLAT_PICKS || {}).length;
+    var startOk = !!(document.getElementById('rp-start') || {}).value;
+    var endOk   = !!(document.getElementById('rp-end')   || {}).value;
+    var ready   = (pickCount > 0) && startOk && endOk;
+    btn.disabled = !ready;
+    if(ready){
+      btn.style.opacity = '1';
+      btn.style.cursor = 'pointer';
+      btn.title = 'Build the ordered route from the ' + pickCount + ' picked candidate' + (pickCount === 1 ? '' : 's') + '.';
+      btn.textContent = 'Generate route → (' + pickCount + ')';
+    } else {
+      btn.style.opacity = '0.45';
+      btn.style.cursor = 'not-allowed';
+      if(!startOk || !endOk){
+        btn.title = 'Pick Start and End first.';
+      } else {
+        btn.title = 'Pick at least one candidate first (click "🔍 Find candidates", then check the boxes on the list).';
+      }
+      btn.textContent = 'Generate route →';
+    }
+  } catch(_){}
+}
+window._rpV5SyncGenerateBtn = _rpV5SyncGenerateBtn;
 window._rpV5ClearAllPicks = _rpV5ClearAllPicks;
 
 // ── PHASE 76 (2026-05-28) — Confirm pre-existing visit into candidates ─────
