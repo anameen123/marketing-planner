@@ -24978,6 +24978,23 @@ function renderAllBusinessPins(){
           _rpOptConsumePinClick(name, { lat: lat, lng: lng });
           return;
         }
+        // Phase 49 (2026-05-28): Random Pick wizard's "Pick on map" button
+        // arms _RP_RW_MAP_PICK_ACTIVE. Leaflet doesn't bubble pin clicks to
+        // the map's click listener — so without this branch, clicking a pin
+        // while armed did nothing visible.
+        if(typeof _RP_RW_MAP_PICK_ACTIVE !== 'undefined' && _RP_RW_MAP_PICK_ACTIVE && typeof _rpRwHandleMapPick === 'function'){
+          if(ev && ev.originalEvent){
+            if(ev.originalEvent.stopPropagation) ev.originalEvent.stopPropagation();
+            if(ev.originalEvent.preventDefault) ev.originalEvent.preventDefault();
+            if(ev.originalEvent.stopImmediatePropagation) ev.originalEvent.stopImmediatePropagation();
+          }
+          if(L && L.DomEvent && L.DomEvent.stop) L.DomEvent.stop(ev);
+          if(_DV_MAP && _DV_MAP.closePopup) _DV_MAP.closePopup();
+          marker.closePopup && marker.closePopup();
+          // Synthesize a latlng from the pin's actual rendered coords
+          _rpRwHandleMapPick({ lat: lat, lng: lng });
+          return;
+        }
         // Corridor S/E preview-then-confirm flow
         if(typeof _RP_DIALOG_AWAITING === 'undefined' || !_RP_DIALOG_AWAITING) return;
         if(typeof _rpDialogConsumePinClick !== 'function') return;
