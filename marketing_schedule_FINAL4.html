@@ -26834,27 +26834,14 @@ function _rpFinalizeSmart(){
       }
     });
     _rpRenderReviewPane(legs, /*pending*/ false, /*routingFailed*/ false, /*source*/ res.source);
-    // Per user 2026-05-24: replace the straight-line dashed purple polyline
-    // with the actual Google/OSRM road-following path so the map shows the
-    // real driving route.
-    if(res.path && res.path.length >= 2 && _DV_MAP && typeof L !== 'undefined'){
-      try {
-        if(_DV_ROUTELINE){ _DV_MAP.removeLayer(_DV_ROUTELINE); }
-        var pathPts = res.path.map(function(p){ return [p.lat, p.lng]; });
-        _DV_ROUTELINE = L.polyline(pathPts, {
-          color: '#7030A0',
-          weight: 5,
-          opacity: 0.9,
-          lineJoin: 'round',
-          lineCap: 'round'
-        }).addTo(_DV_MAP);
-        // Re-fit so the full real path is visible (it may extend slightly
-        // beyond the straight-line bbox).
-        var b = L.latLngBounds(pathPts);
-        if(_DV_CORRIDOR) b.extend(_DV_CORRIDOR.getBounds());
-        _DV_MAP.fitBounds(b.pad(0.08), { maxZoom: 13 });
-      } catch(_){}
-    }
+    // Phase 99 (2026-05-28): KILLED the stray purple #7030A0 polyline that
+    // _rpFetchRoute used to draw on top of the V5 green live route. User
+    // saw two overlapping lines and called it out. The green polyline from
+    // _rpDrawLiveRoute already shows the picks in TSP order; we don't need
+    // a second OSRM-routed polyline competing for the same space. We still
+    // KEEP the OSRM call itself (above) because its `legs[]` results feed
+    // the review pane's real road distance + ETA numbers.
+    if(_DV_ROUTELINE){ try { _DV_MAP.removeLayer(_DV_ROUTELINE); _DV_ROUTELINE = null; } catch(_){} }
   });
 }
 window._rpFinalizeSmart = _rpFinalizeSmart;
@@ -34758,6 +34745,14 @@ function _phase59ApplyDecisions(picks, decisions, di){
   try { if(typeof _rpRefreshCenterline === 'function') _rpRefreshCenterline(); } catch(_){}
   try { if(typeof _rpRefreshLiveRoute === 'function')  _rpRefreshLiveRoute();  } catch(_){}
 
+  // Phase 99 (2026-05-28): if we replaced Start or End, refresh the
+  // Show-on-Map multi-pulse layer so the new endpoint stops getting a
+  // second flashing pin on top of its red/green S/E marker (the multi
+  // refresh now reads _RP_START_NAME / _RP_END_NAME and skips them).
+  if(replaceStartDecs.length > 0 || replaceEndDecs.length > 0){
+    try { if(typeof _dvShowMapRefreshMulti === 'function') _dvShowMapRefreshMulti(); } catch(_){}
+  }
+
   return { picks: picks, removedCount: removeRis.length, insertedNames: insertedExtra };
 }
 window._phase59ApplyDecisions = _phase59ApplyDecisions;
@@ -35429,6 +35424,23 @@ function _dvShowMapRefreshMulti(){
   var chip = document.getElementById('dv-showmap-multi-count');
   if(chip) chip.textContent = selRis.length + ' selected';
   if(selRis.length === 0) return;
+  // Phase 99 (2026-05-28): drop visits whose clinic name is the saved
+  // route's current Start or End. Those already have a permanent S / E
+  // endpoint marker drawn over them by _rpDrawStartMarker / _rpDrawEnd-
+  // Marker, so pulsing them on TOP creates a duplicate pin for the same
+  // clinic (one flashing, one "connected" — user reported).
+  var endpointSkip = {};
+  try {
+    var savedR = (typeof _rpLoadCurrentRoute === 'function') ? _rpLoadCurrentRoute() : null;
+    if(savedR){
+      if(savedR.startName) endpointSkip[savedR.startName] = true;
+      if(savedR.endName)   endpointSkip[savedR.endName]   = true;
+    }
+    // Also dedupe against the IN-FLIGHT planner globals (user is mid-edit
+    // and hasn't committed yet — the marker is on the map already).
+    if(window._RP_START_NAME) endpointSkip[window._RP_START_NAME] = true;
+    if(window._RP_END_NAME)   endpointSkip[window._RP_END_NAME]   = true;
+  } catch(_){}
   // Build layer group + collect bounds
   var group = L.layerGroup();
   var latlngs = [];
@@ -35442,6 +35454,7 @@ function _dvShowMapRefreshMulti(){
   selRis.sort(function(a, b){ return a - b; }).forEach(function(ri){
     var row = rows[ri];
     if(!row || !row.clinic) return;
+    if(endpointSkip[row.clinic]) return;   // Phase 99: skip endpoints
     // Coord resolution chain — same as _dvShowMapJumpTo (Phase 64)
     var coord = null;
     try {
