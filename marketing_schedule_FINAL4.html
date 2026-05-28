@@ -34992,7 +34992,20 @@ function _dvShowMapJumpTo(idx){
   var di = (typeof S !== 'undefined') ? S.currentDay : null;
   if(di == null || !S.days || !S.days[di]) return;
   var rows = (S.days[di].rows || []).filter(function(r){ return r && r.clinic; });
-  if(rows.length === 0) return;
+  // Phase 95 (2026-05-28): if every visit on the day is gone (or never
+  // was any), auto-disable Show on Map. The toggle was lingering on a
+  // pin whose visit had just been deleted — pointless and confusing.
+  if(rows.length === 0){
+    if(window._DV_SHOWMAP_ACTIVE && typeof _dvToggleShowOnMap === 'function'){
+      _dvToggleShowOnMap();
+      if(typeof showToast === 'function') showToast('🔦 Show on Map turned off — no visits left on this day.');
+    } else {
+      // Just clear any lingering pulse layer
+      if(typeof _dvClearShowMapPulse === 'function') _dvClearShowMapPulse();
+      if(typeof _dvClearShowMapMultiLayer === 'function') _dvClearShowMapMultiLayer();
+    }
+    return;
+  }
   idx = Math.max(0, Math.min(rows.length - 1, idx));
   window._DV_SHOWMAP_IDX = idx;
   var row = rows[idx];
@@ -35108,6 +35121,43 @@ function _dvClearShowMapPulse(){
   _DV_SHOWMAP_PULSE_LAYER = null;
 }
 window._dvClearShowMapPulse = _dvClearShowMapPulse;
+
+// ── PHASE 95 (2026-05-28) — Auto-sync Show on Map after row changes ────────
+// Called from renderDayTable after every row mutation. If Show on Map is
+// active but the day is now empty, turn it off. If the current row index
+// is past the new (shorter) list, snap it back into range so the next
+// step doesn't show a phantom pin.
+function _dvSyncShowOnMapAfterRowChange(di){
+  if(!window._DV_SHOWMAP_ACTIVE) return;
+  if(di == null || typeof S === 'undefined' || !S.days || !S.days[di]) return;
+  var rows = (S.days[di].rows || []).filter(function(r){ return r && r.clinic; });
+  // Case 1 — no visits left: turn it off cleanly.
+  if(rows.length === 0){
+    if(typeof _dvToggleShowOnMap === 'function') _dvToggleShowOnMap();
+    if(typeof showToast === 'function') showToast('🔦 Show on Map turned off — no visits left on this day.');
+    return;
+  }
+  // Case 2 — multi-mode: prune the selected set, re-draw the layer.
+  if(window._DV_SHOWMAP_MULTI){
+    var validRis = {};
+    (S.days[di].rows || []).forEach(function(r, ri){ if(r && r.clinic) validRis[ri] = true; });
+    var changed = false;
+    Object.keys(window._DV_SHOWMAP_SELECTED || {}).forEach(function(ri){
+      if(!validRis[ri]){ delete window._DV_SHOWMAP_SELECTED[ri]; changed = true; }
+    });
+    if(changed && typeof _dvShowMapRefreshMulti === 'function') _dvShowMapRefreshMulti();
+    return;
+  }
+  // Case 3 — single-mode: clamp index, re-render the pulse on the new row.
+  var maxIdx = rows.length - 1;
+  if(window._DV_SHOWMAP_IDX == null || window._DV_SHOWMAP_IDX > maxIdx){
+    window._DV_SHOWMAP_IDX = Math.min(window._DV_SHOWMAP_IDX || 0, maxIdx);
+  }
+  // Re-render the current pulse — the row at this index may have changed
+  // (e.g. the rep deleted a different row, shifting indices).
+  if(typeof _dvShowMapJumpTo === 'function') _dvShowMapJumpTo(window._DV_SHOWMAP_IDX);
+}
+window._dvSyncShowOnMapAfterRowChange = _dvSyncShowOnMapAfterRowChange;
 
 // Per-row 🔦 button handler. Jumps to that row + makes it the current.
 // In Multi mode (Phase 72), toggles inclusion in the selected set instead.
@@ -42474,6 +42524,10 @@ function renderDayTable(di){
   var day = S.days && S.days[di];
   // Phase 75 (2026-05-28): keep the Schedule header's visit count in sync.
   if(typeof _dvSyncScheduleCount === 'function') _dvSyncScheduleCount(di);
+  // Phase 95 (2026-05-28): auto-disable Show on Map if the day is now
+  // empty, or re-render the pulse on a valid row if the current one
+  // was deleted.
+  if(typeof _dvSyncShowOnMapAfterRowChange === 'function') _dvSyncShowOnMapAfterRowChange(di);
   if(!day){
     var tbodyMissing = document.getElementById('day-tbody');
     if(tbodyMissing) tbodyMissing.innerHTML = '<tr><td colspan="10" style="padding:20px;text-align:center;color:var(--muted);font-style:italic">Schedule data is still loading for this day. <button onclick="refresh(S.currentDay)" style="margin-left:8px;background:var(--purple);color:#fff;border:none;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer">Retry</button></td></tr>';
