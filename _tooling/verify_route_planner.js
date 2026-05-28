@@ -329,6 +329,49 @@ const TRACE = path.resolve(__dirname, '_verify_route_planner.log');
   note('  → AI button exists: ' + phase30.btnExists + ' · onclick: ' + phase30.btnOnclick);
   note('  → after _rpRunAutoCompute: N=' + phase30.nVal + ', halfWidth=' + phase30.halfVal);
 
+  // ── (6.10) Phase 31 — override-on-reclick (preview pin chain) ─────────
+  note('--- Step: Phase 31 override-on-reclick preview chain ---');
+  const phase31 = await page.evaluate(() => {
+    // Need 3 clinics with coords to simulate the click chain
+    if(typeof CLINIC_BANK === 'undefined') return { err: 'no CLINIC_BANK' };
+    let names = [];
+    for(const c of CLINIC_BANK){
+      if(c && c.n && typeof getCoordForBusiness === 'function' && getCoordForBusiness(c.n)){
+        names.push(c.n);
+        if(names.length === 3) break;
+      }
+    }
+    if(names.length < 3) return { err: 'need 3 clinics' };
+    const out = { names: names };
+    // Arm start
+    if(typeof rpPickFromMapMode === 'function') rpPickFromMapMode('start');
+    out.awaitingAfterArm = window._RP_DIALOG_AWAITING;
+    // Click pin 1 -> preview
+    if(typeof _rpDialogConsumePinClick === 'function') _rpDialogConsumePinClick(names[0]);
+    out.pendingA = window._RP_DIALOG_PENDING && window._RP_DIALOG_PENDING.name;
+    out.pin0StateA = window._RP_PIN_STATE && window._RP_PIN_STATE[names[0]];
+    // Click pin 2 -> overrides
+    if(typeof _rpDialogConsumePinClick === 'function') _rpDialogConsumePinClick(names[1]);
+    out.pendingB = window._RP_DIALOG_PENDING && window._RP_DIALOG_PENDING.name;
+    out.pin0StateB = window._RP_PIN_STATE && window._RP_PIN_STATE[names[0]];   // expect reverted (undefined)
+    out.pin1StateB = window._RP_PIN_STATE && window._RP_PIN_STATE[names[1]];   // expect 'preview'
+    // Click pin 3 -> overrides pin 2
+    if(typeof _rpDialogConsumePinClick === 'function') _rpDialogConsumePinClick(names[2]);
+    out.pendingC = window._RP_DIALOG_PENDING && window._RP_DIALOG_PENDING.name;
+    out.pin1StateC = window._RP_PIN_STATE && window._RP_PIN_STATE[names[1]];   // expect reverted
+    out.pin2StateC = window._RP_PIN_STATE && window._RP_PIN_STATE[names[2]];   // expect 'preview'
+    // Confirm -> pin 3 becomes 'start', pending clears
+    if(typeof _rpConfirmPendingPick === 'function') _rpConfirmPendingPick();
+    out.awaitingAfterConfirm = window._RP_DIALOG_AWAITING;
+    out.pin2StateD = window._RP_PIN_STATE && window._RP_PIN_STATE[names[2]];   // expect 'start'
+    return out;
+  });
+  note('  → arm START → awaiting=' + phase31.awaitingAfterArm);
+  note('  → click pin0: pending=' + phase31.pendingA + ', pin0=' + phase31.pin0StateA + ' (expect preview)');
+  note('  → click pin1: pending=' + phase31.pendingB + ', pin0=' + phase31.pin0StateB + ' (expect undefined), pin1=' + phase31.pin1StateB + ' (expect preview)');
+  note('  → click pin2: pending=' + phase31.pendingC + ', pin1=' + phase31.pin1StateC + ' (expect undefined), pin2=' + phase31.pin2StateC + ' (expect preview)');
+  note('  → confirm: awaiting=' + phase31.awaitingAfterConfirm + ' (expect null), pin2=' + phase31.pin2StateD + ' (expect start)');
+
   // ── (7) Random Pick wizard — click pick-on-map, expect drawer stays ──
   note('--- Step: Random Pick mode + wizard pick ---');
   const randomRes = await page.evaluate(() => {

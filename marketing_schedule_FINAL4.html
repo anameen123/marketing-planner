@@ -24890,18 +24890,19 @@ function renderAllBusinessPins(){
       marker: marker, type: bizType, letter: typeLetter,
       origBg: rec.color, origBorder: border
     };
-    // Phase 25 (2026-05-27): One-click commit when planner is armed.
-    // If the user has clicked [📍 Map] in the planner drawer, the next
-    // pin click should IMMEDIATELY commit (no popup, no preview, no
-    // separate confirm step) and drop the S/E marker on this pin.
+    // Phase 31 (2026-05-27): PREVIEW-then-confirm flow (replaces the
+    // Phase 25 one-click commit per user). When the planner has armed a
+    // slot via [📍 Map], a pin click sets a PREVIEW only — the user must
+    // then click ✓ Confirm in the drawer to actually commit. Clicking
+    // ANOTHER pin overrides the preview (first pin deselects, second
+    // becomes the new preview). Popup is suppressed in this mode.
     marker.on('click', function(ev){
       try {
-        if(typeof _RP_DIALOG_AWAITING !== 'undefined' && _RP_DIALOG_AWAITING && typeof _rpQuickPickPin === 'function'){
-          // Suppress the default popup for this click
+        if(typeof _RP_DIALOG_AWAITING !== 'undefined' && _RP_DIALOG_AWAITING && typeof _rpDialogConsumePinClick === 'function'){
           if(ev && ev.originalEvent && ev.originalEvent.stopPropagation) ev.originalEvent.stopPropagation();
           if(_DV_MAP && _DV_MAP.closePopup) _DV_MAP.closePopup();
           marker.closePopup && marker.closePopup();
-          _rpQuickPickPin(name, { lat: lat, lng: lng });
+          _rpDialogConsumePinClick(name);
         }
       } catch(_){}
     });
@@ -27625,23 +27626,30 @@ window._rpRenderPickStatus = _rpRenderPickStatus;
 // Re-clicking another pin overrides the pending preview.
 function _rpDialogConsumePinClick(name){
   if(!_RP_DIALOG_AWAITING || !name) return false;
+  // Phase 31: clicking another pin while one is already pending should
+  // REPLACE the preview cleanly — revert the old pin's colour first.
+  if(_RP_DIALOG_PENDING && _RP_DIALOG_PENDING.name && _RP_DIALOG_PENDING.name !== name){
+    if(typeof _rpSetPinState === 'function') _rpSetPinState(_RP_DIALOG_PENDING.name, 'reset');
+  }
   var pool = window._RP_POOL || [];
   var match = pool.find(function(p){ return p.name === name; });
   _RP_DIALOG_PENDING = { name: name, match: match || null };
   _rpRenderPickStatus();
-  // Phase 24: drop the bright-blue PREVIEW ring on the tapped pin so the
-  // user gets visual confirmation BEFORE they click ✓ Confirm.
+  // Phase 24: bright-blue PREVIEW ring on the tapped pin (visual reinforcement).
   try {
     var c = (typeof getCoordForBusiness === 'function') ? getCoordForBusiness(name) : null;
     if(c && typeof _rpDrawPreviewRing === 'function') _rpDrawPreviewRing(c);
   } catch(_){}
+  // Phase 31: also mutate the pin ITSELF to the 'preview' state so the
+  // user clearly sees which clinic they tapped (before they confirm).
+  if(typeof _rpSetPinState === 'function') _rpSetPinState(name, 'preview');
   // Make sure the planner modal is still on top so user sees the buttons.
   try {
     var modal = document.getElementById('route-planner-modal');
     if(modal && modal.style.display === 'none') modal.style.display = 'flex';
   } catch(_){}
   if(typeof showToast === 'function'){
-    showToast('Pending: ' + name + ' — tap ✓ Confirm or pick another pin.');
+    showToast('Pending ' + (_RP_DIALOG_AWAITING === 'start' ? 'START' : 'END') + ': ' + name + ' — tap ✓ Confirm or click another pin to override.');
   }
   return true;
 }
@@ -27711,6 +27719,12 @@ function _rpConfirmPendingPick(){
   // Phase 24: clear the bright-blue preview ring now that we've placed the
   // permanent S / E marker.
   if(typeof _rpClearPreviewRing === 'function') _rpClearPreviewRing();
+  // Phase 31: flip the underlying clinic pin from PREVIEW state into its
+  // committed STATE ('start' or 'end'). The pending pin's name is the
+  // canonical key — we just exited pin-pick mode so use pending.name.
+  if(typeof _rpSetPinState === 'function'){
+    _rpSetPinState(pending.name, which);   // 'start' or 'end'
+  }
   if(typeof showToast === 'function'){
     showToast('✓ ' + (which === 'start' ? 'Start' : 'End') + ' set: ' + pending.name);
   }
@@ -27722,6 +27736,10 @@ window._rpConfirmPendingPick = _rpConfirmPendingPick;
 
 // Exit pin-pick mode without committing — leaves rp-start/rp-end untouched.
 function _rpCancelPinMode(){
+  // Phase 31: revert the previewed pin's colour back to its original.
+  if(_RP_DIALOG_PENDING && _RP_DIALOG_PENDING.name && typeof _rpSetPinState === 'function'){
+    _rpSetPinState(_RP_DIALOG_PENDING.name, 'reset');
+  }
   _RP_DIALOG_AWAITING = null;
   _RP_DIALOG_PENDING  = null;
   _rpRenderPickStatus();
@@ -27851,7 +27869,7 @@ window._rpDrawSelectionHalo = _rpDrawSelectionHalo;
 // changes colour so it's unmistakable which clinic is the Start, End,
 // suggested, or picked.
 //
-// state ∈ 'start' | 'end' | 'suggested' | 'picked' | 'reset'
+// state ∈ 'start' | 'end' | 'suggested' | 'picked' | 'preview' | 'reset'
 var _RP_PIN_STATE = {};   // name → state
 function _rpSetPinState(name, state){
   if(!name) return;
@@ -27868,6 +27886,12 @@ function _rpSetPinState(name, state){
   } else if(state === 'end'){
     bg = '#dc2626'; border = '#b91c1c'; size = 22; fontSize = 12; weight = 3; scale = 1.4;
     shadow = '0 0 0 4px rgba(220,38,38,.35), 0 2px 6px rgba(0,0,0,.4)';
+  } else if(state === 'preview'){
+    // Phase 31: BRIGHT BLUE pulse — clinic currently in preview (clicked
+    // but not yet confirmed). Distinct from suggested + picked. Pulses
+    // via CSS so the user sees "this is the one tapped, awaiting Confirm".
+    bg = '#3b82f6'; border = '#1d4ed8'; size = 24; fontSize = 13; weight = 4; scale = 1.5;
+    shadow = '0 0 0 5px rgba(59,130,246,.45), 0 2px 10px rgba(0,0,0,.45)';
   } else if(state === 'suggested'){
     // LIGHT BLUE — candidate for the current level (temporary)
     bg = '#93c5fd'; border = '#1d4ed8'; size = 20; fontSize = 10; weight = 3; scale = 1.25;
@@ -27889,8 +27913,11 @@ function _rpSetPinState(name, state){
       iconSize: [size, size],
       iconAnchor: [size/2, size/2]
     }));
-    // Make picked / start / end pins float above neighbors
-    if(state === 'start' || state === 'end' || state === 'picked'){
+    // Make picked / start / end pins float above neighbors. Preview goes
+    // on top of EVERYTHING so the just-tapped pin is unmistakable.
+    if(state === 'preview'){
+      reg.marker.setZIndexOffset(9500);
+    } else if(state === 'start' || state === 'end' || state === 'picked'){
       reg.marker.setZIndexOffset(8000);
     } else if(state === 'suggested'){
       reg.marker.setZIndexOffset(4000);
