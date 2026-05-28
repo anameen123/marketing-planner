@@ -32404,10 +32404,157 @@ function _rpV5Start(){
     slices.push(lvl);
     _RP_V5_PICKS['level' + k] = [];
   }
-  _RP_V5_LAST = { A: A, B: B, totalMi: totalMi, baseWidth: halfWidth, slices: slices, N: N, quantileBounds: quantileBounds };
-  _rpV5ShowLevel(1);
+  // Phase 29 (2026-05-27): merge every level into ONE flat list sorted by t.
+  // Levels are now an internal calculation only (used to derive halfWidth +
+  // quantile boundaries) — the user sees a single list. Cross-level dedupe
+  // keyed by name in case any clinic squeaked through two boundaries.
+  var seenNames = {};
+  var flatCandidates = [];
+  slices.forEach(function(s){
+    (s.candidates || []).forEach(function(c){
+      if(!c || !c.name || seenNames[c.name]) return;
+      seenNames[c.name] = true;
+      flatCandidates.push(c);
+    });
+  });
+  flatCandidates.sort(function(a, b){ return a.t - b.t; });
+  _RP_V5_LAST = {
+    A: A, B: B, totalMi: totalMi, baseWidth: halfWidth,
+    slices: slices, N: N, quantileBounds: quantileBounds,
+    flatCandidates: flatCandidates
+  };
+  // Reset flat-picks set (Set of clinic names)
+  _RP_V5_FLAT_PICKS = {};
+  _rpV5ShowFlatList();
 }
 window._rpV5Start = _rpV5Start;
+
+// Phase 29: flat candidate list (no level wizard). All in-corridor clinics
+// sorted by t. User checks any subset. The connection rule is applied at
+// Generate time on the checked picks in t-order.
+var _RP_V5_FLAT_PICKS = {};   // { clinicName: true }
+function _rpV5ShowFlatList(){
+  if(!_RP_V5_LAST) return;
+  var box = document.getElementById('rp-results');
+  if(!box) return;
+  var list = _RP_V5_LAST.flatCandidates || [];
+  var totalMi = _RP_V5_LAST.totalMi;
+  var halfW   = _RP_V5_LAST.baseWidth;
+  var pickedCount = Object.keys(_RP_V5_FLAT_PICKS).length;
+  // Header strip
+  var html = '<div style="background:linear-gradient(135deg,#1F3864,#2563eb);color:#fff;border-radius:10px;padding:12px 14px;margin-bottom:10px;display:flex;flex-wrap:wrap;gap:10px;justify-content:space-between;align-items:center">'
+    + '<div>'
+    +   '<div style="font-size:13px;font-weight:800">📍 Route candidates · ' + list.length + ' in corridor</div>'
+    +   '<div style="font-size:10.5px;opacity:.85;margin-top:2px">' + totalMi.toFixed(1) + ' mi Start→End · ±' + halfW + ' mi corridor · sorted by position along route</div>'
+    + '</div>'
+    + '<div style="background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.4);border-radius:20px;padding:5px 14px;font-size:11px;font-weight:700"><span id="rp-flat-picked-count">' + pickedCount + '</span> picked</div>'
+    + '</div>';
+  if(list.length === 0){
+    html += '<div style="padding:14px 16px;background:#fff7ed;border:1px solid #fed7aa;border-left:3px solid #f59e0b;border-radius:8px;font-size:12px;color:#7c2d12">No stale clinics inside the ±' + halfW + ' mi corridor. Try a different Start/End or widen the corridor manually.</div>';
+  } else {
+    // The flat list — one row per candidate, in t order
+    html += '<div style="background:#fff;border:1px solid var(--border);border-radius:8px;overflow:hidden">';
+    list.forEach(function(c, idx){
+      var miFromStart = (c.t * totalMi);
+      var typeIcon = c.bizType === 'mva' ? '⚖' : c.bizType === 'outreach' ? '🏘' : '🏥';
+      var sideArrow = c.perp >= 0 ? '→' : '←';
+      var sideLabel = c.perp >= 0 ? 'right' : 'left';
+      var sideColor = c.perp >= 0 ? '#2563eb' : '#7c3aed';
+      var safeName = String(c.name).replace(/</g,'&lt;').replace(/"/g,'&quot;').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+      var checked = !!_RP_V5_FLAT_PICKS[c.name];
+      var recDot = (c.rec && c.rec.color) ? c.rec.color : '#9ca3af';
+      var daysLbl = (c.days == null) ? 'never' : (c.days + 'd');
+      var rowBg = checked ? '#1e3a8a' : '#fff';
+      var rowFg = checked ? '#fff' : '#0f172a';
+      html += '<label style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid #f1f5f9;cursor:pointer;background:' + rowBg + ';color:' + rowFg + ';transition:background .15s">'
+        + '<input type="checkbox"' + (checked ? ' checked' : '') + ' onchange="_rpV5ToggleFlat(\'' + safeName + '\', this.checked)" style="width:18px;height:18px;cursor:pointer;flex-shrink:0;accent-color:#2563eb">'
+        + '<span style="font-size:14px">' + typeIcon + '</span>'
+        + '<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:' + recDot + ';flex-shrink:0;box-shadow:0 0 0 2px ' + (checked ? '#1e3a8a' : '#fff') + '"></span>'
+        + '<span style="flex:1;min-width:0">'
+        +   '<div style="font-size:12px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + String(c.name).replace(/</g,'&lt;') + '</div>'
+        +   '<div style="font-size:10px;opacity:.8;margin-top:1px">' + miFromStart.toFixed(1) + ' mi from start · '
+        +     '<span style="color:' + (checked ? '#fff' : sideColor) + ';font-weight:600">' + sideArrow + ' ' + Math.abs(c.perp).toFixed(1) + ' mi ' + sideLabel + '</span>'
+        +     ' · stale ' + daysLbl
+        +   '</div>'
+        + '</span>'
+        + '</label>';
+    });
+    html += '</div>';
+    // Live connection-rule preview (if any picks)
+    var preview = _rpV5BuildConnectionPreview();
+    if(preview){
+      html += preview;
+    }
+  }
+  // Footer
+  html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;padding-top:10px;border-top:1px solid var(--border);gap:8px;flex-wrap:wrap">'
+    + '<button onclick="_rpV5ClearAllPicks()" style="background:#fff;color:#475569;border:1px solid var(--border);border-radius:8px;padding:7px 13px;font-size:11px;font-weight:600;cursor:pointer;font-family:DM Sans,sans-serif">Clear all</button>'
+    + (pickedCount === 0
+        ? '<button disabled style="background:#cbd5e1;color:#94a3b8;border:none;border-radius:8px;padding:8px 22px;font-size:12px;font-weight:700;cursor:not-allowed;font-family:DM Sans,sans-serif">Generate route →</button>'
+        : '<button onclick="_rpV5GenerateRoute()" style="background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;border:none;border-radius:8px;padding:8px 22px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">Generate route → (' + pickedCount + ' stop' + (pickedCount===1?'':'s') + ')</button>')
+    + '</div>';
+  box.style.display = 'block';
+  box.innerHTML = html;
+  // Mutate map pins: every candidate is 'suggested' (light blue), every
+  // picked is 'picked' (dark blue). Other pins reset.
+  try {
+    if(typeof _rpResetSuggestedPins === 'function') _rpResetSuggestedPins();
+    list.forEach(function(c){
+      if(_RP_V5_FLAT_PICKS[c.name]) _rpSetPinState(c.name, 'picked');
+      else _rpSetPinState(c.name, 'suggested');
+    });
+  } catch(_){}
+}
+window._rpV5ShowFlatList = _rpV5ShowFlatList;
+
+function _rpV5ToggleFlat(name, on){
+  if(!name) return;
+  if(on) _RP_V5_FLAT_PICKS[name] = true;
+  else delete _RP_V5_FLAT_PICKS[name];
+  // Flip pin colour immediately
+  if(typeof _rpSetPinState === 'function'){
+    _rpSetPinState(name, on ? 'picked' : 'suggested');
+  }
+  _rpV5ShowFlatList();
+}
+window._rpV5ToggleFlat = _rpV5ToggleFlat;
+
+function _rpV5ClearAllPicks(){
+  Object.keys(_RP_V5_FLAT_PICKS).forEach(function(n){
+    delete _RP_V5_FLAT_PICKS[n];
+    if(typeof _rpSetPinState === 'function') _rpSetPinState(n, 'suggested');
+  });
+  _rpV5ShowFlatList();
+}
+window._rpV5ClearAllPicks = _rpV5ClearAllPicks;
+
+// Build a small HTML block that previews the connection rule on the
+// currently-checked picks. Same rule used at Generate time.
+function _rpV5BuildConnectionPreview(){
+  var pickedNames = Object.keys(_RP_V5_FLAT_PICKS);
+  if(pickedNames.length === 0) return '';
+  var picks = (_RP_V5_LAST.flatCandidates || []).filter(function(c){ return _RP_V5_FLAT_PICKS[c.name]; });
+  picks.sort(function(a, b){ return a.t - b.t; });
+  var halfW = _RP_V5_LAST.baseWidth;
+  if(typeof _rpV5ApplyConnectionRule !== 'function') return '';
+  var conn = _rpV5ApplyConnectionRule(picks, halfW);
+  var html = '<div style="margin-top:10px">';
+  if(conn.kept.length > 0){
+    html += '<div style="background:#f0fdf4;border:1px solid #86efac;border-left:3px solid #16a34a;border-radius:8px;padding:8px 12px;font-size:11.5px;color:#14532d;line-height:1.55">'
+      +   '🔗 <b>' + conn.kept.length + ' will be in the route</b>, in order: '
+      +   conn.kept.map(function(p){ return '<b>' + String(p.name).replace(/</g,'&lt;') + '</b>'; }).join(' → ')
+      + '</div>';
+  }
+  if(conn.skipped.length > 0){
+    html += '<div style="margin-top:6px;background:#fef2f2;border:1px solid #fca5a5;border-left:3px solid #dc2626;border-radius:8px;padding:8px 12px;font-size:11px;color:#7f1d1d;line-height:1.5">'
+      + '<div style="font-weight:700;margin-bottom:4px">⚠ ' + conn.skipped.length + ' skipped by connection rule</div>'
+      + conn.skipped.map(function(s){ return '<div>✗ <b>' + String(s.name).replace(/</g,'&lt;') + '</b> · ' + s._skipReason + '</div>'; }).join('')
+      + '</div>';
+  }
+  html += '</div>';
+  return html;
+}
+window._rpV5BuildConnectionPreview = _rpV5BuildConnectionPreview;
 
 function _rpV5ShowLevel(k){
   if(!_RP_V5_LAST) return;
@@ -32820,13 +32967,24 @@ function _rpV5GenerateRoute(){
   // Per user 2026-05-26: clear per-side candidate rings before locking in
   // the route — the planned-route polyline + numbered pins take over.
   if(typeof _rpClearCandidateHighlights === 'function') _rpClearCandidateHighlights();
+  // Phase 29: pull from the flat picks set (no more per-level grouping).
+  // Falls back to the legacy per-level structure for back-compat if the
+  // flat set is empty but level picks exist.
   var allPicks = [];
-  for(var k = 1; k <= _RP_V5_N; k++){
-    var list = _RP_V5_PICKS['level' + k] || [];
-    list.forEach(function(p){ allPicks.push(p); });
+  var flatNames = Object.keys(_RP_V5_FLAT_PICKS || {});
+  if(flatNames.length > 0 && _RP_V5_LAST.flatCandidates){
+    _RP_V5_LAST.flatCandidates.forEach(function(c){
+      if(_RP_V5_FLAT_PICKS[c.name]) allPicks.push(c);
+    });
+  } else {
+    // Legacy fallback (level wizard flow)
+    for(var k = 1; k <= _RP_V5_N; k++){
+      var list = _RP_V5_PICKS['level' + k] || [];
+      list.forEach(function(p){ allPicks.push(p); });
+    }
   }
   if(allPicks.length === 0){
-    if(typeof showToast === 'function') showToast('No stops picked — check at least one candidate in any level.');
+    if(typeof showToast === 'function') showToast('Check at least one candidate before generating the route.');
     return;
   }
   // Sort by t (position along route, Start → End)

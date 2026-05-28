@@ -262,6 +262,43 @@ const TRACE = path.resolve(__dirname, '_verify_route_planner.log');
   note('  → pin registry: ' + phase28.pinRegistrySize + ' pins · helper: ' + phase28.helperExists);
   note('  → centerline: glow=' + phase28.centerlineHasGlow + ', main=' + phase28.centerlineHasMain);
 
+  // ── (6.8) Phase 29 — flat list (no level wizard) ──────────────────────
+  note('--- Step: Phase 29 flat list rendering + toggle ---');
+  const phase29 = await page.evaluate(() => {
+    const last = window._RP_V5_LAST;
+    if(!last) return { err: 'no _RP_V5_LAST' };
+    const out = {
+      flatCount: (last.flatCandidates || []).length,
+      flatHelperExists: typeof window._rpV5ShowFlatList === 'function',
+      toggleHelperExists: typeof window._rpV5ToggleFlat === 'function',
+      flatPicksInitially: Object.keys(window._RP_V5_FLAT_PICKS || {}).length,
+      flatSortedByT: true
+    };
+    // Verify sort order
+    let prev = -Infinity;
+    (last.flatCandidates || []).forEach(c => {
+      if(c.t < prev) out.flatSortedByT = false;
+      prev = c.t;
+    });
+    // Toggle the first 3 candidates ON, verify state
+    const firstThree = (last.flatCandidates || []).slice(0, 3);
+    firstThree.forEach(c => window._rpV5ToggleFlat(c.name, true));
+    out.afterToggle = Object.keys(window._RP_V5_FLAT_PICKS || {}).length;
+    // Verify the picked pins flipped to 'picked' state
+    out.firstThreePinStates = firstThree.map(c => window._RP_PIN_STATE && window._RP_PIN_STATE[c.name]);
+    // Run the connection rule on the picked set
+    if(typeof window._rpV5BuildConnectionPreview === 'function'){
+      const html = window._rpV5BuildConnectionPreview();
+      out.previewHasContent = !!html && html.length > 20;
+    }
+    return out;
+  });
+  note('  → flat candidates: ' + phase29.flatCount + ' · sorted by t: ' + phase29.flatSortedByT);
+  note('  → helpers exist: show=' + phase29.flatHelperExists + ', toggle=' + phase29.toggleHelperExists);
+  note('  → toggled 3 ON → flatPicks count: ' + phase29.afterToggle + ' (expect 3)');
+  note('  → first three pin states: ' + JSON.stringify(phase29.firstThreePinStates) + ' (expect all "picked")');
+  note('  → connection preview built: ' + phase29.previewHasContent);
+
   // ── (7) Random Pick wizard — click pick-on-map, expect drawer stays ──
   note('--- Step: Random Pick mode + wizard pick ---');
   const randomRes = await page.evaluate(() => {
