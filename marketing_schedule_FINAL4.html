@@ -28518,10 +28518,10 @@ function _rpHighlightInsideRectangle(A, B, halfW){
     // Phase 38: visual coord (jittered) — matches the on-screen pin
     var coord = _rpGetVisualCoord(name);
     if(!coord) return;
-    var t = _rpV5ProjT(coord, A, B);
-    if(t < 0 || t > 1) return;
-    var perp = Math.abs(_rpV5SignedPerp(coord, A, B));
-    if(perp > halfW) return;
+    // Phase 90 (2026-05-28): distance-to-segment — covers the case
+    // where S ≈ E (search becomes a circle around the point).
+    var dist = _rpV5DistanceToSegment(coord, A, B);
+    if(dist > halfW) return;
     total++;
     // Phase 41: ONLY light up green/yellow per user. Skip red (fresh) and
     // orange (warm). Tally what's filtered for the explainer message.
@@ -31197,7 +31197,10 @@ window._rpAutoSuggestIfReady = _rpAutoSuggestIfReady;
 function _rpComputeWidthForVisits(A, B, targetN){
   if(!A || !B) return null;
   var totalMi = _rpHaversineMiles(A, B);
-  if(totalMi < 0.5) return null;
+  // Phase 90 (2026-05-28): removed the totalMi < 0.5 restriction per user.
+  // When Start and End are close (or equal), the search degenerates into
+  // a circle around that point — _rpV5DistanceToSegment handles this
+  // naturally (returns distance-to-endpoint when t is outside [0,1]).
   // Phase 79 (2026-05-28): cap reduced from 12 → 6 mi per user. The metro
   // is narrow; 12 mi corridors covered the whole map and pulled in
   // unrelated areas when not many candidates were nearby. 6 mi is the
@@ -31209,15 +31212,17 @@ function _rpComputeWidthForVisits(A, B, targetN){
     var c = (typeof _rpGetVisualCoord === 'function') ? _rpGetVisualCoord(name) : null;
     if(!c && typeof getCoordForBusiness === 'function') c = getCoordForBusiness(name);
     if(!c) return;
-    var t = _rpV5ProjT(c, A, B);
-    if(t < 0 || t > 1) return;
+    // Phase 90 (2026-05-28): use distance-to-segment instead of
+    // perp + t∈[0,1] gate. When Start ≈ End, the t-range collapses and
+    // no pins qualify — distance-to-segment degrades gracefully into a
+    // circle around the single point.
     var days = (typeof daysSinceLastVisit === 'function') ? daysSinceLastVisit(name) : null;
     var rec  = (typeof recencyBucket === 'function') ? recencyBucket(days) : null;
     // Phase 41: only green (ripe/never) + yellow accepted
     if(!rec || (rec.key !== 'ripe' && rec.key !== 'never' && rec.key !== 'yellow')) return;
-    var perp = Math.abs(_rpV5SignedPerp(c, A, B));
-    if(perp > maxCap) return;
-    perps.push(perp);
+    var dist = _rpV5DistanceToSegment(c, A, B);
+    if(dist > maxCap) return;
+    perps.push(dist);
   }
   if(typeof CLINIC_BANK !== 'undefined') CLINIC_BANK.forEach(function(c){ if(c && c.n) consider(c.n); });
   if(typeof MVA_ATTORNEYS !== 'undefined') MVA_ATTORNEYS.forEach(function(m){ if(m && m.firm) consider(m.firm); });
@@ -36352,6 +36357,22 @@ function _rpV5ProjT(P, A, B){
   var t = (px*bx + py*by) / len2;
   return t;
 }
+
+// Phase 90 (2026-05-28): perpendicular distance from point P to the
+// SEGMENT AB (not the infinite line). When P projects between A and B
+// (0 ≤ t ≤ 1) → distance is the perpendicular. When P projects past
+// A or B → distance is to the nearer endpoint. This handles the
+// "Start and End are close together" case naturally: as totalMi → 0,
+// the "segment" becomes a point and the check becomes a circle around
+// that point with radius halfWidth. Returns miles.
+function _rpV5DistanceToSegment(P, A, B){
+  if(!P || !A || !B) return Infinity;
+  var t = _rpV5ProjT(P, A, B);
+  if(t < 0) return _rpHaversineMiles(P, A);
+  if(t > 1) return _rpHaversineMiles(P, B);
+  return Math.abs(_rpV5SignedPerp(P, A, B));
+}
+window._rpV5DistanceToSegment = _rpV5DistanceToSegment;
 
 // Find candidates within depth-slice k (1-indexed) AND inside corridor.
 // Returns array of objects with recency color, days, signed perp, etc.
