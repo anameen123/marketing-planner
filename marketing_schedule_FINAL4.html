@@ -34461,9 +34461,16 @@ function _phase59FindPreExistingPending(di, newPickNames, priorInsertedSet){
   try {
     var day = (typeof S !== 'undefined' && S.days) ? S.days[di] : null;
     if(!day || !Array.isArray(day.rows)) return out;
+    // Phase 93 (2026-05-28): only skip visits that are already in the NEW
+    // route's picks (no point re-folding what's already there). The
+    // priorInsertedSet is NOT a skip-list — previously-inserted visits
+    // that are still on the schedule are STILL pre-existing as far as
+    // the rep is concerned. Skipping them here caused Phase 54 OVERRIDE
+    // to silently remove them without the rep getting a Phase 59 dialog
+    // or auto-fold. (priorInsertedSet kept as a 2nd arg for back-compat
+    // but no longer used as a skip filter.)
     var skipSet = {};
     (newPickNames || []).forEach(function(n){ if(n) skipSet[n] = true; });
-    Object.keys(priorInsertedSet || {}).forEach(function(n){ skipSet[n] = true; });
     day.rows.forEach(function(r, ri){
       if(!r || !r.clinic) return;
       if((r.status || 'Pending') !== 'Pending') return;   // only re-route Pending visits
@@ -37599,30 +37606,25 @@ function _rpV5InsertPicksIntoDay(){
     }
     var me = (CURRENT_USER && CURRENT_USER.name) || '';
     var added = 0, skipped = 0, removed = 0;
-    // Phase 54 (2026-05-28): if a prior route exists for this day,
-    // OVERRIDE it — remove the previously-inserted rows by name so the
-    // re-generated route fully replaces it (no leftover stale stops).
-    var priorSet = {};
-    try {
-      var priorSaved = (typeof _rpLoadCurrentRoute === 'function') ? _rpLoadCurrentRoute() : null;
-      if(priorSaved && Array.isArray(priorSaved.insertedNames) && priorSaved.insertedNames.length > 0){
-        priorSaved.insertedNames.forEach(function(n){ priorSet[n] = true; });
-        var beforeLen = S.days[di].rows.length;
-        S.days[di].rows = (S.days[di].rows || []).filter(function(r){ return !(r && r.clinic && priorSet[r.clinic]); });
-        removed = beforeLen - S.days[di].rows.length;
-      }
-    } catch(_){}
-    // ── PHASE 59 (2026-05-28) — Smart pre-existing integration ─────────────
-    // Before committing picks, look for pre-existing Pending visits on this
-    // day that aren't already part of the picks or the prior-route remove
-    // set. Auto-fold insiders (inside corridor) into picks in t-order. Send
-    // outsiders to a sequential review modal — user can bring each in, skip,
-    // or remove it from the calendar entirely.
+    // Phase 93 (2026-05-28): RESTRUCTURED — Phase 59 detection now runs
+    // BEFORE Phase 54 override. Previously the order was:
+    //   1) Override removes prior-inserted rows
+    //   2) Phase 59 scans for pre-existing → couldn't see what was just
+    //      deleted → pre-existing visits got silently wiped.
+    // New order:
+    //   1) Phase 59 scans current day.rows (before any deletion)
+    //   2) Auto-fold insiders into picks
+    //   3) Phase 54 override removes priorSaved.insertedNames EXCEPT
+    //      what Phase 59 just folded in (preserves them across re-gen)
+    //   4) Outsider review modal (if any) → commit
+    //   5) Commit picks (push to day.rows, skip duplicates)
+    // ── PHASE 59 (run FIRST) ───────────────────────────────────────────────
     var phase59ExtraInserted = [];
     var phase59Removed = 0;
+    var foldedNameSet = {};
     try {
       var pickNameSet = picks.map(function(p){ return p && p.name; });
-      var preExisting = _phase59FindPreExistingPending(di, pickNameSet, priorSet);
+      var preExisting = _phase59FindPreExistingPending(di, pickNameSet, {});
       if(preExisting.length > 0){
         var geom = _phase59GetGeometry('corridor');
         // Build the ordered coord sequence Start → picks → End so the
@@ -37652,6 +37654,7 @@ function _rpV5InsertPicksIntoDay(){
             _phase59FromExisting: true, _phase59ExistingRi: ins.ri
           });
           phase59ExtraInserted.push(ins.name);
+          foldedNameSet[ins.name] = true;
         });
         // CASE 2 — outsiders: defer the commit until the modal completes.
         if(classified.outsiders.length > 0){
@@ -37662,7 +37665,12 @@ function _rpV5InsertPicksIntoDay(){
           _phase59ShowReviewModal(classified.outsiders, routeStopNames, function(decisions){
             var applied = _phase59ApplyDecisions(picks, decisions, di);
             phase59Removed += applied.removedCount;
-            applied.insertedNames.forEach(function(n){ phase59ExtraInserted.push(n); });
+            applied.insertedNames.forEach(function(n){
+              phase59ExtraInserted.push(n);
+              foldedNameSet[n] = true;
+            });
+            // Now run Phase 54 override + commit
+            removed += _rpV5RunPhase54Override(di, foldedNameSet, picks);
             _rpV5CommitPicksToDay(picks, di, me, removed, phase59Removed, phase59ExtraInserted);
           });
           return;   // wait for modal — commit happens in onComplete
@@ -37671,6 +37679,9 @@ function _rpV5InsertPicksIntoDay(){
     } catch(e){
       console.warn('[phase59] corridor pre-existing scan failed:', e);
     }
+    // Phase 93 (2026-05-28): now run Phase 54 override, preserving the
+    // names Phase 59 just folded in.
+    removed += _rpV5RunPhase54Override(di, foldedNameSet, picks);
     // No outsiders → commit immediately
     _rpV5CommitPicksToDay(picks, di, me, removed, phase59Removed, phase59ExtraInserted);
   } catch(e){
@@ -37679,6 +37690,33 @@ function _rpV5InsertPicksIntoDay(){
   }
 }
 window._rpV5InsertPicksIntoDay = _rpV5InsertPicksIntoDay;
+
+// Phase 93 (2026-05-28): Phase 54 override extracted as a helper so it
+// can run AFTER Phase 59 detection (instead of before). Removes rows
+// whose clinic name is in priorSaved.insertedNames EXCEPT those Phase
+// 59 has folded into the new picks (those stay on the schedule). Also
+// excludes any name that's in the current picks (Phase 59 inserted it
+// = we want to keep it). Returns the count of rows removed.
+function _rpV5RunPhase54Override(di, preserveNameSet, picks){
+  if(!S.days || !S.days[di]) return 0;
+  try {
+    var priorSaved = (typeof _rpLoadCurrentRoute === 'function') ? _rpLoadCurrentRoute() : null;
+    if(!priorSaved || !Array.isArray(priorSaved.insertedNames) || priorSaved.insertedNames.length === 0) return 0;
+    // Build the keep-set: names Phase 59 folded + names already in new picks
+    var keep = {};
+    Object.keys(preserveNameSet || {}).forEach(function(n){ keep[n] = true; });
+    (picks || []).forEach(function(p){ if(p && p.name) keep[p.name] = true; });
+    var priorSet = {};
+    priorSaved.insertedNames.forEach(function(n){ if(!keep[n]) priorSet[n] = true; });
+    if(Object.keys(priorSet).length === 0) return 0;
+    var beforeLen = S.days[di].rows.length;
+    S.days[di].rows = (S.days[di].rows || []).filter(function(r){
+      return !(r && r.clinic && priorSet[r.clinic]);
+    });
+    return beforeLen - S.days[di].rows.length;
+  } catch(_){ return 0; }
+}
+window._rpV5RunPhase54Override = _rpV5RunPhase54Override;
 
 // Phase 59 — extracted commit helper for the Corridor path so both the
 // "no-outsiders → commit now" and the "after-modal → commit now" branches
