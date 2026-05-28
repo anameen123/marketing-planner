@@ -25133,21 +25133,21 @@ function renderAllBusinessPins(){
     var typeLabel = bizType === 'mva' ? '⚖ MVA' : bizType === 'outreach' ? '🏘 Outreach' : '🏥 Clinic';
     var safeName = String(name).replace(/</g,'&lt;');
     var escName = name.replace(/'/g,"\\'");
-    // Three action buttons in the popup:
-    //   • Set as Start / End — for Smart Plan workflow
-    //   • Use this clinic for the visit — for Add Visit flow (only visible
-    //     when the user clicked the "📍 Pick from map" button in the modal)
+    // Phase 64 (2026-05-28): removed "Set as Start" / "Set as End" buttons
+    // per user — they were a trace from the legacy Smart Plan workflow that
+    // was already removed elsewhere. The Route Planner now has its own
+    // "📍 Map" arming button which handles Start/End picks correctly; the
+    // popup buttons just confused the flow (accidentally setting Start when
+    // the user meant to Add Visit). Remaining actions:
+    //   • Add visit today  — primary CTA
+    //   • Use this for the visit — only visible during Add-Visit map pick
     var popupHtml = '<div style="font-family:DM Sans,sans-serif;font-size:12px;min-width:180px">'
       +   '<div style="font-weight:700;color:#1F3864;font-size:13px;margin-bottom:4px">' + safeName + '</div>'
       +   '<div style="font-size:10px;color:#64748b;margin-bottom:6px">' + typeLabel + ' · ' + rec.label + '</div>'
       +   '<button onclick="_addVisitFromMapPin(\'' + escName + '\',\'' + bizType + '\')" '
-      +     'style="width:100%;background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;border:none;border-radius:5px;padding:7px 8px;font-size:11px;font-weight:700;cursor:pointer;margin-bottom:6px">'
+      +     'style="width:100%;background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;border:none;border-radius:5px;padding:7px 8px;font-size:11px;font-weight:700;cursor:pointer">'
       +     '➕ Add visit today'
       +   '</button>'
-      +   '<div style="display:flex;gap:5px;margin-top:2px;flex-wrap:wrap">'
-      +     '<button onclick="_rpPickFromMap(\'' + escName + '\',\'start\')" style="flex:1;min-width:70px;background:#1F3864;color:#fff;border:none;border-radius:5px;padding:5px 8px;font-size:10px;font-weight:700;cursor:pointer">Set as Start</button>'
-      +     '<button onclick="_rpPickFromMap(\'' + escName + '\',\'end\')"   style="flex:1;min-width:70px;background:#7030A0;color:#fff;border:none;border-radius:5px;padding:5px 8px;font-size:10px;font-weight:700;cursor:pointer">Set as End</button>'
-      +   '</div>'
       +   '<button id="popup-pick-' + (++_PIN_POPUP_SEQ) + '" data-business="' + escName + '" onclick="_avFinishMapPick(this.getAttribute(\'data-business\'),\'' + bizType + '\')" '
       +     'style="width:100%;margin-top:5px;background:#16a34a;color:#fff;border:none;border-radius:5px;padding:6px 8px;font-size:10px;font-weight:700;cursor:pointer;display:' + (_AV_MAP_PICK_MODE ? 'block' : 'none') + '">'
       +     '✓ Use this for the visit'
@@ -27375,20 +27375,17 @@ function renderDayMap(di){
       sumEl.innerHTML = '';
     }
   } catch(_){}
-  // Also drop a pin for each WCG facility for context — pin popup gets
-  // Set as Start / Set as End buttons too so a route can begin/end at a
-  // facility just like any other pin.
+  // Also drop a pin for each WCG facility for context. Phase 64 (2026-05-28):
+  // removed "Set as Start" / "Set as End" buttons per user — same legacy-
+  // trace cleanup as the clinic popup. Facilities are still pickable as
+  // Start/End via the Route Planner's own "📍 Map" arming button.
   Object.keys(ROUTE_COORDS).forEach(function(k){
     var c = ROUTE_COORDS[k];
     if(c.type !== 'facility') return;
     var safeLabel = String(c.label).replace(/</g,'&lt;').replace(/'/g,"\\'");
     var popupHtml = '<div style="font-family:DM Sans,sans-serif;font-size:12px;min-width:170px">'
       +   '<div style="font-weight:700;color:#7030A0;font-size:13px;margin-bottom:2px">🏥 ' + safeLabel + '</div>'
-      +   '<div style="font-size:10px;color:#64748b;margin-bottom:6px">WCG facility</div>'
-      +   '<div style="display:flex;gap:5px;margin-top:6px">'
-      +     '<button onclick="_rpPickFromMap(\'' + safeLabel + '\',\'start\')" style="flex:1;background:#1F3864;color:#fff;border:none;border-radius:5px;padding:5px 8px;font-size:10px;font-weight:700;cursor:pointer">Set as Start</button>'
-      +     '<button onclick="_rpPickFromMap(\'' + safeLabel + '\',\'end\')"   style="flex:1;background:#7030A0;color:#fff;border:none;border-radius:5px;padding:5px 8px;font-size:10px;font-weight:700;cursor:pointer">Set as End</button>'
-      +   '</div>'
+      +   '<div style="font-size:10px;color:#64748b">WCG facility</div>'
       + '</div>';
     var m = L.marker([c.lat, c.lng], {
       title: c.label,
@@ -34377,11 +34374,45 @@ function _dvShowMapJumpTo(idx){
   window._DV_SHOWMAP_IDX = idx;
   var row = rows[idx];
   if(!row || !row.clinic) return;
-  // Resolve coord — try visual (registry) first, then base
-  var coord = (typeof _rpGetVisualCoord === 'function') ? _rpGetVisualCoord(row.clinic) : null;
-  if(!coord && typeof getCoordForBusiness === 'function') coord = getCoordForBusiness(row.clinic);
+  // Phase 64 (2026-05-28): duplicate-name detection. If two clinics share
+  // the same name in the bank but live at different geocodes, the registry
+  // (and getCoordForBusiness's .find) only resolve to ONE of them — which
+  // can be different from the pin the rep was looking at. Surface this so
+  // they know to dedupe in the Bank instead of chasing a phantom jump.
+  var dupeCount = _dvCountBankDuplicates(row.clinic);
+  // Phase 64: classify the coord source so we can WARN when the jump
+  // lands at a city centroid (not a verified address) — that's the most
+  // common cause of "show on map went to a different point" complaints
+  // when the clinic was added manually without a real geocode.
+  var coordSource = null;       // 'registry' | 'geocode' | 'city' | null
+  var coord = null;
+  try {
+    // 1) Pin registry (rendered pin's actual jittered lat/lng — matches the eye)
+    var reg = window._RP_PIN_REGISTRY && window._RP_PIN_REGISTRY[row.clinic];
+    if(reg && reg.marker && reg.marker.getLatLng){
+      var ll = reg.marker.getLatLng();
+      coord = { lat: ll.lat, lng: ll.lng };
+      coordSource = 'registry';
+    }
+    // 2) Verified per-business geocode (real street address)
+    if(!coord && typeof BUSINESS_GEOCODES !== 'undefined' && BUSINESS_GEOCODES && BUSINESS_GEOCODES[row.clinic]){
+      coord = { lat: BUSINESS_GEOCODES[row.clinic].lat, lng: BUSINESS_GEOCODES[row.clinic].lng };
+      coordSource = 'geocode';
+    }
+    // 3) City centroid via getCoordForBusiness
+    if(!coord && typeof getCoordForBusiness === 'function'){
+      coord = getCoordForBusiness(row.clinic);
+      if(coord) coordSource = 'city';
+    }
+    // 4) Last-resort: the row's own city field (handles manually-added
+    //    visits that aren't in the bank yet)
+    if(!coord && row.city && typeof getRouteCoord === 'function'){
+      coord = getRouteCoord(row.city);
+      if(coord) coordSource = 'city';
+    }
+  } catch(_){}
   if(!coord){
-    if(typeof showToast === 'function') showToast('No location on file for "' + row.clinic + '".');
+    if(typeof showToast === 'function') showToast('No location on file for "' + row.clinic + '". Add an address in the Bank.');
     return;
   }
   // Update the counter chip
@@ -34394,10 +34425,38 @@ function _dvShowMapJumpTo(idx){
   }
   if(typeof showToast === 'function'){
     var st = row.status || 'Pending';
-    showToast('🔦 ' + (idx + 1) + '/' + rows.length + ' · ' + row.clinic + ' · ' + st);
+    var msg = '🔦 ' + (idx + 1) + '/' + rows.length + ' · ' + row.clinic + ' · ' + st;
+    if(dupeCount > 1){
+      msg += ' · ⚠ ' + dupeCount + ' bank entries share this name — fix duplicates in the Bank.';
+    } else if(coordSource === 'city'){
+      msg += ' · ⚠ No verified address — jumped to city centroid (add street address in the Bank for an exact pin).';
+    }
+    showToast(msg);
   }
 }
 window._dvShowMapJumpTo = _dvShowMapJumpTo;
+
+// Phase 64 (2026-05-28): count how many entries in the Clinic / MVA / Outreach
+// banks share the given name. Used by show-on-map + search-flash to warn the
+// rep when duplicates would make the jump ambiguous.
+function _dvCountBankDuplicates(name){
+  if(!name) return 0;
+  var n = String(name);
+  var count = 0;
+  try {
+    if(typeof CLINIC_BANK !== 'undefined' && Array.isArray(CLINIC_BANK)){
+      count += CLINIC_BANK.filter(function(c){ return c && c.n === n; }).length;
+    }
+    if(typeof MVA_ATTORNEYS !== 'undefined' && Array.isArray(MVA_ATTORNEYS)){
+      count += MVA_ATTORNEYS.filter(function(m){ return m && m.firm === n; }).length;
+    }
+    if(typeof OUTREACH !== 'undefined' && Array.isArray(OUTREACH)){
+      count += OUTREACH.filter(function(o){ return o && o.name === n; }).length;
+    }
+  } catch(_){}
+  return count;
+}
+window._dvCountBankDuplicates = _dvCountBankDuplicates;
 
 // Bright pulsing orange ring + label for the currently-highlighted row.
 function _dvDrawShowMapPulse(coord, name, num){
