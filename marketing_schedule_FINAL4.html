@@ -3473,13 +3473,16 @@ body.role-front_desk #referrals-view {
     <div class="modal-body" style="overflow-y:auto;flex:1;min-height:0;padding:18px 22px">
       <!-- ── MODE TOGGLE (per user 2026-05-22) ─────────────────────────
            Two ways to plan. Corridor = Start + End are real visit targets;
-           algorithm fills in clinics between them. Random Pick = user
-           supplies their starting location only, then double-clicks pins
-           on the map to add stops, the TSP solver computes the optimal
-           visit order. -->
+           algorithm fills in clinics between them. AI Optimize = pick a
+           bunch of clinics (pins or circle), TSP solver finds optimal order.
+           Phase 69 (2026-05-28): "Random Pick" mode removed per user — the
+           Corridor and AI Optimize modes cover all the planning needs and
+           Random Pick added complexity without unique value. The HTML
+           blocks (rp-random-*) are left hidden in the DOM and _rpSetMode
+           silently redirects 'random' → 'corridor' so any stale callers
+           don't crash. -->
       <div style="background:#f1f3f9;border-radius:12px;padding:5px;display:flex;gap:4px;margin-bottom:14px;box-shadow:inset 0 1px 2px rgba(15,23,42,.06)">
         <button id="rp-mode-corridor" type="button" onclick="_rpSetMode('corridor')" style="flex:1;padding:9px 14px;font-size:12px;font-weight:700;color:#fff;cursor:pointer;border:none;background:var(--purple);border-radius:9px;font-family:'DM Sans',sans-serif;display:inline-flex;align-items:center;justify-content:center;gap:6px;box-shadow:0 2px 6px rgba(112,48,160,.22);transition:all .15s">🧭 Corridor</button>
-        <button id="rp-mode-random" type="button" onclick="_rpSetMode('random')" style="flex:1;padding:9px 14px;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;border:none;background:transparent;border-radius:9px;font-family:'DM Sans',sans-serif;display:inline-flex;align-items:center;justify-content:center;gap:6px;transition:all .15s">🎲 Random Pick</button>
         <button id="rp-mode-optimize" type="button" onclick="_rpSetMode('optimize')" style="flex:1;padding:9px 14px;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;border:none;background:transparent;border-radius:9px;font-family:'DM Sans',sans-serif;display:inline-flex;align-items:center;justify-content:center;gap:6px;transition:all .15s">🤖 AI Optimize</button>
       </div>
 
@@ -11746,16 +11749,7 @@ function renderHelpView(){
         { title: 'Walk through each level', body: 'Tick the clinics you want to add at each level. Skip any. Re-do if you want.' },
         { title: 'Finalize', body: 'Click Generate Route. The visits get inserted into the day in optimal order.' }
       ])
-    + guideItem('plan-route-random', 'Plan a route — Random Pick wizard', [
-        { title: 'Click 🧭 Plan a Route → 🎲 Random Pick', body: 'The 4-step wizard opens.' },
-        { title: 'Step 1 — pick start', body: 'Facility (Frisco / Castle Hills / Plano / Richardson) OR custom location (your home, anywhere) OR a clinic / MVA / outreach stop that counts as visit #1.' },
-        { title: 'Step 2 — number of visits', body: 'How many stops total on this route. 1–12.' },
-        { title: 'Step 3 — total time', body: 'How long you have (hours). 0.5–12.' },
-        { title: 'Step 4 — minutes per stop', body: 'Time you spend at each clinic. Default 12 min. The wizard shows a live drive-budget preview.' },
-        { title: 'Generate routes', body: '3 candidates appear. If you don\'t like any, click "Show me 3 different routes" once for 3 alternates (6 total max).' },
-        { title: 'Pick + refine', body: 'Click "Use this route" → swap up to 50% of visits with nearby alternatives (5 shown per swap, green priority). Live ETA recalc on each swap.' },
-        { title: 'Confirm + push', body: 'Final Confirm pushes all stops into today\'s schedule in TSP order. Existing visits already on the schedule are reordered, not duplicated.' }
-      ]);
+    ;   // Phase 69 (2026-05-28): removed Random Pick help section — feature dropped.
   var part2Items = ''
     + guideItem('log-patient', 'Log a patient referral (with survey)', [
         { title: 'Open the Referrals tab', body: 'Front-desk users land here automatically. Members see a read-only version.' },
@@ -27101,36 +27095,61 @@ function exportDayRouteToGoogleMaps(){
     return;
   }
   var doneSuffix = droppedDone > 0 ? ' (' + droppedDone + ' finished/canceled stop' + (droppedDone===1?'':'s') + ' skipped)' : '';
-  // Single-stop: open the place card directly.
-  if(stops.length === 1){
-    var urlOne = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(stops[0].query);
-    window.open(urlOne, '_blank', 'noopener');
-    if(typeof showToast === 'function') showToast('🗺️ Opening ' + stops[0].name + ' in Google Maps…' + doneSuffix);
-    return;
-  }
   // Cap at 10 stops (Google Maps deep-link practical limit — 9 waypoints + dest).
   var truncated = false;
   if(stops.length > 10){
     truncated = true;
     stops = stops.slice(0, 10);
   }
-  // Build the directions URL. Origin = first stop, destination = last stop,
-  // waypoints = everything in between. Google Maps resolves each query to
-  // the actual business and draws the FULL route — user no longer has to
-  // paste each clinic name as a separate search.
-  var origin      = stops[0].query;
-  var destination = stops[stops.length - 1].query;
-  var waypoints   = stops.slice(1, -1).map(function(s){ return s.query; }).join('|');
-  var url = 'https://www.google.com/maps/dir/?api=1'
-          + '&origin='      + encodeURIComponent(origin)
-          + '&destination=' + encodeURIComponent(destination)
-          + (waypoints ? '&waypoints=' + encodeURIComponent(waypoints) : '')
-          + '&travelmode=driving';
-  window.open(url, '_blank', 'noopener');
-  if(truncated && typeof showToast === 'function'){
-    showToast('Exported first 10 stops to Google Maps' + doneSuffix + '. Add the rest from the Google Maps app if needed (deep-link limit).');
-  } else if(typeof showToast === 'function'){
-    showToast('🗺️ Opening ' + stops.length + ' stops in Google Maps with full route…' + doneSuffix);
+  // Build the URL we'll open (single-stop place card OR full directions URL).
+  var url, isSingle = (stops.length === 1);
+  if(isSingle){
+    url = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(stops[0].query);
+  } else {
+    var origin      = stops[0].query;
+    var destination = stops[stops.length - 1].query;
+    var waypoints   = stops.slice(1, -1).map(function(s){ return s.query; }).join('|');
+    url = 'https://www.google.com/maps/dir/?api=1'
+        + '&origin='      + encodeURIComponent(origin)
+        + '&destination=' + encodeURIComponent(destination)
+        + (waypoints ? '&waypoints=' + encodeURIComponent(waypoints) : '')
+        + '&travelmode=driving';
+  }
+  // Phase 69 (2026-05-28): confirm BEFORE opening the external Google Maps
+  // page in a new tab. Per user — surface the destination + count so they
+  // can back out if they hit the button by mistake.
+  var stopsList = stops.map(function(s, i){ return (i + 1) + '. ' + s.name; }).join('<br>');
+  var dialogMsg = isSingle
+    ? 'Open <b>' + (stops[0].name || 'this stop').replace(/</g,'&lt;') + '</b> in Google Maps?'
+    : 'Open this <b>' + stops.length + '-stop route</b> in Google Maps?';
+  var dialogSub = (isSingle ? '' : '<div style="max-height:140px;overflow-y:auto;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px 12px;margin-top:8px;font-size:11px;line-height:1.7;color:#1e293b">' + stopsList + '</div>')
+    + '<div style="margin-top:10px;font-size:11px;color:#475569">This opens <b>google.com/maps</b> in a new tab. ' + (truncated ? '⚠ Only the first 10 stops are included (deep-link limit). ' : '') + (droppedDone > 0 ? '✓ Completed / Postponed / Canceled stops are excluded.' : '') + '</div>';
+  function _go(){
+    window.open(url, '_blank', 'noopener');
+    if(typeof showToast === 'function'){
+      if(isSingle){
+        showToast('🗺️ Opening ' + stops[0].name + ' in Google Maps…' + doneSuffix);
+      } else if(truncated){
+        showToast('Exported first 10 stops to Google Maps' + doneSuffix + '. Add the rest from the Google Maps app if needed (deep-link limit).');
+      } else {
+        showToast('🗺️ Opening ' + stops.length + ' stops in Google Maps with full route…' + doneSuffix);
+      }
+    }
+  }
+  if(typeof showConfirm === 'function'){
+    showConfirm({
+      icon: '🗺',
+      msg: dialogMsg,
+      sub: dialogSub,
+      yesLabel: 'Open Google Maps',
+      onConfirm: _go
+    });
+  } else {
+    // No showConfirm helper available — fall back to a native confirm.
+    var plain = (isSingle ? 'Open ' + stops[0].name + ' in Google Maps?' : 'Open this ' + stops.length + '-stop route in Google Maps?')
+      + '\n\nThis opens google.com/maps in a new tab.'
+      + (truncated ? '\n\nNote: only the first 10 stops will be included.' : '');
+    if(window.confirm(plain)) _go();
   }
 }
 window.exportDayRouteToGoogleMaps = exportDayRouteToGoogleMaps;
@@ -32376,8 +32395,12 @@ function _rpFinalApplyMerge(spec, separateOrphans, insertions, di){
 window._rpFinalApplyMerge = _rpFinalApplyMerge;
 
 // Set the planner mode. Toggles section visibility + resets results.
+// Phase 69 (2026-05-28): 'random' mode removed per user — silently redirect
+// to 'corridor' so any leftover callers (saved-route resume, deep links,
+// stale state) don't crash the planner.
 function _rpSetMode(mode){
-  if(mode !== 'corridor' && mode !== 'random' && mode !== 'optimize') return;
+  if(mode === 'random') mode = 'corridor';
+  if(mode !== 'corridor' && mode !== 'optimize') return;
   _RP_MODE = mode;
   // Toggle button states (Phase 46: optimize mode added)
   var cBtn = document.getElementById('rp-mode-corridor');
