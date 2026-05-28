@@ -3665,7 +3665,7 @@ body.role-front_desk #referrals-view {
                  and both Start + End are confirmed. Clicking it sends the
                  corridor distance + candidate density to GitHub Models and
                  the recommended N drops into the input. -->
-            <button id="rp-ai-suggest-n-btn" type="button" onclick="_rpAiSuggestLevelCount()" title="Ask AI to pick the optimum N based on Start↔End distance + stale-candidate density" style="display:none;background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;border:none;border-radius:6px;padding:0 11px;height:36px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;white-space:nowrap;align-items:center;gap:4px">🤖 AI suggest</button>
+            <button id="rp-ai-suggest-n-btn" type="button" onclick="_rpRunAutoCompute()" title="Auto-compute optimum N + corridor half-width from candidate density" style="background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;border:none;border-radius:6px;padding:0 11px;height:36px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;white-space:nowrap;display:inline-flex;align-items:center;gap:4px">🧮 Auto N + width</button>
           </div>
           <div id="rp-ai-suggest-n-hint" style="display:none;font-size:10px;color:#6b21a8;margin-top:5px;line-height:1.45;background:#faf5ff;border:1px solid #ddd6fe;border-radius:6px;padding:5px 8px"></div>
         </div>
@@ -27382,6 +27382,89 @@ function _rpClearCenterline(){
   }
   _DV_CENTERLINE = null;
 }
+
+// Phase 30 (2026-05-27): visible CORRIDOR RECTANGLE on the map. Width =
+// 2 * halfWidth, length = S->E line, oriented parallel to the line. Drawn
+// as a translucent blue polygon so the user can see exactly which clinics
+// fall inside the corridor (= which ones will turn into candidates).
+//
+// Math: take the unit vector along S->E. The perpendicular unit vector
+// (rotate 90deg) gives the corridor's "left/right" direction. Convert
+// halfWidth miles into lat/lng degrees using the local scale factors,
+// then offset the four corners.
+var _DV_CORRIDOR_BOX = null;
+function _rpDrawCorridorBox(A, B, halfWidthMi){
+  if(!_DV_MAP || typeof L === 'undefined' || !A || !B || !halfWidthMi) return;
+  if(_DV_CORRIDOR_BOX){
+    try {
+      if(_DV_CORRIDOR_BOX.fill) _DV_MAP.removeLayer(_DV_CORRIDOR_BOX.fill);
+      if(_DV_CORRIDOR_BOX.edge) _DV_MAP.removeLayer(_DV_CORRIDOR_BOX.edge);
+    } catch(_){}
+    _DV_CORRIDOR_BOX = null;
+  }
+  // Local-scale degrees per mile (good enough for the metro area)
+  var midLat   = (A.lat + B.lat) / 2 * Math.PI / 180;
+  var degPerMiLat = 1 / 69;
+  var degPerMiLng = 1 / (69 * Math.cos(midLat));
+  // Vector A->B in miles
+  var dLat = (B.lat - A.lat);
+  var dLng = (B.lng - A.lng);
+  var dLatMi = dLat / degPerMiLat;
+  var dLngMi = dLng / degPerMiLng;
+  var lenMi  = Math.sqrt(dLatMi * dLatMi + dLngMi * dLngMi);
+  if(lenMi < 0.01) return;   // degenerate (S==E)
+  // Unit along the line + perpendicular (rotate 90deg, swap & negate)
+  var uLatMi = dLatMi / lenMi, uLngMi = dLngMi / lenMi;
+  var pLatMi = -uLngMi,        pLngMi = uLatMi;
+  // Offset for one side of the corridor, in lat/lng degrees
+  var offLat = pLatMi * halfWidthMi * degPerMiLat;
+  var offLng = pLngMi * halfWidthMi * degPerMiLng;
+  // Four corners of the rectangle, in order (so the polygon closes cleanly)
+  var corners = [
+    [A.lat + offLat, A.lng + offLng],   // A + side
+    [B.lat + offLat, B.lng + offLng],   // B + side
+    [B.lat - offLat, B.lng - offLng],   // B - side
+    [A.lat - offLat, A.lng - offLng]    // A - side
+  ];
+  // Stack two polygons: a translucent fill + a bright outline on top.
+  var fill = L.polygon(corners, {
+    color: '#2563eb', weight: 0, fillColor: '#3b82f6', fillOpacity: 0.10,
+    interactive: false
+  }).addTo(_DV_MAP);
+  var edge = L.polygon(corners, {
+    color: '#2563eb', weight: 3, opacity: 0.85, fillOpacity: 0,
+    dashArray: '6,4', interactive: false
+  }).addTo(_DV_MAP);
+  _DV_CORRIDOR_BOX = { fill: fill, edge: edge };
+}
+window._rpDrawCorridorBox = _rpDrawCorridorBox;
+
+function _rpClearCorridorBox(){
+  if(_DV_CORRIDOR_BOX && _DV_MAP){
+    try {
+      if(_DV_CORRIDOR_BOX.fill) _DV_MAP.removeLayer(_DV_CORRIDOR_BOX.fill);
+      if(_DV_CORRIDOR_BOX.edge) _DV_MAP.removeLayer(_DV_CORRIDOR_BOX.edge);
+    } catch(_){}
+  }
+  _DV_CORRIDOR_BOX = null;
+}
+window._rpClearCorridorBox = _rpClearCorridorBox;
+
+// Re-read Start, End, and the current half-width input and (re)draw the
+// box. Called any time an endpoint OR the half-width changes.
+function _rpRefreshCorridorBox(){
+  try {
+    var startVal = (document.getElementById('rp-start') || {}).value || '';
+    var endVal   = (document.getElementById('rp-end')   || {}).value || '';
+    if(!startVal || !endVal){ _rpClearCorridorBox(); return; }
+    var A = (typeof getRouteCoord === 'function') ? getRouteCoord(startVal) : null;
+    var B = (endVal === '__same__') ? A : ((typeof getRouteCoord === 'function') ? getRouteCoord(endVal) : null);
+    if(!A || !B || (A.lat === B.lat && A.lng === B.lng)){ _rpClearCorridorBox(); return; }
+    var halfW = parseFloat((document.getElementById('rp-corridor') || {}).value) || 3;
+    _rpDrawCorridorBox(A, B, halfW);
+  } catch(_){}
+}
+window._rpRefreshCorridorBox = _rpRefreshCorridorBox;
 window._rpClearCenterline = _rpClearCenterline;
 // Read current rp-start/rp-end, resolve their coords, draw the centerline
 // if both resolve (else clear). Called any time an endpoint changes.
@@ -27389,14 +27472,17 @@ function _rpRefreshCenterline(){
   try {
     var startVal = (document.getElementById('rp-start') || {}).value || '';
     var endVal   = (document.getElementById('rp-end')   || {}).value || '';
-    if(!startVal || !endVal){ _rpClearCenterline(); }
+    if(!startVal || !endVal){ _rpClearCenterline(); _rpClearCorridorBox(); }
     else {
       var A = (typeof getRouteCoord === 'function') ? getRouteCoord(startVal) : null;
       var B = (endVal === '__same__') ? A : ((typeof getRouteCoord === 'function') ? getRouteCoord(endVal) : null);
       if(A && B && (A.lat !== B.lat || A.lng !== B.lng)){
         _rpDrawCenterline(A, B);
+        // Phase 30: also draw the corridor rectangle the moment both are set.
+        if(typeof _rpRefreshCorridorBox === 'function') _rpRefreshCorridorBox();
       } else {
         _rpClearCenterline();
+        _rpClearCorridorBox();
       }
     }
     // Per user 2026-05-26: keep the "🤖 AI suggest" button in sync — show
@@ -27419,6 +27505,8 @@ function closeRoutePlanner(){
   if(typeof _rpClearPreviewRing === 'function') _rpClearPreviewRing();
   // Phase 28: restore every pin's original colour when the planner closes.
   if(typeof _rpResetAllPins === 'function') _rpResetAllPins();
+  // Phase 30: clear the corridor rectangle too.
+  if(typeof _rpClearCorridorBox === 'function') _rpClearCorridorBox();
   document.getElementById('route-planner-modal').style.display = 'none';
   // Per user 2026-05-25: release the map-function lock so Add Visit
   // popups and other handlers work again.
@@ -28392,6 +28480,8 @@ function _rpV4OnWidthChange(){
     var hint = document.getElementById('rp-base-width-hint');
     if(hint) hint.textContent = String(w);
   } catch(_){}
+  // Phase 30: redraw the corridor rectangle live as the user types.
+  if(typeof _rpRefreshCorridorBox === 'function') _rpRefreshCorridorBox();
   if(_rpV4Timer) clearTimeout(_rpV4Timer);
   _rpV4Timer = setTimeout(function(){
     if(_RP_V4_LAST) runRoutePlannerV4();
@@ -29464,20 +29554,14 @@ window._rpAiOnToggleChange = _rpAiOnToggleChange;
 // Shown only when: AI toggle is ON + a token is set + both Start + End are
 // resolved (so the AI has real geometry to reason about).
 function _rpAiSuggestBtnSync(){
+  // Phase 30: button is now the deterministic auto-compute (no remote AI,
+  // no token needed). Show it whenever both Start and End are set.
   var btn = document.getElementById('rp-ai-suggest-n-btn');
   if(!btn) return;
-  var aiOn = !!(window._RP_AI && _RP_AI.enabled);
-  var keyOk = (typeof hasGeminiKey === 'function') && hasGeminiKey();
   var startVal = (document.getElementById('rp-start') || {}).value || '';
   var endVal   = (document.getElementById('rp-end')   || {}).value || '';
-  // End may be "__same__" for round-trip — that counts as "both set".
   var bothSet = !!(startVal && endVal);
-  btn.style.display = (aiOn && keyOk && bothSet) ? 'inline-flex' : 'none';
-  // Hide stale reasoning hint when AI gets disabled
-  if(!aiOn){
-    var hint = document.getElementById('rp-ai-suggest-n-hint');
-    if(hint){ hint.style.display = 'none'; hint.innerHTML = ''; }
-  }
+  btn.style.display = bothSet ? 'inline-flex' : 'none';
 }
 window._rpAiSuggestBtnSync = _rpAiSuggestBtnSync;
 
@@ -29718,6 +29802,27 @@ function _rpAutoSuggestIfReady(){
   } catch(_){}
 }
 window._rpAutoSuggestIfReady = _rpAutoSuggestIfReady;
+
+// Phase 30: button handler that force-runs the deterministic compute,
+// bypassing the (start,end) throttle. Also redraws the corridor rectangle
+// using the new halfWidth.
+function _rpRunAutoCompute(){
+  try {
+    var startVal = (document.getElementById('rp-start') || {}).value || '';
+    var endVal   = (document.getElementById('rp-end')   || {}).value || '';
+    if(!startVal || !endVal){
+      if(typeof showToast === 'function') showToast('Pick Start and End first.');
+      return;
+    }
+    if(_RP_AI) _RP_AI.autoSuggestLast = null;   // reset throttle so it always runs
+    _rpAutoSuggestIfReady();
+    // Redraw the corridor rectangle with the new half-width
+    if(typeof _rpRefreshCorridorBox === 'function') _rpRefreshCorridorBox();
+  } catch(e){
+    if(typeof showToast === 'function') showToast('Auto-compute failed: ' + (e && e.message));
+  }
+}
+window._rpRunAutoCompute = _rpRunAutoCompute;
 
 // Visibility — show only for admin. Called whenever the planner opens.
 function _rpAiSyncVisibility(){

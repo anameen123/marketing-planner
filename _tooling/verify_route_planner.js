@@ -299,6 +299,36 @@ const TRACE = path.resolve(__dirname, '_verify_route_planner.log');
   note('  → first three pin states: ' + JSON.stringify(phase29.firstThreePinStates) + ' (expect all "picked")');
   note('  → connection preview built: ' + phase29.previewHasContent);
 
+  // ── (6.9) Phase 30 — corridor rectangle + AI button rewire ────────────
+  note('--- Step: Phase 30 corridor box + AI button ---');
+  const phase30 = await page.evaluate(() => {
+    const out = {};
+    // Centerline should already exist from earlier steps
+    out.centerlineExists = !!(window._DV_CENTERLINE && window._DV_CENTERLINE.main);
+    // Trigger box refresh and check
+    if(typeof window._rpRefreshCorridorBox === 'function'){
+      window._rpRefreshCorridorBox();
+      out.boxFn = true;
+    }
+    out.boxFill = !!(window._DV_CORRIDOR_BOX && window._DV_CORRIDOR_BOX.fill);
+    out.boxEdge = !!(window._DV_CORRIDOR_BOX && window._DV_CORRIDOR_BOX.edge);
+    // Check the AI button is wired to _rpRunAutoCompute, not the old fn
+    const btn = document.getElementById('rp-ai-suggest-n-btn');
+    out.btnExists = !!btn;
+    out.btnOnclick = btn ? (btn.getAttribute('onclick') || '') : '';
+    out.runAutoExists = typeof window._rpRunAutoCompute === 'function';
+    // Force-run the auto-compute and check that the inputs got values
+    if(typeof window._rpRunAutoCompute === 'function'){
+      try { window._rpRunAutoCompute(); } catch(e){ out.runErr = e.message; }
+    }
+    out.nVal = (document.getElementById('rp-level-count') || {}).value;
+    out.halfVal = (document.getElementById('rp-corridor') || {}).value;
+    return out;
+  });
+  note('  → centerline: ' + phase30.centerlineExists + ' · corridor box: fill=' + phase30.boxFill + ', edge=' + phase30.boxEdge);
+  note('  → AI button exists: ' + phase30.btnExists + ' · onclick: ' + phase30.btnOnclick);
+  note('  → after _rpRunAutoCompute: N=' + phase30.nVal + ', halfWidth=' + phase30.halfVal);
+
   // ── (7) Random Pick wizard — click pick-on-map, expect drawer stays ──
   note('--- Step: Random Pick mode + wizard pick ---');
   const randomRes = await page.evaluate(() => {
