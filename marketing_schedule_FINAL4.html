@@ -3300,6 +3300,29 @@ body.role-front_desk #referrals-view {
       <button type="button" id="dv-mtab-list" onclick="_dvSetMobileTab('list')" style="flex:1;padding:8px 12px;font-size:12px;font-weight:700;color:#fff;cursor:pointer;border:none;background:var(--purple);border-radius:7px;font-family:DM Sans,sans-serif">📋 List</button>
       <button type="button" id="dv-mtab-map"  onclick="_dvSetMobileTab('map')"  style="flex:1;padding:8px 12px;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;border:none;background:transparent;border-radius:7px;font-family:DM Sans,sans-serif">🗺️ Map</button>
     </div>
+    <!-- Phase 75 (2026-05-28): Schedule collapsible header.
+         A click on the header toggles the table body's display. The
+         "Current route" chip (Phase 52, relocated from the map header)
+         lives here too — more discoverable up top, doesn't compete
+         with map options below. -->
+    <div id="dv-schedule-header" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;background:linear-gradient(135deg,#1F3864,#3b5fa3);color:#fff;border-radius:10px;padding:10px 14px;margin-bottom:8px;cursor:pointer;user-select:none" onclick="_dvToggleSchedule(event)">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <span id="dv-schedule-chevron" style="font-size:14px;width:16px;display:inline-block;text-align:center;transition:transform .2s">▼</span>
+        <span style="font-size:14px;font-weight:800">📋 Schedule</span>
+        <span id="dv-schedule-count-chip" style="background:rgba(255,255,255,.22);border:1px solid rgba(255,255,255,.4);font-size:11px;font-weight:700;padding:2px 9px;border-radius:10px;font-family:DM Mono,monospace">0 visits</span>
+      </div>
+      <!-- Current route chip (relocated). data-stop-click prevents the
+           header collapse from firing when the chip itself is clicked. -->
+      <button id="dv-current-route-btn" type="button" onclick="event.stopPropagation();_rpResumeSavedRoute()"
+              title="Edit the last route you generated for this day"
+              data-stop-click="1"
+              style="display:none;background:linear-gradient(135deg,#16a34a,#15803d);border:none;color:#fff;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;align-items:center;gap:5px;line-height:1.1;box-shadow:0 1px 3px rgba(0,0,0,.25)">
+        <span>📍</span>
+        <span>Current route</span>
+        <span style="background:rgba(255,255,255,.25);padding:1px 5px;border-radius:8px;font-size:10px">✏</span>
+      </button>
+    </div>
+    <div id="dv-schedule-body">
     <!-- Phase 62 (2026-05-28): Gmail-style inline bulk-select toolbar.
          The "Select" button toggles select mode — when on, each row gets a
          leading checkbox + a top action bar appears with Delete / Copy to date.
@@ -3365,6 +3388,7 @@ body.role-front_desk #referrals-view {
         <tbody id="day-tbody"></tbody>
       </table>
     </div>
+    </div><!-- /dv-schedule-body (Phase 75) -->
 
     <!-- ── DAY ROUTE PLANNER ────────────────────────────────────────────
          A map + "plan a route" tool that lives below the visit table.
@@ -3376,15 +3400,20 @@ body.role-front_desk #referrals-view {
          driving terms). v2 will use precise per-clinic lat/lon once we
          geocode each address individually. ─────────────────────────── -->
     <div id="day-route-panel" style="margin-top:18px;background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;box-shadow:0 2px 10px rgba(15,23,42,.05)">
-      <div style="background:linear-gradient(135deg,#1F3864,#3b5fa3);color:#fff;padding:12px 18px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
-        <div>
-          <div style="font-size:14px;font-weight:700">🗺️ Day Map</div>
-          <div style="font-size:11px;opacity:.85;margin-top:2px">Today's visits · tap any pin to view card or add a visit</div>
+      <!-- Phase 75 (2026-05-28): collapsible Day Map header. Click the title
+           row to toggle the body. Defaults to COLLAPSED so reps see the
+           schedule first; clicking expand also scrolls the map into view. -->
+      <div id="dv-daymap-header" style="background:linear-gradient(135deg,#1F3864,#3b5fa3);color:#fff;padding:12px 18px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;cursor:pointer;user-select:none" onclick="_dvToggleDayMap(event)">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span id="dv-daymap-chevron" style="font-size:14px;width:16px;display:inline-block;text-align:center;transition:transform .2s">▶</span>
+          <div>
+            <div style="font-size:14px;font-weight:700">🗺️ Day Map</div>
+            <div style="font-size:11px;opacity:.85;margin-top:2px">Today's visits · tap to expand</div>
+          </div>
         </div>
-        <!-- Route Planner v1 + v2 + Smart Plan removed per user 2026-05-21.
-             Route Planner v3 (corridor + recency + deroute budget) will live
-             here once the new algorithm is built. -->
+        <!-- Route Planner v1 + v2 + Smart Plan removed per user 2026-05-21. -->
       </div>
+      <div id="dv-daymap-body" style="display:none">
       <!-- ── BUSINESS LAYER + RECENCY LEGEND ──────────────────────────
            Filter chips toggle clinic / MVA / outreach pin visibility.
            Recency legend shows what each fill color means. Smart Plan
@@ -3408,27 +3437,21 @@ body.role-front_desk #referrals-view {
              reachable. Per user 2026-05-22 frustration: "I do not see anything." -->
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
           <span id="rp-pick-status" style="font-size:10px;color:var(--muted);font-style:italic"></span>
-          <button id="dv-plan-route-btn" type="button" onclick="openRoutePlannerDialog()"
+          <button id="dv-plan-route-btn" type="button" onclick="openRoutePlannerDialog();_dvScrollToMap();"
                   title="Open the route-planner dialog. Fill Start and End by typing (with recency-colored suggestions) or by clicking pins on the map."
                   style="background:linear-gradient(135deg,#7030A0,#9333ea);border:none;color:#fff;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;display:inline-flex;align-items:center;gap:5px;line-height:1.1;box-shadow:0 1px 3px rgba(112,48,160,.3)">
             🧭 Plan a Route
           </button>
-          <!-- Phase 52 (2026-05-28): "Current route" chip — only visible if
-               the user has saved a planner state for this day. Click to
-               re-open the planner in the saved mode with Start/End/picks
-               restored, so they can edit instead of starting from zero. -->
-          <button id="dv-current-route-btn" type="button" onclick="_rpResumeSavedRoute()"
-                  title="Edit the last route you generated for this day"
-                  style="display:none;background:linear-gradient(135deg,#16a34a,#15803d);border:none;color:#fff;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;align-items:center;gap:5px;line-height:1.1;box-shadow:0 1px 3px rgba(22,163,74,.3)">
-            <span>📍</span>
-            <span>Current route</span>
-            <span style="background:rgba(255,255,255,.25);padding:1px 5px;border-radius:8px;font-size:10px">✏</span>
-          </button>
+          <!-- Phase 52 chip removed from map header (Phase 75, 2026-05-28).
+               Relocated up to the Schedule header where it's more
+               discoverable. The dv-current-route-btn element is recreated
+               in the new location below. -->
+
           <!-- Phase 10b (per user 2026-05-25): one-click export of the day's
                visits as a Google Maps directions deep link. On phones it
                opens the Google Maps app directly with the route preloaded;
                on desktop it opens maps.google.com with the same route. -->
-          <button id="dv-gmaps-export-btn" type="button" onclick="exportDayRouteToGoogleMaps()"
+          <button id="dv-gmaps-export-btn" type="button" onclick="exportDayRouteToGoogleMaps();_dvScrollToMap();"
                   title="Open the day's route in Google Maps for navigation. Builds a deep link with all stops in order; opens the Google Maps app on phone."
                   style="background:#1e40af;border:none;color:#fff;border-radius:6px;padding:5px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;display:inline-flex;align-items:center;gap:5px;line-height:1.1">
             🗺️ Open in Google Maps
@@ -3437,7 +3460,7 @@ body.role-front_desk #referrals-view {
                Lets the user step through every row in the day's visit table
                and see each clinic's pin lit up + map zoomed in. Useful when
                planning a route around pre-existing visits. -->
-          <button id="dv-showmap-toggle-btn" type="button" onclick="_dvToggleShowOnMap()"
+          <button id="dv-showmap-toggle-btn" type="button" onclick="_dvToggleShowOnMap();_dvScrollToMap();"
                   title="Step through this day's visits — each one lights up on the map and zooms in"
                   style="background:#fff;border:1px solid #fbbf24;color:#92400e;border-radius:6px;padding:5px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;display:inline-flex;align-items:center;gap:5px;line-height:1.1">
             🔦 Show on map
@@ -3465,7 +3488,7 @@ body.role-front_desk #referrals-view {
                existing settings modal where the Google Maps + Gemini keys
                + daily quota caps are configured. -->
           <button id="dv-mapv2-settings-btn" type="button" onclick="openMapV2Settings()" title="Map v2 settings — paste Google Maps API key for real driving directions, traffic-aware ETA, and AI auto-fill" style="display:inline-flex;align-items:center;gap:4px;background:#7030A0;border:1px solid #fff;color:#fff;border-radius:6px;padding:5px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;line-height:1.1">⚙ Map v2</button>
-          <button id="dv-map-expand-btn" type="button" onclick="toggleDayMapExpanded()"
+          <button id="dv-map-expand-btn" type="button" onclick="toggleDayMapExpanded();_dvScrollToMap();"
                   title="Expand the map to full height — easier to see the route"
                   style="background:#1F3864;border:none;color:#fff;border-radius:6px;padding:5px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;display:inline-flex;align-items:center;gap:5px;line-height:1.1">
             <span id="dv-map-expand-icon">↔</span>
@@ -3479,6 +3502,7 @@ body.role-front_desk #referrals-view {
       <div id="dv-route-summary" style="display:none;padding:10px 18px;background:#f8fafc;border-top:1px solid var(--border);font-size:12px;color:var(--text)"></div>
       <!-- Smart Plan working area — appears below the map once Start + End are picked -->
       <div id="rp-smart-panel" style="display:none;background:#f8fafc;border-top:1px solid var(--border);padding:14px 18px"></div>
+      </div><!-- /dv-daymap-body (Phase 75) -->
     </div>
   </div>
 </div>
@@ -35107,6 +35131,71 @@ function _dvSetMobileTab(tab){
   }
 }
 window._dvSetMobileTab = _dvSetMobileTab;
+
+// ── PHASE 75 (2026-05-28): Collapsible Schedule + Day Map sections ─────────
+// Both sections start in their default state on every day open:
+//   • Schedule: EXPANDED (rep usually needs to see the rows)
+//   • Day Map:  COLLAPSED (compact; rep clicks to expand + scroll into view)
+// Header clicks toggle. Buttons inside the header use data-stop-click or
+// event.stopPropagation() so they don't bubble into the toggle.
+
+window._DV_SCHEDULE_COLLAPSED = false;   // expanded by default
+window._DV_DAYMAP_COLLAPSED   = true;    // collapsed by default
+
+function _dvToggleSchedule(ev){
+  // If the click bubbled from a button with data-stop-click, ignore.
+  if(ev && ev.target && ev.target.closest && ev.target.closest('[data-stop-click="1"]')) return;
+  window._DV_SCHEDULE_COLLAPSED = !window._DV_SCHEDULE_COLLAPSED;
+  var body = document.getElementById('dv-schedule-body');
+  var chev = document.getElementById('dv-schedule-chevron');
+  if(body) body.style.display = window._DV_SCHEDULE_COLLAPSED ? 'none' : 'block';
+  if(chev) chev.style.transform = window._DV_SCHEDULE_COLLAPSED ? 'rotate(-90deg)' : 'rotate(0deg)';
+}
+window._dvToggleSchedule = _dvToggleSchedule;
+
+function _dvToggleDayMap(ev){
+  if(ev && ev.target && ev.target.closest && ev.target.closest('[data-stop-click="1"]')) return;
+  window._DV_DAYMAP_COLLAPSED = !window._DV_DAYMAP_COLLAPSED;
+  var body = document.getElementById('dv-daymap-body');
+  var chev = document.getElementById('dv-daymap-chevron');
+  if(body) body.style.display = window._DV_DAYMAP_COLLAPSED ? 'none' : 'block';
+  if(chev) chev.style.transform = window._DV_DAYMAP_COLLAPSED ? 'rotate(0deg)' : 'rotate(90deg)';
+  // When expanding, kick Leaflet's invalidateSize (tiles render greyed if
+  // the container was hidden when initialized) + scroll into view so the
+  // map is focused after the click.
+  if(!window._DV_DAYMAP_COLLAPSED){
+    try {
+      if(typeof _DV_MAP !== 'undefined' && _DV_MAP){
+        setTimeout(function(){ _DV_MAP.invalidateSize(); }, 60);
+      }
+    } catch(_){}
+    _dvScrollToMap();
+  }
+}
+window._dvToggleDayMap = _dvToggleDayMap;
+
+// Scroll the Day Map into view smoothly. Called from the toggle + from
+// every map-option button (Plan a Route / Show on map / Open in GMaps /
+// Expand) so any click on those buttons brings the map into focus.
+function _dvScrollToMap(){
+  try {
+    var el = document.getElementById('day-route-panel');
+    if(!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch(_){}
+}
+window._dvScrollToMap = _dvScrollToMap;
+
+// Helper used by renderDayTable to keep the Schedule header's visit-count
+// chip in sync with the day's row count.
+function _dvSyncScheduleCount(di){
+  var chip = document.getElementById('dv-schedule-count-chip');
+  if(!chip) return;
+  if(typeof S === 'undefined' || !S.days || !S.days[di]){ chip.textContent = '0 visits'; return; }
+  var n = (S.days[di].rows || []).filter(function(r){ return r && r.clinic; }).length;
+  chip.textContent = n + ' visit' + (n === 1 ? '' : 's');
+}
+window._dvSyncScheduleCount = _dvSyncScheduleCount;
 // Default mobile state on first paint: list tab active. (Class is a no-op
 // on desktop since the sub-tab bar + section overrides are inside a
 // @media max-width:768px block.)
@@ -41844,6 +41933,8 @@ function renderDayTable(di){
   // missing, render an empty-state row with the Add Visit button so the user
   // can still do work.
   var day = S.days && S.days[di];
+  // Phase 75 (2026-05-28): keep the Schedule header's visit count in sync.
+  if(typeof _dvSyncScheduleCount === 'function') _dvSyncScheduleCount(di);
   if(!day){
     var tbodyMissing = document.getElementById('day-tbody');
     if(tbodyMissing) tbodyMissing.innerHTML = '<tr><td colspan="10" style="padding:20px;text-align:center;color:var(--muted);font-style:italic">Schedule data is still loading for this day. <button onclick="refresh(S.currentDay)" style="margin-left:8px;background:var(--purple);color:#fff;border:none;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer">Retry</button></td></tr>';
