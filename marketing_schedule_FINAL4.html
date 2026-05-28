@@ -28122,12 +28122,19 @@ function _rpDrawCorridorBox(A, B, halfWidthMi){
     dashArray: '6,4', interactive: false
   }).addTo(_DV_MAP);
   _DV_CORRIDOR_BOX = { fill: fill, edge: edge };
-  // ── PHASE 71 (2026-05-28) — Manual drag handles in 'width' mode ──────
+  // ── PHASE 71 + 71b (2026-05-28) — Manual drag handles in 'width' mode ──
   // When the user is in "Fix corridor width" mode, add two draggable
   // handles at the long-edge midpoints. Dragging perpendicular to the
-  // centerline resizes halfWidth on the fly. Mirrors the AI Optimize
-  // circle's edge-drag pattern. Mode = 'visits' skips the handles since
-  // the width is computed there.
+  // centerline resizes halfWidth on the fly.
+  //
+  // Phase 71b fix: the previous version called _rpDrawCorridorBox on every
+  // 'drag' event, which destroyed the handle (the very element Leaflet was
+  // tracking) mid-drag. The drag broke after a short motion. New approach:
+  //   • During drag — ONLY update the polygon coords (setLatLngs) +
+  //     re-light pins inside. Don't touch the handles.
+  //   • On dragend — snap handles back to the new edge midpoint and run
+  //     the full redraw (which re-creates handles cleanly).
+  // Cursor: 'ns-resize' (single double-arrow) instead of 'move' (4-way).
   var manualMode = (window._RP_CORRIDOR_MODE === 'width');
   if(manualMode){
     var midA = { lat: (A.lat + B.lat) / 2, lng: (A.lng + B.lng) / 2 };
@@ -28137,8 +28144,8 @@ function _rpDrawCorridorBox(A, B, halfWidthMi){
       return L.marker([pos.lat, pos.lng], {
         icon: L.divIcon({
           className: 'rp-corridor-handle',
-          html: '<div title="Drag to resize corridor width" style="width:18px;height:18px;background:#2563eb;border:3px solid #fff;border-radius:50%;box-shadow:0 0 0 2px #2563eb,0 2px 6px rgba(0,0,0,.4);cursor:move"></div>',
-          iconSize: [18,18], iconAnchor: [9,9]
+          html: '<div title="Drag perpendicular to the corridor line to resize width" style="width:20px;height:20px;background:#2563eb;border:3px solid #fff;border-radius:50%;box-shadow:0 0 0 2px #2563eb,0 2px 8px rgba(0,0,0,.4);cursor:ns-resize"></div>',
+          iconSize: [20,20], iconAnchor: [10,10]
         }),
         draggable: true,
         zIndexOffset: 9400
@@ -28146,25 +28153,44 @@ function _rpDrawCorridorBox(A, B, halfWidthMi){
     }
     var h1 = makeHandle(handlePos1);
     var h2 = makeHandle(handlePos2);
+    // Live drag — only update polygon coords + highlights. NO redraw.
     function onDrag(ev){
       var ll = ev.target.getLatLng();
-      // Compute new perpendicular distance from centerline to dragged point
       var perp = Math.abs(_rpV5SignedPerp({ lat: ll.lat, lng: ll.lng }, A, B));
       perp = Math.max(0.1, Math.min(15, Math.round(perp * 100) / 100));
-      // Update the input + global, redraw box (which re-creates handles at new pos)
+      // Update the corridor input live
       var wInp = document.getElementById('rp-corridor');
       if(wInp) wInp.value = perp;
       window._RP_APPLIED_HALFWIDTH = perp;
-      _rpDrawCorridorBox(A, B, perp);
-      // Light up pins inside the new rectangle (Phase 37 helper)
+      // Recompute the four corners + apply via setLatLngs (no DOM tear-down)
+      var newOffLat = pLatMi * perp * degPerMiLat;
+      var newOffLng = pLngMi * perp * degPerMiLng;
+      var newCorners = [
+        [A.lat + newOffLat, A.lng + newOffLng],
+        [B.lat + newOffLat, B.lng + newOffLng],
+        [B.lat - newOffLat, B.lng - newOffLng],
+        [A.lat - newOffLat, A.lng - newOffLng]
+      ];
+      try {
+        if(_DV_CORRIDOR_BOX && _DV_CORRIDOR_BOX.fill) _DV_CORRIDOR_BOX.fill.setLatLngs(newCorners);
+        if(_DV_CORRIDOR_BOX && _DV_CORRIDOR_BOX.edge) _DV_CORRIDOR_BOX.edge.setLatLngs(newCorners);
+      } catch(_){}
+      // Light pins inside the new rectangle so the rep sees what's covered
       if(typeof _rpHighlightInsideRectangle === 'function') _rpHighlightInsideRectangle(A, B, perp);
-      // Refresh the Apply button state (Phase 35)
+    }
+    function onDragEnd(){
+      var wInp = document.getElementById('rp-corridor');
+      var perp = parseFloat(wInp && wInp.value) || halfWidthMi;
+      if(typeof showToast === 'function') showToast('🎯 Corridor width = ±' + perp + ' mi');
       if(typeof _rpRenderApplyWidthBtn === 'function') _rpRenderApplyWidthBtn();
+      // Full redraw now that the drag is over — snaps the OTHER handle to
+      // its new symmetric position and rebuilds the polygon cleanly.
+      _rpDrawCorridorBox(A, B, perp);
     }
     h1.on('drag', onDrag);
     h2.on('drag', onDrag);
-    h1.on('dragend', function(){ if(typeof showToast === 'function') showToast('🎯 Corridor width = ±' + (parseFloat((document.getElementById('rp-corridor') || {}).value) || halfWidthMi) + ' mi'); });
-    h2.on('dragend', function(){ if(typeof showToast === 'function') showToast('🎯 Corridor width = ±' + (parseFloat((document.getElementById('rp-corridor') || {}).value) || halfWidthMi) + ' mi'); });
+    h1.on('dragend', onDragEnd);
+    h2.on('dragend', onDragEnd);
     _DV_CORRIDOR_BOX.handle1 = h1;
     _DV_CORRIDOR_BOX.handle2 = h2;
   }
@@ -28183,8 +28209,12 @@ window._rpDrawCorridorBox = _rpDrawCorridorBox;
 function _rpClearCorridorBox(){
   if(_DV_CORRIDOR_BOX && _DV_MAP){
     try {
-      if(_DV_CORRIDOR_BOX.fill) _DV_MAP.removeLayer(_DV_CORRIDOR_BOX.fill);
-      if(_DV_CORRIDOR_BOX.edge) _DV_MAP.removeLayer(_DV_CORRIDOR_BOX.edge);
+      if(_DV_CORRIDOR_BOX.fill)    _DV_MAP.removeLayer(_DV_CORRIDOR_BOX.fill);
+      if(_DV_CORRIDOR_BOX.edge)    _DV_MAP.removeLayer(_DV_CORRIDOR_BOX.edge);
+      // Phase 71b — also strip the resize handles so a clean close doesn't
+      // leave orphan blue dots on the map after closing the planner.
+      if(_DV_CORRIDOR_BOX.handle1) _DV_MAP.removeLayer(_DV_CORRIDOR_BOX.handle1);
+      if(_DV_CORRIDOR_BOX.handle2) _DV_MAP.removeLayer(_DV_CORRIDOR_BOX.handle2);
     } catch(_){}
   }
   _DV_CORRIDOR_BOX = null;
