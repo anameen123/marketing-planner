@@ -3465,10 +3465,15 @@ body.role-front_desk #referrals-view {
      so users can double-click pins WHILE the planner is open. Removed the
      modal-ov class + dark backdrop. Container is fixed-position right rail. -->
 <div id="route-planner-modal" style="display:none;position:fixed;top:0;right:0;width:460px;max-width:96vw;height:100vh;z-index:9800;background:rgba(15,23,42,.0);pointer-events:none">
-  <div class="modal-box" style="width:100%;height:100%;max-height:100vh;display:flex;flex-direction:column;border-radius:0;box-shadow:-12px 0 36px rgba(15,23,42,.18);pointer-events:auto;border-left:1px solid var(--border)">
-    <div class="modal-top" style="flex-shrink:0;background:linear-gradient(135deg,#1F3864,#3b5fa3);color:#fff">
-      🚗 Plan a route
-      <button onclick="closeRoutePlanner()" style="background:rgba(255,255,255,.18);color:#fff;border:none">&#215;</button>
+  <div id="route-planner-box" class="modal-box" style="width:100%;height:100%;max-height:100vh;display:flex;flex-direction:column;border-radius:0;box-shadow:-12px 0 36px rgba(15,23,42,.18);pointer-events:auto;border-left:1px solid var(--border)">
+    <!-- Phase 70b (2026-05-28): the header doubles as a DRAG HANDLE on
+         desktop (≥ 768px). Mousedown on it (outside the close button)
+         starts a drag — the inner .modal-box detaches from the right
+         rail and follows the cursor. Position persists in localStorage
+         (wcg_rp_pos) so re-opens land where the rep last placed it. -->
+    <div id="rp-drag-handle" class="modal-top" style="flex-shrink:0;background:linear-gradient(135deg,#1F3864,#3b5fa3);color:#fff;cursor:move;user-select:none" title="Drag to move (desktop only)">
+      <span style="display:inline-flex;align-items:center;gap:6px"><span style="opacity:.7;font-size:14px">⋮⋮</span> 🚗 Plan a route</span>
+      <button onclick="closeRoutePlanner()" style="background:rgba(255,255,255,.18);color:#fff;border:none;cursor:pointer">&#215;</button>
     </div>
     <div class="modal-body" style="overflow-y:auto;flex:1;min-height:0;padding:18px 22px">
       <!-- ── MODE TOGGLE (per user 2026-05-22) ─────────────────────────
@@ -27639,6 +27644,8 @@ function openRoutePlanner(){
   if(res){ res.style.display = 'none'; res.innerHTML = ''; }
 
   document.getElementById('route-planner-modal').style.display = 'flex';
+  // Phase 70b (2026-05-28): restore the last drag position (desktop only).
+  if(typeof _rpRestoreDragPos === 'function') _rpRestoreDragPos();
   // Per user 2026-05-25: when the planner is open, the rest of the map
   // is locked - no Add Visit popups, no pick-from-map for the visit
   // modal, no accidental clicks on other map functions. User explicitly
@@ -27660,6 +27667,94 @@ function _isRoutePlannerOpen(){
   return !!(rpm && rpm.style.display !== 'none' && rpm.style.display !== '');
 }
 window._isRoutePlannerOpen = _isRoutePlannerOpen;
+
+// ── PHASE 70b (2026-05-28): Planner drag-to-move (desktop only) ────────────
+// Mousedown on the title bar (#rp-drag-handle, outside the close button)
+// detaches the planner from the right rail and follows the cursor. The new
+// position is persisted to localStorage as { left, top, width, height } so
+// re-opens land where the rep last placed it. Mobile (< 768px) is excluded —
+// the full-screen drawer works better there.
+var _RP_DRAG_KEY = 'wcg_rp_drag_pos_v1';
+function _rpIsDesktop(){
+  try { return window.innerWidth >= 768; } catch(_){ return true; }
+}
+function _rpRestoreDragPos(){
+  if(!_rpIsDesktop()) return;
+  try {
+    var raw = localStorage.getItem(_RP_DRAG_KEY);
+    if(!raw) return;
+    var pos = JSON.parse(raw);
+    if(!pos || pos.left == null || pos.top == null) return;
+    var rpm = document.getElementById('route-planner-modal');
+    if(!rpm) return;
+    // Clamp to viewport so a previous off-screen drag doesn't hide it.
+    var maxL = Math.max(0, window.innerWidth - 200);
+    var maxT = Math.max(0, window.innerHeight - 120);
+    pos.left = Math.max(0, Math.min(maxL, pos.left));
+    pos.top  = Math.max(0, Math.min(maxT, pos.top));
+    rpm.style.left  = pos.left + 'px';
+    rpm.style.top   = pos.top  + 'px';
+    rpm.style.right = 'auto';
+    if(pos.width)  rpm.style.width  = pos.width + 'px';
+    if(pos.height) rpm.style.height = pos.height + 'px';
+  } catch(_){}
+}
+window._rpRestoreDragPos = _rpRestoreDragPos;
+
+function _rpInitDrag(){
+  var handle = document.getElementById('rp-drag-handle');
+  var rpm    = document.getElementById('route-planner-modal');
+  if(!handle || !rpm || handle._rpDragBound) return;
+  handle._rpDragBound = true;
+  var dragging = false;
+  var startX = 0, startY = 0, startLeft = 0, startTop = 0;
+  handle.addEventListener('mousedown', function(e){
+    if(!_rpIsDesktop()) return;
+    // Don't drag when clicking the close button or any other button inside
+    if(e.target && e.target.tagName === 'BUTTON') return;
+    dragging = true;
+    var rect = rpm.getBoundingClientRect();
+    startX = e.clientX; startY = e.clientY;
+    startLeft = rect.left; startTop = rect.top;
+    // Lock in the current pixel position so the move math is absolute
+    rpm.style.left  = startLeft + 'px';
+    rpm.style.top   = startTop  + 'px';
+    rpm.style.right = 'auto';
+    rpm.style.width = rect.width + 'px';
+    document.body.style.userSelect = 'none';
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove', function(e){
+    if(!dragging) return;
+    var dx = e.clientX - startX;
+    var dy = e.clientY - startY;
+    var newL = Math.max(0, Math.min(window.innerWidth - 100, startLeft + dx));
+    var newT = Math.max(0, Math.min(window.innerHeight - 60, startTop + dy));
+    rpm.style.left = newL + 'px';
+    rpm.style.top  = newT + 'px';
+  });
+  document.addEventListener('mouseup', function(){
+    if(!dragging) return;
+    dragging = false;
+    document.body.style.userSelect = '';
+    // Persist position
+    try {
+      var rect = rpm.getBoundingClientRect();
+      localStorage.setItem(_RP_DRAG_KEY, JSON.stringify({
+        left: rect.left, top: rect.top, width: rect.width
+      }));
+    } catch(_){}
+  });
+}
+// Bind drag on next event tick — DOM should be ready by then.
+if(typeof window !== 'undefined'){
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', _rpInitDrag);
+  } else {
+    setTimeout(_rpInitDrag, 0);
+  }
+}
+window._rpInitDrag = _rpInitDrag;
 
 // ── ROUTE-PLANNER ENDPOINT AUTOCOMPLETE (per user 2026-05-19) ───────────
 // When the user changes the area dropdown, clear the search input + hidden
@@ -34583,10 +34678,18 @@ window._dvCountBankDuplicates = _dvCountBankDuplicates;
 function _dvDrawShowMapPulse(coord, name, num){
   if(typeof L === 'undefined' || typeof _DV_MAP === 'undefined' || !_DV_MAP || !coord) return;
   _dvClearShowMapPulse();
-  var html = '<div class="dv-showmap-pulse" style="width:42px;height:42px;border-radius:50%;border:4px solid #f59e0b;background:rgba(245,158,11,.22);box-shadow:0 0 0 4px rgba(255,255,255,.7), 0 0 18px #f59e0b;pointer-events:none;display:flex;align-items:center;justify-content:center;color:#7c2d12;font-weight:800;font-size:14px;font-family:DM Sans,sans-serif;animation:rpSelHaloPulse 1.4s ease-in-out infinite">'
-    + (num || '') + '</div>';
+  // Phase 70a (2026-05-28): per user, show the clinic NAME as a label
+  // alongside the flashing ring so the rep can read which visit is
+  // currently being shown without checking the side panel. The label
+  // is a small dark chip floating above the pulse — same lifetime as
+  // the pulse (cleared together when stepping to the next visit).
+  var safeName = String(name || '').replace(/</g,'&lt;');
+  var ringHtml = '<div style="position:relative;width:160px;height:64px;display:flex;flex-direction:column;align-items:center;pointer-events:none">'
+    +   '<div style="background:rgba(15,23,42,.95);color:#fff;font-size:11px;font-weight:800;padding:4px 10px;border-radius:6px;font-family:DM Sans,sans-serif;white-space:nowrap;max-width:160px;overflow:hidden;text-overflow:ellipsis;box-shadow:0 4px 12px rgba(0,0,0,.4);border:1.5px solid #f59e0b;letter-spacing:.01em;margin-bottom:6px">' + safeName + '</div>'
+    +   '<div class="dv-showmap-pulse" style="width:42px;height:42px;border-radius:50%;border:4px solid #f59e0b;background:rgba(245,158,11,.22);box-shadow:0 0 0 4px rgba(255,255,255,.7), 0 0 18px #f59e0b;display:flex;align-items:center;justify-content:center;color:#7c2d12;font-weight:800;font-size:14px;font-family:DM Sans,sans-serif;animation:rpSelHaloPulse 1.4s ease-in-out infinite">' + (num || '') + '</div>'
+    + '</div>';
   _DV_SHOWMAP_PULSE_LAYER = L.marker([coord.lat, coord.lng], {
-    icon: L.divIcon({ className:'dv-showmap-pulse-wrap', html: html, iconSize:[42,42], iconAnchor:[21,21] }),
+    icon: L.divIcon({ className:'dv-showmap-pulse-wrap', html: ringHtml, iconSize:[160,64], iconAnchor:[80,42] }),
     interactive: false,
     zIndexOffset: 9700
   }).addTo(_DV_MAP);
