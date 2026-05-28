@@ -27256,8 +27256,11 @@ function renderDayMap(di){
     var coord = getCoordForBusiness(row.clinic);
     if(!coord) return;
     visitOrdinal++;
-    var isFirst = (visitOrdinal === 1);
-    var isLast  = (visitOrdinal === totalVisits && totalVisits > 1);
+    // Phase 67 (2026-05-28): removed the auto-START / auto-END badges on
+    // the first and last visit pins per user — leftover from a legacy
+    // "day as a route" feature, conflicted visually with the Plan-a-Route's
+    // own S marker (rep was seeing two "starts" at the same clinic). The
+    // numbered pins + polyline stay.
     // Add a tiny offset for duplicate-city pins so they don't stack invisibly
     var dupKey = coord.lat.toFixed(3) + ',' + coord.lng.toFixed(3);
     var stack = seenCities[dupKey] || 0;
@@ -27268,24 +27271,18 @@ function renderDayMap(di){
               : (row.status === 'Canceled')  ? '#dc2626'
               : (row.status === 'Postponed') ? '#f59e0b'
                                               : '#1F3864';
-    // Use a numbered divIcon so the visit order is visible at a glance.
+    // Numbered divIcon — no START/END badge anymore.
     var ordinalLabel = String(visitOrdinal);
-    // Start/End badge above the pin
-    var tagHtml = '';
-    if(isFirst) tagHtml = '<div style="position:absolute;top:-18px;left:50%;transform:translateX(-50%);background:#16a34a;color:#fff;font-size:9px;font-weight:800;padding:2px 6px;border-radius:4px;font-family:DM Sans,sans-serif;white-space:nowrap;letter-spacing:.04em">START</div>';
-    if(isLast)  tagHtml = '<div style="position:absolute;top:-18px;left:50%;transform:translateX(-50%);background:#dc2626;color:#fff;font-size:9px;font-weight:800;padding:2px 6px;border-radius:4px;font-family:DM Sans,sans-serif;white-space:nowrap;letter-spacing:.04em">END</div>';
     var marker = L.marker([lat, lng], {
       icon: L.divIcon({
         className: 'visit-ordinal-pin',
-        html: '<div style="position:relative;width:28px;height:28px">' + tagHtml + '<div style="width:28px;height:28px;background:' + color + ';color:#fff;border:2.5px solid #fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;font-family:DM Sans,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.3)">' + ordinalLabel + '</div></div>',
+        html: '<div style="position:relative;width:28px;height:28px"><div style="width:28px;height:28px;background:' + color + ';color:#fff;border:2.5px solid #fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;font-family:DM Sans,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.3)">' + ordinalLabel + '</div></div>',
         iconSize: [28, 28],
         iconAnchor: [14, 14]
       })
     }).bindPopup('<b>#' + ordinalLabel + ' · ' + (row.clinic || '').replace(/</g,'&lt;') + '</b><br>'
                 + (row.status || 'Pending')
-                + (row.member ? '<br>👤 ' + row.member : '')
-                + (isFirst ? '<br><em style="color:#16a34a">— Start of route —</em>' : '')
-                + (isLast  ? '<br><em style="color:#dc2626">— End of route —</em>' : ''));
+                + (row.member ? '<br>👤 ' + row.member : ''));
     _DV_MARKERS.addLayer(marker);
     pts.push([lat, lng]);
     routeLine.push([lat, lng]);
