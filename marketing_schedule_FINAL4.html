@@ -36416,6 +36416,11 @@ function _rpV5ShowFlatList(){
     + '</div>'
     + '<div style="background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.4);border-radius:20px;padding:5px 14px;font-size:11px;font-weight:700"><span id="rp-flat-picked-count">' + pickedCount + '</span> picked</div>'
     + '</div>';
+  // Phase 76 (2026-05-28): pre-existing visits banner — listing the auto-
+  // folded orange stops that the rep can confirm into the candidate list.
+  if(typeof _rpV5BuildPreExistingBanner === 'function'){
+    html += _rpV5BuildPreExistingBanner();
+  }
   if(list.length === 0){
     // Phase 37: explain the gap. inside-rect stats come from
     // _rpHighlightInsideRectangle (set when the rectangle was drawn).
@@ -36446,12 +36451,16 @@ function _rpV5ShowFlatList(){
       var daysLbl = (c.days == null) ? 'never' : (c.days + 'd');
       var rowBg = checked ? '#1e3a8a' : '#fff';
       var rowFg = checked ? '#fff' : '#0f172a';
+      // Phase 76: 📌 chip on rows that were promoted from a pre-existing visit
+      var preChip = c._phase76FromExisting
+        ? '<span title="Pre-existing visit on this day — promoted into candidates" style="background:' + (checked ? 'rgba(245,158,11,.5)' : '#fff7ed') + ';color:' + (checked ? '#fff' : '#7c2d12') + ';border:1px solid ' + (checked ? 'rgba(245,158,11,.6)' : '#fed7aa') + ';font-size:9px;font-weight:800;padding:1px 6px;border-radius:8px;margin-left:6px;letter-spacing:.04em;vertical-align:middle">📌 PRE-EXISTING</span>'
+        : '';
       html += '<label style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid #f1f5f9;cursor:pointer;background:' + rowBg + ';color:' + rowFg + ';transition:background .15s">'
         + '<input type="checkbox"' + (checked ? ' checked' : '') + ' onchange="_rpV5ToggleFlat(\'' + safeName + '\', this.checked)" style="width:18px;height:18px;cursor:pointer;flex-shrink:0;accent-color:#2563eb">'
         + '<span style="font-size:14px">' + typeIcon + '</span>'
         + '<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:' + recDot + ';flex-shrink:0;box-shadow:0 0 0 2px ' + (checked ? '#1e3a8a' : '#fff') + '"></span>'
         + '<span style="flex:1;min-width:0">'
-        +   '<div style="font-size:12px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + String(c.name).replace(/</g,'&lt;') + '</div>'
+        +   '<div style="font-size:12px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + String(c.name).replace(/</g,'&lt;') + preChip + '</div>'
         +   '<div style="font-size:10px;opacity:.8;margin-top:1px">' + miFromStart.toFixed(1) + ' mi from start · '
         +     '<span style="color:' + (checked ? '#fff' : sideColor) + ';font-weight:600">' + sideArrow + ' ' + Math.abs(c.perp).toFixed(1) + ' mi ' + sideLabel + '</span>'
         +     ' · stale ' + daysLbl
@@ -36512,6 +36521,113 @@ function _rpV5ClearAllPicks(){
   if(typeof _rpClearLiveRoute === 'function') _rpClearLiveRoute();
 }
 window._rpV5ClearAllPicks = _rpV5ClearAllPicks;
+
+// ── PHASE 76 (2026-05-28) — Confirm pre-existing visit into candidates ─────
+// Pre-existing Pending visits inside the corridor are shown as orange
+// auto-folded stops on the live route line (Phase 74). To "commit" one
+// as a regular pick, the rep clicks the + button next to it in the new
+// banner above the candidate list — that promotes the visit into the
+// candidate set + ticks its checkbox. Once promoted, the orange auto-
+// fold marker disappears (it's now a normal green pick).
+
+function _rpV5FindPreExistingInsideCorridor(){
+  if(!_RP_V5_LAST || !_RP_V5_LAST.A || !_RP_V5_LAST.B) return [];
+  var A = _RP_V5_LAST.A, B = _RP_V5_LAST.B;
+  var halfWidthMi = _RP_V5_LAST.baseWidth || 3;
+  var di = (typeof _DV_LAST_DI === 'number') ? _DV_LAST_DI : null;
+  if(di == null || typeof S === 'undefined' || !S.days || !S.days[di]) return [];
+  // Anything already in flatCandidates is excluded (it'll show up there directly).
+  var inCandidates = {};
+  (_RP_V5_LAST.flatCandidates || []).forEach(function(c){ inCandidates[c.name] = true; });
+  var out = [];
+  (S.days[di].rows || []).forEach(function(r){
+    if(!r || !r.clinic) return;
+    if((r.status || 'Pending') !== 'Pending') return;
+    if(inCandidates[r.clinic]) return;
+    var coord = (typeof _rpGetVisualCoord === 'function') ? _rpGetVisualCoord(r.clinic) : null;
+    if(!coord && typeof getCoordForBusiness === 'function') coord = getCoordForBusiness(r.clinic);
+    if(!coord) return;
+    var t = _rpV5ProjT(coord, A, B);
+    if(t < 0 || t > 1) return;
+    var perp = Math.abs(_rpV5SignedPerp(coord, A, B));
+    if(perp > halfWidthMi) return;
+    out.push({ name: r.clinic, coord: coord, t: t, perp: perp });
+  });
+  out.sort(function(a, b){ return a.t - b.t; });
+  return out;
+}
+window._rpV5FindPreExistingInsideCorridor = _rpV5FindPreExistingInsideCorridor;
+
+function _rpV5BringPreExistingIntoCandidates(name){
+  if(!name || !_RP_V5_LAST || !_RP_V5_LAST.A || !_RP_V5_LAST.B) return;
+  var A = _RP_V5_LAST.A, B = _RP_V5_LAST.B;
+  var coord = (typeof _rpGetVisualCoord === 'function') ? _rpGetVisualCoord(name) : null;
+  if(!coord && typeof getCoordForBusiness === 'function') coord = getCoordForBusiness(name);
+  if(!coord){
+    if(typeof showToast === 'function') showToast('No location for "' + name + '" — can\'t add to candidates.');
+    return;
+  }
+  if(!_RP_V5_LAST.flatCandidates) _RP_V5_LAST.flatCandidates = [];
+  var exists = _RP_V5_LAST.flatCandidates.some(function(c){ return c.name === name; });
+  if(!exists){
+    var t = _rpV5ProjT(coord, A, B);
+    var perp = _rpV5SignedPerp(coord, A, B);
+    var bizType = (typeof getBizTypeForName === 'function') ? getBizTypeForName(name) : 'clinic';
+    var days = (typeof daysSinceLastVisit === 'function') ? daysSinceLastVisit(name) : null;
+    var rec  = (typeof recencyBucket === 'function') ? recencyBucket(days) : { color:'#9ca3af', key:'?', label:'unknown' };
+    _RP_V5_LAST.flatCandidates.push({
+      name: name, coord: coord, t: t, perp: perp, absPerp: Math.abs(perp),
+      bizType: bizType, days: days, rec: rec,
+      _phase76FromExisting: true   // mark so future renders can show a 📌 chip
+    });
+    _RP_V5_LAST.flatCandidates.sort(function(a, b){ return a.t - b.t; });
+  }
+  _RP_V5_FLAT_PICKS[name] = true;
+  if(typeof _rpSetPinState === 'function') _rpSetPinState(name, 'picked');
+  if(typeof _rpV5ShowFlatList === 'function') _rpV5ShowFlatList();
+  if(typeof _rpRefreshLiveRoute === 'function') _rpRefreshLiveRoute();
+}
+window._rpV5BringPreExistingIntoCandidates = _rpV5BringPreExistingIntoCandidates;
+
+function _rpV5BringAllPreExistingIntoCandidates(){
+  var list = _rpV5FindPreExistingInsideCorridor();
+  if(list.length === 0){ if(typeof showToast === 'function') showToast('No pre-existing visits inside the corridor.'); return; }
+  list.forEach(function(v){ _rpV5BringPreExistingIntoCandidates(v.name); });
+  if(typeof showToast === 'function') showToast('✓ Added ' + list.length + ' pre-existing visit' + (list.length===1?'':'s') + ' to the candidates.');
+}
+window._rpV5BringAllPreExistingIntoCandidates = _rpV5BringAllPreExistingIntoCandidates;
+
+// Build the banner HTML that lists the pre-existing visits inside the
+// corridor (Phase 76). Returns empty string when there are none.
+function _rpV5BuildPreExistingBanner(){
+  var list = _rpV5FindPreExistingInsideCorridor();
+  if(list.length === 0) return '';
+  var totalMi = _RP_V5_LAST && _RP_V5_LAST.totalMi ? _RP_V5_LAST.totalMi : 0;
+  var rows = list.map(function(v){
+    var miFromStart = totalMi ? (v.t * totalMi) : 0;
+    var safe = String(v.name).replace(/</g,'&lt;').replace(/"/g,'&quot;').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 10px;background:rgba(255,255,255,.7);border:1px solid #fed7aa;border-radius:6px;margin-top:5px">'
+      +   '<span style="display:flex;align-items:center;gap:6px;font-size:11px;color:#7c2d12;min-width:0">'
+      +     '<span style="font-size:12px">🟠</span>'
+      +     '<span style="font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + String(v.name).replace(/</g,'&lt;') + '</span>'
+      +     '<span style="font-size:10px;opacity:.75;flex-shrink:0">· ' + miFromStart.toFixed(1) + ' mi from start · ±' + v.perp.toFixed(1) + ' mi off line</span>'
+      +   '</span>'
+      +   '<button type="button" onclick="_rpV5BringPreExistingIntoCandidates(\'' + safe + '\')" title="Promote this auto-folded visit to a normal candidate (becomes a regular green pick)" style="background:#7c2d12;color:#fff;border:none;border-radius:5px;padding:3px 10px;font-size:10px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;white-space:nowrap;flex-shrink:0">+ Add</button>'
+      + '</div>';
+  }).join('');
+  return ''
+    + '<div style="background:linear-gradient(135deg,#fff7ed,#fef3c7);border:1px solid #fed7aa;border-left:4px solid #f59e0b;border-radius:10px;padding:10px 12px;margin-bottom:10px">'
+    +   '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">'
+    +     '<div style="font-size:12px;color:#7c2d12;line-height:1.5;flex:1;min-width:0">'
+    +       '<strong>📌 ' + list.length + ' pre-existing visit' + (list.length===1?' is':'s are') + ' inside this corridor</strong> '
+    +       '<span style="opacity:.85">— shown as orange stops on the route line. Confirm to merge into the candidates as regular picks.</span>'
+    +     '</div>'
+    +     '<button type="button" onclick="_rpV5BringAllPreExistingIntoCandidates()" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;white-space:nowrap">✓ Bring all ' + list.length + ' in</button>'
+    +   '</div>'
+    +   rows
+    + '</div>';
+}
+window._rpV5BuildPreExistingBanner = _rpV5BuildPreExistingBanner;
 
 // Build a small HTML block that previews the connection rule on the
 // currently-checked picks. Same rule used at Generate time.
