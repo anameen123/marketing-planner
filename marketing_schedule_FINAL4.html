@@ -25133,26 +25133,36 @@ function renderAllBusinessPins(){
     var typeLabel = bizType === 'mva' ? '⚖ MVA' : bizType === 'outreach' ? '🏘 Outreach' : '🏥 Clinic';
     var safeName = String(name).replace(/</g,'&lt;');
     var escName = name.replace(/'/g,"\\'");
-    // Phase 64 (2026-05-28): removed "Set as Start" / "Set as End" buttons
-    // per user — they were a trace from the legacy Smart Plan workflow that
-    // was already removed elsewhere. The Route Planner now has its own
-    // "📍 Map" arming button which handles Start/End picks correctly; the
-    // popup buttons just confused the flow (accidentally setting Start when
-    // the user meant to Add Visit). Remaining actions:
-    //   • Add visit today  — primary CTA
-    //   • Use this for the visit — only visible during Add-Visit map pick
-    var popupHtml = '<div style="font-family:DM Sans,sans-serif;font-size:12px;min-width:180px">'
-      +   '<div style="font-weight:700;color:#1F3864;font-size:13px;margin-bottom:4px">' + safeName + '</div>'
-      +   '<div style="font-size:10px;color:#64748b;margin-bottom:6px">' + typeLabel + ' · ' + rec.label + '</div>'
-      +   '<button onclick="_addVisitFromMapPin(\'' + escName + '\',\'' + bizType + '\')" '
-      +     'style="width:100%;background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;border:none;border-radius:5px;padding:7px 8px;font-size:11px;font-weight:700;cursor:pointer">'
-      +     '➕ Add visit today'
-      +   '</button>'
-      +   '<button id="popup-pick-' + (++_PIN_POPUP_SEQ) + '" data-business="' + escName + '" onclick="_avFinishMapPick(this.getAttribute(\'data-business\'),\'' + bizType + '\')" '
-      +     'style="width:100%;margin-top:5px;background:#16a34a;color:#fff;border:none;border-radius:5px;padding:6px 8px;font-size:10px;font-weight:700;cursor:pointer;display:' + (_AV_MAP_PICK_MODE ? 'block' : 'none') + '">'
-      +     '✓ Use this for the visit'
-      +   '</button>'
-      + '</div>';
+    // Phase 64 (2026-05-28): removed "Set as Start" / "Set as End" buttons.
+    // Phase 68 (2026-05-28): the "Add visit today" button is now hidden when
+    // the Route Planner is open — per user, the rep should finish their
+    // route plan (or close the planner) before adding ad-hoc visits. We
+    // build the popup HTML LAZILY on open so it reflects the live planner
+    // state (a marker bound once can't easily re-render its popup string).
+    var popupSeqId = ++_PIN_POPUP_SEQ;
+    function _buildPinPopupHtml(){
+      var plannerOpen = (typeof _isRoutePlannerOpen === 'function') && _isRoutePlannerOpen();
+      var avMapPick = !!window._AV_MAP_PICK_MODE;
+      var addVisitBtn = plannerOpen
+        ? '<div style="font-size:10px;color:#7c2d12;background:#fef3c7;border:1px solid #fcd34d;border-radius:5px;padding:7px 9px;text-align:center;font-style:italic">🔒 Route Planner is active — close it first to add a visit manually.</div>'
+        : '<button onclick="_addVisitFromMapPin(\'' + escName + '\',\'' + bizType + '\')" '
+          + 'style="width:100%;background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;border:none;border-radius:5px;padding:7px 8px;font-size:11px;font-weight:700;cursor:pointer">'
+          + '➕ Add visit today'
+          + '</button>';
+      return '<div style="font-family:DM Sans,sans-serif;font-size:12px;min-width:180px">'
+        +   '<div style="font-weight:700;color:#1F3864;font-size:13px;margin-bottom:4px">' + safeName + '</div>'
+        +   '<div style="font-size:10px;color:#64748b;margin-bottom:6px">' + typeLabel + ' · ' + rec.label + '</div>'
+        +   addVisitBtn
+        +   '<button id="popup-pick-' + popupSeqId + '" data-business="' + escName + '" onclick="_avFinishMapPick(this.getAttribute(\'data-business\'),\'' + bizType + '\')" '
+        +     'style="width:100%;margin-top:5px;background:#16a34a;color:#fff;border:none;border-radius:5px;padding:6px 8px;font-size:10px;font-weight:700;cursor:pointer;display:' + (avMapPick ? 'block' : 'none') + '">'
+        +     '✓ Use this for the visit'
+        +   '</button>'
+        + '</div>';
+    }
+    // Leaflet accepts a function for bindPopup — that re-evaluates on every
+    // open so the popup reflects the LIVE planner state (planner just opened?
+    // The next pin click shows the locked variant. Closed? Add Visit back).
+    var popupHtml = _buildPinPopupHtml;
     // Per user 2026-05-25: pins now show a type letter so MVAs and
     // outreach orgs are distinguishable from clinics at a glance.
     //   C = Clinic, M = MVA attorney, O = Outreach org
@@ -28196,7 +28206,44 @@ function _rpRefreshCenterline(){
 }
 window._rpRefreshCenterline = _rpRefreshCenterline;
 
-function closeRoutePlanner(){
+// Phase 68 (2026-05-28): "do you have unsaved changes?" — true if the rep
+// has done any route-planning work that hasn't been committed via
+// "✓ Add to schedule" yet. Used by closeRoutePlanner to gate the close.
+function _rpHasUnsavedChanges(){
+  try {
+    if(window._RP_START_NAME) return true;
+    if(window._RP_END_NAME)   return true;
+    if(window._RP_OPT_TARGETS && window._RP_OPT_TARGETS.length > 0) return true;
+    if(window._RP_OPT_CIRCLE && window._RP_OPT_CIRCLE.center) return true;
+    if(window._RP_V5_FLAT_PICKS && Object.keys(window._RP_V5_FLAT_PICKS).length > 0) return true;
+    // Random Pick wizard mid-flight
+    if(typeof _RP_RANDOM_START !== 'undefined' && _RP_RANDOM_START && _RP_RANDOM_START.name) return true;
+  } catch(_){}
+  return false;
+}
+window._rpHasUnsavedChanges = _rpHasUnsavedChanges;
+
+function closeRoutePlanner(opts){
+  // Phase 68 (2026-05-28): if the rep has unsaved route work and we weren't
+  // explicitly told to skip the prompt (e.g., the Insert helpers pass force:
+  // true after committing), confirm before discarding their progress.
+  opts = opts || {};
+  if(!opts.force && _rpHasUnsavedChanges()){
+    var msg = 'You have unsaved route changes — closing will discard them. Close anyway?';
+    if(typeof showConfirm === 'function'){
+      showConfirm({
+        icon: '!',
+        msg: 'Close the Route Planner?',
+        sub: 'Your picks (Start / End / targets / circle / candidates) will be lost. You can use the 📍 Current route chip to resume LAST SAVED routes, but the current in-progress edits won\'t survive.',
+        yesLabel: 'Close & discard',
+        danger: true,
+        onConfirm: function(){ closeRoutePlanner({ force: true }); }
+      });
+      return;
+    } else if(!window.confirm(msg)){
+      return;
+    }
+  }
   // Per user 2026-05-23: closing the drawer disarms the random-pick map
   // listener and clears the guided "S" marker so a future open starts fresh.
   if(typeof _rpDisarmRandomMap === 'function') _rpDisarmRandomMap();
@@ -29429,8 +29476,9 @@ function _rpV4GenerateRoute(){
       leadStatus: p.leadStatus, leadLevel: p.leadLevel
     };
   });
-  // Close the dialog so the user sees the route on the map + review pane
-  if(typeof closeRoutePlanner === 'function') closeRoutePlanner();
+  // Close the dialog so the user sees the route on the map + review pane.
+  // force:true → commit path, skip the unsaved-changes confirm (Phase 68).
+  if(typeof closeRoutePlanner === 'function') closeRoutePlanner({ force: true });
   // Refresh map highlights for Start + End
   if(typeof _rpRefreshHighlights === 'function') _rpRefreshHighlights();
   if(typeof _rpUpdateStatus === 'function') _rpUpdateStatus();
@@ -31849,7 +31897,7 @@ function _rpRwConfirmRoute(){
   };
   _rpStartCommitFlow(spec, function(){
     window._RP_RW_EDITING = null;
-    if(typeof closeRoutePlanner === 'function') closeRoutePlanner();
+    if(typeof closeRoutePlanner === 'function') closeRoutePlanner({ force: true });
     if(typeof _rpRwRestart === 'function') _rpRwRestart();
   });
 }
@@ -31911,7 +31959,7 @@ function _rpRwPushRouteToSchedule(route){
   day.rows = newRows;
   if(typeof _saveS === 'function') _saveS();
   if(typeof refresh === 'function') refresh(di);
-  if(typeof closeRoutePlanner === 'function') closeRoutePlanner();
+  if(typeof closeRoutePlanner === 'function') closeRoutePlanner({ force: true });
   // Reset wizard for next time
   _rpRwRestart();
   if(typeof showToast === 'function'){
@@ -33183,7 +33231,7 @@ function _rpRandomInsertIntoDay(){
   });
   if(typeof _saveS === 'function') _saveS();
   if(typeof refresh === 'function') refresh(di);
-  if(typeof closeRoutePlanner === 'function') closeRoutePlanner();
+  if(typeof closeRoutePlanner === 'function') closeRoutePlanner({ force: true });
   if(typeof showToast === 'function') showToast('Inserted ' + added + ' stops into the day in route order.');
 }
 window._rpRandomInsertIntoDay = _rpRandomInsertIntoDay;
@@ -33776,7 +33824,7 @@ function _rpOptCommitOrderedToDay(ordered, di, me, removed, phase59Removed, phas
       if(extras.length) msg += ' (' + extras.join(' · ') + ')';
       showToast(msg);
     }
-    if(typeof closeRoutePlanner === 'function') closeRoutePlanner();
+    if(typeof closeRoutePlanner === 'function') closeRoutePlanner({ force: true });
   } catch(e){
     console.error('[_rpOptInsertIntoDay] failed:', e);
     if(typeof showToast === 'function') showToast('Failed to add stops: ' + (e && e.message));
@@ -36586,7 +36634,7 @@ function _rpV5CommitPicksToDay(picks, di, me, removed, phase59Removed, phase59Ex
       if(extras.length) msg += ' (' + extras.join(' · ') + ')';
       showToast(msg);
     }
-    if(typeof closeRoutePlanner === 'function') closeRoutePlanner();
+    if(typeof closeRoutePlanner === 'function') closeRoutePlanner({ force: true });
   } catch(e){
     console.error('[_rpV5InsertPicksIntoDay] failed:', e);
     if(typeof showToast === 'function') showToast('Failed to add stops: ' + (e && e.message));
