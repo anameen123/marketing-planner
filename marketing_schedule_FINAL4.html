@@ -3699,10 +3699,24 @@ body.role-front_desk #referrals-view {
           <!-- Phase 55: staged guidance — each step explains what to do now. -->
           <div id="rp-opt-circle-step" style="font-size:11px;color:#1e3a8a;margin-bottom:8px;line-height:1.5"><b>Step 1.</b> Click anywhere on the map to drop the <b>center</b> (burgundy dot). You can re-click to move it, or drag the dot itself.</div>
           <button id="rp-opt-circle-center-confirm-btn" type="button" onclick="_rpOptConfirmCenter()" style="display:none;width:100%;margin-bottom:8px;background:linear-gradient(135deg,#7f1d1d,#991b1b);color:#fff;border:none;border-radius:6px;padding:7px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">✓ Confirm center</button>
+          <!-- Phase 56: shows after center confirm — lets user re-place the center -->
+          <button id="rp-opt-circle-edit-center-btn" type="button" onclick="_rpOptEditCenter()" style="display:none;margin-bottom:8px;background:#fff;color:#7f1d1d;border:1px solid #fecaca;border-radius:6px;padding:6px 10px;font-size:10px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">✏ Edit center</button>
+          <!-- Phase 56: sub-toggle for circle-size mode -->
+          <div id="rp-opt-circle-size-mode" style="display:none;gap:5px;margin-bottom:8px;background:#bfdbfe;padding:4px;border-radius:8px;font-family:DM Sans,sans-serif">
+            <button id="rp-opt-circle-sz-manual" type="button" onclick="_rpOptSetSizeMode('manual')" style="flex:1;background:#fff;color:#1e3a8a;border:none;padding:6px 10px;font-size:10.5px;font-weight:700;cursor:pointer;border-radius:6px;box-shadow:0 1px 3px rgba(30,58,138,.15)">📐 Expand manually</button>
+            <button id="rp-opt-circle-sz-fit"    type="button" onclick="_rpOptSetSizeMode('fit')"    style="flex:1;background:transparent;color:#1e3a8a;border:none;padding:6px 10px;font-size:10.5px;font-weight:600;cursor:pointer;border-radius:6px">🎯 Fit N visits</button>
+          </div>
+          <!-- Phase 56: radius DISPLAY (read-only) for manual mode -->
           <div id="rp-opt-circle-radius-row" style="display:none;align-items:center;gap:8px;margin-top:4px">
-            <label style="font-size:11px;font-weight:700;color:#1e3a8a">Radius (mi):</label>
-            <input type="number" id="rp-opt-circle-radius" value="1" min="0.1" max="20" step="0.1" oninput="_rpOptOnRadiusInputChange()" style="flex:1;border:1px solid #93c5fd;border-radius:6px;padding:6px 9px;font-size:12px;background:#fff;text-align:center">
+            <span style="font-size:11px;font-weight:700;color:#1e3a8a">Radius:</span>
+            <span id="rp-opt-circle-radius-display" style="flex:1;background:#fff;border:1px solid #93c5fd;border-radius:6px;padding:6px 9px;font-size:13px;font-weight:800;color:#1e3a8a;text-align:center;font-family:DM Mono,monospace">±1.00 mi</span>
             <span id="rp-opt-circle-count" style="font-size:11px;font-weight:700;color:#1e3a8a;background:#fff;border:1px solid #93c5fd;border-radius:14px;padding:3px 10px"></span>
+          </div>
+          <!-- Phase 56: fit-mode input — covered pins count -->
+          <div id="rp-opt-circle-fit-row" style="display:none;align-items:center;gap:8px;margin-top:4px">
+            <label style="font-size:11px;font-weight:700;color:#1e3a8a">Visits to cover:</label>
+            <input type="number" id="rp-opt-circle-fit-count" value="5" min="1" max="50" step="1" oninput="_rpOptOnFitCountChange()" style="flex:1;border:1px solid #93c5fd;border-radius:6px;padding:6px 9px;font-size:12px;background:#fff;text-align:center">
+            <span id="rp-opt-circle-fit-radius-display" style="font-size:11px;font-weight:700;color:#1e3a8a;background:#fff;border:1px solid #93c5fd;border-radius:14px;padding:3px 10px;font-family:DM Mono,monospace">±?</span>
           </div>
           <button id="rp-opt-circle-confirm-btn" type="button" onclick="_rpOptConfirmCircle()" disabled style="display:none;width:100%;margin-top:8px;background:linear-gradient(135deg,#15803d,#16a34a);color:#fff;border:none;border-radius:6px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">✓ Confirm selection</button>
         </div>
@@ -33499,16 +33513,111 @@ function _rpOptConfirmCenter(){
   window._RP_OPT_CIRCLE_CENTER_CONFIRMED = true;
   var btn = document.getElementById('rp-opt-circle-center-confirm-btn');
   if(btn) btn.style.display = 'none';
+  // Phase 56: show the Edit Center button + size-mode toggle
+  var editBtn = document.getElementById('rp-opt-circle-edit-center-btn');
+  if(editBtn) editBtn.style.display = 'inline-block';
+  var sizeMode = document.getElementById('rp-opt-circle-size-mode');
+  if(sizeMode) sizeMode.style.display = 'flex';
   var stepEl = document.getElementById('rp-opt-circle-step');
-  if(stepEl) stepEl.innerHTML = '<b>Step 2.</b> Drag the small blue handle on the circle edge to resize, OR type a radius below. Pins inside light up. Click any inside pin (or its checkbox) to exclude.';
-  var radiusRow = document.getElementById('rp-opt-circle-radius-row');
-  if(radiusRow) radiusRow.style.display = 'flex';
-  var radiusInp = document.getElementById('rp-opt-circle-radius');
-  if(radiusInp) radiusInp.value = window._RP_OPT_CIRCLE.radius || 1;
+  if(stepEl) stepEl.innerHTML = '<b>Step 2.</b> Pick how to size the circle: drag the edge handle (📐 Expand), or type how many visits you want to cover (🎯 Fit). Click any inside pin (or its checkbox) to exclude.';
+  // Default size mode = manual
+  _rpOptSetSizeMode('manual');
   _rpOptRecomputeCircleTargets();
-  if(typeof showToast === 'function') showToast('✓ Center locked. Set the radius next.');
+  if(typeof showToast === 'function') showToast('✓ Center locked. Choose how to size the circle.');
 }
 window._rpOptConfirmCenter = _rpOptConfirmCenter;
+
+// Phase 56: edit the center after it was confirmed — re-unlocks placement
+// without resetting the radius or targets.
+function _rpOptEditCenter(){
+  window._RP_OPT_CIRCLE_CENTER_CONFIRMED = false;
+  var btn = document.getElementById('rp-opt-circle-center-confirm-btn');
+  if(btn) btn.style.display = 'block';
+  var editBtn = document.getElementById('rp-opt-circle-edit-center-btn');
+  if(editBtn) editBtn.style.display = 'none';
+  var sizeMode = document.getElementById('rp-opt-circle-size-mode');
+  if(sizeMode) sizeMode.style.display = 'none';
+  var radiusRow = document.getElementById('rp-opt-circle-radius-row');
+  if(radiusRow) radiusRow.style.display = 'none';
+  var fitRow = document.getElementById('rp-opt-circle-fit-row');
+  if(fitRow) fitRow.style.display = 'none';
+  var stepEl = document.getElementById('rp-opt-circle-step');
+  if(stepEl) stepEl.innerHTML = '<b>Edit center.</b> Click a new spot on the map OR drag the burgundy dot to move it. Then click <b>✓ Confirm center</b> again.';
+  if(typeof showToast === 'function') showToast('✏ Center edit mode — drag the burgundy dot or click a new spot.');
+}
+window._rpOptEditCenter = _rpOptEditCenter;
+
+// Phase 56: switch between manual-drag mode and fit-N-visits mode.
+window._RP_OPT_CIRCLE_SIZE_MODE = 'manual';
+function _rpOptSetSizeMode(mode){
+  if(mode !== 'manual' && mode !== 'fit') return;
+  window._RP_OPT_CIRCLE_SIZE_MODE = mode;
+  var manBtn = document.getElementById('rp-opt-circle-sz-manual');
+  var fitBtn = document.getElementById('rp-opt-circle-sz-fit');
+  var active   = 'flex:1;background:#fff;color:#1e3a8a;border:none;padding:6px 10px;font-size:10.5px;font-weight:700;cursor:pointer;border-radius:6px;box-shadow:0 1px 3px rgba(30,58,138,.15)';
+  var inactive = 'flex:1;background:transparent;color:#1e3a8a;border:none;padding:6px 10px;font-size:10.5px;font-weight:600;cursor:pointer;border-radius:6px';
+  if(manBtn) manBtn.setAttribute('style', mode === 'manual' ? active : inactive);
+  if(fitBtn) fitBtn.setAttribute('style', mode === 'fit'    ? active : inactive);
+  var radiusRow = document.getElementById('rp-opt-circle-radius-row');
+  var fitRow    = document.getElementById('rp-opt-circle-fit-row');
+  if(radiusRow) radiusRow.style.display = mode === 'manual' ? 'flex' : 'none';
+  if(fitRow)    fitRow.style.display    = mode === 'fit'    ? 'flex' : 'none';
+  // Enable/disable the drag handle based on mode (manual = enabled, fit = disabled)
+  if(_DV_OPT_CIRCLE_HANDLE){
+    try {
+      if(mode === 'manual'){ _DV_OPT_CIRCLE_HANDLE.dragging.enable(); _DV_OPT_CIRCLE_HANDLE._icon && (_DV_OPT_CIRCLE_HANDLE._icon.style.opacity = '1'); }
+      else                  { _DV_OPT_CIRCLE_HANDLE.dragging.disable(); _DV_OPT_CIRCLE_HANDLE._icon && (_DV_OPT_CIRCLE_HANDLE._icon.style.opacity = '0.3'); }
+    } catch(_){}
+  }
+  if(mode === 'fit'){
+    // Trigger the initial fit so the circle snaps to the typed count
+    _rpOptOnFitCountChange();
+  } else {
+    // Refresh the radius display
+    _rpOptUpdateRadiusDisplay();
+  }
+}
+window._rpOptSetSizeMode = _rpOptSetSizeMode;
+
+function _rpOptUpdateRadiusDisplay(){
+  var d = document.getElementById('rp-opt-circle-radius-display');
+  if(d && window._RP_OPT_CIRCLE) d.textContent = '±' + (window._RP_OPT_CIRCLE.radius || 1).toFixed(2) + ' mi';
+}
+window._rpOptUpdateRadiusDisplay = _rpOptUpdateRadiusDisplay;
+
+// Phase 56: fit-mode — compute minimum radius covering N closest clinic+MVA
+// pins, then set it as the circle radius + recompute targets.
+function _rpOptOnFitCountChange(){
+  if(!window._RP_OPT_CIRCLE || !window._RP_OPT_CIRCLE.center) return;
+  var inp = document.getElementById('rp-opt-circle-fit-count');
+  var n = parseInt(inp && inp.value, 10);
+  if(isNaN(n) || n < 1) return;
+  n = Math.max(1, Math.min(50, n));
+  var c = window._RP_OPT_CIRCLE.center;
+  var distances = [];
+  function consider(name){
+    var coord = (typeof _rpGetVisualCoord === 'function') ? _rpGetVisualCoord(name) : null;
+    if(!coord && typeof getCoordForBusiness === 'function') coord = getCoordForBusiness(name);
+    if(!coord) return;
+    distances.push(_rpHaversineMiles(c, coord));
+  }
+  if(typeof CLINIC_BANK !== 'undefined') CLINIC_BANK.forEach(function(o){ if(o && o.n) consider(o.n); });
+  if(typeof MVA_ATTORNEYS !== 'undefined') MVA_ATTORNEYS.forEach(function(o){ if(o && o.firm) consider(o.firm); });
+  if(distances.length === 0){
+    if(typeof showToast === 'function') showToast('No clinics or MVAs found in the bank.');
+    return;
+  }
+  distances.sort(function(a, b){ return a - b; });
+  var idx = Math.min(n, distances.length) - 1;
+  // Slight padding (2%) so the Nth pin sits clearly inside, not on the edge
+  var newR = Math.max(0.1, Math.min(20, distances[idx] * 1.02));
+  window._RP_OPT_CIRCLE.radius = newR;
+  _rpOptDrawCircle();
+  _rpOptRecomputeCircleTargets();
+  var displayEl = document.getElementById('rp-opt-circle-fit-radius-display');
+  if(displayEl) displayEl.textContent = '±' + newR.toFixed(2) + ' mi';
+}
+window._rpOptOnFitCountChange = _rpOptOnFitCountChange;
 window._rpOptArmCircleMode = _rpOptArmCircleMode;
 
 function _rpOptDisarmCircleMode(){
@@ -33592,10 +33701,9 @@ function _rpOptDrawCircle(){
     var newR = _rpHaversineMiles(c, { lat: ll.lat, lng: ll.lng });
     newR = Math.max(0.05, Math.min(20, newR));
     window._RP_OPT_CIRCLE.radius = newR;
-    // Re-render the circle (but keep the handle being dragged)
     if(_DV_OPT_CIRCLE_LAYER) _DV_OPT_CIRCLE_LAYER.setRadius(newR * 1609.344);
-    var radiusInp = document.getElementById('rp-opt-circle-radius');
-    if(radiusInp) radiusInp.value = newR.toFixed(2);
+    // Phase 56: update the read-only radius display
+    if(typeof _rpOptUpdateRadiusDisplay === 'function') _rpOptUpdateRadiusDisplay();
   });
   _DV_OPT_CIRCLE_HANDLE.on('dragend', function(){
     // Snap handle back to the east edge of the new radius
@@ -33613,16 +33721,11 @@ function _rpOptOffsetEast(c, miles){
   return { lat: c.lat, lng: c.lng + (miles * degPerMiLng) };
 }
 
-function _rpOptOnRadiusInputChange(){
-  if(!window._RP_OPT_CIRCLE || !window._RP_OPT_CIRCLE.center) return;
-  var inp = document.getElementById('rp-opt-circle-radius');
-  var r = parseFloat(inp && inp.value);
-  if(isNaN(r) || r <= 0) return;
-  r = Math.max(0.1, Math.min(20, r));
-  window._RP_OPT_CIRCLE.radius = r;
-  _rpOptDrawCircle();
-  _rpOptRecomputeCircleTargets();
-}
+// Phase 56 (2026-05-28): manual-input mode removed per user. Replaced by
+// the read-only radius display (updates live during drag) + the new
+// 🎯 Fit-N-visits mode. Kept as a no-op for backward compat in case any
+// straggler caller still hits it.
+function _rpOptOnRadiusInputChange(){ /* no-op */ }
 window._rpOptOnRadiusInputChange = _rpOptOnRadiusInputChange;
 
 // Phase 53b (2026-05-28): split into TWO steps per user.
