@@ -31442,12 +31442,18 @@ function _rpRunAutoCompute(){
       }
     }
     if(typeof _rpRefreshCorridorBox === 'function') _rpRefreshCorridorBox();
-    // Phase 85 (2026-05-28): per user clarification, the auto-render IS
-    // wanted — rectangle drawn → all green/yellow inside lit up → candidate
-    // list appears with everything pre-checked → rep DESELECTS what they
-    // don't want. The "all pins on the map" issue was the misunderstanding;
-    // green/yellow filtering happens in _rpHighlightInsideRectangle.
-    if(typeof runRoutePlannerV4 === 'function'){
+    // Phase 92 (2026-05-28): call _rpV5Start (V5 flat-list path) — was
+    // mistakenly calling runRoutePlannerV4 (legacy V4 bucket render),
+    // which (a) renders to a different format and (b) bails when the
+    // hidden inputs are empty (no global-coord fallback). _rpV5Start
+    // has the proper coord-resolution chain (_RP_START_COORD →
+    // getRouteCoord → getCoordForBusiness) so it works with map-pick
+    // clinic-name flows. THIS is what produces the pre-checked flat
+    // candidate list with light-blue / dark-blue pins.
+    if(typeof _rpV5Start === 'function'){
+      try { _rpV5Start(); } catch(_){}
+    } else if(typeof runRoutePlannerV4 === 'function'){
+      // Fallback only — shouldn't happen
       try { runRoutePlannerV4(); } catch(_){}
     }
   } catch(e){
