@@ -3685,7 +3685,24 @@ body.role-front_desk #referrals-view {
       <div id="rp-opt-wrap" style="display:none;margin-bottom:10px">
         <div style="background:linear-gradient(135deg,#1e3a8a,#2563eb);color:#fff;border-radius:10px;padding:13px 15px;margin-bottom:12px">
           <div style="font-size:13px;font-weight:800">🤖 AI Optimize — pick the stops, we find the order</div>
-          <div style="font-size:11px;opacity:.9;margin-top:3px;line-height:1.45">Click <b>3–10 pins</b> on the map. Each click previews; then ✓ Confirm to add it to your target list. When you're done, pick which one is your <b>starting point</b> and we'll compute the shortest order visiting all of them.</div>
+          <div style="font-size:11px;opacity:.9;margin-top:3px;line-height:1.45">Either click pins one-by-one OR draw a circle on the map to grab everything inside. Pick one as <b>starting point</b> and we compute the shortest visit order.</div>
+        </div>
+        <!-- Phase 53 (2026-05-28): sub-mode toggle. Pick mode = click pins
+             one-by-one (original). Circle mode = click map to set center,
+             drag the edge handle to resize, or type radius manually. -->
+        <div style="display:flex;gap:5px;margin-bottom:10px;background:#f1f5f9;padding:4px;border-radius:8px;font-family:DM Sans,sans-serif">
+          <button id="rp-opt-sub-pin" type="button" onclick="_rpOptSetSubMode('pin')" style="flex:1;background:#fff;color:#1F3864;border:none;padding:7px 12px;font-size:11px;font-weight:700;cursor:pointer;border-radius:6px;box-shadow:0 1px 3px rgba(31,56,100,.15)">✋ Pick pins one-by-one</button>
+          <button id="rp-opt-sub-circle" type="button" onclick="_rpOptSetSubMode('circle')" style="flex:1;background:transparent;color:#64748b;border:none;padding:7px 12px;font-size:11px;font-weight:600;cursor:pointer;border-radius:6px">⭕ Draw a circle</button>
+        </div>
+        <div id="rp-opt-circle-controls" style="display:none;margin-bottom:10px;padding:10px 12px;background:#dbeafe;border:1px solid #93c5fd;border-left:3px solid #2563eb;border-radius:8px">
+          <div style="font-size:11px;font-weight:700;color:#1e3a8a;margin-bottom:6px">⭕ Circle selection</div>
+          <div id="rp-opt-circle-step" style="font-size:11px;color:#1e3a8a;margin-bottom:8px;line-height:1.45">1) Click anywhere on the map to set the <b>center</b>. 2) Drag the small blue handle on the edge to resize, OR type a radius below.</div>
+          <div id="rp-opt-circle-radius-row" style="display:none;align-items:center;gap:8px;margin-top:4px">
+            <label style="font-size:11px;font-weight:700;color:#1e3a8a">Radius (mi):</label>
+            <input type="number" id="rp-opt-circle-radius" value="1" min="0.1" max="20" step="0.1" oninput="_rpOptOnRadiusInputChange()" style="flex:1;border:1px solid #93c5fd;border-radius:6px;padding:6px 9px;font-size:12px;background:#fff;text-align:center">
+            <span id="rp-opt-circle-count" style="font-size:11px;font-weight:700;color:#1e3a8a;background:#fff;border:1px solid #93c5fd;border-radius:14px;padding:3px 10px"></span>
+          </div>
+          <div style="font-size:10px;color:#1e3a8a;opacity:.85;margin-top:6px;font-style:italic">Click any pin inside the circle to exclude it. Click again to include.</div>
         </div>
         <!-- Status panel — shows preview pin + Confirm / Cancel like Corridor -->
         <div id="rp-opt-pick-status" style="display:none;margin-bottom:10px"></div>
@@ -24976,6 +24993,20 @@ function renderAllBusinessPins(){
     // S/E flag exactly where the user tapped.
     function _armedPinHandler(ev){
       try {
+        // Phase 53: AI Optimize CIRCLE sub-mode — pin click toggles include/exclude
+        if(window._RP_OPT_SUB_MODE === 'circle' && typeof _rpOptCircleTogglePin === 'function'){
+          if(_rpOptCircleTogglePin(name)){
+            if(ev && ev.originalEvent){
+              if(ev.originalEvent.stopPropagation) ev.originalEvent.stopPropagation();
+              if(ev.originalEvent.preventDefault) ev.originalEvent.preventDefault();
+              if(ev.originalEvent.stopImmediatePropagation) ev.originalEvent.stopImmediatePropagation();
+            }
+            if(L && L.DomEvent && L.DomEvent.stop) L.DomEvent.stop(ev);
+            if(_DV_MAP && _DV_MAP.closePopup) _DV_MAP.closePopup();
+            marker.closePopup && marker.closePopup();
+            return;
+          }
+        }
         // Phase 46: AI Optimize mode armed?
         if(window._RP_OPT_AWAITING_PICK && typeof _rpOptConsumePinClick === 'function'){
           if(ev && ev.originalEvent){
@@ -27229,12 +27260,15 @@ function openRoutePlanner(){
     window._RP_V5_FLAT_PICKS = {};
     window._RP_V5_PICKS = {};
     window._RP_V5_LAST = null;
-    // Phase 46: also reset AI Optimize state
+    // Phase 46 + 53: also reset AI Optimize state (incl. circle sub-mode)
     window._RP_OPT_TARGETS = [];
     window._RP_OPT_PENDING = null;
     window._RP_OPT_AWAITING_PICK = false;
     window._RP_OPT_START_NAME = null;
     window._RP_OPT_ORDERED = null;
+    window._RP_OPT_SUB_MODE = 'pin';
+    window._RP_OPT_CIRCLE = null;
+    window._RP_OPT_CIRCLE_EXCLUDED = {};
     if(window._RP_AI) window._RP_AI.autoSuggestLast = null;
     if(typeof _rpClearStartMarker === 'function') _rpClearStartMarker();
     if(typeof _rpClearEndMarker === 'function') _rpClearEndMarker();
@@ -27846,6 +27880,8 @@ function closeRoutePlanner(){
   if(typeof _rpClearCorridorBox === 'function') _rpClearCorridorBox();
   // Phase 39: clear the live route polyline too.
   if(typeof _rpClearLiveRoute === 'function') _rpClearLiveRoute();
+  // Phase 53: tear down any AI Optimize circle layer + map click handler.
+  if(typeof _rpOptDisarmCircleMode === 'function') _rpOptDisarmCircleMode();
   // Phase 33 (2026-05-27): per user, closing the planner WITHOUT generating
   // a route wipes ALL transient state — Start/End inputs, dialog pending,
   // flat picks, level picks, AI throttle. "If I get out, the start will
@@ -32856,6 +32892,12 @@ window._RP_OPT_ORDERED = null;      // result after Optimize
 
 function _rpOptInit(){
   window._RP_OPT_AWAITING_PICK = true;
+  // Phase 53: default sub-mode = pin. Reset the toggle visual.
+  window._RP_OPT_SUB_MODE = 'pin';
+  if(typeof _rpOptSetSubMode === 'function'){
+    // Use a microtask so the wrapper's other inits run first
+    setTimeout(function(){ _rpOptSetSubMode('pin'); }, 0);
+  }
   _rpOptRenderTargetList();
   _rpOptRenderStartPicker();
   _rpOptRenderPickStatus();
@@ -33248,6 +33290,252 @@ function _rpOptInsertIntoDay(){
   if(typeof closeRoutePlanner === 'function') closeRoutePlanner();
 }
 window._rpOptInsertIntoDay = _rpOptInsertIntoDay;
+
+// ════════════════════════════════════════════════════════════════════════════
+// PHASE 53 (2026-05-28) — AI OPTIMIZE: CIRCLE-DRAW SUB-MODE
+// User clicks the map to drop a circle center, drags the edge handle to
+// resize, OR types a radius. Pins inside become targets automatically.
+// Click any inside-circle pin to toggle exclude.
+// ════════════════════════════════════════════════════════════════════════════
+
+window._RP_OPT_SUB_MODE = 'pin';            // 'pin' | 'circle'
+window._RP_OPT_CIRCLE   = null;             // { center: {lat,lng}, radius: miles }
+window._RP_OPT_CIRCLE_EXCLUDED = {};        // { name: true } — manually excluded
+var _DV_OPT_CIRCLE_LAYER  = null;
+var _DV_OPT_CIRCLE_HANDLE = null;
+var _DV_OPT_CIRCLE_MAP_CLICK_HANDLER = null;
+
+function _rpOptSetSubMode(sub){
+  if(sub !== 'pin' && sub !== 'circle') return;
+  window._RP_OPT_SUB_MODE = sub;
+  var pinBtn = document.getElementById('rp-opt-sub-pin');
+  var cirBtn = document.getElementById('rp-opt-sub-circle');
+  var active   = 'flex:1;background:#fff;color:#1F3864;border:none;padding:7px 12px;font-size:11px;font-weight:700;cursor:pointer;border-radius:6px;box-shadow:0 1px 3px rgba(31,56,100,.15)';
+  var inactive = 'flex:1;background:transparent;color:#64748b;border:none;padding:7px 12px;font-size:11px;font-weight:600;cursor:pointer;border-radius:6px';
+  if(pinBtn) pinBtn.setAttribute('style', sub === 'pin' ? active : inactive);
+  if(cirBtn) cirBtn.setAttribute('style', sub === 'circle' ? active : inactive);
+  var cirCtl = document.getElementById('rp-opt-circle-controls');
+  if(cirCtl) cirCtl.style.display = (sub === 'circle') ? 'block' : 'none';
+  if(sub === 'circle'){
+    // Pin mode → circle mode: clear any pin-picked targets so they don't
+    // mix (per user "I don't want them to intervene"). Also disarm pin
+    // pick mode + arm the map's click-to-set-center listener.
+    window._RP_OPT_AWAITING_PICK = false;
+    if(window._RP_OPT_PENDING && window._RP_OPT_PENDING.name && typeof _rpSetPinState === 'function'){
+      _rpSetPinState(window._RP_OPT_PENDING.name, 'reset');
+    }
+    window._RP_OPT_PENDING = null;
+    if(typeof _rpClearPreviewRing === 'function') _rpClearPreviewRing();
+    _rpOptRenderPickStatus();
+    _rpOptArmCircleMode();
+    if(typeof showToast === 'function') showToast('⭕ Click anywhere on the map to set the circle center.');
+  } else {
+    // Circle → pin: tear down circle UI but keep _RP_OPT_TARGETS
+    _rpOptDisarmCircleMode();
+    window._RP_OPT_AWAITING_PICK = true;
+    _rpOptRenderPickStatus();
+    if(typeof showToast === 'function') showToast('✋ Click pins one-by-one to add them.');
+  }
+}
+window._rpOptSetSubMode = _rpOptSetSubMode;
+
+function _rpOptArmCircleMode(){
+  if(!_DV_MAP) return;
+  if(_DV_OPT_CIRCLE_MAP_CLICK_HANDLER){
+    try { _DV_MAP.off('click', _DV_OPT_CIRCLE_MAP_CLICK_HANDLER); } catch(_){}
+  }
+  _DV_OPT_CIRCLE_MAP_CLICK_HANDLER = function(ev){
+    if(window._RP_OPT_SUB_MODE !== 'circle') return;
+    if(!ev || !ev.latlng) return;
+    // First click sets center + default radius. Subsequent clicks MOVE the center.
+    var existingRadius = (window._RP_OPT_CIRCLE && window._RP_OPT_CIRCLE.radius) || 1;
+    window._RP_OPT_CIRCLE = {
+      center: { lat: ev.latlng.lat, lng: ev.latlng.lng },
+      radius: existingRadius
+    };
+    _rpOptDrawCircle();
+    _rpOptRecomputeCircleTargets();
+    var stepEl = document.getElementById('rp-opt-circle-step');
+    if(stepEl) stepEl.innerHTML = '✓ Center set. Drag the small blue handle on the edge to resize, OR type a radius below.';
+    var radiusRow = document.getElementById('rp-opt-circle-radius-row');
+    if(radiusRow) radiusRow.style.display = 'flex';
+    var radiusInp = document.getElementById('rp-opt-circle-radius');
+    if(radiusInp) radiusInp.value = existingRadius;
+  };
+  _DV_MAP.on('click', _DV_OPT_CIRCLE_MAP_CLICK_HANDLER);
+}
+window._rpOptArmCircleMode = _rpOptArmCircleMode;
+
+function _rpOptDisarmCircleMode(){
+  if(_DV_MAP && _DV_OPT_CIRCLE_MAP_CLICK_HANDLER){
+    try { _DV_MAP.off('click', _DV_OPT_CIRCLE_MAP_CLICK_HANDLER); } catch(_){}
+    _DV_OPT_CIRCLE_MAP_CLICK_HANDLER = null;
+  }
+  _rpOptClearCircleLayer();
+  // Reset pins
+  if(window._RP_OPT_TARGETS){
+    window._RP_OPT_TARGETS.forEach(function(t){
+      if(typeof _rpSetPinState === 'function') _rpSetPinState(t.name, 'reset');
+    });
+  }
+  window._RP_OPT_TARGETS = [];
+  window._RP_OPT_CIRCLE = null;
+  window._RP_OPT_CIRCLE_EXCLUDED = {};
+  _rpOptRenderTargetList();
+  _rpOptRenderStartPicker();
+  var radiusRow = document.getElementById('rp-opt-circle-radius-row');
+  if(radiusRow) radiusRow.style.display = 'none';
+}
+window._rpOptDisarmCircleMode = _rpOptDisarmCircleMode;
+
+function _rpOptClearCircleLayer(){
+  if(_DV_OPT_CIRCLE_LAYER && _DV_MAP){
+    try { _DV_MAP.removeLayer(_DV_OPT_CIRCLE_LAYER); } catch(_){}
+  }
+  _DV_OPT_CIRCLE_LAYER = null;
+  if(_DV_OPT_CIRCLE_HANDLE && _DV_MAP){
+    try { _DV_MAP.removeLayer(_DV_OPT_CIRCLE_HANDLE); } catch(_){}
+  }
+  _DV_OPT_CIRCLE_HANDLE = null;
+}
+
+function _rpOptDrawCircle(){
+  if(!_DV_MAP || typeof L === 'undefined') return;
+  if(!window._RP_OPT_CIRCLE || !window._RP_OPT_CIRCLE.center) return;
+  _rpOptClearCircleLayer();
+  var c = window._RP_OPT_CIRCLE.center;
+  var rMi = window._RP_OPT_CIRCLE.radius;
+  var rMeters = rMi * 1609.344;   // miles → meters
+  // The circle itself
+  _DV_OPT_CIRCLE_LAYER = L.circle([c.lat, c.lng], {
+    radius: rMeters,
+    color: '#2563eb', weight: 3, opacity: 0.9, dashArray: '6,4',
+    fillColor: '#3b82f6', fillOpacity: 0.10,
+    interactive: false
+  }).addTo(_DV_MAP);
+  // Drag handle on the EAST edge — small blue circle marker
+  var handleCoord = _rpOptOffsetEast(c, rMi);
+  _DV_OPT_CIRCLE_HANDLE = L.marker([handleCoord.lat, handleCoord.lng], {
+    icon: L.divIcon({
+      className: 'rp-opt-circle-handle',
+      html: '<div style="width:18px;height:18px;background:#2563eb;border:3px solid #fff;border-radius:50%;box-shadow:0 0 0 2px #2563eb,0 2px 6px rgba(0,0,0,.35);cursor:ew-resize"></div>',
+      iconSize: [18,18], iconAnchor: [9,9]
+    }),
+    draggable: true,
+    zIndexOffset: 9300
+  }).addTo(_DV_MAP);
+  _DV_OPT_CIRCLE_HANDLE.on('drag', function(ev){
+    var ll = ev.target.getLatLng();
+    var newR = _rpHaversineMiles(c, { lat: ll.lat, lng: ll.lng });
+    newR = Math.max(0.05, Math.min(20, newR));
+    window._RP_OPT_CIRCLE.radius = newR;
+    // Re-render the circle (but keep the handle being dragged)
+    if(_DV_OPT_CIRCLE_LAYER) _DV_OPT_CIRCLE_LAYER.setRadius(newR * 1609.344);
+    var radiusInp = document.getElementById('rp-opt-circle-radius');
+    if(radiusInp) radiusInp.value = newR.toFixed(2);
+  });
+  _DV_OPT_CIRCLE_HANDLE.on('dragend', function(){
+    // Snap handle back to the east edge of the new radius
+    var ncoord = _rpOptOffsetEast(c, window._RP_OPT_CIRCLE.radius);
+    _DV_OPT_CIRCLE_HANDLE.setLatLng([ncoord.lat, ncoord.lng]);
+    _rpOptRecomputeCircleTargets();
+  });
+}
+window._rpOptDrawCircle = _rpOptDrawCircle;
+
+// Helper: offset a lat/lng by N miles directly east.
+function _rpOptOffsetEast(c, miles){
+  var midLat = c.lat * Math.PI / 180;
+  var degPerMiLng = 1 / (69 * Math.cos(midLat));
+  return { lat: c.lat, lng: c.lng + (miles * degPerMiLng) };
+}
+
+function _rpOptOnRadiusInputChange(){
+  if(!window._RP_OPT_CIRCLE || !window._RP_OPT_CIRCLE.center) return;
+  var inp = document.getElementById('rp-opt-circle-radius');
+  var r = parseFloat(inp && inp.value);
+  if(isNaN(r) || r <= 0) return;
+  r = Math.max(0.1, Math.min(20, r));
+  window._RP_OPT_CIRCLE.radius = r;
+  _rpOptDrawCircle();
+  _rpOptRecomputeCircleTargets();
+}
+window._rpOptOnRadiusInputChange = _rpOptOnRadiusInputChange;
+
+// Rescan all clinics + MVAs + outreach; targets = inside circle minus
+// manually excluded. Set pin states + repopulate _RP_OPT_TARGETS.
+function _rpOptRecomputeCircleTargets(){
+  if(!window._RP_OPT_CIRCLE || !window._RP_OPT_CIRCLE.center) return;
+  var c = window._RP_OPT_CIRCLE.center;
+  var rMi = window._RP_OPT_CIRCLE.radius;
+  // Reset all old target pin states first
+  if(window._RP_OPT_TARGETS){
+    window._RP_OPT_TARGETS.forEach(function(t){
+      if(typeof _rpSetPinState === 'function') _rpSetPinState(t.name, 'reset');
+    });
+  }
+  var hits = [];
+  function consider(name, bizType){
+    if(window._RP_OPT_CIRCLE_EXCLUDED[name]) return;
+    var coord = (typeof _rpGetVisualCoord === 'function') ? _rpGetVisualCoord(name) : null;
+    if(!coord && typeof getCoordForBusiness === 'function') coord = getCoordForBusiness(name);
+    if(!coord) return;
+    var d = _rpHaversineMiles(c, coord);
+    if(d > rMi) return;
+    hits.push({ name: name, coord: coord, bizType: bizType });
+  }
+  if(typeof CLINIC_BANK !== 'undefined') CLINIC_BANK.forEach(function(o){ if(o && o.n) consider(o.n, 'clinic'); });
+  if(typeof MVA_ATTORNEYS !== 'undefined') MVA_ATTORNEYS.forEach(function(o){ if(o && o.firm) consider(o.firm, 'mva'); });
+  if(typeof OUTREACH !== 'undefined') OUTREACH.forEach(function(o){ if(o && o.name) consider(o.name, 'outreach'); });
+  // Cap at 10 (TSP solver sweet spot)
+  if(hits.length > 10){
+    if(typeof showToast === 'function') showToast('⚠ ' + hits.length + ' pins inside — capping at 10 closest. Shrink the circle or exclude some.');
+    // Sort by distance asc, keep 10
+    hits.sort(function(a, b){
+      return _rpHaversineMiles(c, a.coord) - _rpHaversineMiles(c, b.coord);
+    });
+    hits = hits.slice(0, 10);
+  }
+  window._RP_OPT_TARGETS = hits;
+  // Mutate pin states to 'suggested' (light blue) for inside-circle
+  hits.forEach(function(t){
+    if(typeof _rpSetPinState === 'function') _rpSetPinState(t.name, 'suggested');
+  });
+  // If the start was excluded by a circle resize, clear it
+  if(window._RP_OPT_START_NAME && !hits.some(function(t){ return t.name === window._RP_OPT_START_NAME; })){
+    window._RP_OPT_START_NAME = null;
+  } else if(window._RP_OPT_START_NAME && typeof _rpSetPinState === 'function'){
+    _rpSetPinState(window._RP_OPT_START_NAME, 'start');
+  }
+  var countEl = document.getElementById('rp-opt-circle-count');
+  if(countEl) countEl.textContent = hits.length + ' in';
+  _rpOptRenderTargetList();
+  _rpOptRenderStartPicker();
+}
+window._rpOptRecomputeCircleTargets = _rpOptRecomputeCircleTargets;
+
+// Click-pin handler for circle mode — toggles exclude state for that pin.
+function _rpOptCircleTogglePin(name){
+  if(window._RP_OPT_SUB_MODE !== 'circle') return false;
+  if(!window._RP_OPT_CIRCLE || !window._RP_OPT_CIRCLE.center) return false;
+  // Verify the pin is actually inside the circle (else this isn't relevant)
+  var coord = (typeof _rpGetVisualCoord === 'function') ? _rpGetVisualCoord(name) : null;
+  if(!coord && typeof getCoordForBusiness === 'function') coord = getCoordForBusiness(name);
+  if(!coord) return false;
+  var d = _rpHaversineMiles(window._RP_OPT_CIRCLE.center, coord);
+  if(d > window._RP_OPT_CIRCLE.radius) return false;
+  // Toggle
+  if(window._RP_OPT_CIRCLE_EXCLUDED[name]){
+    delete window._RP_OPT_CIRCLE_EXCLUDED[name];
+    if(typeof showToast === 'function') showToast('✓ Re-included: ' + name);
+  } else {
+    window._RP_OPT_CIRCLE_EXCLUDED[name] = true;
+    if(typeof showToast === 'function') showToast('✕ Excluded: ' + name);
+  }
+  _rpOptRecomputeCircleTargets();
+  return true;
+}
+window._rpOptCircleTogglePin = _rpOptCircleTogglePin;
 
 // Map double-click listener — per user 2026-05-23 this is now a guided
 // two-step flow (start, then stops). All dispatch lives in _rpHandleRandom-
