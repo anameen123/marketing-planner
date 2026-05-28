@@ -197,6 +197,17 @@ const TRACE_LOG   = path.resolve(__dirname, '_visual_trace.log');
     // Phase 36: run Find Candidates and check the flat list count
     try { _rpV5Start(); } catch(e){ out.startErr = e.message; }
     out.flatCandidateCount = (window._RP_V5_LAST && window._RP_V5_LAST.flatCandidates) ? window._RP_V5_LAST.flatCandidates.length : null;
+    // Phase 41: target-visits-driven fit
+    out.targetVisitsInputExists = !!document.getElementById('rp-target-visits');
+    out.fitWidthFnExists = typeof window._rpComputeWidthForVisits === 'function';
+    if(out.fitWidthFnExists && window._RP_V5_LAST){
+      var fitRes3 = _rpComputeWidthForVisits(window._RP_V5_LAST.A, window._RP_V5_LAST.B, 3);
+      var fitRes5 = _rpComputeWidthForVisits(window._RP_V5_LAST.A, window._RP_V5_LAST.B, 5);
+      var fitRes10 = _rpComputeWidthForVisits(window._RP_V5_LAST.A, window._RP_V5_LAST.B, 10);
+      out.fitForVisits3 = fitRes3;
+      out.fitForVisits5 = fitRes5;
+      out.fitForVisits10 = fitRes10;
+    }
     // Phase 39: pick the first 3 candidates and verify the live route draws
     if(typeof _rpV5ToggleFlat === 'function' && window._RP_V5_LAST && window._RP_V5_LAST.flatCandidates){
       const first3 = window._RP_V5_LAST.flatCandidates.slice(0, 3);

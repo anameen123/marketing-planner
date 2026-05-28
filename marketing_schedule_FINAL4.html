@@ -3674,19 +3674,21 @@ body.role-front_desk #referrals-view {
              level gets per-level "+1 mi" / "+2 mi" buttons (capped at base+2). -->
       <div id="rp-corridor-controls" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
         <div>
-          <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Number of route levels <span style="color:var(--muted);font-weight:400">(visits to plan)</span></label>
+          <!-- Phase 41 (2026-05-28): "Number of route levels" was confusing
+               and didn't affect output meaningfully (flat-list mode renders
+               every candidate). Replaced with "Number of visits (target)"
+               which directly drives the corridor width — the algorithm
+               expands width until N green/yellow pins fit. -->
+          <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Number of visits <span style="color:var(--muted);font-weight:400">(target)</span></label>
           <div style="display:flex;align-items:center;gap:5px">
-            <button type="button" onclick="_rpV5AdjustN(-1)" style="background:#e5e7eb;border:none;color:#374151;width:30px;height:36px;border-radius:6px;font-size:14px;font-weight:700;cursor:pointer">−</button>
-            <input type="number" id="rp-level-count" value="5" min="1" max="12" style="flex:1;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box;text-align:center">
-            <button type="button" onclick="_rpV5AdjustN(1)" style="background:#e5e7eb;border:none;color:#374151;width:30px;height:36px;border-radius:6px;font-size:14px;font-weight:700;cursor:pointer">+</button>
-            <!-- 🤖 AI suggest N (per user 2026-05-26) — visible only when the
-                 "Use AI planning" toggle is ON, a GitHub Models token is set,
-                 and both Start + End are confirmed. Clicking it sends the
-                 corridor distance + candidate density to GitHub Models and
-                 the recommended N drops into the input. -->
-            <button id="rp-ai-suggest-n-btn" type="button" onclick="_rpRunAutoCompute()" title="Auto-compute optimum N + corridor half-width from candidate density" style="background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;border:none;border-radius:6px;padding:0 11px;height:36px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;white-space:nowrap;display:inline-flex;align-items:center;gap:4px">🧮 Auto N + width</button>
+            <button type="button" onclick="_rpAdjustTargetVisits(-1)" style="background:#e5e7eb;border:none;color:#374151;width:30px;height:36px;border-radius:6px;font-size:14px;font-weight:700;cursor:pointer">−</button>
+            <input type="number" id="rp-target-visits" value="5" min="1" max="20" oninput="_rpOnTargetVisitsChange()" style="flex:1;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box;text-align:center">
+            <button type="button" onclick="_rpAdjustTargetVisits(1)" style="background:#e5e7eb;border:none;color:#374151;width:30px;height:36px;border-radius:6px;font-size:14px;font-weight:700;cursor:pointer">+</button>
+            <button id="rp-ai-suggest-n-btn" type="button" onclick="_rpRunAutoCompute()" title="Recompute corridor half-width so it covers exactly N green/yellow visits" style="background:linear-gradient(135deg,#16a34a,#15803d);color:#fff;border:none;border-radius:6px;padding:0 11px;height:36px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;white-space:nowrap;display:inline-flex;align-items:center;gap:4px">🎯 Fit width</button>
           </div>
-          <div id="rp-ai-suggest-n-hint" style="display:none;font-size:10px;color:#6b21a8;margin-top:5px;line-height:1.45;background:#faf5ff;border:1px solid #ddd6fe;border-radius:6px;padding:5px 8px"></div>
+          <div id="rp-ai-suggest-n-hint" style="display:none;font-size:10px;color:#1e3a8a;margin-top:5px;line-height:1.45;background:#dbeafe;border:1px solid #93c5fd;border-radius:6px;padding:5px 8px"></div>
+          <!-- Hidden legacy field — keeps any straggler readers from crashing -->
+          <input type="hidden" id="rp-level-count" value="5">
         </div>
         <div>
           <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Corridor half-width <span style="color:var(--muted);font-weight:400">(±miles)</span></label>
@@ -27670,14 +27672,18 @@ function _rpHighlightInsideRectangle(A, B, halfW){
     var perp = Math.abs(_rpV5SignedPerp(coord, A, B));
     if(perp > halfW) return;
     total++;
-    // Diagnostic: how many would Find Candidates filter out?
+    // Phase 41: ONLY light up green/yellow per user. Skip red (fresh) and
+    // orange (warm). Tally what's filtered for the explainer message.
     var days = (typeof daysSinceLastVisit === 'function') ? daysSinceLastVisit(name) : null;
     var rec  = (typeof recencyBucket === 'function') ? recencyBucket(days) : null;
-    if(rec && (rec.key === 'fresh' || rec.key === 'warm')) recent++;
+    if(rec && (rec.key === 'fresh' || rec.key === 'warm')){
+      recent++;
+      return;   // don't light it up
+    }
     if(typeof BUSINESS_REFERRALS !== 'undefined' && BUSINESS_REFERRALS[name] && (BUSINESS_REFERRALS[name].currentCount || 0) > 0) alreadyVisitedPeriod++;
     var lead = (typeof getClinicLead === 'function') ? getClinicLead(name) : null;
     if(lead && lead.status === 'dead_end') deadEnd++;
-    // Light it up regardless of those filters
+    // Green/yellow inside the rectangle → light it up
     if(typeof _rpSetPinState === 'function') _rpSetPinState(name, 'suggested');
   }
   if(typeof CLINIC_BANK !== 'undefined') CLINIC_BANK.forEach(function(c){ if(c && c.n) check(c.n); });
@@ -30188,10 +30194,8 @@ function _rpComputeOptimalParams(A, B){
 }
 window._rpComputeOptimalParams = _rpComputeOptimalParams;
 
-// Phase 26: replaces the remote AI call. Computes deterministically + writes
-// into the rp-level-count + rp-corridor inputs. Runs whenever Start + End
-// are both set. Throttled by (start, end) key so it doesn't refire
-// identically.
+// Phase 26 / 41: auto-fire when Start+End get set. Phase 41 delegates to
+// _rpRunAutoCompute which uses the new target-visits-driven algorithm.
 function _rpAutoSuggestIfReady(){
   try {
     var startVal = (document.getElementById('rp-start') || {}).value || '';
@@ -30200,6 +30204,9 @@ function _rpAutoSuggestIfReady(){
     var pairKey = startVal + '|' + endVal;
     if(_RP_AI && _RP_AI.autoSuggestLast === pairKey) return;
     if(_RP_AI) _RP_AI.autoSuggestLast = pairKey;
+    // Phase 41: use the target-visits fit instead of the old N+halfWidth compute
+    setTimeout(function(){ if(typeof _rpRunAutoCompute === 'function') _rpRunAutoCompute(); }, 80);
+    return;
     // Phase 34b: clinic-name fallback so the auto-fire works when the user
     // picked from the map (which writes clinic name to the hidden input).
     function _resolveAny(val){
@@ -30239,18 +30246,87 @@ function _rpAutoSuggestIfReady(){
 }
 window._rpAutoSuggestIfReady = _rpAutoSuggestIfReady;
 
-// Phase 30 / 34: button handler that force-runs the deterministic compute,
-// bypassing the (start,end) throttle. Also redraws the corridor rectangle.
-// Phase 34 (2026-05-27): always shows visible feedback — toast + console
-// log + status banner — even when nothing changed, so the user knows the
-// click registered.
+// Phase 41 (2026-05-28): _rpComputeWidthForVisits — pure-math algorithm
+// per user. Given Start (A), End (B), and target number of visits N, find
+// the SMALLEST corridor half-width that contains at least N green/yellow
+// clinic candidates (geometrically inside the rectangle).
+//
+// Algorithm:
+//   1. Compute (t, |perp|) for every clinic + MVA using the VISUAL coord
+//      (jittered if applicable) so it matches what the user sees.
+//   2. Keep only those with 0 ≤ t ≤ 1 (between Start and End along the line)
+//      AND recency is green (ripe / never) or yellow (14-20d).
+//      Skip fresh (red) and warm (orange) per user requirement.
+//   3. Sort by |perp| ascending — closest-to-centerline first.
+//   4. Take the Nth smallest |perp| → that's the minimum half-width.
+//      If fewer than N exist, use the largest available |perp| (or cap).
+//   5. Round up to nearest 0.5 mi, clamp 0.5..12.
+function _rpComputeWidthForVisits(A, B, targetN){
+  if(!A || !B) return null;
+  var totalMi = _rpHaversineMiles(A, B);
+  if(totalMi < 0.5) return null;
+  var maxCap = 12;
+  var perps = [];
+  function consider(name){
+    var c = (typeof _rpGetVisualCoord === 'function') ? _rpGetVisualCoord(name) : null;
+    if(!c && typeof getCoordForBusiness === 'function') c = getCoordForBusiness(name);
+    if(!c) return;
+    var t = _rpV5ProjT(c, A, B);
+    if(t < 0 || t > 1) return;
+    var days = (typeof daysSinceLastVisit === 'function') ? daysSinceLastVisit(name) : null;
+    var rec  = (typeof recencyBucket === 'function') ? recencyBucket(days) : null;
+    // Phase 41: only green (ripe/never) + yellow accepted
+    if(!rec || (rec.key !== 'ripe' && rec.key !== 'never' && rec.key !== 'yellow')) return;
+    var perp = Math.abs(_rpV5SignedPerp(c, A, B));
+    if(perp > maxCap) return;
+    perps.push(perp);
+  }
+  if(typeof CLINIC_BANK !== 'undefined') CLINIC_BANK.forEach(function(c){ if(c && c.n) consider(c.n); });
+  if(typeof MVA_ATTORNEYS !== 'undefined') MVA_ATTORNEYS.forEach(function(m){ if(m && m.firm) consider(m.firm); });
+  perps.sort(function(a, b){ return a - b; });
+  var totalAvail = perps.length;
+  if(totalAvail === 0){
+    return { halfWidth: 1, available: 0, asked: targetN, totalMi: totalMi, exact: false };
+  }
+  var idx = Math.min(targetN, totalAvail) - 1;
+  var raw = perps[idx];
+  // Round up to nearest 0.5 mi so the rectangle is a clean number
+  var halfWidth = Math.max(0.5, Math.min(maxCap, Math.ceil(raw * 2) / 2));
+  return { halfWidth: halfWidth, available: totalAvail, asked: targetN, exact: (targetN <= totalAvail), totalMi: totalMi };
+}
+window._rpComputeWidthForVisits = _rpComputeWidthForVisits;
+
+function _rpAdjustTargetVisits(delta){
+  var inp = document.getElementById('rp-target-visits');
+  if(!inp) return;
+  var v = parseInt(inp.value, 10) || 5;
+  v = Math.max(1, Math.min(20, v + delta));
+  inp.value = v;
+  _rpOnTargetVisitsChange();
+}
+window._rpAdjustTargetVisits = _rpAdjustTargetVisits;
+
+function _rpOnTargetVisitsChange(){
+  // Auto-trigger the fit when the user changes the target visits, BUT
+  // throttle so rapid typing doesn't spam the compute.
+  if(window._rpTargetVisitsTimer) clearTimeout(window._rpTargetVisitsTimer);
+  window._rpTargetVisitsTimer = setTimeout(function(){
+    if(typeof _rpRunAutoCompute === 'function') _rpRunAutoCompute();
+  }, 350);
+}
+window._rpOnTargetVisitsChange = _rpOnTargetVisitsChange;
+
+// Phase 30 / 34 / 41: "Fit width" button handler. Reads Start, End, and
+// target visits from the inputs. Computes the smallest halfWidth that
+// covers exactly N green/yellow candidates. Writes it into the corridor
+// input + redraws the rectangle.
 function _rpRunAutoCompute(){
   console.log('[_rpRunAutoCompute] click received');
   try {
     var startVal = (document.getElementById('rp-start') || {}).value || '';
     var endVal   = (document.getElementById('rp-end')   || {}).value || '';
     if(!startVal || !endVal){
-      if(typeof showToast === 'function') showToast('🧮 Pick Start AND End first, then I can compute.');
+      if(typeof showToast === 'function') showToast('🎯 Pick Start AND End first.');
       return;
     }
     // Phase 34b: getRouteCoord only knows city + facility keys. Fall back
@@ -30271,38 +30347,39 @@ function _rpRunAutoCompute(){
       console.log('[_rpRunAutoCompute] resolve failed', { startVal: startVal, endVal: endVal, A: A, B: B });
       return;
     }
-    if(_RP_AI) _RP_AI.autoSuggestLast = null;   // reset throttle so it always runs
-    var params = _rpComputeOptimalParams(A, B);
-    if(!params){
-      if(typeof showToast === 'function') showToast('🧮 Start and End are too close to compute (need >0.5 mi apart).');
+    var targetN = parseInt((document.getElementById('rp-target-visits') || {}).value, 10) || 5;
+    targetN = Math.max(1, Math.min(20, targetN));
+    var result = _rpComputeWidthForVisits(A, B, targetN);
+    if(!result){
+      if(typeof showToast === 'function') showToast('🎯 Start and End are too close (need >0.5 mi apart).');
       return;
     }
-    // Apply
-    var nInp = document.getElementById('rp-level-count');
-    if(nInp) nInp.value = params.N;
+    // Apply the new half-width
     var wInp = document.getElementById('rp-corridor');
     if(wInp){
-      wInp.value = params.halfWidth;
-      if(typeof _rpV4OnWidthChange === 'function') _rpV4OnWidthChange();
+      wInp.value = result.halfWidth;
+      window._RP_APPLIED_HALFWIDTH = result.halfWidth;
+      if(typeof _rpRenderApplyWidthBtn === 'function') _rpRenderApplyWidthBtn();
     }
-    // Inline hint with the formula breakdown
+    // Inline hint with the breakdown
     var hint = document.getElementById('rp-ai-suggest-n-hint');
     if(hint){
       hint.style.display = 'block';
-      hint.style.color = '#1e3a8a';
-      hint.style.background = '#dbeafe';
-      hint.style.border = '1px solid #93c5fd';
-      hint.innerHTML = '🧮 Auto: <b>' + params.N + ' levels</b> · <b>±' + params.halfWidth + ' mi</b> corridor — '
-        + params.totalCandidates + ' stale clinics in the corridor cap. '
-        + 'Levels = round(count/4) clamped 3–8. Half-width = max(closest-perp per level), capped at 25% of ' + (params.maxHalfCap ? params.maxHalfCap.toFixed(1) : '?') + ' mi.';
+      if(result.exact){
+        hint.innerHTML = '🎯 Corridor expanded to <b>±' + result.halfWidth + ' mi</b> to cover the closest <b>' + targetN + ' green/yellow visit' + (targetN===1?'':'s') + '</b> inside the route. '
+          + result.available + ' total available in this corridor.';
+      } else {
+        hint.innerHTML = '⚠ Only <b>' + result.available + '</b> green/yellow visit' + (result.available===1?'':'s') + ' available between Start and End — corridor capped at <b>±' + result.halfWidth + ' mi</b>. Try further Start/End for more.';
+      }
     }
     if(typeof showToast === 'function'){
-      showToast('🧮 ' + params.N + ' levels · ±' + params.halfWidth + ' mi corridor');
+      showToast('🎯 Corridor fit to ' + Math.min(targetN, result.available) + ' visits · ±' + result.halfWidth + ' mi');
     }
     if(typeof _rpRefreshCorridorBox === 'function') _rpRefreshCorridorBox();
+    if(typeof runRoutePlannerV4 === 'function' && window._RP_V4_LAST) runRoutePlannerV4();
   } catch(e){
     console.error('[_rpRunAutoCompute] error:', e);
-    if(typeof showToast === 'function') showToast('🧮 Auto-compute failed: ' + (e && e.message));
+    if(typeof showToast === 'function') showToast('🎯 Auto-compute failed: ' + (e && e.message));
   }
 }
 window._rpRunAutoCompute = _rpRunAutoCompute;
