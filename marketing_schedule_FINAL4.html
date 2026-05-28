@@ -28232,7 +28232,11 @@ function _rpDrawCorridorBox(A, B, halfWidthMi){
   //   • On dragend — snap handles back to the new edge midpoint and run
   //     the full redraw (which re-creates handles cleanly).
   // Cursor: 'ns-resize' (single double-arrow) instead of 'move' (4-way).
-  var manualMode = (window._RP_CORRIDOR_MODE === 'width');
+  // Phase 85 (2026-05-28): handles available in BOTH modes per user. In
+  // visits mode, manual drag overrides the auto-fit width (the rep can
+  // mix the two — change # of visits OR drag the edge, whichever feels
+  // right).
+  var manualMode = true;
   if(manualMode){
     var midA = { lat: (A.lat + B.lat) / 2, lng: (A.lng + B.lng) / 2 };
     var handlePos1 = { lat: midA.lat + offLat, lng: midA.lng + offLng };
@@ -28283,6 +28287,14 @@ function _rpDrawCorridorBox(A, B, halfWidthMi){
       // Full redraw now that the drag is over — snaps the OTHER handle to
       // its new symmetric position and rebuilds the polygon cleanly.
       _rpDrawCorridorBox(A, B, perp);
+      // Phase 85 (2026-05-28): re-render the candidate list with the new
+      // width so the rep sees an updated set of pre-checked candidates.
+      // Same flow as changing the # of visits — drag changes width →
+      // candidates refresh → all pre-checked → rep deselects what they
+      // don't want.
+      if(typeof runRoutePlannerV4 === 'function'){
+        try { runRoutePlannerV4(); } catch(_){}
+      }
     }
     h1.on('drag', onDrag);
     h2.on('drag', onDrag);
@@ -31372,15 +31384,13 @@ function _rpRunAutoCompute(){
       }
     }
     if(typeof _rpRefreshCorridorBox === 'function') _rpRefreshCorridorBox();
-    // Phase 83 (2026-05-28): Phase 80's auto-render of the candidate list
-    // was reverted per user — it lit up too many pins + removed the rep's
-    // control over WHEN candidates surface. The corridor box is refreshed
-    // here (so the rectangle visually updates with the new width), but
-    // candidate rendering is back to requiring an explicit "Find
-    // candidates" click. The legacy V4 refresh path still fires if a
-    // previous candidate-list render exists (width-mode tweaks).
-    if(typeof runRoutePlannerV4 === 'function' && window._RP_V4_LAST){
-      runRoutePlannerV4();
+    // Phase 85 (2026-05-28): per user clarification, the auto-render IS
+    // wanted — rectangle drawn → all green/yellow inside lit up → candidate
+    // list appears with everything pre-checked → rep DESELECTS what they
+    // don't want. The "all pins on the map" issue was the misunderstanding;
+    // green/yellow filtering happens in _rpHighlightInsideRectangle.
+    if(typeof runRoutePlannerV4 === 'function'){
+      try { runRoutePlannerV4(); } catch(_){}
     }
   } catch(e){
     console.error('[_rpRunAutoCompute] error:', e);
@@ -36505,12 +36515,26 @@ function _rpV5Start(){
     slices: slices, N: N, quantileBounds: quantileBounds,
     flatCandidates: flatCandidates
   };
-  // Phase 83 (2026-05-28): reverted Phase 80's auto-check. The rep now
-  // sees all candidates UNCHECKED (as before Phase 80) and picks what
-  // they want manually — same as the original flow. No live route line
-  // is drawn until they check something + no map pins flip to 'picked'.
+  // Phase 85 (2026-05-28): per user — once the rectangle is drawn, the
+  // candidate list appears with EVERY candidate pre-CHECKED. The rep then
+  // DESELECTS what they don't want (vs the original "build from blank"
+  // flow). Live route line draws through the auto-checked picks + their
+  // pins flip to 'picked' (dark blue) immediately.
   _RP_V5_FLAT_PICKS = {};
+  flatCandidates.forEach(function(c){
+    if(c && c.name) _RP_V5_FLAT_PICKS[c.name] = true;
+  });
   _rpV5ShowFlatList();
+  // Draw the live route line + flip pin states to 'picked' so the visual
+  // matches the candidate-list checkboxes.
+  try {
+    flatCandidates.forEach(function(c){
+      if(c && c.name && typeof _rpSetPinState === 'function') _rpSetPinState(c.name, 'picked');
+    });
+  } catch(_){}
+  if(typeof _rpRefreshLiveRoute === 'function'){
+    try { _rpRefreshLiveRoute(); } catch(_){}
+  }
 }
 window._rpV5Start = _rpV5Start;
 
