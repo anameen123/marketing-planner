@@ -3463,7 +3463,7 @@ body.role-front_desk #referrals-view {
              reachable. Per user 2026-05-22 frustration: "I do not see anything." -->
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
           <span id="rp-pick-status" style="font-size:10px;color:var(--muted);font-style:italic"></span>
-          <button id="dv-plan-route-btn" type="button" onclick="openRoutePlannerDialog();_dvScrollToMap();"
+          <button id="dv-plan-route-btn" type="button" onclick="_dvExpandDayMap();openRoutePlannerDialog();_dvScrollToMap();"
                   title="Open the route-planner dialog. Fill Start and End by typing (with recency-colored suggestions) or by clicking pins on the map."
                   style="background:linear-gradient(135deg,#7030A0,#9333ea);border:none;color:#fff;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;display:inline-flex;align-items:center;gap:5px;line-height:1.1;box-shadow:0 1px 3px rgba(112,48,160,.3)">
             🧭 Plan a Route
@@ -3481,7 +3481,7 @@ body.role-front_desk #referrals-view {
                Lets the user step through every row in the day's visit table
                and see each clinic's pin lit up + map zoomed in. Useful when
                planning a route around pre-existing visits. -->
-          <button id="dv-showmap-toggle-btn" type="button" onclick="_dvToggleShowOnMap();_dvScrollToMap();"
+          <button id="dv-showmap-toggle-btn" type="button" onclick="_dvExpandDayMap();_dvToggleShowOnMap();_dvScrollToMap();"
                   title="Step through this day's visits — each one lights up on the map and zooms in"
                   style="background:#fff;border:1px solid #fbbf24;color:#92400e;border-radius:6px;padding:5px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;display:inline-flex;align-items:center;gap:5px;line-height:1.1">
             🔦 Show on map
@@ -3508,7 +3508,7 @@ body.role-front_desk #referrals-view {
                (saved route bounds if any, else all visits on this day,
                else DFW metro). Useful when the rep has dragged / zoomed
                into a specific area and wants to snap back. -->
-          <button id="dv-reset-map-btn" type="button" onclick="_dvResetMapView();_dvScrollToMap();" title="Reset zoom + center to the default view (route if any, else today's visits)" style="background:#fff;border:1px solid #cbd5e1;color:#1F3864;border-radius:6px;padding:5px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;display:inline-flex;align-items:center;gap:5px;line-height:1.1">
+          <button id="dv-reset-map-btn" type="button" onclick="_dvExpandDayMap();_dvResetMapView();_dvScrollToMap();" title="Reset zoom + center to the default view (route if any, else today's visits)" style="background:#fff;border:1px solid #cbd5e1;color:#1F3864;border-radius:6px;padding:5px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;display:inline-flex;align-items:center;gap:5px;line-height:1.1">
             🔄 Reset
           </button>
           <!-- Phase 94 (2026-05-28): Map v2 settings button removed from
@@ -35604,6 +35604,24 @@ function _dvToggleDayMap(ev){
   }
 }
 window._dvToggleDayMap = _dvToggleDayMap;
+
+// Phase 106 (2026-05-28): "ensure expanded" helper for callers that
+// always want the map visible (Plan a Route, Show on map, etc.). No
+// toggle — only expands if currently collapsed. Idempotent.
+function _dvExpandDayMap(){
+  if(!window._DV_DAYMAP_COLLAPSED) return;   // already open
+  window._DV_DAYMAP_COLLAPSED = false;
+  var body = document.getElementById('dv-daymap-body');
+  var chev = document.getElementById('dv-daymap-chevron');
+  if(body) body.style.display = 'block';
+  if(chev) chev.style.transform = 'rotate(90deg)';
+  try {
+    if(typeof _DV_MAP !== 'undefined' && _DV_MAP){
+      setTimeout(function(){ _DV_MAP.invalidateSize(); }, 60);
+    }
+  } catch(_){}
+}
+window._dvExpandDayMap = _dvExpandDayMap;
 
 // Scroll the Day Map into view smoothly. Called from the toggle + from
 // every map-option button (Plan a Route / Show on map / Open in GMaps /
