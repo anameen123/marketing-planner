@@ -27550,6 +27550,23 @@ function _rpRefreshCorridorBox(){
   } catch(_){}
 }
 
+// Phase 38 (2026-05-28): VISUAL coord helper — prefers the pin's actual
+// rendered lat/lng (jitter applied) from the registry, so the
+// point-in-rectangle math matches what the user's eye sees on the map.
+// Falls back to getCoordForBusiness (base coord) when a pin isn't in the
+// registry yet (low-zoom city-aggregate mode, etc.).
+function _rpGetVisualCoord(name){
+  try {
+    var reg = window._RP_PIN_REGISTRY && window._RP_PIN_REGISTRY[name];
+    if(reg && reg.marker && reg.marker.getLatLng){
+      var ll = reg.marker.getLatLng();
+      return { lat: ll.lat, lng: ll.lng };
+    }
+  } catch(_){}
+  return (typeof getCoordForBusiness === 'function') ? getCoordForBusiness(name) : null;
+}
+window._rpGetVisualCoord = _rpGetVisualCoord;
+
 // Phase 37 (2026-05-28): mutate every clinic pin that geometrically falls
 // inside the corridor rectangle to the 'suggested' (light blue) state.
 // No recency filter, no schedule filter — purely "this is inside the
@@ -27561,7 +27578,8 @@ function _rpHighlightInsideRectangle(A, B, halfW){
   var total = 0, recent = 0, scheduled = 0, deadEnd = 0, alreadyVisitedPeriod = 0;
   function check(name){
     if(!name) return;
-    var coord = (typeof getCoordForBusiness === 'function') ? getCoordForBusiness(name) : null;
+    // Phase 38: visual coord (jittered) — matches the on-screen pin
+    var coord = _rpGetVisualCoord(name);
     if(!coord) return;
     var t = _rpV5ProjT(coord, A, B);
     if(t < 0 || t > 1) return;
@@ -30035,9 +30053,12 @@ function _rpComputeOptimalParams(A, B){
   if(totalMi < 0.5) return null;
   var maxHalfCap = Math.min(12, Math.max(1, totalMi * 0.25));   // 25% rule
   // Gather every candidate's (t, |perp|) once.
+  // Phase 38: visual coord (jittered) — keeps the math consistent with what
+  // the user sees AND with _rpHighlightInsideRectangle / _rpV5FindForLevel.
   var pool = [];
   function consider(name){
-    var c = (typeof getCoordForBusiness === 'function') ? getCoordForBusiness(name) : null;
+    var c = (typeof _rpGetVisualCoord === 'function') ? _rpGetVisualCoord(name) : null;
+    if(!c && typeof getCoordForBusiness === 'function') c = getCoordForBusiness(name);
     if(!c) return;
     var t = _rpV5ProjT(c, A, B);
     if(t < 0 || t > 1) return;
@@ -32700,7 +32721,9 @@ function _rpV5FindForLevel(A, B, k, opts){
       if(specFilter && spec !== specFilter) return;
       // Per user 2026-05-24: skip clinics already on today's schedule.
       if(scheduled[name]) return;
-      var coord = (typeof getCoordForBusiness === 'function') ? getCoordForBusiness(name) : null;
+      // Phase 38: visual coord (jittered) so the math matches the on-screen pin
+      var coord = (typeof _rpGetVisualCoord === 'function') ? _rpGetVisualCoord(name) : null;
+      if(!coord && typeof getCoordForBusiness === 'function') coord = getCoordForBusiness(name);
       if(!coord) return;
       var t = _rpV5ProjT(coord, A, B);
       // Phase 28b: half-open intervals [tLo, tHi) so boundary clinics don't
@@ -32825,7 +32848,9 @@ function _rpV5Start(){
   var quantileBounds = (function(){
     var allTs = [];
     function scan(name){
-      var c = (typeof getCoordForBusiness === 'function') ? getCoordForBusiness(name) : null;
+      // Phase 38: visual coord (jittered) — matches what addPin renders
+      var c = (typeof _rpGetVisualCoord === 'function') ? _rpGetVisualCoord(name) : null;
+      if(!c && typeof getCoordForBusiness === 'function') c = getCoordForBusiness(name);
       if(!c) return;
       var t = _rpV5ProjT(c, A, B);
       if(t < 0 || t > 1) return;
