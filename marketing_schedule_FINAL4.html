@@ -24896,13 +24896,17 @@ function renderAllBusinessPins(){
     // then click ✓ Confirm in the drawer to actually commit. Clicking
     // ANOTHER pin overrides the preview (first pin deselects, second
     // becomes the new preview). Popup is suppressed in this mode.
+    // Phase 32: pass the ACTUAL rendered lat/lng (jitter included) into
+    // the handler so Confirm drops the S/E flag exactly where the pin
+    // appears on screen — not at the un-jittered city centroid that
+    // getRouteCoord would return.
     marker.on('click', function(ev){
       try {
         if(typeof _RP_DIALOG_AWAITING !== 'undefined' && _RP_DIALOG_AWAITING && typeof _rpDialogConsumePinClick === 'function'){
           if(ev && ev.originalEvent && ev.originalEvent.stopPropagation) ev.originalEvent.stopPropagation();
           if(_DV_MAP && _DV_MAP.closePopup) _DV_MAP.closePopup();
           marker.closePopup && marker.closePopup();
-          _rpDialogConsumePinClick(name);
+          _rpDialogConsumePinClick(name, { lat: lat, lng: lng });
         }
       } catch(_){}
     });
@@ -27624,7 +27628,7 @@ window._rpRenderPickStatus = _rpRenderPickStatus;
 // the click. Per user 2026-05-26: now sets pending preview instead of
 // committing — user must click ✓ Confirm to actually fill the field.
 // Re-clicking another pin overrides the pending preview.
-function _rpDialogConsumePinClick(name){
+function _rpDialogConsumePinClick(name, exactCoord){
   if(!_RP_DIALOG_AWAITING || !name) return false;
   // Phase 31: clicking another pin while one is already pending should
   // REPLACE the preview cleanly — revert the old pin's colour first.
@@ -27633,12 +27637,15 @@ function _rpDialogConsumePinClick(name){
   }
   var pool = window._RP_POOL || [];
   var match = pool.find(function(p){ return p.name === name; });
-  _RP_DIALOG_PENDING = { name: name, match: match || null };
+  // Phase 32: stash the EXACT visual coord (jitter included) when called
+  // from the pin click handler. Falls back to getCoordForBusiness when the
+  // caller doesn't provide one (e.g. legacy popup buttons).
+  var coord = exactCoord || ((typeof getCoordForBusiness === 'function') ? getCoordForBusiness(name) : null);
+  _RP_DIALOG_PENDING = { name: name, match: match || null, coord: coord };
   _rpRenderPickStatus();
   // Phase 24: bright-blue PREVIEW ring on the tapped pin (visual reinforcement).
   try {
-    var c = (typeof getCoordForBusiness === 'function') ? getCoordForBusiness(name) : null;
-    if(c && typeof _rpDrawPreviewRing === 'function') _rpDrawPreviewRing(c);
+    if(coord && typeof _rpDrawPreviewRing === 'function') _rpDrawPreviewRing(coord);
   } catch(_){}
   // Phase 31: also mutate the pin ITSELF to the 'preview' state so the
   // user clearly sees which clinic they tapped (before they confirm).
@@ -27690,11 +27697,14 @@ function _rpConfirmPendingPick(){
   // Per user 2026-05-26: drop the S/E marker on confirm + zoom map.
   // - Start confirm: place S, zoom to start area (or fit S+E if both set).
   // - End confirm: place E, always fitBounds(S+E) so both are visible.
+  // Phase 32 (2026-05-27): use the EXACT coord captured at click time
+  // (jitter included) so the S/E flag drops on the same screen position
+  // as the pin the user actually tapped — NOT the un-jittered city
+  // centroid that getRouteCoord would return for placeholder addresses.
   try {
-    var coord = (typeof getRouteCoord === 'function') ? getRouteCoord(hid && hid.value) : null;
-    if(!coord && pending && pending.match && pending.match.value){
-      coord = (typeof getRouteCoord === 'function') ? getRouteCoord(pending.match.value) : null;
-    }
+    var coord = (pending && pending.coord) ? pending.coord : null;
+    if(!coord) coord = (typeof getCoordForBusiness === 'function') ? getCoordForBusiness(pending.name) : null;
+    if(!coord) coord = (typeof getRouteCoord === 'function') ? getRouteCoord(hid && hid.value) : null;
     if(coord && _DV_MAP && typeof L !== 'undefined'){
       if(which === 'start' && typeof _rpDrawStartMarker === 'function'){
         _rpDrawStartMarker(coord, pending.name);
@@ -27702,11 +27712,12 @@ function _rpConfirmPendingPick(){
         _rpDrawEndMarker(coord, pending.name);
       }
       // Auto-fit: if both Start + End are now resolvable, fit to both;
-      // otherwise zoom to the single confirmed point.
+      // otherwise zoom to the single confirmed point. Use the exact coord
+      // we just dropped for one end + look up the other end from inputs.
       var startVal = (document.getElementById('rp-start') || {}).value || '';
       var endVal   = (document.getElementById('rp-end')   || {}).value || '';
-      var A = startVal ? getRouteCoord(startVal) : null;
-      var B = (endVal === '__same__') ? A : (endVal ? getRouteCoord(endVal) : null);
+      var A = (which === 'start') ? coord : (startVal ? getRouteCoord(startVal) : null);
+      var B = (which === 'end')   ? coord : ((endVal === '__same__') ? A : (endVal ? getRouteCoord(endVal) : null));
       if(A && B && (A.lat !== B.lat || A.lng !== B.lng)){
         var bounds = L.latLngBounds([[A.lat, A.lng], [B.lat, B.lng]]);
         _DV_MAP.fitBounds(bounds.pad(0.25), { maxZoom: 13, animate: true });
