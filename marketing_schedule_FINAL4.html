@@ -38477,6 +38477,59 @@ function _rpClearCurrentRoute(){
 }
 window._rpClearCurrentRoute = _rpClearCurrentRoute;
 
+// ════════════════════════════════════════════════════════════════════════════
+// PHASE 104 (2026-05-28) — KEEP SAVED ROUTE IN SYNC WITH SCHEDULE
+// User: "if i create a route and then i delete a vidit that was added to
+// the calender then the route it self shsould change based on the current
+// route ... and if i delete all the visits added by that route then the
+// whole current route click should be deacyivated as there is no route
+// associated with it anmore". The saved route's insertedNames list is
+// the source of truth for "which day-rows came from this route". When
+// the rep deletes one of those rows, prune the name out. When the list
+// is empty, nuke the saved-route entirely so the chip hides.
+// Called from refresh(di), which runs after every row mutation.
+// ════════════════════════════════════════════════════════════════════════════
+function _rpSyncSavedRouteToSchedule(di){
+  try {
+    if(typeof S === 'undefined' || !S.days || !S.days[di]) return;
+    var iso = S.days[di].date;
+    if(!iso) return;
+    var key = (typeof _rpSavedRouteKey === 'function') ? _rpSavedRouteKey(iso) : null;
+    if(!key) return;
+    var raw = localStorage.getItem(key);
+    if(!raw) return;   // no saved route for this day → nothing to sync
+    var saved;
+    try { saved = JSON.parse(raw); } catch(_){ return; }
+    if(!saved || !Array.isArray(saved.insertedNames) || saved.insertedNames.length === 0) return;
+    // Build the set of clinic names currently on the schedule
+    var onSchedule = {};
+    (S.days[di].rows || []).forEach(function(r){
+      if(r && r.clinic) onSchedule[r.clinic] = true;
+    });
+    // Filter insertedNames to only those still on the schedule
+    var before = saved.insertedNames.length;
+    var after  = saved.insertedNames.filter(function(n){ return onSchedule[n]; });
+    if(after.length === before) return;   // nothing changed
+    if(after.length === 0){
+      // ALL inserted rows are gone → kill the saved route entirely
+      try { localStorage.removeItem(key); } catch(_){}
+      try { console.log('[savedRoute] all picks deleted from schedule → clearing saved route for', iso); } catch(_){}
+    } else {
+      // Some still on schedule → save the trimmed payload
+      saved.insertedNames = after;
+      // Also trim flatPicks (if present) to match
+      if(Array.isArray(saved.flatPicks)){
+        saved.flatPicks = saved.flatPicks.filter(function(n){ return onSchedule[n]; });
+      }
+      saved.syncedAt = new Date().toISOString();
+      try { localStorage.setItem(key, JSON.stringify(saved)); } catch(_){}
+      try { console.log('[savedRoute] pruned', before - after.length, 'deleted pick(s) from saved route for', iso, '(' + after.length + ' remain)'); } catch(_){}
+    }
+    if(typeof _rpSyncCurrentRouteChip === 'function') _rpSyncCurrentRouteChip();
+  } catch(e){ try { console.warn('[_rpSyncSavedRouteToSchedule] failed:', e); } catch(_){} }
+}
+window._rpSyncSavedRouteToSchedule = _rpSyncSavedRouteToSchedule;
+
 // Show / hide the "📍 Current route" chip based on whether saved state
 // exists for the currently-open day.
 function _rpSyncCurrentRouteChip(){
@@ -43094,6 +43147,19 @@ function refresh(di){
       try { renderMonthlyCompletion(currentMember); } catch(e){ try { console.warn('[refresh] renderMonthlyCompletion threw:', e); } catch(_){} }
     }
   } catch(e){ try { console.warn('[refresh] outer threw:', e); } catch(_){} }
+  // Phase 104 (2026-05-28): keep the SAVED ROUTE in sync with the
+  // schedule. If the rep deleted a visit that was inserted by a route,
+  // drop that name from the saved route's insertedNames list. If the
+  // last one is gone, clear the saved route entirely (chip disappears).
+  // Hooked here so EVERY mutation that touches day.rows (bulk delete,
+  // clear visit, single-row splice, etc.) flows through the same sync —
+  // we don't have to wire every delete site individually.
+  try {
+    if(typeof _rpSyncSavedRouteToSchedule === 'function'){
+      var diSync = (typeof di === 'number') ? di : (S && S.currentDay);
+      if(typeof diSync === 'number') _rpSyncSavedRouteToSchedule(diSync);
+    }
+  } catch(_){}
   // ALWAYS persist S.days, even if a render above threw. This is what
   // makes the bug less catastrophic — data integrity > UI render.
   if(typeof _saveS === 'function') _saveS();
