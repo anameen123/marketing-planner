@@ -26057,8 +26057,13 @@ function _rpBearingDeg(a, b){
   return ((Math.atan2(y, x) * 180 / Math.PI) + 360) % 360;
 }
 function _rpDrawCorridor(startCoord, endCoord){
-  if(!_DV_MAP || !startCoord || !endCoord) return;
-  if(_DV_CORRIDOR){ _DV_MAP.removeLayer(_DV_CORRIDOR); _DV_CORRIDOR = null; }
+  // Phase 43: legacy purple corridor — replaced by _rpDrawCorridorBox.
+  // Neutered so it no longer paints a separate purple polygon on top
+  // of the new blue rectangle. Still clears any leftover layer.
+  if(!_DV_MAP) return;
+  if(_DV_CORRIDOR){ try { _DV_MAP.removeLayer(_DV_CORRIDOR); } catch(_){} _DV_CORRIDOR = null; }
+  return;
+  // ─── original implementation kept below as dead code for reference ───
   var bearing = _rpBearingDeg(startCoord, endCoord);
   // Perpendiculars: bearing ±90° → left + right offsets
   var sL = _rpOffsetLatLng(startCoord.lat, startCoord.lng, bearing - 90, _RP_CORRIDOR_MILES);
@@ -26113,26 +26118,14 @@ function _rpClearCorridor(){
 // corridor rectangle around the A→B line so the user can see the planning
 // region as well as the chosen route.
 function _rpDrawRouteLine(){
+  // Phase 43 (2026-05-28): legacy Smart Plan route line + purple corridor —
+  // replaced by _rpDrawLiveRoute (green, Phase 39) + _rpDrawCorridorBox
+  // (blue, Phase 30). Neutered so it no longer paints stray purple things
+  // on top of the new visuals. Still removes any leftover purple line +
+  // corridor so they vanish if previously drawn.
   if(!_DV_MAP) return;
-  if(_DV_ROUTELINE){ _DV_MAP.removeLayer(_DV_ROUTELINE); _DV_ROUTELINE = null; }
-  var startCoord = _rpResolveCoord(_RP_START_NAME);
-  var endCoord   = _rpResolveCoord(_RP_END_NAME);
-  if(!startCoord || !endCoord){ _rpClearCorridor(); return; }
-  // Corridor first (sits under everything else)
-  _rpDrawCorridor(startCoord, endCoord);
-  // Then the route polyline through Start → picks → End
-  var pts = [[startCoord.lat, startCoord.lng]];
-  _RP_SLOT_PICKS.forEach(function(p){
-    if(p && p.coord) pts.push([p.coord.lat, p.coord.lng]);
-  });
-  pts.push([endCoord.lat, endCoord.lng]);
-  _DV_ROUTELINE = L.polyline(pts, { color:'#7030A0', weight:3, opacity:0.85, dashArray:'8,5' }).addTo(_DV_MAP);
-  // Fit map to the whole corridor + route so the user sees the full picture
-  try {
-    var bounds = L.latLngBounds(pts);
-    if(_DV_CORRIDOR) bounds.extend(_DV_CORRIDOR.getBounds());
-    _DV_MAP.fitBounds(bounds.pad(0.10), { maxZoom: 13 });
-  } catch(_){}
+  if(_DV_ROUTELINE){ try { _DV_MAP.removeLayer(_DV_ROUTELINE); } catch(_){} _DV_ROUTELINE = null; }
+  if(typeof _rpClearCorridor === 'function') _rpClearCorridor();
 }
 
 // Finalize → show the confirmation pane with leg-by-leg distances.
@@ -30305,8 +30298,11 @@ function _rpComputeWidthForVisits(A, B, targetN){
   }
   var idx = Math.min(targetN, totalAvail) - 1;
   var raw = perps[idx];
-  // Round up to nearest 0.5 mi so the rectangle is a clean number
-  var halfWidth = Math.max(0.5, Math.min(maxCap, Math.ceil(raw * 2) / 2));
+  // Phase 43 (2026-05-28): use EXACT perps[N-1] (rounded to 2 decimals).
+  // Rounding UP to 0.5 mi like before caused overshoot — a 0.42 mi
+  // requirement became 0.5 mi which then included pins at perps[5],
+  // perps[6], etc. User got way more than the requested N.
+  var halfWidth = Math.max(0.1, Math.min(maxCap, Math.round(raw * 100) / 100));
   return { halfWidth: halfWidth, available: totalAvail, asked: targetN, exact: (targetN <= totalAvail), totalMi: totalMi };
 }
 window._rpComputeWidthForVisits = _rpComputeWidthForVisits;
@@ -33030,6 +33026,29 @@ function _rpV5Start(){
     if(typeof showToast === 'function') showToast('Fill the required fields before finding candidates.');
     return;
   }
+  // Phase 43 (2026-05-28): in visits-mode, reconcile the corridor half-width
+  // with the current target visits BEFORE running the algorithm. Prevents
+  // the user clicking Find Candidates faster than the 350ms auto-fit throttle
+  // and getting stale results.
+  if(window._RP_CORRIDOR_MODE === 'visits'){
+    try {
+      if(window._rpTargetVisitsTimer){ clearTimeout(window._rpTargetVisitsTimer); window._rpTargetVisitsTimer = null; }
+      var startSync = (document.getElementById('rp-start') || {}).value || '';
+      var endSync   = (document.getElementById('rp-end')   || {}).value || '';
+      if(startSync && endSync && typeof _rpComputeWidthForVisits === 'function'){
+        var Async = window._RP_START_COORD || (typeof getRouteCoord === 'function' ? getRouteCoord(startSync) : null) || (typeof getCoordForBusiness === 'function' ? getCoordForBusiness(startSync) : null);
+        var Bsync = window._RP_END_COORD   || (typeof getRouteCoord === 'function' ? getRouteCoord(endSync)   : null) || (typeof getCoordForBusiness === 'function' ? getCoordForBusiness(endSync)   : null);
+        var targetSync = parseInt((document.getElementById('rp-target-visits') || {}).value, 10) || 5;
+        var fitSync = (Async && Bsync) ? _rpComputeWidthForVisits(Async, Bsync, targetSync) : null;
+        if(fitSync){
+          var wInpSync = document.getElementById('rp-corridor');
+          if(wInpSync) wInpSync.value = fitSync.halfWidth;
+          window._RP_APPLIED_HALFWIDTH = fitSync.halfWidth;
+          if(typeof _rpRefreshCorridorBox === 'function') _rpRefreshCorridorBox();
+        }
+      }
+    } catch(_){}
+  }
   // Resolve Start + End — Phase 36 (2026-05-28): same coord-resolution
   // chain as the line/rectangle (Phase 34b). Use the stashed jittered
   // coord captured at pin-click / dropdown-pick time; fall back to
@@ -33154,6 +33173,16 @@ function _rpV5Start(){
       flatCandidates.push(c);
     });
   });
+  // Phase 43: in visits-mode, sort by |perp| ascending and HARD-CAP to the
+  // target count. The corridor width can include extras due to ties + the
+  // recency filter; this cap guarantees the user gets exactly N candidates.
+  if(window._RP_CORRIDOR_MODE === 'visits'){
+    var targetN = parseInt((document.getElementById('rp-target-visits') || {}).value, 10) || 5;
+    targetN = Math.max(1, Math.min(20, targetN));
+    flatCandidates.sort(function(a, b){ return Math.abs(a.perp) - Math.abs(b.perp); });
+    flatCandidates = flatCandidates.slice(0, targetN);
+    console.log('[_rpV5Start] visits-mode hard-cap → ' + flatCandidates.length + ' (target ' + targetN + ')');
+  }
   flatCandidates.sort(function(a, b){ return a.t - b.t; });
   _RP_V5_LAST = {
     A: A, B: B, totalMi: totalMi, baseWidth: halfWidth,
