@@ -31125,7 +31125,12 @@ function _rpComputeWidthForVisits(A, B, targetN){
   if(!A || !B) return null;
   var totalMi = _rpHaversineMiles(A, B);
   if(totalMi < 0.5) return null;
-  var maxCap = 12;
+  // Phase 79 (2026-05-28): cap reduced from 12 → 6 mi per user. The metro
+  // is narrow; 12 mi corridors covered the whole map and pulled in
+  // unrelated areas when not many candidates were nearby. 6 mi is the
+  // practical max — if the user wants wider, switch to "Fix corridor
+  // width" mode and drag manually.
+  var maxCap = 6;
   var perps = [];
   function consider(name){
     var c = (typeof _rpGetVisualCoord === 'function') ? _rpGetVisualCoord(name) : null;
@@ -31146,7 +31151,9 @@ function _rpComputeWidthForVisits(A, B, targetN){
   perps.sort(function(a, b){ return a - b; });
   var totalAvail = perps.length;
   if(totalAvail === 0){
-    return { halfWidth: 1, available: 0, asked: targetN, totalMi: totalMi, exact: false };
+    // Phase 79: nothing within maxCap → return maxCap (so the rectangle
+    // shows the search ceiling) + exact=false so caller can toast.
+    return { halfWidth: maxCap, available: 0, asked: targetN, totalMi: totalMi, exact: false, atCap: true };
   }
   var idx = Math.min(targetN, totalAvail) - 1;
   var raw = perps[idx];
@@ -31154,8 +31161,25 @@ function _rpComputeWidthForVisits(A, B, targetN){
   // Rounding UP to 0.5 mi like before caused overshoot — a 0.42 mi
   // requirement became 0.5 mi which then included pins at perps[5],
   // perps[6], etc. User got way more than the requested N.
-  var halfWidth = Math.max(0.1, Math.min(maxCap, Math.round(raw * 100) / 100));
-  return { halfWidth: halfWidth, available: totalAvail, asked: targetN, exact: (targetN <= totalAvail), totalMi: totalMi };
+  // Phase 79: when not enough candidates exist (totalAvail < targetN),
+  // pin halfWidth at maxCap and flag atCap so the UI can say "only N
+  // found at max corridor width — try a different Start/End".
+  var halfWidth, atCap = false;
+  if(targetN > totalAvail){
+    halfWidth = maxCap;
+    atCap = true;
+  } else {
+    halfWidth = Math.max(0.1, Math.min(maxCap, Math.round(raw * 100) / 100));
+  }
+  return {
+    halfWidth: halfWidth,
+    available: totalAvail,
+    asked: targetN,
+    exact: (targetN <= totalAvail),
+    totalMi: totalMi,
+    atCap: atCap,
+    maxCap: maxCap
+  };
 }
 window._rpComputeWidthForVisits = _rpComputeWidthForVisits;
 
@@ -31167,6 +31191,20 @@ window._RP_CORRIDOR_MODE = 'visits';
 function _rpSetCorridorMode(mode){
   if(mode !== 'visits' && mode !== 'width') return;
   window._RP_CORRIDOR_MODE = mode;
+  // Phase 79 (2026-05-28): defensive teardown — when switching to VISITS
+  // mode, kill any leftover drag handles from a previous WIDTH-mode
+  // session. The redraw below will re-create the box without handles
+  // (since the visit mode gate in _rpDrawCorridorBox skips handle
+  // creation), but if a redraw doesn't run for some reason the handles
+  // could linger. Remove them eagerly here.
+  if(mode === 'visits' && _DV_CORRIDOR_BOX && typeof _DV_MAP !== 'undefined' && _DV_MAP){
+    try {
+      if(_DV_CORRIDOR_BOX.handle1) _DV_MAP.removeLayer(_DV_CORRIDOR_BOX.handle1);
+      if(_DV_CORRIDOR_BOX.handle2) _DV_MAP.removeLayer(_DV_CORRIDOR_BOX.handle2);
+    } catch(_){}
+    _DV_CORRIDOR_BOX.handle1 = null;
+    _DV_CORRIDOR_BOX.handle2 = null;
+  }
   // Toggle pill styles
   var visitsBtn = document.getElementById('rp-mode-visits');
   var widthBtn  = document.getElementById('rp-mode-width');
@@ -31241,14 +31279,14 @@ window._rpOnTargetVisitsChange = _rpOnTargetVisitsChange;
 function _rpRunAutoCompute(){
   console.log('[_rpRunAutoCompute] click received');
   try {
+    // Phase 79 (2026-05-28): the gate previously demanded BOTH hidden-input
+    // values to be populated. But map-pick / clinic-name flows can leave
+    // those empty while still having the global _RP_START_COORD /
+    // _RP_END_COORD set. That made the "# of visits → corridor width"
+    // recompute silently fail. New gate: accept EITHER the hidden input
+    // OR the global coord. Only abort when neither path resolves to a coord.
     var startVal = (document.getElementById('rp-start') || {}).value || '';
     var endVal   = (document.getElementById('rp-end')   || {}).value || '';
-    if(!startVal || !endVal){
-      if(typeof showToast === 'function') showToast('🎯 Pick Start AND End first.');
-      return;
-    }
-    // Phase 34b: getRouteCoord only knows city + facility keys. Fall back
-    // to getCoordForBusiness so clinic-name picks resolve too.
     function resolveAny(val){
       if(!val) return null;
       var c = (typeof getRouteCoord === 'function') ? getRouteCoord(val) : null;
@@ -31257,12 +31295,13 @@ function _rpRunAutoCompute(){
       }
       return c;
     }
-    // Prefer the stashed jittered coord from confirm time (Phase 34b)
+    // Prefer the stashed jittered coord from confirm time (Phase 34b),
+    // fall back to the hidden input resolved through name lookups.
     var A = window._RP_START_COORD || resolveAny(startVal);
     var B = (endVal === '__same__') ? A : (window._RP_END_COORD || resolveAny(endVal));
     if(!A || !B){
-      if(typeof showToast === 'function') showToast('🧮 Could not resolve Start/End coordinates. Try re-picking from the map.');
-      console.log('[_rpRunAutoCompute] resolve failed', { startVal: startVal, endVal: endVal, A: A, B: B });
+      if(typeof showToast === 'function') showToast('🎯 Pick Start AND End first.');
+      console.log('[_rpRunAutoCompute] no coords yet', { startVal: startVal, endVal: endVal, A: A, B: B });
       return;
     }
     var targetN = parseInt((document.getElementById('rp-target-visits') || {}).value, 10) || 5;
@@ -31297,14 +31336,21 @@ function _rpRunAutoCompute(){
     if(hint){
       hint.style.display = 'block';
       if(result.exact){
-        hint.innerHTML = '🎯 Corridor expanded to <b>±' + result.halfWidth + ' mi</b> to cover the closest <b>' + targetN + ' green/yellow visit' + (targetN===1?'':'s') + '</b> inside the route. '
-          + result.available + ' total available in this corridor.';
+        hint.innerHTML = '🎯 Corridor sized to <b>±' + result.halfWidth + ' mi</b> to cover the closest <b>' + targetN + ' green/yellow visit' + (targetN===1?'':'s') + '</b>. '
+          + result.available + ' total available within the ±' + result.maxCap + ' mi cap.';
+      } else if(result.available === 0){
+        hint.innerHTML = '⚠ <b>No green/yellow visits</b> within ±' + result.maxCap + ' mi of this Start→End line. Try a different corridor.';
       } else {
-        hint.innerHTML = '⚠ Only <b>' + result.available + '</b> green/yellow visit' + (result.available===1?'':'s') + ' available between Start and End — corridor capped at <b>±' + result.halfWidth + ' mi</b>. Try further Start/End for more.';
+        hint.innerHTML = '⚠ Only <b>' + result.available + '</b> green/yellow visit' + (result.available===1?'':'s') + ' fit within the <b>±' + result.maxCap + ' mi cap</b> for this route. Asked for ' + targetN + ' — using max corridor. Try a different Start/End for more candidates.';
       }
     }
+    // Phase 79 toast — surface cap-hit prominently
     if(typeof showToast === 'function'){
-      showToast('🎯 Corridor fit to ' + Math.min(targetN, result.available) + ' visits · ±' + result.halfWidth + ' mi');
+      if(result.atCap){
+        showToast('⚠ Only ' + result.available + ' visit' + (result.available===1?'':'s') + ' within ±' + result.maxCap + ' mi · corridor at max width');
+      } else {
+        showToast('🎯 Corridor fit to ' + Math.min(targetN, result.available) + ' visits · ±' + result.halfWidth + ' mi');
+      }
     }
     if(typeof _rpRefreshCorridorBox === 'function') _rpRefreshCorridorBox();
     if(typeof runRoutePlannerV4 === 'function' && window._RP_V4_LAST) runRoutePlannerV4();
