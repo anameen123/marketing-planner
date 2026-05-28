@@ -196,6 +196,15 @@ td:last-child{border-right:none}
   50%  { transform: scale(1.18); opacity: .65; }
   100% { transform: scale(1);    opacity: 1; }
 }
+/* Phase 81 (2026-05-28): hide the native number-input spinner arrows on
+   any input that opts in via class="rp-no-spinner". Used on the corridor
+   # of visits input where the +/- buttons are the only stepper. */
+input.rp-no-spinner::-webkit-outer-spin-button,
+input.rp-no-spinner::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input.rp-no-spinner { -moz-appearance: textfield; }
 /* Per user 2026-05-25 Phase 7: row fill-state coloring for unconfirmed
    rows (light amber, "needs filling") vs confirmed rows (light blue,
    "done"). These take precedence over the biz-type colors but yield to
@@ -3894,11 +3903,16 @@ body.role-front_desk #referrals-view {
                which directly drives the corridor width — the algorithm
                expands width until N green/yellow pins fit. -->
           <label style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Number of visits <span style="color:var(--muted);font-weight:400">(target)</span></label>
+          <!-- Phase 81 (2026-05-28): the +/- buttons are the only stepper.
+               Native input-number arrows are hidden via the rp-no-spinner
+               class so the rep has one unambiguous way to change the count.
+               The old "🎯 Fit width" button is removed — auto-fit fires on
+               every visits change (Phase 80), so the explicit button was
+               redundant. -->
           <div style="display:flex;align-items:center;gap:5px">
             <button type="button" onclick="_rpAdjustTargetVisits(-1)" style="background:#e5e7eb;border:none;color:#374151;width:30px;height:36px;border-radius:6px;font-size:14px;font-weight:700;cursor:pointer">−</button>
-            <input type="number" id="rp-target-visits" value="5" min="1" max="20" oninput="_rpOnTargetVisitsChange()" style="flex:1;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box;text-align:center">
+            <input type="number" id="rp-target-visits" class="rp-no-spinner" value="5" min="1" max="20" oninput="_rpOnTargetVisitsChange()" style="flex:1;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box;text-align:center;-moz-appearance:textfield">
             <button type="button" onclick="_rpAdjustTargetVisits(1)" style="background:#e5e7eb;border:none;color:#374151;width:30px;height:36px;border-radius:6px;font-size:14px;font-weight:700;cursor:pointer">+</button>
-            <button id="rp-ai-suggest-n-btn" type="button" onclick="_rpRunAutoCompute()" title="Recompute corridor half-width so it covers exactly N green/yellow visits" style="background:linear-gradient(135deg,#16a34a,#15803d);color:#fff;border:none;border-radius:6px;padding:0 11px;height:36px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;white-space:nowrap;display:inline-flex;align-items:center;gap:4px">🎯 Fit width</button>
           </div>
           <div id="rp-ai-suggest-n-hint" style="display:none;font-size:10px;color:#1e3a8a;margin-top:5px;line-height:1.45;background:#dbeafe;border:1px solid #93c5fd;border-radius:6px;padding:5px 8px"></div>
           <!-- Hidden legacy field — keeps any straggler readers from crashing -->
