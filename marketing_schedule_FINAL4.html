@@ -3703,6 +3703,9 @@ body.role-front_desk #referrals-view {
             <span id="rp-opt-circle-count" style="font-size:11px;font-weight:700;color:#1e3a8a;background:#fff;border:1px solid #93c5fd;border-radius:14px;padding:3px 10px"></span>
           </div>
           <div style="font-size:10px;color:#1e3a8a;opacity:.85;margin-top:6px;font-style:italic">Click any pin inside the circle to exclude it. Click again to include.</div>
+          <!-- Phase 53b (2026-05-28): explicit confirm step — only after the
+               user clicks this do the highlighted pins become candidates. -->
+          <button id="rp-opt-circle-confirm-btn" type="button" onclick="_rpOptConfirmCircle()" disabled style="display:none;width:100%;margin-top:8px;background:linear-gradient(135deg,#15803d,#16a34a);color:#fff;border:none;border-radius:6px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">✓ Confirm selection</button>
         </div>
         <!-- Status panel — shows preview pin + Confirm / Cancel like Corridor -->
         <div id="rp-opt-pick-status" style="display:none;margin-bottom:10px"></div>
@@ -33372,19 +33375,27 @@ function _rpOptDisarmCircleMode(){
     _DV_OPT_CIRCLE_MAP_CLICK_HANDLER = null;
   }
   _rpOptClearCircleLayer();
-  // Reset pins
+  // Reset pins — both committed targets AND staged-but-not-confirmed
   if(window._RP_OPT_TARGETS){
     window._RP_OPT_TARGETS.forEach(function(t){
       if(typeof _rpSetPinState === 'function') _rpSetPinState(t.name, 'reset');
     });
   }
+  if(window._RP_OPT_CIRCLE_STAGED){
+    window._RP_OPT_CIRCLE_STAGED.forEach(function(s){
+      if(typeof _rpSetPinState === 'function') _rpSetPinState(s.name, 'reset');
+    });
+  }
   window._RP_OPT_TARGETS = [];
   window._RP_OPT_CIRCLE = null;
   window._RP_OPT_CIRCLE_EXCLUDED = {};
+  window._RP_OPT_CIRCLE_STAGED = [];
   _rpOptRenderTargetList();
   _rpOptRenderStartPicker();
   var radiusRow = document.getElementById('rp-opt-circle-radius-row');
   if(radiusRow) radiusRow.style.display = 'none';
+  var confirmBtn = document.getElementById('rp-opt-circle-confirm-btn');
+  if(confirmBtn) confirmBtn.style.display = 'none';
 }
 window._rpOptDisarmCircleMode = _rpOptDisarmCircleMode;
 
@@ -33462,17 +33473,30 @@ function _rpOptOnRadiusInputChange(){
 }
 window._rpOptOnRadiusInputChange = _rpOptOnRadiusInputChange;
 
-// Rescan all clinics + MVAs + outreach; targets = inside circle minus
-// manually excluded. Set pin states + repopulate _RP_OPT_TARGETS.
+// Phase 53b (2026-05-28): split into TWO steps per user.
+// STEP 1 — _rpOptRecomputeCircleTargets: scan + light up ALL pins inside
+//          the circle (no cap on visual). Stages them in
+//          window._RP_OPT_CIRCLE_STAGED but does NOT add to _RP_OPT_TARGETS.
+//          The "✓ Confirm selection" button activates.
+// STEP 2 — _rpOptConfirmCircle: commits the staged pins as targets
+//          (capped at 10 closest if needed) + enables start picker.
+window._RP_OPT_CIRCLE_STAGED = [];
 function _rpOptRecomputeCircleTargets(){
   if(!window._RP_OPT_CIRCLE || !window._RP_OPT_CIRCLE.center) return;
   var c = window._RP_OPT_CIRCLE.center;
   var rMi = window._RP_OPT_CIRCLE.radius;
-  // Reset all old target pin states first
+  // Reset any previously-staged pin states so we don't leave stragglers
+  if(window._RP_OPT_CIRCLE_STAGED){
+    window._RP_OPT_CIRCLE_STAGED.forEach(function(s){
+      if(typeof _rpSetPinState === 'function') _rpSetPinState(s.name, 'reset');
+    });
+  }
+  // Also reset any picked-but-not-staged targets if circle shrank away from them
   if(window._RP_OPT_TARGETS){
     window._RP_OPT_TARGETS.forEach(function(t){
       if(typeof _rpSetPinState === 'function') _rpSetPinState(t.name, 'reset');
     });
+    window._RP_OPT_TARGETS = [];
   }
   var hits = [];
   function consider(name, bizType){
@@ -33482,37 +33506,68 @@ function _rpOptRecomputeCircleTargets(){
     if(!coord) return;
     var d = _rpHaversineMiles(c, coord);
     if(d > rMi) return;
-    hits.push({ name: name, coord: coord, bizType: bizType });
+    hits.push({ name: name, coord: coord, bizType: bizType, dist: d });
   }
   if(typeof CLINIC_BANK !== 'undefined') CLINIC_BANK.forEach(function(o){ if(o && o.n) consider(o.n, 'clinic'); });
   if(typeof MVA_ATTORNEYS !== 'undefined') MVA_ATTORNEYS.forEach(function(o){ if(o && o.firm) consider(o.firm, 'mva'); });
   if(typeof OUTREACH !== 'undefined') OUTREACH.forEach(function(o){ if(o && o.name) consider(o.name, 'outreach'); });
-  // Cap at 10 (TSP solver sweet spot)
-  if(hits.length > 10){
-    if(typeof showToast === 'function') showToast('⚠ ' + hits.length + ' pins inside — capping at 10 closest. Shrink the circle or exclude some.');
-    // Sort by distance asc, keep 10
-    hits.sort(function(a, b){
-      return _rpHaversineMiles(c, a.coord) - _rpHaversineMiles(c, b.coord);
-    });
-    hits = hits.slice(0, 10);
-  }
-  window._RP_OPT_TARGETS = hits;
-  // Mutate pin states to 'suggested' (light blue) for inside-circle
+  // Stage ALL hits (no cap) and light them ALL up
+  window._RP_OPT_CIRCLE_STAGED = hits;
   hits.forEach(function(t){
     if(typeof _rpSetPinState === 'function') _rpSetPinState(t.name, 'suggested');
   });
-  // If the start was excluded by a circle resize, clear it
-  if(window._RP_OPT_START_NAME && !hits.some(function(t){ return t.name === window._RP_OPT_START_NAME; })){
-    window._RP_OPT_START_NAME = null;
-  } else if(window._RP_OPT_START_NAME && typeof _rpSetPinState === 'function'){
-    _rpSetPinState(window._RP_OPT_START_NAME, 'start');
-  }
+  // Count chip + Confirm button enable
   var countEl = document.getElementById('rp-opt-circle-count');
-  if(countEl) countEl.textContent = hits.length + ' in';
+  if(countEl){
+    var capMsg = hits.length > 10 ? ' (top 10 closest will be picked)' : '';
+    countEl.textContent = hits.length + ' in' + capMsg;
+  }
+  var confirmBtn = document.getElementById('rp-opt-circle-confirm-btn');
+  if(confirmBtn){
+    confirmBtn.style.display = 'block';
+    confirmBtn.disabled = (hits.length === 0);
+    confirmBtn.style.opacity = hits.length === 0 ? '0.55' : '1';
+    confirmBtn.style.cursor  = hits.length === 0 ? 'not-allowed' : 'pointer';
+    confirmBtn.textContent = '✓ Confirm selection (' + Math.min(10, hits.length) + ' stop' + (hits.length===1?'':'s') + ')';
+  }
+  // Start picker stays empty until confirm
   _rpOptRenderTargetList();
   _rpOptRenderStartPicker();
 }
 window._rpOptRecomputeCircleTargets = _rpOptRecomputeCircleTargets;
+
+// Phase 53b: commit the staged circle picks into _RP_OPT_TARGETS so the
+// start picker + Optimize button activate. Caps at 10 closest if the
+// circle contains more than that.
+function _rpOptConfirmCircle(){
+  var staged = window._RP_OPT_CIRCLE_STAGED || [];
+  if(staged.length === 0){
+    if(typeof showToast === 'function') showToast('No pins inside the circle yet — set a center first.');
+    return;
+  }
+  // Sort by distance asc + cap at 10
+  var picks = staged.slice().sort(function(a, b){ return a.dist - b.dist; }).slice(0, 10);
+  window._RP_OPT_TARGETS = picks.map(function(p){
+    return { name: p.name, coord: p.coord, bizType: p.bizType };
+  });
+  // Pin states: targets stay 'suggested' (light blue), non-target inside-circle pins reset
+  var picked = {};
+  picks.forEach(function(p){ picked[p.name] = true; });
+  staged.forEach(function(s){
+    if(typeof _rpSetPinState === 'function'){
+      _rpSetPinState(s.name, picked[s.name] ? 'suggested' : 'reset');
+    }
+  });
+  _rpOptRenderTargetList();
+  _rpOptRenderStartPicker();
+  if(typeof showToast === 'function'){
+    var msg = '✓ ' + picks.length + ' stop' + (picks.length===1?'':'s') + ' confirmed.';
+    if(staged.length > picks.length) msg += ' (' + (staged.length - picks.length) + ' skipped — too many, kept the closest 10)';
+    msg += ' Pick which one is your start.';
+    showToast(msg);
+  }
+}
+window._rpOptConfirmCircle = _rpOptConfirmCircle;
 
 // Click-pin handler for circle mode — toggles exclude state for that pin.
 function _rpOptCircleTogglePin(name){
