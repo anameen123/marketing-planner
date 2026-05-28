@@ -3897,11 +3897,14 @@ body.role-front_desk #referrals-view {
             <option value="">All specialties</option>
           </select>
         </div>
-        <div class="kpi-input-row" style="margin-bottom:6px">
-          <label style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:var(--text);cursor:pointer">
-            <input type="checkbox" id="rp-skip-visited" checked onchange="_rpV4OnWidthChange()"> Skip clinics already visited this period
-          </label>
-        </div>
+        <!-- Phase 73 (2026-05-28): the "Skip clinics already visited this
+             period" toggle is now a HARD RULE per user — not a user choice.
+             A clinic already on someone's calendar this week (any member,
+             any status) is permanently excluded. The hidden input keeps the
+             id alive so the 3 existing readers
+             (_rpV4Collect / _rpV5CollectFlatCandidates / runRoutePlannerV4)
+             still get .checked === true without code changes. -->
+        <input type="checkbox" id="rp-skip-visited" checked style="display:none">
       </div>
 
       <!-- LEVEL-BASED PICKER (per user 2026-05-22 v4 — Corridor mode only).
@@ -3918,10 +3921,13 @@ body.role-front_desk #referrals-view {
         <button onclick="closeRoutePlanner()" style="background:#e5e7eb;color:#374151;border:none;border-radius:8px;padding:9px 16px;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif">Cancel</button>
         <span id="rp-v4-selected-summary" style="font-size:11px;color:var(--muted);font-style:italic"></span>
       </div>
-      <div style="display:flex;align-items:center;gap:8px">
-        <button onclick="_rpFindOrPickClick()" id="rp-run-btn" style="background:#7030A0;color:#fff;border:none;border-radius:8px;padding:9px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif">🔍 Find candidates</button>
-        <button onclick="_rpGenerateClick()" id="rp-v4-generate-btn" style="background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;border:none;border-radius:8px;padding:9px 22px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif">Generate route →</button>
-      </div>
+      <!-- Phase 73 (2026-05-28): removed the duplicate footer buttons
+           '🔍 Find candidates' + 'Generate route →' per user. The corridor
+           flow auto-runs after Start/End are picked (auto-compute banner
+           or Fit width), and the Generate button lives INSIDE the
+           candidate list (where it shows the live pick count). The
+           footer pair was redundant + confusing. Cancel + summary stay. -->
+      <div style="display:flex;align-items:center;gap:8px"></div>
     </div>
   </div>
 </div>
@@ -36281,7 +36287,7 @@ function _rpV5ShowFlatList(){
     if(stats.total > 0){
       lines.push('<b>' + stats.total + ' clinic' + (stats.total===1?'':'s') + ' inside the ±' + halfW + ' mi corridor</b>, but all were excluded:');
       if(stats.recent > 0) lines.push('• <b>' + stats.recent + '</b> visited in the last 13 days (fresh/warm)');
-      if(stats.alreadyVisitedPeriod > 0) lines.push('• <b>' + stats.alreadyVisitedPeriod + '</b> already visited this period (uncheck "Skip clinics already visited this period" to include)');
+      if(stats.alreadyVisitedPeriod > 0) lines.push('• <b>' + stats.alreadyVisitedPeriod + '</b> already visited this period (locked rule — pick a different corridor)');
       if(stats.deadEnd > 0) lines.push('• <b>' + stats.deadEnd + '</b> marked as dead-end leads');
       lines.push('<div style="margin-top:6px;font-style:italic">Light-blue pins on the map show what\'s inside the rectangle. Loosen filters above to include them.</div>');
     } else {
