@@ -28669,6 +28669,17 @@ window.closeRoutePlanner = closeRoutePlanner;
 // to fill each endpoint: type with recency-colored autocomplete, or tap
 // 📍 Map to switch the underlying map into pick-mode for that field.
 function openRoutePlannerDialog(){
+  // Phase 88 (2026-05-28): IDEMPOTENT — if the planner is already open,
+  // bail silently. Previously a misclick on Plan a Route while filling
+  // out the form wiped all progress (because openRoutePlanner runs the
+  // full state-wipe chain on every call). User explicitly: "Don't let
+  // that happen, just ignore if I double click on the same while I'm
+  // on it." If they want to close, the X / Cancel button shows the
+  // unsaved-changes confirm (Phase 68) — that's the only path to wipe.
+  if(typeof _isRoutePlannerOpen === 'function' && _isRoutePlannerOpen()){
+    if(typeof showToast === 'function') showToast('Route Planner is already open.');
+    return;
+  }
   // Same past-date guard as the inline planner (per user 2026-05-22).
   try {
     var di = (typeof _DV_LAST_DI === 'number') ? _DV_LAST_DI : null;
@@ -31217,12 +31228,18 @@ function _rpComputeWidthForVisits(A, B, targetN){
   // Phase 79: when not enough candidates exist (totalAvail < targetN),
   // pin halfWidth at maxCap and flag atCap so the UI can say "only N
   // found at max corridor width — try a different Start/End".
+  // Phase 88 (2026-05-28): round UP (Math.ceil) instead of nearest. The
+  // previous Math.round could round DOWN to a value SMALLER than the Nth
+  // pin's actual perp — e.g. raw=0.144, rounded to 0.14, but the
+  // _rpHighlightInsideRectangle check (perp > halfW) then rejected the
+  // Nth pin (0.144 > 0.14 = true). Result: user asked for 4, only 3 lit.
+  // Math.ceil guarantees halfWidth ≥ raw, so the Nth pin always fits.
   var halfWidth, atCap = false;
   if(targetN > totalAvail){
     halfWidth = maxCap;
     atCap = true;
   } else {
-    halfWidth = Math.max(0.1, Math.min(maxCap, Math.round(raw * 100) / 100));
+    halfWidth = Math.max(0.1, Math.min(maxCap, Math.ceil(raw * 100) / 100));
   }
   return {
     halfWidth: halfWidth,
