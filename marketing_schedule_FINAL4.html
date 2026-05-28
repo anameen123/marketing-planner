@@ -3368,6 +3368,20 @@ body.role-front_desk #referrals-view {
                   style="background:#1e40af;border:none;color:#fff;border-radius:6px;padding:5px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;display:inline-flex;align-items:center;gap:5px;line-height:1.1">
             🗺️ Open in Google Maps
           </button>
+          <!-- Phase 58 (2026-05-28): "🔦 Show on map" toggle + Prev/Next stepper.
+               Lets the user step through every row in the day's visit table
+               and see each clinic's pin lit up + map zoomed in. Useful when
+               planning a route around pre-existing visits. -->
+          <button id="dv-showmap-toggle-btn" type="button" onclick="_dvToggleShowOnMap()"
+                  title="Step through this day's visits — each one lights up on the map and zooms in"
+                  style="background:#fff;border:1px solid #fbbf24;color:#92400e;border-radius:6px;padding:5px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;display:inline-flex;align-items:center;gap:5px;line-height:1.1">
+            🔦 Show on map
+          </button>
+          <div id="dv-showmap-stepper" style="display:none;align-items:center;gap:4px">
+            <button type="button" onclick="_dvShowMapStep(-1)" title="Previous visit" style="background:#fbbf24;border:none;color:#7c2d12;border-radius:6px;width:28px;height:28px;font-size:14px;font-weight:800;cursor:pointer;font-family:DM Sans,sans-serif">⏴</button>
+            <span id="dv-showmap-counter" style="font-size:10px;font-weight:700;color:#7c2d12;background:#fef3c7;border:1px solid #fbbf24;border-radius:6px;padding:5px 9px;font-family:DM Mono,monospace;min-width:48px;text-align:center">1 / 1</span>
+            <button type="button" onclick="_dvShowMapStep(1)" title="Next visit" style="background:#fbbf24;border:none;color:#7c2d12;border-radius:6px;width:28px;height:28px;font-size:14px;font-weight:800;cursor:pointer;font-family:DM Sans,sans-serif">⏵</button>
+          </div>
           <!-- Admin-only Map v2 settings opener. Hidden by default; revealed
                by JS in renderDayMap when isAdmin() returns true. Opens the
                existing settings modal where the Google Maps + Gemini keys
@@ -33397,6 +33411,132 @@ function _rpOptInsertIntoDay(){
 window._rpOptInsertIntoDay = _rpOptInsertIntoDay;
 
 // ════════════════════════════════════════════════════════════════════════════
+// PHASE 58 (2026-05-28) — "🔦 SHOW ON MAP" stepper
+// Walk through the day's visit rows one at a time. The current row's pin
+// lights up (bright orange ring) + the map zooms to it. Prev/Next stepper
+// in the header. Per-row 🔦 button jumps directly. Works on ALL statuses.
+// ════════════════════════════════════════════════════════════════════════════
+
+window._DV_SHOWMAP_ACTIVE = false;
+window._DV_SHOWMAP_IDX    = 0;
+var _DV_SHOWMAP_PULSE_LAYER = null;
+
+function _dvToggleShowOnMap(){
+  window._DV_SHOWMAP_ACTIVE = !window._DV_SHOWMAP_ACTIVE;
+  var btn = document.getElementById('dv-showmap-toggle-btn');
+  var stp = document.getElementById('dv-showmap-stepper');
+  if(window._DV_SHOWMAP_ACTIVE){
+    if(btn){
+      btn.style.background = 'linear-gradient(135deg,#f59e0b,#d97706)';
+      btn.style.color = '#fff';
+      btn.style.borderColor = '#92400e';
+      btn.innerHTML = '🔦 Showing on map · click to stop';
+    }
+    if(stp) stp.style.display = 'inline-flex';
+    window._DV_SHOWMAP_IDX = 0;
+    // Re-render the table so the per-row 🔦 buttons appear
+    if(typeof S !== 'undefined' && typeof S.currentDay === 'number' && typeof renderDayTable === 'function'){
+      renderDayTable(S.currentDay);
+    }
+    _dvShowMapJumpTo(0);
+  } else {
+    if(btn){
+      btn.style.background = '#fff';
+      btn.style.color = '#92400e';
+      btn.style.borderColor = '#fbbf24';
+      btn.innerHTML = '🔦 Show on map';
+    }
+    if(stp) stp.style.display = 'none';
+    _dvClearShowMapPulse();
+    if(typeof S !== 'undefined' && typeof S.currentDay === 'number' && typeof renderDayTable === 'function'){
+      renderDayTable(S.currentDay);
+    }
+  }
+}
+window._dvToggleShowOnMap = _dvToggleShowOnMap;
+
+function _dvShowMapStep(delta){
+  if(!window._DV_SHOWMAP_ACTIVE) return;
+  var di = (typeof S !== 'undefined') ? S.currentDay : null;
+  if(di == null || !S.days || !S.days[di]) return;
+  var rows = (S.days[di].rows || []).filter(function(r){ return r && r.clinic; });
+  if(rows.length === 0){
+    if(typeof showToast === 'function') showToast('No visits on this day yet.');
+    return;
+  }
+  window._DV_SHOWMAP_IDX = (window._DV_SHOWMAP_IDX + delta + rows.length) % rows.length;
+  _dvShowMapJumpTo(window._DV_SHOWMAP_IDX);
+}
+window._dvShowMapStep = _dvShowMapStep;
+
+function _dvShowMapJumpTo(idx){
+  var di = (typeof S !== 'undefined') ? S.currentDay : null;
+  if(di == null || !S.days || !S.days[di]) return;
+  var rows = (S.days[di].rows || []).filter(function(r){ return r && r.clinic; });
+  if(rows.length === 0) return;
+  idx = Math.max(0, Math.min(rows.length - 1, idx));
+  window._DV_SHOWMAP_IDX = idx;
+  var row = rows[idx];
+  if(!row || !row.clinic) return;
+  // Resolve coord — try visual (registry) first, then base
+  var coord = (typeof _rpGetVisualCoord === 'function') ? _rpGetVisualCoord(row.clinic) : null;
+  if(!coord && typeof getCoordForBusiness === 'function') coord = getCoordForBusiness(row.clinic);
+  if(!coord){
+    if(typeof showToast === 'function') showToast('No location on file for "' + row.clinic + '".');
+    return;
+  }
+  // Update the counter chip
+  var counter = document.getElementById('dv-showmap-counter');
+  if(counter) counter.textContent = (idx + 1) + ' / ' + rows.length;
+  // Highlight + zoom
+  _dvDrawShowMapPulse(coord, row.clinic, idx + 1);
+  if(typeof _DV_MAP !== 'undefined' && _DV_MAP){
+    _DV_MAP.setView([coord.lat, coord.lng], 15, { animate: true });
+  }
+  if(typeof showToast === 'function'){
+    var st = row.status || 'Pending';
+    showToast('🔦 ' + (idx + 1) + '/' + rows.length + ' · ' + row.clinic + ' · ' + st);
+  }
+}
+window._dvShowMapJumpTo = _dvShowMapJumpTo;
+
+// Bright pulsing orange ring + label for the currently-highlighted row.
+function _dvDrawShowMapPulse(coord, name, num){
+  if(typeof L === 'undefined' || typeof _DV_MAP === 'undefined' || !_DV_MAP || !coord) return;
+  _dvClearShowMapPulse();
+  var html = '<div class="dv-showmap-pulse" style="width:42px;height:42px;border-radius:50%;border:4px solid #f59e0b;background:rgba(245,158,11,.22);box-shadow:0 0 0 4px rgba(255,255,255,.7), 0 0 18px #f59e0b;pointer-events:none;display:flex;align-items:center;justify-content:center;color:#7c2d12;font-weight:800;font-size:14px;font-family:DM Sans,sans-serif;animation:rpSelHaloPulse 1.4s ease-in-out infinite">'
+    + (num || '') + '</div>';
+  _DV_SHOWMAP_PULSE_LAYER = L.marker([coord.lat, coord.lng], {
+    icon: L.divIcon({ className:'dv-showmap-pulse-wrap', html: html, iconSize:[42,42], iconAnchor:[21,21] }),
+    interactive: false,
+    zIndexOffset: 9700
+  }).addTo(_DV_MAP);
+}
+function _dvClearShowMapPulse(){
+  if(_DV_SHOWMAP_PULSE_LAYER && typeof _DV_MAP !== 'undefined' && _DV_MAP){
+    try { _DV_MAP.removeLayer(_DV_SHOWMAP_PULSE_LAYER); } catch(_){}
+  }
+  _DV_SHOWMAP_PULSE_LAYER = null;
+}
+window._dvClearShowMapPulse = _dvClearShowMapPulse;
+
+// Per-row 🔦 button handler. Jumps to that row + makes it the current.
+function _dvShowMapForRow(ri){
+  // Make sure toggle is ON so subsequent prev/next work
+  if(!window._DV_SHOWMAP_ACTIVE) _dvToggleShowOnMap();
+  // Find this row's index in the filtered (clinic-only) list
+  var di = (typeof S !== 'undefined') ? S.currentDay : null;
+  if(di == null || !S.days || !S.days[di]) return;
+  var rows = S.days[di].rows || [];
+  var fi = 0, count = -1;
+  for(var i = 0; i < rows.length; i++){
+    if(rows[i] && rows[i].clinic){ count++; if(i === ri){ fi = count; break; } }
+  }
+  _dvShowMapJumpTo(fi);
+}
+window._dvShowMapForRow = _dvShowMapForRow;
+
+// ════════════════════════════════════════════════════════════════════════════
 // PHASE 53 (2026-05-28) — AI OPTIMIZE: CIRCLE-DRAW SUB-MODE
 // User clicks the map to drop a circle center, drags the edge handle to
 // resize, OR types a radius. Pins inside become targets automatically.
@@ -36531,6 +36671,17 @@ function rowHTML(row,di,ri){
       +   '<button onclick="event.stopPropagation();_openVisitMenu('+di+','+ri+',\''+menuId+'\')" '
       +     'title="More actions" '
       +     'style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:16px;padding:2px 6px;line-height:1;font-weight:700">&#8942;</button>'
+      // Phase 58 — per-row 🔦 "Show on map" button. Only appears when the
+      // header toggle is ON, and only for rows that actually have a clinic
+      // name (so empty placeholder rows don't get a useless button). The
+      // handler activates the toggle if it isn't already, then jumps the
+      // map to this row's pin. Works on ALL statuses (Pending, Completed,
+      // Postponed, Canceled) per user spec.
+      + ((window._DV_SHOWMAP_ACTIVE && row.clinic)
+          ? '<button onclick="event.stopPropagation();_dvShowMapForRow('+ri+')" '
+            + 'title="🔦 Show this visit on the map" '
+            + 'style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;border:none;border-radius:6px;padding:2px 7px;font-size:11px;line-height:1;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;margin-left:3px;box-shadow:0 1px 3px rgba(217,119,6,.3)">🔦</button>'
+          : '')
       +   '<div id="'+menuId+'" style="display:none;position:absolute;top:calc(100% + 4px);left:0;background:#fff;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.15);padding:4px;min-width:140px;z-index:9000;font-family:DM Sans,sans-serif;text-align:left">'
       +     (canEditHere
           ? '<button onclick="event.stopPropagation();_closeVisitMenu(\''+menuId+'\');openEditVisit('+di+','+ri+')" style="display:flex;align-items:center;gap:6px;width:100%;text-align:left;background:transparent;border:0;padding:7px 10px;border-radius:6px;cursor:pointer;font-size:12px;color:#1e293b;font-family:inherit" onmouseover="this.style.background=\'#f1f5f9\'" onmouseout="this.style.background=\'transparent\'"><span>&#9998;</span> Edit visit</button>'
