@@ -3496,6 +3496,13 @@ body.role-front_desk #referrals-view {
               <button type="button" onclick="_dvShowMapClearSelection()" title="Unselect everything" style="background:#fff;border:1px solid #fbbf24;color:#7c2d12;border-radius:6px;padding:4px 9px;font-size:10px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;line-height:1.1">Clear</button>
             </div>
           </div>
+          <!-- Phase 86 (2026-05-28): Reset map — re-runs the smart fit
+               (saved route bounds if any, else all visits on this day,
+               else DFW metro). Useful when the rep has dragged / zoomed
+               into a specific area and wants to snap back. -->
+          <button id="dv-reset-map-btn" type="button" onclick="_dvResetMapView();_dvScrollToMap();" title="Reset zoom + center to the default view (route if any, else today's visits)" style="background:#fff;border:1px solid #cbd5e1;color:#1F3864;border-radius:6px;padding:5px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;display:inline-flex;align-items:center;gap:5px;line-height:1.1">
+            🔄 Reset
+          </button>
           <!-- Admin-only Map v2 settings opener. Hidden by default; revealed
                by JS in renderDayMap when isAdmin() returns true. Opens the
                existing settings modal where the Google Maps + Gemini keys
@@ -35311,6 +35318,84 @@ function _dvScrollToMap(){
 }
 window._dvScrollToMap = _dvScrollToMap;
 
+// ── PHASE 86 (2026-05-28) — Reset map view + smart default centering ──────
+// Priority order (best fit at the top):
+//   1) Saved route for this day (via _rpLoadCurrentRoute) → fit to bounds
+//      covering Start + End + all picks. The rep's planned route is the
+//      most useful frame of reference.
+//   2) Today's visit pins → fit to bounds covering every clinic the rep
+//      is going to visit. Filters out off-map / no-coord rows.
+//   3) DFW metro setView fallback → if neither path resolves.
+// Cap zoom at 14 so a single pin doesn't snap to street level.
+function _dvResetMapView(){
+  if(typeof _DV_MAP === 'undefined' || !_DV_MAP || typeof L === 'undefined') return;
+  try {
+    var pts = [];
+    // 1) Saved route
+    var saved = (typeof _rpLoadCurrentRoute === 'function') ? _rpLoadCurrentRoute() : null;
+    if(saved){
+      if(saved.startCoord) pts.push([saved.startCoord.lat, saved.startCoord.lng]);
+      if(saved.endCoord)   pts.push([saved.endCoord.lat,   saved.endCoord.lng]);
+      // For corridor: insertedNames are the picks
+      if(Array.isArray(saved.insertedNames)){
+        saved.insertedNames.forEach(function(n){
+          var c = (typeof _rpGetVisualCoord === 'function') ? _rpGetVisualCoord(n) : null;
+          if(!c && typeof getCoordForBusiness === 'function') c = getCoordForBusiness(n);
+          if(c) pts.push([c.lat, c.lng]);
+        });
+      }
+      // For AI Optimize: optTargets are the picks
+      if(Array.isArray(saved.optTargets)){
+        saved.optTargets.forEach(function(t){
+          if(t && t.coord) pts.push([t.coord.lat, t.coord.lng]);
+        });
+      }
+    }
+    // 2) Today's visits — only used if there's no saved route
+    if(pts.length === 0){
+      var di = (typeof S !== 'undefined') ? S.currentDay : null;
+      if(di != null && S.days && S.days[di] && Array.isArray(S.days[di].rows)){
+        S.days[di].rows.forEach(function(r){
+          if(!r || !r.clinic) return;
+          var c = (typeof _rpGetVisualCoord === 'function') ? _rpGetVisualCoord(r.clinic) : null;
+          if(!c && typeof getCoordForBusiness === 'function') c = getCoordForBusiness(r.clinic);
+          if(c) pts.push([c.lat, c.lng]);
+        });
+      }
+    }
+    // 3) DFW fallback
+    if(pts.length === 0){
+      _DV_MAP.setView([33.07, -96.78], 10);
+      return;
+    }
+    if(pts.length === 1){
+      _DV_MAP.setView(pts[0], 14);
+    } else {
+      _DV_MAP.fitBounds(L.latLngBounds(pts).pad(0.2), { maxZoom: 14 });
+    }
+    if(typeof showToast === 'function') showToast('🔄 Map reset to default view');
+  } catch(e){ console.warn('[_dvResetMapView] failed:', e); }
+}
+window._dvResetMapView = _dvResetMapView;
+
+// Auto-enable Show on Map when a day opens, IF there's at least one
+// visit on the day. Skipped on a fresh empty day so the rep doesn't get
+// a toast with nothing to step through.
+function _dvAutoEnableShowOnMap(di){
+  try {
+    if(di == null || typeof S === 'undefined' || !S.days || !S.days[di]) return;
+    var hasVisit = (S.days[di].rows || []).some(function(r){ return r && r.clinic; });
+    if(!hasVisit) return;
+    if(window._DV_SHOWMAP_ACTIVE) return;   // already on
+    // Defer slightly so the day-table render completes first (the toggle
+    // re-renders the table to inject per-row 🔦 buttons).
+    setTimeout(function(){
+      if(typeof _dvToggleShowOnMap === 'function') _dvToggleShowOnMap();
+    }, 120);
+  } catch(_){}
+}
+window._dvAutoEnableShowOnMap = _dvAutoEnableShowOnMap;
+
 // Helper used by renderDayTable to keep the Schedule header's visit-count
 // chip in sync with the day's row count.
 function _dvSyncScheduleCount(di){
@@ -39155,6 +39240,15 @@ function openDay(di){
   // Phase 52: show / hide the "📍 Current route" chip based on whether a
   // saved planner state exists for this day.
   if(typeof _rpSyncCurrentRouteChip === 'function') _rpSyncCurrentRouteChip();
+  // Phase 86 (2026-05-28): smart default centering — fit to the saved
+  // route's bounds if any, else the day's visit pins. Run after a delay
+  // so renderDayMap's own fit (~400ms) completes first and we override.
+  setTimeout(function(){
+    if(typeof _dvResetMapView === 'function') _dvResetMapView();
+  }, 500);
+  // Phase 86: auto-enable Show on Map if there are visits — the rep
+  // wants to see them lit by default.
+  if(typeof _dvAutoEnableShowOnMap === 'function') _dvAutoEnableShowOnMap(di);
 }
 function showLanding(){
   window.scrollTo(0,0);
