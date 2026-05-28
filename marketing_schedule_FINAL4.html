@@ -34941,12 +34941,28 @@ function _dvToggleShowOnMap(){
       btn.innerHTML = '🔦 Showing on map · click to stop';
     }
     if(stp) stp.style.display = 'inline-flex';
+    // Phase 96 (2026-05-28): default is MULTI mode with all visits
+    // selected. Rep sees every visit flashing at once. They can switch
+    // to Single mode to step through one at a time.
+    window._DV_SHOWMAP_MULTI = true;
     window._DV_SHOWMAP_IDX = 0;
-    // Re-render the table so the per-row 🔦 buttons appear
+    // Sync the mode toggle button to show "Multi" active visually
+    var modeBtnOn = document.getElementById('dv-showmap-mode-btn');
+    if(modeBtnOn){
+      modeBtnOn.style.background = 'linear-gradient(135deg,#f59e0b,#d97706)';
+      modeBtnOn.style.color = '#fff';
+      modeBtnOn.innerHTML = '✓ Multi';
+    }
+    var singleCtrlsOn = document.getElementById('dv-showmap-single-ctrls');
+    var multiCtrlsOn  = document.getElementById('dv-showmap-multi-ctrls');
+    if(singleCtrlsOn) singleCtrlsOn.style.display = 'none';
+    if(multiCtrlsOn)  multiCtrlsOn.style.display  = 'inline-flex';
+    // Re-render the table so the per-row 🔦 buttons appear (in multi-add style)
     if(typeof S !== 'undefined' && typeof S.currentDay === 'number' && typeof renderDayTable === 'function'){
       renderDayTable(S.currentDay);
     }
-    _dvShowMapJumpTo(0);
+    // Auto-select every visit on the day so they all flash by default
+    if(typeof _dvShowMapSelectAll === 'function') _dvShowMapSelectAll();
   } else {
     if(btn){
       btn.style.background = '#fff';
