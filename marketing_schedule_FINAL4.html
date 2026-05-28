@@ -34494,15 +34494,20 @@ function _phase59Classify(preExisting, geom, routeCoords){
   var insiders = [], outsiders = [];
   preExisting.forEach(function(p){
     var isInside = _phase59IsInsideGeometry(p.coord, geom);
+    // Phase 98 (2026-05-28): always stash t (projection on Start→End line)
+    // so outsider decisions can branch on it:
+    //   t < 0 → before Start → becomes the new Start (extends backward)
+    //   t > 1 → past End    → becomes the new End   (extends forward)
+    //   else → between → insert at best-insertion gap
+    var t = 0.5;
+    if(geom && geom.kind === 'corridor' && geom.A && geom.B && typeof _rpV5ProjT === 'function'){
+      try { t = _rpV5ProjT(p.coord, geom.A, geom.B); } catch(_){}
+    }
     if(isInside){
-      // For corridor, compute t so we can sort into the route order
-      var t = (geom.kind === 'corridor' && typeof _rpV5ProjT === 'function')
-        ? _rpV5ProjT(p.coord, geom.A, geom.B)
-        : 0.5;
       insiders.push(Object.assign({}, p, { t: t }));
     } else {
       var best = _phase59BestInsertion(routeCoords, p.coord);
-      outsiders.push(Object.assign({}, p, best));
+      outsiders.push(Object.assign({}, p, best, { t: t }));
     }
   });
   insiders.sort(function(a, b){ return a.t - b.t; });
@@ -34541,6 +34546,27 @@ function _phase59ShowReviewModal(outsiders, routeStopNames, onComplete){
     var beforeStop = (v.idx > 0) ? (routeStopNames[v.idx - 1] || 'Start') : 'Start';
     var afterStop  = (v.idx < routeStopNames.length) ? (routeStopNames[v.idx] || 'End') : 'End';
     var deltaMiFmt = (v.deltaMi >= 10) ? v.deltaMi.toFixed(0) : v.deltaMi.toFixed(1);
+    // Phase 98 (2026-05-28): branch on t (projection on Start→End line).
+    //   t < -0.02 → "before Start" → action becomes "replace Start"
+    //   t >  1.02 → "past End"     → action becomes "replace End"
+    //   else      → "between"       → insert as a stop (existing behavior)
+    var t = (typeof v.t === 'number') ? v.t : 0.5;
+    var mode98 = 'insert';
+    if(t < -0.02)     mode98 = 'replaceStart';
+    else if(t > 1.02) mode98 = 'replaceEnd';
+    var oldStartName = window._RP_START_NAME || 'old Start';
+    var oldEndName   = window._RP_END_NAME   || 'old End';
+    var actionLine, actionLabel;
+    if(mode98 === 'replaceStart'){
+      actionLine  = '🚩 <strong>' + (v.name || 'this visit') + '</strong> becomes the new <strong>Start</strong> · <strong>' + oldStartName + '</strong> becomes the first stop.';
+      actionLabel = '✓ Make "' + (v.name || 'this visit') + '" the new Start (extend route backward)';
+    } else if(mode98 === 'replaceEnd'){
+      actionLine  = '🏁 <strong>' + (v.name || 'this visit') + '</strong> becomes the new <strong>End</strong> · <strong>' + oldEndName + '</strong> becomes the last stop.';
+      actionLabel = '✓ Make "' + (v.name || 'this visit') + '" the new End (extend route forward)';
+    } else {
+      actionLine  = '📍 Insert between <strong>' + beforeStop + '</strong> and <strong>' + afterStop + '</strong>';
+      actionLabel = '✓ Bring "' + (v.name || 'this visit') + '" into the route as a stop';
+    }
     var html = ''
       + '<div style="background:#fff;border-radius:14px;padding:22px;max-width:520px;width:92%;box-shadow:0 20px 60px rgba(0,0,0,.4)">'
       +   '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
@@ -34548,23 +34574,26 @@ function _phase59ShowReviewModal(outsiders, routeStopNames, onComplete){
       +     '<button type="button" onclick="document.getElementById(\''+modalId+'\').remove()" style="background:transparent;border:0;font-size:18px;color:#94a3b8;cursor:pointer;line-height:1" title="Cancel — leave remaining visits untouched">&#10005;</button>'
       +   '</div>'
       +   '<div style="font-size:15px;font-weight:800;color:#1F3864;margin-bottom:4px">' + (v.name || 'Visit') + '</div>'
-      +   '<div style="font-size:11px;color:var(--muted);margin-bottom:14px">Pre-existing Pending visit on this day · outside the planned route geometry.</div>'
+      +   '<div style="font-size:11px;color:var(--muted);margin-bottom:14px">Pre-existing Pending visit on this day · outside the planned route geometry. <span style="color:#94a3b8">(t=' + t.toFixed(2) + ')</span></div>'
       +   '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px;margin-bottom:14px">'
-      +     '<div style="font-size:11px;font-weight:700;color:#475569;margin-bottom:6px">If you bring it in, the route detours:</div>'
+      +     '<div style="font-size:11px;font-weight:700;color:#475569;margin-bottom:6px">If you bring it in:</div>'
       +     '<div style="font-size:12px;color:#1e293b;line-height:1.55">'
-      +       '<div>📍 Insert between <strong>' + beforeStop + '</strong> and <strong>' + afterStop + '</strong></div>'
+      +       '<div>' + actionLine + '</div>'
       +       '<div style="margin-top:6px">⛽ Extra distance: <strong style="color:#dc2626">+' + deltaMiFmt + ' mi</strong> · <strong style="color:#dc2626">+' + v.deltaMin + ' min</strong></div>'
       +     '</div>'
       +   '</div>'
       +   '<div style="display:flex;flex-direction:column;gap:8px">'
-      +     '<button type="button" id="p59-btn-insert" style="background:linear-gradient(135deg,#15803d,#16a34a);color:#fff;border:none;border-radius:8px;padding:11px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">✓ Bring "' + (v.name || 'this visit') + '" into the route</button>'
+      +     '<button type="button" id="p59-btn-insert" style="background:linear-gradient(135deg,#15803d,#16a34a);color:#fff;border:none;border-radius:8px;padding:11px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">' + actionLabel + '</button>'
       +     '<button type="button" id="p59-btn-skip"   style="background:#fff;color:#1F3864;border:1px solid var(--border);border-radius:8px;padding:10px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">→ Skip — leave on the calendar but not in the route</button>'
       +     '<button type="button" id="p59-btn-remove" style="background:#fff;color:#991b1b;border:1px solid #fecaca;border-radius:8px;padding:10px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">✗ Remove from today\'s calendar</button>'
       +   '</div>'
       + '</div>';
     modal.innerHTML = html;
     document.getElementById('p59-btn-insert').onclick = function(){
-      decisions.push({ visit: v, action: 'insert' });
+      // Phase 98 (2026-05-28): tag the decision with the geometric mode so
+      // _phase59ApplyDecisions knows whether to replace Start/End or just
+      // splice as a stop.
+      decisions.push({ visit: v, action: 'insert', mode98: mode98 });
       idx++; render();
     };
     document.getElementById('p59-btn-skip').onclick = function(){
@@ -34592,34 +34621,126 @@ window._phase59ShowReviewModal = _phase59ShowReviewModal;
 function _phase59ApplyDecisions(picks, decisions, di){
   var insertedExtra = [];
   var removeRis = [];
-  // For 'insert' decisions, we want to splice them into picks in the right
-  // order. Sort by idx descending so earlier splices don't shift later ones.
-  var insertDecs = decisions.filter(function(d){ return d.action === 'insert'; });
-  insertDecs.sort(function(a, b){ return b.visit.idx - a.visit.idx; });
-  insertDecs.forEach(function(d){
+  // Phase 98 (2026-05-28): split insert decisions by mode98 so we can do
+  // Start/End REPLACEMENT (the outsider becomes the new anchor, the old
+  // anchor gets pushed onto picks as a stop), in addition to the legacy
+  // splice-as-stop. Without this, an outsider with t<0 ("before Start")
+  // or t>1 ("past End") gets crammed into the middle of the route, which
+  // doesn't match what the user actually wants when they say "extend".
+  var insertDecs    = decisions.filter(function(d){ return d.action === 'insert'; });
+  var stopInsertDecs    = insertDecs.filter(function(d){ return !d.mode98 || d.mode98 === 'insert'; });
+  var replaceStartDecs  = insertDecs.filter(function(d){ return d.mode98 === 'replaceStart'; });
+  var replaceEndDecs    = insertDecs.filter(function(d){ return d.mode98 === 'replaceEnd'; });
+
+  // ── Sub-branch A: replace Start ──────────────────────────────────────────
+  // Only one outsider can be the new Start. If the user picked > 1 with
+  // t<0, treat the SMALLEST t (most extreme) as the new Start and demote
+  // the rest to first-stops in t-ascending order (so the next-most-extreme
+  // is right after the new Start).
+  if(replaceStartDecs.length > 0){
+    replaceStartDecs.sort(function(a, b){ return a.visit.t - b.visit.t; });
+    var newStartDec = replaceStartDecs[0];
+    var oldStartName  = window._RP_START_NAME || null;
+    var oldStartCoord = window._RP_START_COORD || null;
+    // Promote the new Start
+    try {
+      window._RP_START_NAME  = newStartDec.visit.name;
+      window._RP_START_COORD = newStartDec.visit.coord ? { lat: newStartDec.visit.coord.lat, lng: newStartDec.visit.coord.lng } : null;
+      var sInp = document.getElementById('rp-start');         if(sInp) sInp.value = newStartDec.visit.name;
+      var sLbl = document.getElementById('rp-start-search');   if(sLbl) sLbl.value = newStartDec.visit.name;
+      if(typeof _rpDrawStartMarker === 'function' && window._RP_START_COORD) _rpDrawStartMarker(window._RP_START_COORD, newStartDec.visit.name);
+      if(typeof _rpSetPinState === 'function') _rpSetPinState(newStartDec.visit.name, 'start');
+    } catch(_){}
+    // The new Start was already on the schedule (pre-existing visit) — we
+    // do NOT add it to picks (endpoints are NOT picks). Mark so the
+    // caller's foldedNameSet protects it from Phase 54 cleanup.
+    insertedExtra.push(newStartDec.visit.name);
+    // Old Start, if any, becomes the first pick (now a stop)
+    if(oldStartName && oldStartCoord){
+      picks.unshift({
+        name: oldStartName,
+        coord: oldStartCoord,
+        _phase98WasStart: true
+      });
+    }
+    // Any extra "before Start" outsiders demote to first-stops between
+    // new Start and old Start, ordered by ascending t.
+    for(var i = 1; i < replaceStartDecs.length; i++){
+      var d = replaceStartDecs[i];
+      picks.unshift({
+        name: d.visit.name,
+        coord: d.visit.coord,
+        _phase59FromExisting: true,
+        _phase59ExistingRi: d.visit.ri,
+        _phase98DemotedFromStart: true
+      });
+      // re-add at index 1 so new Start (window global) is conceptually
+      // first; picks[0] is the first real stop. unshift puts it at 0,
+      // but that's fine — order of picks among themselves still walks
+      // from the (new) Start outward.
+      insertedExtra.push(d.visit.name);
+    }
+  }
+
+  // ── Sub-branch B: replace End ────────────────────────────────────────────
+  if(replaceEndDecs.length > 0){
+    replaceEndDecs.sort(function(a, b){ return b.visit.t - a.visit.t; });   // largest t first
+    var newEndDec = replaceEndDecs[0];
+    var oldEndName  = window._RP_END_NAME || null;
+    var oldEndCoord = window._RP_END_COORD || null;
+    try {
+      window._RP_END_NAME  = newEndDec.visit.name;
+      window._RP_END_COORD = newEndDec.visit.coord ? { lat: newEndDec.visit.coord.lat, lng: newEndDec.visit.coord.lng } : null;
+      var eInp = document.getElementById('rp-end');           if(eInp) eInp.value = newEndDec.visit.name;
+      var eLbl = document.getElementById('rp-end-search');     if(eLbl) eLbl.value = newEndDec.visit.name;
+      if(typeof _rpDrawEndMarker === 'function' && window._RP_END_COORD) _rpDrawEndMarker(window._RP_END_COORD, newEndDec.visit.name);
+      if(typeof _rpSetPinState === 'function') _rpSetPinState(newEndDec.visit.name, 'end');
+    } catch(_){}
+    insertedExtra.push(newEndDec.visit.name);
+    // Old End becomes the last pick
+    if(oldEndName && oldEndCoord){
+      picks.push({
+        name: oldEndName,
+        coord: oldEndCoord,
+        _phase98WasEnd: true
+      });
+    }
+    // Any extra "past End" outsiders demote to last-stops, ordered by
+    // descending t (most extreme stays closest to new End).
+    for(var j = 1; j < replaceEndDecs.length; j++){
+      var d2 = replaceEndDecs[j];
+      picks.push({
+        name: d2.visit.name,
+        coord: d2.visit.coord,
+        _phase59FromExisting: true,
+        _phase59ExistingRi: d2.visit.ri,
+        _phase98DemotedFromEnd: true
+      });
+      insertedExtra.push(d2.visit.name);
+    }
+  }
+
+  // ── Sub-branch C: between-Start-and-End → splice at best-insertion idx ──
+  // Sort by idx descending so earlier splices don't shift later ones.
+  stopInsertDecs.sort(function(a, b){ return b.visit.idx - a.visit.idx; });
+  stopInsertDecs.forEach(function(d){
     var v = d.visit;
-    // Convert the day-row visit into a pick-shaped object
     var pick = {
       name: v.name,
       coord: v.coord,
-      // Mark so downstream code knows this came from a pre-existing row
       _phase59FromExisting: true,
       _phase59ExistingRi: v.ri
     };
-    // picks.length+1 == routeCoords.length-1; the idx in best-insertion was
-    // computed against [Start, ...picks, End]. picks idx == best.idx - 1.
-    // For AI Optimize w/o end, routeCoords = ordered list; idx maps to picks idx.
-    var pickIdx = Math.max(0, v.idx - 1);   // best.idx - 1 (best was relative to Start)
+    var pickIdx = Math.max(0, v.idx - 1);
     if(pickIdx > picks.length) pickIdx = picks.length;
     picks.splice(pickIdx, 0, pick);
     insertedExtra.push(v.name);
   });
+
+  // ── 'remove' decisions: delete from day.rows ─────────────────────────────
   decisions.filter(function(d){ return d.action === 'remove'; }).forEach(function(d){
     removeRis.push(d.visit.ri);
   });
-  // Auto-insiders that came from caller's pre-fold are already in `picks`;
-  // we just track the names here so the caller can report.
-  // Delete removeRis from day.rows (descending index order to avoid shifts)
   if(removeRis.length > 0){
     removeRis.sort(function(a, b){ return b - a; });
     try {
@@ -34630,6 +34751,13 @@ function _phase59ApplyDecisions(picks, decisions, di){
       });
     } catch(_){}
   }
+
+  // Phase 98: try to refresh the live route render so the user sees the
+  // new path BEFORE the commit closes the planner. Non-fatal if either
+  // helper is missing.
+  try { if(typeof _rpRefreshCenterline === 'function') _rpRefreshCenterline(); } catch(_){}
+  try { if(typeof _rpRefreshLiveRoute === 'function')  _rpRefreshLiveRoute();  } catch(_){}
+
   return { picks: picks, removedCount: removeRis.length, insertedNames: insertedExtra };
 }
 window._phase59ApplyDecisions = _phase59ApplyDecisions;
