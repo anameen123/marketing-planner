@@ -1,0 +1,642 @@
+[
+  {
+    "key": "Pediatrics People PLLC",
+    "type": "clinic",
+    "address": "11955 Dallas Pkwy, Ste 400, Frisco, TX 75033",
+    "phone": "(214) 396-5200",
+    "website": "https://pediatricpeople.com/",
+    "confidence": "medium",
+    "source": "https://pediatricpeople.com/",
+    "notes": "Input lists McKinney but Dr. Audra Linck's practice is at the Frisco location."
+  },
+  {
+    "key": "Texas Diabetes & Endocrinology",
+    "type": "clinic",
+    "address": null,
+    "phone": null,
+    "website": "https://texasdiabetes.com/",
+    "confidence": "not_found",
+    "source": "https://texasdiabetes.com/about-us/our-doctors/luis-casaubon/",
+    "notes": "Dr. Luis Casaubon is at the Austin office (6500 N Mopac). No McKinney location for this practice."
+  },
+  {
+    "key": "Dr.Aris N Jacob",
+    "type": "clinic",
+    "address": "4521 Medical Center Dr, Ste 400, McKinney, TX 75069",
+    "phone": "(214) 547-7557",
+    "website": "https://www.texendocrine.com/",
+    "confidence": "medium",
+    "source": "https://www.southwesternhealth.org/find-a-provider/location/texas-associates-endocrinology-diabetes-pa/0014u00002pp453qac",
+    "notes": "Dr. Aris N. Jacob practices at Texas Associates of Endocrinology & Diabetes, McKinney office."
+  },
+  {
+    "key": "New Hope Diabetes Care & Prevention",
+    "type": "clinic",
+    "address": "5220 W University Dr, Ste 250, McKinney, TX 75071",
+    "phone": "(469) 800-5400",
+    "website": null,
+    "confidence": "medium",
+    "source": "https://www.bswhealth.com/physician/sana-ullah",
+    "notes": "Dr. Sana Ullah practices at Baylor Scott & White Endocrinology Specialists in McKinney. Did not directly confirm 'New Hope Diabetes Care' name."
+  },
+  {
+    "key": "Sanders Barry Md",
+    "type": "clinic",
+    "address": "4323 N Josey Ln, Ste 106, Carrollton, TX 75010",
+    "phone": "(972) 420-8800",
+    "website": null,
+    "confidence": "high",
+    "source": "https://local.yahoo.com/info-225375970-Sanders-Barry-MD---North-Texas-Gastroenterology/",
+    "notes": "North Texas Gastroenterology — Dr. Barry Sanders. Input doctor name 'Jason Sanders' doesn't match."
+  },
+  {
+    "key": "MR. DOUGLAS CONNER",
+    "type": "clinic",
+    "address": null,
+    "phone": null,
+    "website": null,
+    "confidence": "not_found",
+    "source": "",
+    "notes": "No general surgeon named Douglas Conner located in McKinney TX."
+  },
+  {
+    "key": "Dr.Sherryl Shipes",
+    "type": "clinic",
+    "address": "5285 Independence Pkwy, Ste 300, Frisco, TX 75035",
+    "phone": "(469) 656-1944",
+    "website": "https://totalmedsolutions.com/",
+    "confidence": "medium",
+    "source": "https://www.superpages.com/frisco-tx/bpp/sherryl-shipes-do-545105453",
+    "notes": "Dr. Sherryl Shipes practices at Total Med Solutions in Frisco (input lists Plano)."
+  },
+  {
+    "key": "Precision Spine Care",
+    "type": "clinic",
+    "address": "2737 S Broadway Ave, Tyler, TX 75701",
+    "phone": "(903) 592-6000",
+    "website": "https://precisionspinecare.com/",
+    "confidence": "medium",
+    "source": "https://precisionspinecare.com/tyler/",
+    "notes": "Input lists Frisco but Dr. Charles Gordon's practice is at the Tyler location. No DFW office found."
+  },
+  {
+    "key": "Texas Star Pain & Spine",
+    "type": "clinic",
+    "address": "3000 Communications Pkwy, Ste 200, Plano, TX 75093",
+    "phone": "(469) 200-6461",
+    "website": "https://www.texasclinic.net/",
+    "confidence": "medium",
+    "source": "https://www.care.texashealth.org/Providers/Affiliated/Star-Pain--Spine-LLC/Pain-Medicine/gonzalo-gonzales-do",
+    "notes": "Plano office (also has Carrollton at 4221 Medical Pkwy Ste 250). Input lists McKinney but no McKinney office."
+  },
+  {
+    "key": "Express Family Clinic",
+    "type": "clinic",
+    "address": "940 Ridgeview Dr, Ste 150, Allen, TX 75013",
+    "phone": "(972) 672-4121",
+    "website": "https://www.expressphysician.com/",
+    "confidence": "high",
+    "source": "https://www.expressphysician.com/",
+    "notes": "Input lists McKinney; actual location is Allen, TX."
+  },
+  {
+    "key": "Just For Kids Dentistry",
+    "type": "clinic",
+    "address": null,
+    "phone": null,
+    "website": "https://pediatricdentistmckinney.com/",
+    "confidence": "low",
+    "source": "https://pediatricdentistmckinney.com/contact/",
+    "notes": "Dr. Jeffrey Hoffman is at Just For Kids Dentistry Keller (601 Main St #220, Keller, TX 76248, (817) 741-8390). Separate McKinney pediatric dental practice exists at pediatricdentistmckinney.com with different dentists."
+  },
+  {
+    "key": "Plano Therapy center",
+    "type": "clinic",
+    "address": "3405 Midway Rd, Ste 500, Plano, TX 75093",
+    "phone": "(972) 473-0229",
+    "website": "https://www.posmc.com/",
+    "confidence": "high",
+    "source": "https://www.posmc.com/physical-therapy/plano-therapy-center/plano-therapy-center-2/",
+    "notes": "Part of Plano Orthopedic & Sports Medicine Center."
+  },
+  {
+    "key": "Endocrinology",
+    "type": "clinic",
+    "address": null,
+    "phone": null,
+    "website": null,
+    "confidence": "not_found",
+    "source": "",
+    "notes": "Name too generic — cannot disambiguate which endocrinology practice in Plano."
+  },
+  {
+    "key": "AIX Family Care",
+    "type": "clinic",
+    "address": "1705 Ohio Dr, Ste 200, Plano, TX 75093",
+    "phone": "(214) 440-2667",
+    "website": "https://www.aixwellnesscare.com/",
+    "confidence": "high",
+    "source": "https://www.aixwellnesscare.com/",
+    "notes": "Operates as Ai X Wellness Care."
+  },
+  {
+    "key": "Pediatrics",
+    "type": "clinic",
+    "address": null,
+    "phone": null,
+    "website": null,
+    "confidence": "not_found",
+    "source": "",
+    "notes": "Name too generic — cannot disambiguate which pediatrics practice in Carrollton."
+  },
+  {
+    "key": "monkey mouth pediatric therapy",
+    "type": "clinic",
+    "address": "255 W Lebanon Rd, Ste 316, Frisco, TX 75036",
+    "phone": "(817) 479-7019",
+    "website": "https://monkeymouths.com/",
+    "confidence": "medium",
+    "source": "https://monkeymouths.com/about-us/our-locations/",
+    "notes": "No Plano location exists. Frisco is the closest office (serves Plano area)."
+  },
+  {
+    "key": "Allen children clinic",
+    "type": "clinic",
+    "address": "311 N Allen Dr, Allen, TX 75013",
+    "phone": "(972) 372-0444",
+    "website": "https://www.eastsidechildrens.com/",
+    "confidence": "low",
+    "source": "https://www.eastsidechildrens.com/Contact-Us/Location",
+    "notes": "No clinic exactly named 'Allen Children's Clinic'. Best match: Eastside Children's Clinic in Allen."
+  },
+  {
+    "key": "ABC Pediatrics",
+    "type": "clinic",
+    "address": null,
+    "phone": null,
+    "website": "https://www.abcpediatric.us/",
+    "confidence": "not_found",
+    "source": "",
+    "notes": "No ABC Pediatrics clinic found in Frisco TX."
+  },
+  {
+    "key": "bright kids pediatrics",
+    "type": "clinic",
+    "address": "1400 N Coit Rd, Ste 2101, McKinney, TX 75071",
+    "phone": null,
+    "website": "https://brightkidspeds.com/",
+    "confidence": "medium",
+    "source": "https://brightkidspeds.com/contact-us/",
+    "notes": "Input lists Frisco but BrightKids Pediatrics is in McKinney (serves Frisco area)."
+  },
+  {
+    "key": "Lone star",
+    "type": "clinic",
+    "address": "1256 W Exchange Pkwy, Ste 200, Allen, TX 75013",
+    "phone": "(972) 649-5480",
+    "website": "https://www.lonestarkidscare.com/",
+    "confidence": "medium",
+    "source": "https://www.lonestarkidscare.com/",
+    "notes": "Best guess: Lone Star Kids Care in Allen."
+  },
+  {
+    "key": "NcT Step",
+    "type": "clinic",
+    "address": null,
+    "phone": null,
+    "website": null,
+    "confidence": "not_found",
+    "source": "",
+    "notes": "Could not identify any 'NCT Step' clinic in Plano."
+  },
+  {
+    "key": "plano",
+    "type": "clinic",
+    "address": null,
+    "phone": null,
+    "website": null,
+    "confidence": "not_found",
+    "source": "",
+    "notes": "Name too generic — just the word 'plano'."
+  },
+  {
+    "key": "Blue star imaging",
+    "type": "clinic",
+    "address": "720 E Park Blvd, Ste 102, Plano, TX 75074",
+    "phone": "(469) 609-6409",
+    "website": "https://bluestarimaging.com/",
+    "confidence": "medium",
+    "source": "https://www.yelp.com/biz/bluestar-diagnostics-plano",
+    "notes": "Plano location operates as Blue Star Diagnostics; main Blue Star Imaging is in Frisco at 3800 Gaylord Pkwy Ste 150."
+  },
+  {
+    "key": "Next Gen",
+    "type": "clinic",
+    "address": null,
+    "phone": null,
+    "website": "https://nextgenpcp.com/",
+    "confidence": "not_found",
+    "source": "",
+    "notes": "Ambiguous — possible match NextGen Primary Care but Plano address not confirmed."
+  },
+  {
+    "key": "Carrolton spring",
+    "type": "clinic",
+    "address": "2225 Parker Rd, Carrollton, TX 75010",
+    "phone": "(972) 242-4114",
+    "website": "https://www.carrolltonsprings.com/",
+    "confidence": "high",
+    "source": "https://www.carrolltonsprings.com/locations/carrollton-tx",
+    "notes": "Carrollton Springs behavioral health hospital."
+  },
+  {
+    "key": "Clinica San Miguel",
+    "type": "clinic",
+    "address": null,
+    "phone": "(469) 565-2030",
+    "website": "https://www.clinicsanmiguel.com/",
+    "confidence": "not_found",
+    "source": "https://www.clinicsanmiguel.com/contact",
+    "notes": "No Carrollton location (closest are Dallas, Farmers Branch, Arlington)."
+  },
+  {
+    "key": "Medical Clinic /Dan Dinh",
+    "type": "clinic",
+    "address": "3008 E Hebron Pkwy, Carrollton, TX 75010",
+    "phone": null,
+    "website": null,
+    "confidence": "low",
+    "source": "https://www.yellowpages.com/carrollton-tx/dds-nguyen-dinh-dan",
+    "notes": "Dan Dinh in Carrollton appears to be a dentist (DDS), not a medical clinic."
+  },
+  {
+    "key": "Elite Digestive",
+    "type": "clinic",
+    "address": "118 Lynn Ave, Ste 500, Lewisville, TX 75057",
+    "phone": "(214) 888-0670",
+    "website": "http://www.elitedigestive.com/",
+    "confidence": "medium",
+    "source": "https://www.yelp.com/biz/elite-digestive-specialists-lewisville",
+    "notes": "Input lists Carrollton but Elite Digestive Specialists (Dr. Laxmi Deepika Koya) is in Lewisville."
+  },
+  {
+    "key": "Elite",
+    "type": "clinic",
+    "address": null,
+    "phone": null,
+    "website": null,
+    "confidence": "not_found",
+    "source": "",
+    "notes": "Name too generic. Possibly same as Elite Digestive entry above."
+  },
+  {
+    "key": "Sandy Maccoy",
+    "type": "clinic",
+    "address": "2101 Teakwood Ln, Ste 300, Plano, TX 75075",
+    "phone": "(214) 396-4916",
+    "website": null,
+    "confidence": "medium",
+    "source": "https://health.usnews.com/nurse-practitioners/sandy-mccoy-2004429",
+    "notes": "Sandy McCoy, NP at Believe Bariatrics and Primary Care in Plano."
+  },
+  {
+    "key": "Pure Health",
+    "type": "clinic",
+    "address": null,
+    "phone": null,
+    "website": "https://yourpurehealth.com/",
+    "confidence": "not_found",
+    "source": "",
+    "notes": "No Pure Health clinic specifically in McKinney TX. Other Pure Health entities exist in Plano/Houston."
+  },
+  {
+    "key": "Plano clinic Supreme",
+    "type": "clinic",
+    "address": "4020 Hedgcoxe Rd, Ste 700, Plano, TX 75024",
+    "phone": "(972) 618-7800",
+    "website": "http://www.primarycareus.com/",
+    "confidence": "medium",
+    "source": "http://www.primarycareus.com/",
+    "notes": "Plano Supreme Primary Care. Input lists Frisco but it's in Plano."
+  },
+  {
+    "key": "Sarkar",
+    "type": "clinic",
+    "address": null,
+    "phone": null,
+    "website": null,
+    "confidence": "not_found",
+    "source": "",
+    "notes": "Could not identify a clinic 'Sarkar' in Carrollton."
+  },
+  {
+    "key": "Omni",
+    "type": "clinic",
+    "address": "8380 Warren Pkwy, Ste 100, Frisco, TX 75034",
+    "phone": "(214) 449-1710",
+    "website": "https://omnipainrelief.com/",
+    "confidence": "low",
+    "source": "https://omnipainrelief.com/locations-frisco",
+    "notes": "Best Frisco match is OmniSpine Pain Management (input says PCP but no PCP found). Omni Medical Center is in Plano (4666 McDermott Rd, Ste 100)."
+  },
+  {
+    "key": "Boomfield",
+    "type": "clinic",
+    "address": "8090 Preston Rd, Ste 301, Frisco, TX 75034",
+    "phone": null,
+    "website": "https://bloomfieldmed.com/",
+    "confidence": "medium",
+    "source": "https://bloomfieldmed.com/contact/",
+    "notes": "Bloomfield Medical Clinic in Frisco. 'Nafeesa' not confirmed at this clinic (Dr. Esho is listed)."
+  },
+  {
+    "key": "Care Choice",
+    "type": "clinic",
+    "address": "1400 N Coit Rd, McKinney, TX 75071",
+    "phone": "(972) 210-6693",
+    "website": "https://www.choicefamilymedicineclinic.com/",
+    "confidence": "low",
+    "source": "https://www.choicefamilymedicineclinic.com/",
+    "notes": "Best McKinney match: Choice Family Medicine Clinic of Texas. A 'Care Choice Family Clinic PLLC' exists in Plano."
+  },
+  {
+    "key": "Highland Medical and primary",
+    "type": "clinic",
+    "address": "1000 E Beltline Rd, #112, Carrollton, TX 75006",
+    "phone": "(972) 338-5574",
+    "website": "https://www.txhighlandsmedical.com/",
+    "confidence": "medium",
+    "source": "https://www.txhighlandsmedical.com/",
+    "notes": "Highlands Medical and Wellness — Dr. Van Tran practices here. In Carrollton, not McKinney."
+  },
+  {
+    "key": "Dr. Kyle K. Carter MD",
+    "type": "clinic",
+    "address": "1428 W Hebron Pkwy, Ste 110, Carrollton, TX 75010",
+    "phone": "(972) 939-4555",
+    "website": null,
+    "confidence": "medium",
+    "source": "https://health.usnews.com/doctors/kyle-carter-403908",
+    "notes": "Dr. Kyle Kelley Carter at Precision Family Medicine in Carrollton (input says McKinney)."
+  },
+  {
+    "key": "Dr. Hong Xiao MD",
+    "type": "clinic",
+    "address": "4100 Fairway Dr, Ste 320, Carrollton, TX 75010",
+    "phone": "(972) 236-7608",
+    "website": null,
+    "confidence": "medium",
+    "source": "https://www.healthgrades.com/physician/dr-hong-xiao-y4ssq",
+    "notes": "Dr. Hong Xiao at Fairway Family Medicine in Carrollton (input says Frisco)."
+  },
+  {
+    "key": "MD Kids Pediactrics",
+    "type": "clinic",
+    "address": "2750 W Northwest Hwy, Ste 170, Dallas, TX 75220",
+    "phone": null,
+    "website": "https://mdmedicalgroup.us/",
+    "confidence": "low",
+    "source": "https://mdmedicalgroup.us/medical-providers/providers-md-kids-pediatrics/",
+    "notes": "MD Kids Pediatrics is in Dallas, not Frisco. Dr. Hung Truong is associated with the McKinney area."
+  },
+  {
+    "key": "Care Express Clinic",
+    "type": "clinic",
+    "address": "1143 S Buckner Blvd, Dallas, TX 75217",
+    "phone": null,
+    "website": "https://careexclinic.com/",
+    "confidence": "low",
+    "source": "https://www.zocdoc.com/doctor/muhammad-siddiqui-md-352531",
+    "notes": "Care Express Clinic (Dr. Muhammad Ali Siddiqui) is in Dallas, not Frisco."
+  },
+  {
+    "key": "Cierras Heath Primary care",
+    "type": "clinic",
+    "address": null,
+    "phone": null,
+    "website": null,
+    "confidence": "not_found",
+    "source": "",
+    "notes": "Could not locate a clinic named 'Cierra's Health' in Frisco."
+  },
+  {
+    "key": "Gray branch Pediatrics",
+    "type": "clinic",
+    "address": null,
+    "phone": null,
+    "website": null,
+    "confidence": "not_found",
+    "source": "",
+    "notes": "Could not locate a clinic by this name in Frisco."
+  },
+  {
+    "key": "Woman Health",
+    "type": "clinic",
+    "address": "4343 N Josey Ln, Carrollton, TX 75010",
+    "phone": "(972) 492-1010",
+    "website": "https://crmc.health/",
+    "confidence": "low",
+    "source": "https://crmc.health/womens-health/",
+    "notes": "Best match for 'Woman Health' in Carrollton: Carrollton Regional Medical Center Women's Health."
+  },
+  {
+    "key": "Carrolton Primary care",
+    "type": "clinic",
+    "address": "1913 Walnut Plz, Carrollton, TX 75006",
+    "phone": "(972) 416-5902",
+    "website": null,
+    "confidence": "low",
+    "source": "https://www.southwesternhealth.org/find-a-provider/location/carrollton-medical-clinic-md-pa/0012e000022u39cqaq",
+    "notes": "Best guess: Carrollton Medical Clinic MD PA. Generic name — many Carrollton PCP clinics could match."
+  },
+  {
+    "key": "Liberty",
+    "type": "clinic",
+    "address": null,
+    "phone": null,
+    "website": null,
+    "confidence": "not_found",
+    "source": "",
+    "notes": "No 'Liberty' clinic in Frisco. Liberty Medical Clinics are all in Liberty, TX (far southeast)."
+  },
+  {
+    "key": "Quick Urgent care",
+    "type": "clinic",
+    "address": "9613 Coit Rd, Ste 104, Plano, TX 75024",
+    "phone": "(903) 225-9827",
+    "website": "https://quickaidurgentcare.com/",
+    "confidence": "medium",
+    "source": "https://quickaidurgentcare.com/contact-us/",
+    "notes": "Best match: QuickAid Urgent Care in Plano."
+  },
+  {
+    "key": "Garduno Family Medical Clinic",
+    "type": "clinic",
+    "address": "9925 Gillespie Dr, Ste 1300, Plano, TX 75025",
+    "phone": "(469) 871-0266",
+    "website": "https://gardunofamilymedicine.com/",
+    "confidence": "medium",
+    "source": "https://gardunofamilymedicine.com/contact-us/",
+    "notes": "Input says Frisco but Garduño Family Medicine is in Plano."
+  },
+  {
+    "key": "CPC Frisco",
+    "type": "clinic",
+    "address": "5520 Independence Pkwy, Ste 201, Frisco, TX 75035",
+    "phone": "(214) 383-0001",
+    "website": "https://cpcfrisco.com/",
+    "confidence": "medium",
+    "source": "https://www.cpcfrisco.com/ContactUs.aspx",
+    "notes": "Centennial Primary Care, Frisco."
+  },
+  {
+    "key": "Advanced Primary Care",
+    "type": "clinic",
+    "address": null,
+    "phone": null,
+    "website": null,
+    "confidence": "not_found",
+    "source": "",
+    "notes": "No clinic by this exact name in Frisco found."
+  },
+  {
+    "key": "Greenhill Family Physician",
+    "type": "clinic",
+    "address": "5575 Warren Pkwy, Ste 106, Frisco, TX 75034",
+    "phone": "(214) 872-2688",
+    "website": "https://gfpcare.com/",
+    "confidence": "medium",
+    "source": "https://www.healthgrades.com/group-directory/tx-texas/frisco/greenhill-family-physicians-x8fv2n",
+    "notes": "Greenhill Family Physicians — Dr. Mike Lee. In Frisco, not Plano as input says."
+  },
+  {
+    "key": "Premerier Independant Physicians",
+    "type": "clinic",
+    "address": "1820 N Lake Forest Dr, Ste 300, McKinney, TX 75071",
+    "phone": "(214) 491-5606",
+    "website": "https://piptx.com/",
+    "confidence": "low",
+    "source": "https://piptx.com/location/mckinney/",
+    "notes": "No Frisco office found. Closest: McKinney-Lake Forest location."
+  },
+  {
+    "key": "Specialty Clinics",
+    "type": "clinic",
+    "address": "12600 Rolater Rd, Frisco, TX 75035",
+    "phone": "(469) 545-9983",
+    "website": null,
+    "confidence": "low",
+    "source": "https://www.yelp.com/biz/specialty-care-clinics-frisco",
+    "notes": "Best guess: Specialty Care Clinics in Frisco. Name is generic."
+  },
+  {
+    "key": "Allen OB/GYN",
+    "type": "clinic",
+    "address": "931 SH 121, Ste 2350, Allen, TX 75013",
+    "phone": "(469) 270-6430",
+    "website": "https://www.allenobgyn.com/",
+    "confidence": "high",
+    "source": "https://www.allenobgyn.com/",
+    "notes": "Dr. Sreedhar Tallapureddy at Allen OB/GYN. Located in Allen (input says McKinney)."
+  },
+  {
+    "key": "Peak Fertility",
+    "type": "clinic",
+    "address": "5288 Towne Square Dr, Plano, TX 75024",
+    "phone": "(469) 443-4329",
+    "website": "https://peakfertility.com/",
+    "confidence": "high",
+    "source": "https://peakfertility.com/",
+    "notes": "Peak Fertility Plano location. Dr. Amber Klimczak co-founder. Input lists McKinney; no McKinney office exists."
+  },
+  {
+    "key": "Daffodil Primary Care",
+    "type": "clinic",
+    "address": "4300 Punjab Way, Bldg 1, Unit 160, Frisco, TX 75034",
+    "phone": "(469) 649-9968",
+    "website": "https://www.daffodilclinic.com/",
+    "confidence": "high",
+    "source": "https://www.daffodilclinic.com/contact-us/",
+    "notes": "Daffodil Primary Care & Cardio Renal Clinic. In Frisco, not Plano as input says."
+  },
+  {
+    "key": "Pediactrics R US",
+    "type": "clinic",
+    "address": null,
+    "phone": null,
+    "website": null,
+    "confidence": "not_found",
+    "source": "",
+    "notes": "No 'Pediatrics R Us' practice found in Plano."
+  },
+  {
+    "key": "Monkey Mouths Pediactric therapy",
+    "type": "clinic",
+    "address": "255 W Lebanon Rd, Ste 316, Frisco, TX 75036",
+    "phone": "(817) 479-7019",
+    "website": "https://monkeymouths.com/",
+    "confidence": "medium",
+    "source": "https://monkeymouths.com/about-us/our-locations/",
+    "notes": "Duplicate of earlier 'monkey mouth pediatric therapy' entry. Frisco location serves Plano."
+  },
+  {
+    "key": "Synapse Psychotherapy , LLC",
+    "type": "clinic",
+    "address": "6401 Eldorado Pkwy, McKinney, TX 75070",
+    "phone": "(972) 449-5137",
+    "website": null,
+    "confidence": "medium",
+    "source": "https://www.psychologytoday.com/us/therapists/joseph-dustin-cobb-mckinney-tx/859541",
+    "notes": "Joseph Dustin Cobb, LCSW — Synapse Psychotherapy in McKinney. Synapse LLC phone also listed as (469) 966-2172."
+  },
+  {
+    "key": "Family Medicine",
+    "type": "clinic",
+    "address": "5941 Dallas Pkwy, Plano, TX 75093",
+    "phone": "(972) 758-4455",
+    "website": "http://www.karinbergman.com/",
+    "confidence": "medium",
+    "source": "https://www.vitadox.com/doctor/plano-tx-75093/karin-k-bergman-md/7DTmtrvSmToVBCbmNmZcQi",
+    "notes": "Dr. Karin K. Bergman, MD. Plano office address; she also has a Frisco office at 5150 Warren Pkwy, Bldg 7, Ste 705B."
+  },
+  {
+    "key": "Med Pro Family Clinic",
+    "type": "clinic",
+    "address": "4525 Ohio Dr, Ste 300, Frisco, TX 75035",
+    "phone": "(972) 377-1900",
+    "website": "https://medprofamilyclinic.com/",
+    "confidence": "medium",
+    "source": "https://medprofamilyclinic.com/",
+    "notes": "MedPro Family Clinic. Located in Frisco, not Carrollton as input says."
+  },
+  {
+    "key": "Herrera Law",
+    "type": "mva",
+    "address": null,
+    "phone": null,
+    "website": null,
+    "confidence": "not_found",
+    "source": "",
+    "notes": "Multiple Herrera law firms in Texas but none confirmed in Carrollton. Possible candidates: Law Offices of Rogelio Herrera (1104 W Jefferson Blvd Ste A, Dallas TX 75208, (214) 943-6062) or Alfonso J Herrera Law Firm (16475 Dallas Pkwy Ste 735, Addison TX 75001, (214) 214-4878). Need more details to disambiguate."
+  },
+  {
+    "key": "Zapata Law",
+    "type": "mva",
+    "address": "1403 E Campbell Rd, Ste 105, Richardson, TX 75081",
+    "phone": "(972) 585-7393",
+    "website": "https://dzlawdallas.com/",
+    "confidence": "low",
+    "source": "https://dzlawfirm.com/",
+    "notes": "Best match: Dang & Zapata Law Firm (DFW office is in Richardson, near Carrollton). State Bar lists a Deborah Andrea Zapata in Carrollton but her primary address is in Nashville TN."
+  },
+  {
+    "key": "McMinn Law Firm",
+    "type": "mva",
+    "address": null,
+    "phone": null,
+    "website": "https://www.mcminnlaw.com/",
+    "confidence": "not_found",
+    "source": "https://www.mcminnlaw.com/about-our-firm/",
+    "notes": "McMinn Personal Injury Lawyers is based in Austin (502 W 14th St, (512) 474-0222), not Dallas. No Dallas office found."
+  }
+]

@@ -1,0 +1,368 @@
+[
+  {
+    "name": "Pediatrics People PLLC",
+    "city": "McKinney",
+    "specialty": "",
+    "doctor": "Dr. Audra Renata Linck"
+  },
+  {
+    "name": "Texas Diabetes & Endocrinology",
+    "city": "McKinney",
+    "specialty": "Endocrinologist",
+    "doctor": "Dr.Luis Casaubon"
+  },
+  {
+    "name": "Dr.Aris N Jacob",
+    "city": "McKinney",
+    "specialty": "Endocrinologist",
+    "doctor": "Dr.Aris N Jacob"
+  },
+  {
+    "name": "New Hope Diabetes Care & Prevention",
+    "city": "McKinney",
+    "specialty": "Endocrinologist",
+    "doctor": "Dr..Sana Ullah"
+  },
+  {
+    "name": "Sanders Barry Md",
+    "city": "Carrollton",
+    "specialty": "GI",
+    "doctor": "Dr.Jason Chase Sanders"
+  },
+  {
+    "name": "MR. DOUGLAS CONNER",
+    "city": "McKinney",
+    "specialty": "GS",
+    "doctor": ""
+  },
+  {
+    "name": "Dr.Sherryl Shipes",
+    "city": "Plano",
+    "specialty": "",
+    "doctor": "Dr.Sherryl Shipes"
+  },
+  {
+    "name": "Precision Spine Care",
+    "city": "Frisco",
+    "specialty": "Pain Management",
+    "doctor": "Charles R. Gordon, MD"
+  },
+  {
+    "name": "Texas Star Pain & Spine",
+    "city": "McKinney",
+    "specialty": "Pain Management",
+    "doctor": "Gonzalo Gonzales, DO"
+  },
+  {
+    "name": "Express Family Clinic",
+    "city": "McKinney",
+    "specialty": "MD",
+    "doctor": "Dr. Parihar Pardeep"
+  },
+  {
+    "name": "Just For Kids Dentistry",
+    "city": "McKinney",
+    "specialty": "",
+    "doctor": "Dr. Jeffrey Hoffman"
+  },
+  {
+    "name": "Plano Therapy center",
+    "city": "Plano",
+    "specialty": "",
+    "doctor": ""
+  },
+  {
+    "name": "Endocrinology",
+    "city": "Plano",
+    "specialty": "",
+    "doctor": ""
+  },
+  {
+    "name": "AIX Family Care",
+    "city": "Plano",
+    "specialty": "",
+    "doctor": ""
+  },
+  {
+    "name": "Pediatrics",
+    "city": "Carrollton",
+    "specialty": "",
+    "doctor": ""
+  },
+  {
+    "name": "monkey mouth pediatric therapy",
+    "city": "Plano",
+    "specialty": "",
+    "doctor": ""
+  },
+  {
+    "name": "Allen children clinic",
+    "city": "Allen",
+    "specialty": "",
+    "doctor": ""
+  },
+  {
+    "name": "ABC Pediatrics",
+    "city": "Frisco",
+    "specialty": "",
+    "doctor": ""
+  },
+  {
+    "name": "bright kids pediatrics",
+    "city": "Frisco",
+    "specialty": "",
+    "doctor": ""
+  },
+  {
+    "name": "Lone star",
+    "city": "Allen",
+    "specialty": "",
+    "doctor": ""
+  },
+  {
+    "name": "NcT Step",
+    "city": "Plano",
+    "specialty": "",
+    "doctor": ""
+  },
+  {
+    "name": "plano",
+    "city": "Plano",
+    "specialty": "",
+    "doctor": ""
+  },
+  {
+    "name": "Blue star imaging",
+    "city": "Plano",
+    "specialty": "",
+    "doctor": ""
+  },
+  {
+    "name": "Next Gen",
+    "city": "Plano",
+    "specialty": "",
+    "doctor": ""
+  },
+  {
+    "name": "Carrolton spring",
+    "city": "Carrollton",
+    "specialty": "",
+    "doctor": ""
+  },
+  {
+    "name": "Clinica San Miguel",
+    "city": "Carrollton",
+    "specialty": "",
+    "doctor": ""
+  },
+  {
+    "name": "Medical Clinic /Dan Dinh",
+    "city": "Carrollton",
+    "specialty": "",
+    "doctor": ""
+  },
+  {
+    "name": "Elite Digestive",
+    "city": "Carrollton",
+    "specialty": "GI",
+    "doctor": "Laxmi Deepika"
+  },
+  {
+    "name": "Elite",
+    "city": "Carrollton",
+    "specialty": "",
+    "doctor": ""
+  },
+  {
+    "name": "Sandy Maccoy",
+    "city": "Plano",
+    "specialty": "",
+    "doctor": ""
+  },
+  {
+    "name": "Pure Health",
+    "city": "McKinney",
+    "specialty": "",
+    "doctor": ""
+  },
+  {
+    "name": "Plano clinic Supreme",
+    "city": "Frisco",
+    "specialty": "",
+    "doctor": ""
+  },
+  {
+    "name": "Sarkar",
+    "city": "Carrollton",
+    "specialty": "",
+    "doctor": ""
+  },
+  {
+    "name": "Omni",
+    "city": "Frisco",
+    "specialty": "PCP",
+    "doctor": ""
+  },
+  {
+    "name": "Boomfield",
+    "city": "Frisco",
+    "specialty": "PCP",
+    "doctor": "Nafeesa"
+  },
+  {
+    "name": "Care Choice",
+    "city": "McKinney",
+    "specialty": "",
+    "doctor": ""
+  },
+  {
+    "name": "Highland Medical and primary",
+    "city": "McKinney",
+    "specialty": "PCP",
+    "doctor": "Van Tran MD"
+  },
+  {
+    "name": "Dr. Kyle K. Carter MD",
+    "city": "McKinney",
+    "specialty": "MD",
+    "doctor": "Dr. Kyle Carter MD"
+  },
+  {
+    "name": "Dr. Hong Xiao MD",
+    "city": "Frisco",
+    "specialty": "MD",
+    "doctor": "Dr. Hong Xiao MD"
+  },
+  {
+    "name": "MD Kids Pediactrics",
+    "city": "Frisco",
+    "specialty": "MD",
+    "doctor": "Hung Truong MD"
+  },
+  {
+    "name": "Care Express Clinic",
+    "city": "Frisco",
+    "specialty": "MD",
+    "doctor": "Muhammad Ali Siddiqui , MD"
+  },
+  {
+    "name": "Cierras Heath Primary care",
+    "city": "Frisco",
+    "specialty": "PCP",
+    "doctor": ""
+  },
+  {
+    "name": "Gray branch Pediatrics",
+    "city": "Frisco",
+    "specialty": "PCP",
+    "doctor": ""
+  },
+  {
+    "name": "Woman Health",
+    "city": "Carrollton",
+    "specialty": "",
+    "doctor": ""
+  },
+  {
+    "name": "Carrolton Primary care",
+    "city": "Carrollton",
+    "specialty": "PCP",
+    "doctor": ""
+  },
+  {
+    "name": "Liberty",
+    "city": "Frisco",
+    "specialty": "",
+    "doctor": ""
+  },
+  {
+    "name": "Quick Urgent care",
+    "city": "Plano",
+    "specialty": "",
+    "doctor": ""
+  },
+  {
+    "name": "Garduno Family Medical Clinic",
+    "city": "Frisco",
+    "specialty": "",
+    "doctor": ""
+  },
+  {
+    "name": "CPC Frisco",
+    "city": "Frisco",
+    "specialty": "",
+    "doctor": ""
+  },
+  {
+    "name": "Advanced Primary Care",
+    "city": "Frisco",
+    "specialty": "",
+    "doctor": ""
+  },
+  {
+    "name": "Greenhill Family Physician",
+    "city": "Plano",
+    "specialty": "MD",
+    "doctor": "Mike M. Lee MD"
+  },
+  {
+    "name": "Premerier Independant Physicians",
+    "city": "Frisco",
+    "specialty": "MD",
+    "doctor": ""
+  },
+  {
+    "name": "Specialty Clinics",
+    "city": "Frisco",
+    "specialty": "MD",
+    "doctor": ""
+  },
+  {
+    "name": "Allen OB/GYN",
+    "city": "McKinney",
+    "specialty": "MD",
+    "doctor": "Sreedhar Tallapureddy MD"
+  },
+  {
+    "name": "Peak Fertility",
+    "city": "McKinney",
+    "specialty": "MD",
+    "doctor": "Amber Klimczak MD"
+  },
+  {
+    "name": "Daffodil Primary Care",
+    "city": "Plano",
+    "specialty": "",
+    "doctor": ""
+  },
+  {
+    "name": "Pediactrics R US",
+    "city": "Plano",
+    "specialty": "",
+    "doctor": ""
+  },
+  {
+    "name": "Monkey Mouths Pediactric therapy",
+    "city": "Plano",
+    "specialty": "",
+    "doctor": ""
+  },
+  {
+    "name": "Synapse Psychotherapy , LLC",
+    "city": "McKinney",
+    "specialty": "LCSW",
+    "doctor": "Joseph Dustin Cobb, LCSW"
+  },
+  {
+    "name": "Family Medicine",
+    "city": "Plano",
+    "specialty": "MD",
+    "doctor": "Karin K. Bergman"
+  },
+  {
+    "name": "Med Pro Family Clinic",
+    "city": "Carrollton",
+    "specialty": "",
+    "doctor": ""
+  }
+]
