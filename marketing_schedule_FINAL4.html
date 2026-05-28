@@ -3945,13 +3945,15 @@ body.role-front_desk #referrals-view {
         <button onclick="closeRoutePlanner()" style="background:#e5e7eb;color:#374151;border:none;border-radius:8px;padding:9px 16px;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif">Cancel</button>
         <span id="rp-v4-selected-summary" style="font-size:11px;color:var(--muted);font-style:italic"></span>
       </div>
-      <!-- Phase 73 (2026-05-28): removed the duplicate footer buttons
-           '🔍 Find candidates' + 'Generate route →' per user. The corridor
-           flow auto-runs after Start/End are picked (auto-compute banner
-           or Fit width), and the Generate button lives INSIDE the
-           candidate list (where it shows the live pick count). The
-           footer pair was redundant + confusing. Cancel + summary stay. -->
-      <div style="display:flex;align-items:center;gap:8px"></div>
+      <!-- Phase 77 (2026-05-28): restored both footer buttons. Phase 73
+           wrongly removed them assuming the auto-compute banner would
+           replace Find candidates — but auto-compute only sets corridor
+           width, the candidate list still needs an explicit trigger.
+           User couldn't finish the planning flow without these. -->
+      <div style="display:flex;align-items:center;gap:8px">
+        <button onclick="_rpFindOrPickClick()" id="rp-run-btn" style="background:#7030A0;color:#fff;border:none;border-radius:8px;padding:9px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif">🔍 Find candidates</button>
+        <button onclick="_rpGenerateClick()" id="rp-v4-generate-btn" style="background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;border:none;border-radius:8px;padding:9px 22px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif">Generate route →</button>
+      </div>
     </div>
   </div>
 </div>
