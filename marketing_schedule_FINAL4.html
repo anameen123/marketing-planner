@@ -28068,8 +28068,10 @@ function _rpDrawCorridorBox(A, B, halfWidthMi){
   if(!_DV_MAP || typeof L === 'undefined' || !A || !B || !halfWidthMi) return;
   if(_DV_CORRIDOR_BOX){
     try {
-      if(_DV_CORRIDOR_BOX.fill) _DV_MAP.removeLayer(_DV_CORRIDOR_BOX.fill);
-      if(_DV_CORRIDOR_BOX.edge) _DV_MAP.removeLayer(_DV_CORRIDOR_BOX.edge);
+      if(_DV_CORRIDOR_BOX.fill)    _DV_MAP.removeLayer(_DV_CORRIDOR_BOX.fill);
+      if(_DV_CORRIDOR_BOX.edge)    _DV_MAP.removeLayer(_DV_CORRIDOR_BOX.edge);
+      if(_DV_CORRIDOR_BOX.handle1) _DV_MAP.removeLayer(_DV_CORRIDOR_BOX.handle1);
+      if(_DV_CORRIDOR_BOX.handle2) _DV_MAP.removeLayer(_DV_CORRIDOR_BOX.handle2);
     } catch(_){}
     _DV_CORRIDOR_BOX = null;
   }
@@ -28107,6 +28109,52 @@ function _rpDrawCorridorBox(A, B, halfWidthMi){
     dashArray: '6,4', interactive: false
   }).addTo(_DV_MAP);
   _DV_CORRIDOR_BOX = { fill: fill, edge: edge };
+  // ── PHASE 71 (2026-05-28) — Manual drag handles in 'width' mode ──────
+  // When the user is in "Fix corridor width" mode, add two draggable
+  // handles at the long-edge midpoints. Dragging perpendicular to the
+  // centerline resizes halfWidth on the fly. Mirrors the AI Optimize
+  // circle's edge-drag pattern. Mode = 'visits' skips the handles since
+  // the width is computed there.
+  var manualMode = (window._RP_CORRIDOR_MODE === 'width');
+  if(manualMode){
+    var midA = { lat: (A.lat + B.lat) / 2, lng: (A.lng + B.lng) / 2 };
+    var handlePos1 = { lat: midA.lat + offLat, lng: midA.lng + offLng };
+    var handlePos2 = { lat: midA.lat - offLat, lng: midA.lng - offLng };
+    function makeHandle(pos){
+      return L.marker([pos.lat, pos.lng], {
+        icon: L.divIcon({
+          className: 'rp-corridor-handle',
+          html: '<div title="Drag to resize corridor width" style="width:18px;height:18px;background:#2563eb;border:3px solid #fff;border-radius:50%;box-shadow:0 0 0 2px #2563eb,0 2px 6px rgba(0,0,0,.4);cursor:move"></div>',
+          iconSize: [18,18], iconAnchor: [9,9]
+        }),
+        draggable: true,
+        zIndexOffset: 9400
+      }).addTo(_DV_MAP);
+    }
+    var h1 = makeHandle(handlePos1);
+    var h2 = makeHandle(handlePos2);
+    function onDrag(ev){
+      var ll = ev.target.getLatLng();
+      // Compute new perpendicular distance from centerline to dragged point
+      var perp = Math.abs(_rpV5SignedPerp({ lat: ll.lat, lng: ll.lng }, A, B));
+      perp = Math.max(0.1, Math.min(15, Math.round(perp * 100) / 100));
+      // Update the input + global, redraw box (which re-creates handles at new pos)
+      var wInp = document.getElementById('rp-corridor');
+      if(wInp) wInp.value = perp;
+      window._RP_APPLIED_HALFWIDTH = perp;
+      _rpDrawCorridorBox(A, B, perp);
+      // Light up pins inside the new rectangle (Phase 37 helper)
+      if(typeof _rpHighlightInsideRectangle === 'function') _rpHighlightInsideRectangle(A, B, perp);
+      // Refresh the Apply button state (Phase 35)
+      if(typeof _rpRenderApplyWidthBtn === 'function') _rpRenderApplyWidthBtn();
+    }
+    h1.on('drag', onDrag);
+    h2.on('drag', onDrag);
+    h1.on('dragend', function(){ if(typeof showToast === 'function') showToast('🎯 Corridor width = ±' + (parseFloat((document.getElementById('rp-corridor') || {}).value) || halfWidthMi) + ' mi'); });
+    h2.on('dragend', function(){ if(typeof showToast === 'function') showToast('🎯 Corridor width = ±' + (parseFloat((document.getElementById('rp-corridor') || {}).value) || halfWidthMi) + ' mi'); });
+    _DV_CORRIDOR_BOX.handle1 = h1;
+    _DV_CORRIDOR_BOX.handle2 = h2;
+  }
   // Phase 35: verify dimensions. Distance from corner 0 (A+side) to corner 3
   // (A-side) is the FULL width across the rectangle = 2 * halfWidth.
   try {
@@ -31001,6 +31049,11 @@ function _rpSetCorridorMode(mode){
     if(mode === 'visits' && typeof _rpRunAutoCompute === 'function') _rpRunAutoCompute();
     else if(mode === 'width' && typeof _rpRefreshCorridorBox === 'function') _rpRefreshCorridorBox();
   }
+  // Phase 71 (2026-05-28): toast hint for the new draggable-edge feature
+  // when switching INTO width mode + both ends set.
+  if(mode === 'width' && startVal && endVal && typeof showToast === 'function'){
+    showToast('📐 Drag the blue handles on the corridor edges to resize width on the map. Pins inside the box are auto-included.');
+  }
   console.log('[_rpSetCorridorMode] →', mode);
 }
 window._rpSetCorridorMode = _rpSetCorridorMode;
@@ -31069,6 +31122,19 @@ function _rpRunAutoCompute(){
       wInp.value = result.halfWidth;
       window._RP_APPLIED_HALFWIDTH = result.halfWidth;
       if(typeof _rpRenderApplyWidthBtn === 'function') _rpRenderApplyWidthBtn();
+      // Phase 71 (2026-05-28): brief yellow flash on the corridor input so
+      // the rep sees the value just changed (it's disabled in 'visits'
+      // mode → no caret, easy to miss the new number).
+      try {
+        var origBg = wInp.style.backgroundColor;
+        var origTr = wInp.style.transition;
+        wInp.style.transition = 'background-color .25s ease';
+        wInp.style.backgroundColor = '#fef3c7';
+        setTimeout(function(){
+          wInp.style.backgroundColor = origBg;
+          setTimeout(function(){ wInp.style.transition = origTr; }, 260);
+        }, 900);
+      } catch(_){}
     }
     // Inline hint with the breakdown
     var hint = document.getElementById('rp-ai-suggest-n-hint');
