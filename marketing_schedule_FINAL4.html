@@ -27599,6 +27599,20 @@ function openRoutePlanner(){
   var endInp   = document.getElementById('rp-end');
   var specSel  = document.getElementById('rp-specialty');
   if(!startInp || !endInp) return;
+  // Phase 78 (2026-05-28): snapshot the map view BEFORE we do any state
+  // wipes / pin resets. Some intermediate path (_rpResetAllPins / pin
+  // re-render / panel resize from the planner appearing) was kicking
+  // the view back to DFW-wide, which lost the rep's Show-on-Map zoom.
+  // Capturing + restoring guarantees their zoom stays exactly where it
+  // was when they clicked Plan a Route — even if a future regression
+  // introduces another resetter.
+  var _savedView = null;
+  try {
+    if(typeof _DV_MAP !== 'undefined' && _DV_MAP && typeof _DV_MAP.getCenter === 'function'){
+      var c = _DV_MAP.getCenter();
+      _savedView = { lat: c.lat, lng: c.lng, zoom: _DV_MAP.getZoom() };
+    }
+  } catch(_){}
   // Phase 40: nuke any stale selection halos / preview rings / live route
   // before the planner shows. Prevents leftovers from a previous session
   // (e.g. the stray purple "E" the user reported).
@@ -27723,6 +27737,18 @@ function openRoutePlanner(){
   // the whole thing." Setting the flag here; _isRoutePlannerOpen() is
   // the canonical gate used by other handlers.
   window._RP_LOCKED = true;
+  // Phase 78 (2026-05-28): restore the saved view AFTER the modal is
+  // shown + Leaflet has had a frame to invalidate. Double timeout so
+  // the restore wins against any animated setView from intermediate
+  // helpers. Without this, the rep's Show-on-Map zoom was being lost
+  // the moment they opened Plan a Route.
+  if(_savedView){
+    var restore = function(){
+      try { _DV_MAP.setView([_savedView.lat, _savedView.lng], _savedView.zoom, { animate: false }); } catch(_){}
+    };
+    setTimeout(restore, 0);
+    setTimeout(restore, 80);
+  }
 }
 window.openRoutePlanner = openRoutePlanner;
 // Canonical check used by other map functions to decide whether to
