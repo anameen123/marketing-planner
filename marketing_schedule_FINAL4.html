@@ -3685,7 +3685,7 @@ body.role-front_desk #referrals-view {
       <div id="rp-opt-wrap" style="display:none;margin-bottom:10px">
         <div style="background:linear-gradient(135deg,#1e3a8a,#2563eb);color:#fff;border-radius:10px;padding:13px 15px;margin-bottom:12px">
           <div style="font-size:13px;font-weight:800">🤖 AI Optimize — pick the stops, we find the order</div>
-          <div style="font-size:11px;opacity:.9;margin-top:3px;line-height:1.45">Either click pins one-by-one OR draw a circle on the map to grab everything inside. Pick one as <b>starting point</b> and we compute the shortest visit order.</div>
+          <div style="font-size:11px;opacity:.9;margin-top:3px;line-height:1.45">Either click pins one-by-one OR draw a circle on the map to grab everything inside. Pick one as <b>starting point</b> and we compute the shortest visit order. <b>Only green + yellow clinics</b> are pickable (recently-visited red/orange are skipped).</div>
         </div>
         <!-- Phase 53 (2026-05-28): sub-mode toggle. Pick mode = click pins
              one-by-one (original). Circle mode = click map to set center,
@@ -32946,12 +32946,30 @@ function _rpOptDisarm(){
 }
 window._rpOptDisarm = _rpOptDisarm;
 
+// Phase 57 (2026-05-28): only green/yellow pins are pickable in AI Optimize.
+// Matches the Corridor rule — fresh (red, 0-13d) and warm (orange, 7-13d)
+// clinics that were just visited shouldn't be picked again so soon.
+function _rpOptIsGreenOrYellow(name){
+  try {
+    var days = (typeof daysSinceLastVisit === 'function') ? daysSinceLastVisit(name) : null;
+    var rec  = (typeof recencyBucket === 'function') ? recencyBucket(days) : null;
+    if(!rec) return true;   // unknown → allow
+    return rec.key === 'ripe' || rec.key === 'never' || rec.key === 'yellow';
+  } catch(_){ return true; }
+}
+window._rpOptIsGreenOrYellow = _rpOptIsGreenOrYellow;
+
 // Called by the per-pin click listener (in addPin) when in Optimize mode.
 function _rpOptConsumePinClick(name, exactCoord){
   if(!window._RP_OPT_AWAITING_PICK || !name) return false;
   // Already in target list? Toast and bail (re-clicking same pin shouldn't dup)
   if(window._RP_OPT_TARGETS.some(function(t){ return t.name === name; })){
     if(typeof showToast === 'function') showToast('"' + name + '" is already in your target list.');
+    return false;
+  }
+  // Phase 57: green+yellow only
+  if(!_rpOptIsGreenOrYellow(name)){
+    if(typeof showToast === 'function') showToast('"' + name + '" is too recent (red/orange). Only green + yellow clinics are pickable.');
     return false;
   }
   // Cap at 10
@@ -33596,6 +33614,8 @@ function _rpOptOnFitCountChange(){
   var c = window._RP_OPT_CIRCLE.center;
   var distances = [];
   function consider(name){
+    // Phase 57: only count green/yellow toward the fit target
+    if(typeof _rpOptIsGreenOrYellow === 'function' && !_rpOptIsGreenOrYellow(name)) return;
     var coord = (typeof _rpGetVisualCoord === 'function') ? _rpGetVisualCoord(name) : null;
     if(!coord && typeof getCoordForBusiness === 'function') coord = getCoordForBusiness(name);
     if(!coord) return;
@@ -33604,7 +33624,7 @@ function _rpOptOnFitCountChange(){
   if(typeof CLINIC_BANK !== 'undefined') CLINIC_BANK.forEach(function(o){ if(o && o.n) consider(o.n); });
   if(typeof MVA_ATTORNEYS !== 'undefined') MVA_ATTORNEYS.forEach(function(o){ if(o && o.firm) consider(o.firm); });
   if(distances.length === 0){
-    if(typeof showToast === 'function') showToast('No clinics or MVAs found in the bank.');
+    if(typeof showToast === 'function') showToast('No green/yellow clinics or MVAs found near the center.');
     return;
   }
   distances.sort(function(a, b){ return a - b; });
@@ -33756,6 +33776,8 @@ function _rpOptRecomputeCircleTargets(){
   var hits = [];
   function consider(name, bizType){
     if(window._RP_OPT_CIRCLE_EXCLUDED[name]) return;
+    // Phase 57: only green/yellow inside the circle.
+    if(typeof _rpOptIsGreenOrYellow === 'function' && !_rpOptIsGreenOrYellow(name)) return;
     var coord = (typeof _rpGetVisualCoord === 'function') ? _rpGetVisualCoord(name) : null;
     if(!coord && typeof getCoordForBusiness === 'function') coord = getCoordForBusiness(name);
     if(!coord) return;
