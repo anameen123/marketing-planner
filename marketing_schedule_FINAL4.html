@@ -3443,9 +3443,22 @@ body.role-front_desk #referrals-view {
             🔦 Show on map
           </button>
           <div id="dv-showmap-stepper" style="display:none;align-items:center;gap:4px">
-            <button type="button" onclick="_dvShowMapStep(-1)" title="Previous visit" style="background:#fbbf24;border:none;color:#7c2d12;border-radius:6px;width:28px;height:28px;font-size:14px;font-weight:800;cursor:pointer;font-family:DM Sans,sans-serif">⏴</button>
-            <span id="dv-showmap-counter" style="font-size:10px;font-weight:700;color:#7c2d12;background:#fef3c7;border:1px solid #fbbf24;border-radius:6px;padding:5px 9px;font-family:DM Mono,monospace;min-width:48px;text-align:center">1 / 1</span>
-            <button type="button" onclick="_dvShowMapStep(1)" title="Next visit" style="background:#fbbf24;border:none;color:#7c2d12;border-radius:6px;width:28px;height:28px;font-size:14px;font-weight:800;cursor:pointer;font-family:DM Sans,sans-serif">⏵</button>
+            <!-- Phase 72 (2026-05-28): Single vs Multi toggle. Single = current
+                 stepper behavior (Prev / Next). Multi = pick several rows;
+                 all their pins flash + map auto-fitBounds to show them. -->
+            <button id="dv-showmap-mode-btn" type="button" onclick="_dvShowMapToggleMulti()" title="Switch between Single (one at a time) and Multi (light up several)" style="background:#fff;border:1px solid #fbbf24;color:#7c2d12;border-radius:6px;padding:4px 9px;font-size:10px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;line-height:1.1">📍 Single</button>
+            <!-- Single-mode controls -->
+            <div id="dv-showmap-single-ctrls" style="display:inline-flex;align-items:center;gap:4px">
+              <button type="button" onclick="_dvShowMapStep(-1)" title="Previous visit" style="background:#fbbf24;border:none;color:#7c2d12;border-radius:6px;width:28px;height:28px;font-size:14px;font-weight:800;cursor:pointer;font-family:DM Sans,sans-serif">⏴</button>
+              <span id="dv-showmap-counter" style="font-size:10px;font-weight:700;color:#7c2d12;background:#fef3c7;border:1px solid #fbbf24;border-radius:6px;padding:5px 9px;font-family:DM Mono,monospace;min-width:48px;text-align:center">1 / 1</span>
+              <button type="button" onclick="_dvShowMapStep(1)" title="Next visit" style="background:#fbbf24;border:none;color:#7c2d12;border-radius:6px;width:28px;height:28px;font-size:14px;font-weight:800;cursor:pointer;font-family:DM Sans,sans-serif">⏵</button>
+            </div>
+            <!-- Multi-mode controls — hidden until user toggles Multi -->
+            <div id="dv-showmap-multi-ctrls" style="display:none;align-items:center;gap:4px">
+              <span id="dv-showmap-multi-count" style="font-size:10px;font-weight:700;color:#7c2d12;background:#fef3c7;border:1px solid #fbbf24;border-radius:6px;padding:5px 9px;font-family:DM Mono,monospace;min-width:64px;text-align:center">0 selected</span>
+              <button type="button" onclick="_dvShowMapSelectAll()" title="Light up every visit on this day" style="background:#fff;border:1px solid #fbbf24;color:#7c2d12;border-radius:6px;padding:4px 9px;font-size:10px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;line-height:1.1">All</button>
+              <button type="button" onclick="_dvShowMapClearSelection()" title="Unselect everything" style="background:#fff;border:1px solid #fbbf24;color:#7c2d12;border-radius:6px;padding:4px 9px;font-size:10px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;line-height:1.1">Clear</button>
+            </div>
           </div>
           <!-- Admin-only Map v2 settings opener. Hidden by default; revealed
                by JS in renderDayMap when isAdmin() returns true. Opens the
@@ -34643,6 +34656,17 @@ function _dvToggleShowOnMap(){
     }
     if(stp) stp.style.display = 'none';
     _dvClearShowMapPulse();
+    // Phase 72: wipe multi-mode state + layer on exit so a future open
+    // starts fresh in Single mode.
+    if(typeof _dvClearShowMapMultiLayer === 'function') _dvClearShowMapMultiLayer();
+    window._DV_SHOWMAP_SELECTED = {};
+    window._DV_SHOWMAP_MULTI = false;
+    var modeBtn = document.getElementById('dv-showmap-mode-btn');
+    if(modeBtn){ modeBtn.style.background = '#fff'; modeBtn.style.color = '#7c2d12'; modeBtn.innerHTML = '📍 Single'; }
+    var singleC = document.getElementById('dv-showmap-single-ctrls');
+    var multiC  = document.getElementById('dv-showmap-multi-ctrls');
+    if(singleC) singleC.style.display = 'inline-flex';
+    if(multiC)  multiC.style.display  = 'none';
     if(typeof S !== 'undefined' && typeof S.currentDay === 'number' && typeof renderDayTable === 'function'){
       renderDayTable(S.currentDay);
     }
@@ -34786,9 +34810,14 @@ function _dvClearShowMapPulse(){
 window._dvClearShowMapPulse = _dvClearShowMapPulse;
 
 // Per-row 🔦 button handler. Jumps to that row + makes it the current.
+// In Multi mode (Phase 72), toggles inclusion in the selected set instead.
 function _dvShowMapForRow(ri){
   // Make sure toggle is ON so subsequent prev/next work
   if(!window._DV_SHOWMAP_ACTIVE) _dvToggleShowOnMap();
+  if(window._DV_SHOWMAP_MULTI){
+    _dvShowMapToggleSelection(ri);
+    return;
+  }
   // Find this row's index in the filtered (clinic-only) list
   var di = (typeof S !== 'undefined') ? S.currentDay : null;
   if(di == null || !S.days || !S.days[di]) return;
@@ -34800,6 +34829,170 @@ function _dvShowMapForRow(ri){
   _dvShowMapJumpTo(fi);
 }
 window._dvShowMapForRow = _dvShowMapForRow;
+
+// ── PHASE 72 (2026-05-28) — Show-on-Map MULTI-SELECT mode ──────────────────
+// Single mode = step through one at a time (Phase 58, prev/next).
+// Multi  mode = pick several rows; ALL their pins flash simultaneously and
+//               the map auto-fitBounds to show every selected pin in the
+//               visible area. Per-row 🔦 button becomes an add/remove toggle.
+window._DV_SHOWMAP_MULTI = false;
+window._DV_SHOWMAP_SELECTED = {};                  // ri → true
+window._DV_SHOWMAP_MULTI_LAYER = null;             // L.layerGroup of all pulse markers
+
+function _dvShowMapToggleMulti(){
+  window._DV_SHOWMAP_MULTI = !window._DV_SHOWMAP_MULTI;
+  var single = document.getElementById('dv-showmap-single-ctrls');
+  var multi  = document.getElementById('dv-showmap-multi-ctrls');
+  var btn    = document.getElementById('dv-showmap-mode-btn');
+  if(window._DV_SHOWMAP_MULTI){
+    if(single) single.style.display = 'none';
+    if(multi)  multi.style.display  = 'inline-flex';
+    if(btn){
+      btn.style.background = 'linear-gradient(135deg,#f59e0b,#d97706)';
+      btn.style.color = '#fff';
+      btn.innerHTML = '✓ Multi';
+    }
+    // Wipe the single-mode pulse layer; multi mode owns its own layer group.
+    _dvClearShowMapPulse();
+    window._DV_SHOWMAP_SELECTED = {};
+    _dvShowMapRefreshMulti();
+    if(typeof showToast === 'function') showToast('✓ Multi mode: tap any 🔦 button on a row to add/remove it. Map auto-fits to all selected.');
+  } else {
+    if(single) single.style.display = 'inline-flex';
+    if(multi)  multi.style.display  = 'none';
+    if(btn){
+      btn.style.background = '#fff';
+      btn.style.color = '#7c2d12';
+      btn.innerHTML = '📍 Single';
+    }
+    // Wipe the multi layer; revert to single behavior.
+    _dvClearShowMapMultiLayer();
+    window._DV_SHOWMAP_SELECTED = {};
+  }
+  // Re-render the day table so the per-row buttons reflect the new mode.
+  if(typeof S !== 'undefined' && typeof S.currentDay === 'number' && typeof renderDayTable === 'function'){
+    renderDayTable(S.currentDay);
+  }
+}
+window._dvShowMapToggleMulti = _dvShowMapToggleMulti;
+
+function _dvShowMapToggleSelection(ri){
+  if(window._DV_SHOWMAP_SELECTED[ri]){
+    delete window._DV_SHOWMAP_SELECTED[ri];
+  } else {
+    window._DV_SHOWMAP_SELECTED[ri] = true;
+  }
+  _dvShowMapRefreshMulti();
+  // Re-render table so the toggled row's button visual updates
+  if(typeof S !== 'undefined' && typeof S.currentDay === 'number' && typeof renderDayTable === 'function'){
+    renderDayTable(S.currentDay);
+  }
+}
+window._dvShowMapToggleSelection = _dvShowMapToggleSelection;
+
+function _dvShowMapSelectAll(){
+  var di = (typeof S !== 'undefined') ? S.currentDay : null;
+  if(di == null || !S.days || !S.days[di]) return;
+  var rows = S.days[di].rows || [];
+  window._DV_SHOWMAP_SELECTED = {};
+  rows.forEach(function(r, ri){
+    if(r && r.clinic) window._DV_SHOWMAP_SELECTED[ri] = true;
+  });
+  _dvShowMapRefreshMulti();
+  if(typeof S !== 'undefined' && typeof S.currentDay === 'number' && typeof renderDayTable === 'function'){
+    renderDayTable(S.currentDay);
+  }
+}
+window._dvShowMapSelectAll = _dvShowMapSelectAll;
+
+function _dvShowMapClearSelection(){
+  window._DV_SHOWMAP_SELECTED = {};
+  _dvShowMapRefreshMulti();
+  if(typeof S !== 'undefined' && typeof S.currentDay === 'number' && typeof renderDayTable === 'function'){
+    renderDayTable(S.currentDay);
+  }
+}
+window._dvShowMapClearSelection = _dvShowMapClearSelection;
+
+function _dvClearShowMapMultiLayer(){
+  if(window._DV_SHOWMAP_MULTI_LAYER && typeof _DV_MAP !== 'undefined' && _DV_MAP){
+    try { _DV_MAP.removeLayer(window._DV_SHOWMAP_MULTI_LAYER); } catch(_){}
+  }
+  window._DV_SHOWMAP_MULTI_LAYER = null;
+}
+window._dvClearShowMapMultiLayer = _dvClearShowMapMultiLayer;
+
+// Re-draw the multi-mode pulse layer + counter chip + auto-fit map bounds
+// to every selected pin's coord. Cheap (≤20 markers usually).
+function _dvShowMapRefreshMulti(){
+  if(typeof L === 'undefined' || typeof _DV_MAP === 'undefined' || !_DV_MAP) return;
+  _dvClearShowMapMultiLayer();
+  var di = (typeof S !== 'undefined') ? S.currentDay : null;
+  if(di == null || !S.days || !S.days[di]) return;
+  var rows = S.days[di].rows || [];
+  var selRis = Object.keys(window._DV_SHOWMAP_SELECTED || {}).map(function(k){ return parseInt(k, 10); });
+  // Update counter chip
+  var chip = document.getElementById('dv-showmap-multi-count');
+  if(chip) chip.textContent = selRis.length + ' selected';
+  if(selRis.length === 0) return;
+  // Build layer group + collect bounds
+  var group = L.layerGroup();
+  var latlngs = [];
+  // For visit-number labels, we want ordinal among the clinic-only filtered list
+  // (matches what the rep sees in the per-row '#' column).
+  var ordinalMap = {};   // ri → ordinal
+  var n = 0;
+  rows.forEach(function(r, ri){
+    if(r && r.clinic){ n++; ordinalMap[ri] = n; }
+  });
+  selRis.sort(function(a, b){ return a - b; }).forEach(function(ri){
+    var row = rows[ri];
+    if(!row || !row.clinic) return;
+    // Coord resolution chain — same as _dvShowMapJumpTo (Phase 64)
+    var coord = null;
+    try {
+      var reg = window._RP_PIN_REGISTRY && window._RP_PIN_REGISTRY[row.clinic];
+      if(reg && reg.marker && reg.marker.getLatLng){
+        var ll = reg.marker.getLatLng();
+        coord = { lat: ll.lat, lng: ll.lng };
+      }
+      if(!coord && typeof BUSINESS_GEOCODES !== 'undefined' && BUSINESS_GEOCODES && BUSINESS_GEOCODES[row.clinic]){
+        coord = { lat: BUSINESS_GEOCODES[row.clinic].lat, lng: BUSINESS_GEOCODES[row.clinic].lng };
+      }
+      if(!coord && typeof getCoordForBusiness === 'function') coord = getCoordForBusiness(row.clinic);
+      if(!coord && row.city && typeof getRouteCoord === 'function') coord = getRouteCoord(row.city);
+    } catch(_){}
+    if(!coord) return;
+    var safeName = String(row.clinic || '').replace(/</g,'&lt;');
+    var num = ordinalMap[ri] || '';
+    var html = '<div style="position:relative;width:160px;height:64px;display:flex;flex-direction:column;align-items:center;pointer-events:none">'
+      +   '<div style="background:rgba(15,23,42,.95);color:#fff;font-size:11px;font-weight:800;padding:4px 10px;border-radius:6px;font-family:DM Sans,sans-serif;white-space:nowrap;max-width:160px;overflow:hidden;text-overflow:ellipsis;box-shadow:0 4px 12px rgba(0,0,0,.4);border:1.5px solid #f59e0b;letter-spacing:.01em;margin-bottom:6px">' + safeName + '</div>'
+      +   '<div style="width:42px;height:42px;border-radius:50%;border:4px solid #f59e0b;background:rgba(245,158,11,.22);box-shadow:0 0 0 4px rgba(255,255,255,.7), 0 0 18px #f59e0b;display:flex;align-items:center;justify-content:center;color:#7c2d12;font-weight:800;font-size:14px;font-family:DM Sans,sans-serif;animation:rpSelHaloPulse 1.4s ease-in-out infinite">' + num + '</div>'
+      + '</div>';
+    var m = L.marker([coord.lat, coord.lng], {
+      icon: L.divIcon({ className:'dv-showmap-pulse-wrap', html: html, iconSize:[160,64], iconAnchor:[80,42] }),
+      interactive: false,
+      zIndexOffset: 9700
+    });
+    group.addLayer(m);
+    latlngs.push([coord.lat, coord.lng]);
+  });
+  group.addTo(_DV_MAP);
+  window._DV_SHOWMAP_MULTI_LAYER = group;
+  // Auto-fit bounds so every selected pin is visible — but don't zoom in
+  // tighter than 15 (otherwise a single-pick selection looks weird).
+  if(latlngs.length > 0){
+    try {
+      if(latlngs.length === 1){
+        _DV_MAP.setView(latlngs[0], 15, { animate: true });
+      } else {
+        var bounds = L.latLngBounds(latlngs);
+        _DV_MAP.fitBounds(bounds, { padding: [60, 60], maxZoom: 15, animate: true });
+      }
+    } catch(_){}
+  }
+}
+window._dvShowMapRefreshMulti = _dvShowMapRefreshMulti;
 
 // ── PHASE 70c (2026-05-28): Mobile sub-tab toggle (📋 List / 🗺️ Map) ──
 // On phones the day view shows the visit table AND the map stacked — too
@@ -38273,14 +38466,24 @@ function rowHTML(row,di,ri){
       +     'style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:16px;padding:2px 6px;line-height:1;font-weight:700">&#8942;</button>'
       // Phase 58 — per-row 🔦 "Show on map" button. Only appears when the
       // header toggle is ON, and only for rows that actually have a clinic
-      // name (so empty placeholder rows don't get a useless button). The
-      // handler activates the toggle if it isn't already, then jumps the
-      // map to this row's pin. Works on ALL statuses (Pending, Completed,
-      // Postponed, Canceled) per user spec.
+      // name. Phase 72 (2026-05-28): in MULTI mode, the button toggles
+      // selection — selected rows show a ✓ check + a green tint so the rep
+      // can scan which visits are currently lit on the map.
       + ((window._DV_SHOWMAP_ACTIVE && row.clinic)
-          ? '<button onclick="event.stopPropagation();_dvShowMapForRow('+ri+')" '
-            + 'title="🔦 Show this visit on the map" '
-            + 'style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;border:none;border-radius:6px;padding:2px 7px;font-size:11px;line-height:1;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;margin-left:3px;box-shadow:0 1px 3px rgba(217,119,6,.3)">🔦</button>'
+          ? (function(){
+              var isMulti = !!window._DV_SHOWMAP_MULTI;
+              var isSel   = isMulti && !!(window._DV_SHOWMAP_SELECTED && window._DV_SHOWMAP_SELECTED[ri]);
+              var bg = isSel
+                ? 'linear-gradient(135deg,#16a34a,#15803d)'
+                : 'linear-gradient(135deg,#f59e0b,#d97706)';
+              var label = isMulti ? (isSel ? '✓ 🔦' : '+ 🔦') : '🔦';
+              var title = isMulti
+                ? (isSel ? 'Selected — click to remove from the lit set' : 'Add to the lit set on the map')
+                : '🔦 Show this visit on the map';
+              return '<button onclick="event.stopPropagation();_dvShowMapForRow('+ri+')" '
+                + 'title="' + title + '" '
+                + 'style="background:' + bg + ';color:#fff;border:none;border-radius:6px;padding:2px 7px;font-size:11px;line-height:1;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;margin-left:3px;box-shadow:0 1px 3px rgba(0,0,0,.2)">' + label + '</button>';
+            })()
           : '')
       +   '<div id="'+menuId+'" style="display:none;position:absolute;top:calc(100% + 4px);left:0;background:#fff;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.15);padding:4px;min-width:140px;z-index:9000;font-family:DM Sans,sans-serif;text-align:left">'
       +     (canEditHere
