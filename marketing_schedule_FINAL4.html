@@ -41079,36 +41079,106 @@ function _rpSyncSavedRouteToSchedule(di){
     if(typeof S === 'undefined' || !S.days || !S.days[di]) return;
     var iso = S.days[di].date;
     if(!iso) return;
-    var key = (typeof _rpSavedRouteKey === 'function') ? _rpSavedRouteKey(iso) : null;
-    if(!key) return;
-    var raw = localStorage.getItem(key);
-    if(!raw) return;   // no saved route for this day → nothing to sync
-    var saved;
-    try { saved = JSON.parse(raw); } catch(_){ return; }
-    if(!saved || !Array.isArray(saved.insertedNames) || saved.insertedNames.length === 0) return;
-    // Build the set of clinic names currently on the schedule
+    // Build the set of clinic names currently on the schedule — used by
+    // both the v1 (legacy) and v2 (multi-route) cleanup paths below.
     var onSchedule = {};
     (S.days[di].rows || []).forEach(function(r){
       if(r && r.clinic) onSchedule[r.clinic] = true;
     });
-    // Filter insertedNames to only those still on the schedule
+
+    // ── Phase 132 (2026-05-29) — V2 MULTI-ROUTE STORAGE CLEANUP ─────────
+    // Phase 122a moved the real storage to the v2 key (one record per
+    // route). The original Phase 104 sync only touched v1, so deleting
+    // a route's rows manually left the v2 array intact — and the
+    // override-confirm modal kept firing on the next commit because
+    // _rpLoadCurrentRoute reads from v2 first. User: "I already removed
+    // all the visits from the route previously created so there is
+    // nothing from the trace of that route should still trigger anything
+    // right".
+    try {
+      var v2key = (typeof _rpSavedRoutesKeyV2 === 'function') ? _rpSavedRoutesKeyV2(iso) : null;
+      if(v2key){
+        var rawV2 = localStorage.getItem(v2key);
+        if(rawV2){
+          var v2arr = null;
+          try { v2arr = JSON.parse(rawV2); } catch(_){}
+          if(Array.isArray(v2arr) && v2arr.length > 0){
+            var droppedRouteCount = 0, prunedNameCount = 0;
+            var kept = [];
+            v2arr.forEach(function(rec){
+              if(!rec || !Array.isArray(rec.insertedNames)){
+                kept.push(rec);   // unknown shape — leave alone
+                return;
+              }
+              var beforeN = rec.insertedNames.length;
+              var afterN = rec.insertedNames.filter(function(n){ return onSchedule[n]; });
+              if(afterN.length === 0){
+                // EVERY inserted row from this route was deleted → drop
+                // the whole route record (no override-confirm trigger).
+                droppedRouteCount++;
+                prunedNameCount += beforeN;
+                return;
+              }
+              if(afterN.length !== beforeN){
+                prunedNameCount += (beforeN - afterN.length);
+                rec.insertedNames = afterN;
+                if(Array.isArray(rec.flatPicks)){
+                  rec.flatPicks = rec.flatPicks.filter(function(n){ return onSchedule[n]; });
+                }
+                rec.syncedAt = new Date().toISOString();
+              }
+              kept.push(rec);
+            });
+            if(droppedRouteCount > 0 || prunedNameCount > 0){
+              if(kept.length === 0){
+                localStorage.removeItem(v2key);
+              } else {
+                localStorage.setItem(v2key, JSON.stringify(kept));
+              }
+              try { console.log('[savedRoute v2] pruned ' + prunedNameCount + ' deleted name(s), dropped ' + droppedRouteCount + ' empty route(s) for ' + iso); } catch(_){}
+            }
+          }
+        }
+      }
+    } catch(eV2){ try { console.warn('[_rpSyncSavedRouteToSchedule] v2 cleanup failed:', eV2); } catch(_){} }
+
+    // ── Legacy v1 cleanup (kept for back-compat with pre-Phase-122 saved data) ──
+    var key = (typeof _rpSavedRouteKey === 'function') ? _rpSavedRouteKey(iso) : null;
+    if(!key){
+      if(typeof _rpSyncCurrentRouteChip === 'function') _rpSyncCurrentRouteChip();
+      return;
+    }
+    var raw = localStorage.getItem(key);
+    if(!raw){
+      if(typeof _rpSyncCurrentRouteChip === 'function') _rpSyncCurrentRouteChip();
+      return;
+    }
+    var saved;
+    try { saved = JSON.parse(raw); } catch(_){
+      if(typeof _rpSyncCurrentRouteChip === 'function') _rpSyncCurrentRouteChip();
+      return;
+    }
+    if(!saved || !Array.isArray(saved.insertedNames) || saved.insertedNames.length === 0){
+      if(typeof _rpSyncCurrentRouteChip === 'function') _rpSyncCurrentRouteChip();
+      return;
+    }
     var before = saved.insertedNames.length;
     var after  = saved.insertedNames.filter(function(n){ return onSchedule[n]; });
-    if(after.length === before) return;   // nothing changed
+    if(after.length === before){
+      if(typeof _rpSyncCurrentRouteChip === 'function') _rpSyncCurrentRouteChip();
+      return;
+    }
     if(after.length === 0){
-      // ALL inserted rows are gone → kill the saved route entirely
       try { localStorage.removeItem(key); } catch(_){}
-      try { console.log('[savedRoute] all picks deleted from schedule → clearing saved route for', iso); } catch(_){}
+      try { console.log('[savedRoute v1] all picks deleted from schedule → clearing for', iso); } catch(_){}
     } else {
-      // Some still on schedule → save the trimmed payload
       saved.insertedNames = after;
-      // Also trim flatPicks (if present) to match
       if(Array.isArray(saved.flatPicks)){
         saved.flatPicks = saved.flatPicks.filter(function(n){ return onSchedule[n]; });
       }
       saved.syncedAt = new Date().toISOString();
       try { localStorage.setItem(key, JSON.stringify(saved)); } catch(_){}
-      try { console.log('[savedRoute] pruned', before - after.length, 'deleted pick(s) from saved route for', iso, '(' + after.length + ' remain)'); } catch(_){}
+      try { console.log('[savedRoute v1] pruned', before - after.length, 'deleted pick(s) for', iso, '(' + after.length + ' remain)'); } catch(_){}
     }
     if(typeof _rpSyncCurrentRouteChip === 'function') _rpSyncCurrentRouteChip();
   } catch(e){ try { console.warn('[_rpSyncSavedRouteToSchedule] failed:', e); } catch(_){} }
