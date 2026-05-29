@@ -17482,6 +17482,88 @@ window._crSaveReferral = _crSaveReferral;
 //   - Marketing members + admin → see all pending referrals (created by anyone)
 //   - Front-desk → see only referrals destined for their facility
 //   - Status filter dropdown narrows further (default = pending only)
+// ════════════════════════════════════════════════════════════════════════════
+// PHASE 120a (2026-05-29) — STATUS CHIPS + SMART SEARCH + FILTER DROPDOWNS
+// User: "pending — once the status is changed to successful or unsuccessful
+// then it will be moved to the list where it supposed to be based on the
+// status ... add filters to these lists btw for the clinic name or members
+// or the insurance ... or we can just create a smart filter in which you
+// will write down the name and it will find any match in there ... add
+// filter for successful and unsuccessful".
+//
+// Status chips REPLACE the legacy pr-status-filter dropdown (kept hidden
+// for back-compat — chips drive its value before re-render). Smart search
+// matches across: sourceName, patientName, notes (chief complaint), and
+// createdBy. Two extra dropdowns: creator (member name) + source clinic.
+// All filters compose. _prClearFilters resets everything to "All".
+// ════════════════════════════════════════════════════════════════════════════
+function _prRenderStatusChips(scopedItems){
+  var host = document.getElementById('pr-status-chips');
+  if(!host) return;
+  var sel = document.getElementById('pr-status-filter');
+  var current = (sel && sel.value) || 'all';
+  var counts = { all: scopedItems.length, pending: 0, approved: 0, declined: 0, incomplete: 0, retracted: 0 };
+  scopedItems.forEach(function(r){ if(counts[r.status] != null) counts[r.status]++; });
+  var defs = [
+    { key:'all',         label:'All',          icon:'',   color:'#1F3864' },
+    { key:'pending',     label:'Pending',      icon:'⏳', color:'#d97706' },
+    { key:'approved',    label:'Successful',   icon:'✓',  color:'#16a34a' },
+    { key:'declined',    label:'Unsuccessful', icon:'✗',  color:'#dc2626' },
+    { key:'incomplete',  label:'Incomplete',   icon:'⏰', color:'#7c2d12' },
+    { key:'retracted',   label:'Retracted',    icon:'↩',  color:'#64748b' }
+  ];
+  host.innerHTML = defs.map(function(d){
+    var active = (d.key === current);
+    var bg     = active ? d.color : '#fff';
+    var fg     = active ? '#fff'  : d.color;
+    var bord   = active ? d.color : '#e2e8f0';
+    var weight = active ? '800'   : '600';
+    var count  = counts[d.key] || 0;
+    return '<button type="button" onclick="_prSetStatusFilter(\'' + d.key + '\')" style="background:' + bg + ';color:' + fg + ';border:1px solid ' + bord + ';border-radius:16px;padding:5px 12px;font-size:11px;font-weight:' + weight + ';cursor:pointer;font-family:DM Sans,sans-serif;display:inline-flex;align-items:center;gap:5px;transition:all .12s">'
+      + (d.icon ? d.icon + ' ' : '') + d.label
+      + ' <span style="background:' + (active ? 'rgba(255,255,255,.25)' : '#f1f5f9') + ';color:' + (active ? '#fff' : '#64748b') + ';font-size:10px;font-weight:700;padding:1px 7px;border-radius:8px;font-family:DM Mono,monospace">' + count + '</span>'
+      + '</button>';
+  }).join('');
+}
+window._prRenderStatusChips = _prRenderStatusChips;
+
+function _prSetStatusFilter(value){
+  var sel = document.getElementById('pr-status-filter');
+  if(sel){ sel.value = value; }
+  if(typeof renderPendingReferrals === 'function') renderPendingReferrals();
+}
+window._prSetStatusFilter = _prSetStatusFilter;
+
+function _prClearFilters(){
+  var ids = ['pr-status-filter', 'pr-smart-search', 'pr-filter-member', 'pr-filter-clinic'];
+  ids.forEach(function(id){ var el = document.getElementById(id); if(el){ if(id === 'pr-status-filter') el.value = 'all'; else el.value = ''; } });
+  if(typeof renderPendingReferrals === 'function') renderPendingReferrals();
+}
+window._prClearFilters = _prClearFilters;
+
+// Populate the member + clinic dropdowns from the scoped referral list
+// so they only offer real, in-data choices. Preserves the current value.
+function _prSyncFilterDropdowns(scopedItems){
+  function fillSel(id, label, values){
+    var sel = document.getElementById(id);
+    if(!sel) return;
+    var current = sel.value;
+    var unique = {};
+    values.forEach(function(v){ if(v) unique[v] = true; });
+    var sorted = Object.keys(unique).sort();
+    sel.innerHTML = '<option value="">' + label + '</option>'
+      + sorted.map(function(v){
+          var safe = String(v).replace(/</g,'&lt;').replace(/"/g,'&quot;');
+          return '<option value="' + safe + '"' + (v === current ? ' selected' : '') + '>' + safe + '</option>';
+        }).join('');
+  }
+  fillSel('pr-filter-member', '👥 All creators',
+    scopedItems.map(function(r){ return r.createdBy || ''; }));
+  fillSel('pr-filter-clinic', '🏥 All sources',
+    scopedItems.map(function(r){ return r.sourceName || ''; }));
+}
+window._prSyncFilterDropdowns = _prSyncFilterDropdowns;
+
 function renderPendingReferrals(){
   // Per user 2026-05-26: sweep auto-expirations before rendering so the
   // panel never shows a stale 'pending' row past its 1.5-hour cutoff.
@@ -17509,17 +17591,47 @@ function renderPendingReferrals(){
   // (not the current filter view) so the rep sees the real numbers, and
   // scoped per-facility for FD users so they see only their own.
   try { _crRenderMonthlySummary(); } catch(e){ console.warn('[112b] monthly summary failed:', e); }
-  // Filter
+  // Phase 120a (2026-05-29): SCOPE first (facility for FD), THEN render
+  // chips + dropdowns from the scoped set (so counts reflect what THIS
+  // user can actually see), THEN apply chip + smart search + dropdown
+  // filters.
+  var scopedAll = (PENDING_REFERRALS || []).slice();
+  if(isFD && CURRENT_USER.facilityKey){
+    scopedAll = scopedAll.filter(function(r){ return r.destinationFacility === CURRENT_USER.facilityKey; });
+  }
+  // Chips + dropdowns reflect SCOPED data (not the current view) so the
+  // rep always sees an accurate "(N)" count next to each chip + real-data
+  // dropdown options.
+  try { _prRenderStatusChips(scopedAll); } catch(e){ console.warn('[120a] chips failed:', e); }
+  try { _prSyncFilterDropdowns(scopedAll); } catch(e){ console.warn('[120a] dropdowns failed:', e); }
+  // Now read filter values
   var statusSel = document.getElementById('pr-status-filter');
   var statusFilter = (statusSel && statusSel.value) || 'all';
-  var items = (PENDING_REFERRALS || []).slice();
-  // Scope: front-desk users only see referrals destined for their facility
-  if(isFD && CURRENT_USER.facilityKey){
-    items = items.filter(function(r){ return r.destinationFacility === CURRENT_USER.facilityKey; });
-  }
+  var search = ((document.getElementById('pr-smart-search') || {}).value || '').toLowerCase().trim();
+  var memberFilter = ((document.getElementById('pr-filter-member') || {}).value || '').toLowerCase();
+  var clinicFilter = ((document.getElementById('pr-filter-clinic') || {}).value || '').toLowerCase();
+  var items = scopedAll;
   // Status filter
   if(statusFilter !== 'all'){
     items = items.filter(function(r){ return r.status === statusFilter; });
+  }
+  // Creator (member) filter
+  if(memberFilter){
+    items = items.filter(function(r){ return (r.createdBy || '').toLowerCase() === memberFilter; });
+  }
+  // Source clinic filter
+  if(clinicFilter){
+    items = items.filter(function(r){ return (r.sourceName || '').toLowerCase() === clinicFilter; });
+  }
+  // Smart text search — matches anywhere in source/patient/complaint/creator
+  if(search){
+    items = items.filter(function(r){
+      var hay = [
+        r.sourceName, r.patientName, r.notes, r.createdBy,
+        r.patientPhone, r.sourceClinicPhone
+      ].map(function(s){ return String(s || '').toLowerCase(); }).join(' ');
+      return hay.indexOf(search) >= 0;
+    });
   }
   // Sort: newest first
   items.sort(function(a, b){ return (b.createdAt || '').localeCompare(a.createdAt || ''); });
@@ -57510,25 +57622,42 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
         <div style="font-size:14px;font-weight:700;color:#581c87;display:flex;align-items:center;gap:6px">📥 Pending referrals <span id="pr-count-badge" style="background:#7c3aed;color:#fff;font-size:10px;padding:1px 8px;border-radius:10px;font-weight:700">0</span></div>
         <div style="font-size:11px;color:var(--muted);margin-top:3px">Two-stage flow — marketing creates → facility approves on patient arrival → auto-creates a patient log.</div>
       </div>
-      <div style="display:flex;gap:6px;align-items:center">
-        <!-- Per user 2026-05-26 (#29): default to All so approved /
-             declined / incomplete referrals stay visible without
-             toggling. The persistent record matters as much as pending. -->
-        <!-- Phase 112a (2026-05-29): renamed Approved → Successful, Declined → Unsuccessful in the filter dropdown labels. Values unchanged. -->
-        <select id="pr-status-filter" onchange="renderPendingReferrals()" style="border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:11px;font-family:'DM Sans',sans-serif;background:#fff">
-          <option value="all" selected>All statuses</option>
-          <option value="pending">⏳ Pending only</option>
-          <option value="approved">✓ Successful</option>
-          <option value="declined">✗ Unsuccessful</option>
-          <option value="incomplete">⏰ Incomplete (auto-expired)</option>
-          <option value="retracted">↩ Retracted</option>
-        </select>
-      </div>
+      <!-- Phase 120a (2026-05-29): legacy dropdown replaced by pill chips
+           rendered live by _prRenderStatusChips. The chip row also hosts
+           the smart text search + member/clinic dropdown filters. Hidden
+           dropdown kept (display:none) so old code paths reading
+           pr-status-filter.value still work — chip clicks update its
+           value before re-rendering. -->
+      <select id="pr-status-filter" onchange="renderPendingReferrals()" style="display:none">
+        <option value="all" selected>All statuses</option>
+        <option value="pending">⏳ Pending</option>
+        <option value="approved">✓ Successful</option>
+        <option value="declined">✗ Unsuccessful</option>
+        <option value="incomplete">⏰ Incomplete</option>
+        <option value="retracted">↩ Retracted</option>
+      </select>
     </div>
     <!-- Phase 112b (2026-05-29): monthly summary card host — populated by
          _crRenderMonthlySummary() on every renderPendingReferrals(). Shows
          this-month totals + success / unsuccessful ratios. Read-only. -->
     <div id="pr-monthly-summary" style="margin-bottom:10px"></div>
+    <!-- Phase 120a (2026-05-29): status pill chips with live counts.
+         Click → filters the list to that status. Active chip is purple-
+         filled. Populated by _prRenderStatusChips() on every render. -->
+    <div id="pr-status-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;padding:8px 10px;background:#f8fafc;border:1px solid var(--border);border-radius:8px"></div>
+    <!-- Phase 120a (2026-05-29): smart-search + dropdown filters. Smart
+         search matches: source clinic, patient name, chief complaint,
+         creator name. Dropdowns populated live from current referrals. -->
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">
+      <input type="text" id="pr-smart-search" placeholder="🔍 Search clinic, patient, chief complaint, member…" oninput="renderPendingReferrals()" style="flex:2;min-width:220px;border:1px solid var(--border);border-radius:6px;padding:7px 11px;font-size:12px;font-family:DM Sans,sans-serif;background:#fff;box-sizing:border-box">
+      <select id="pr-filter-member" onchange="renderPendingReferrals()" style="border:1px solid var(--border);border-radius:6px;padding:7px 11px;font-size:12px;font-family:DM Sans,sans-serif;background:#fff" title="Filter by who created the referral">
+        <option value="">👥 All creators</option>
+      </select>
+      <select id="pr-filter-clinic" onchange="renderPendingReferrals()" style="border:1px solid var(--border);border-radius:6px;padding:7px 11px;font-size:12px;font-family:DM Sans,sans-serif;background:#fff" title="Filter by source clinic / MVA">
+        <option value="">🏥 All sources</option>
+      </select>
+      <button type="button" onclick="_prClearFilters()" title="Clear all filters + show All statuses" style="background:#fff;border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:6px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">✕ Clear</button>
+    </div>
     <div id="pr-list" style="display:flex;flex-direction:column;gap:8px"></div>
   </div>
   <!-- Phase 119: empty-state hint when no outgoing referrals exist.
