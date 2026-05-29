@@ -1828,15 +1828,13 @@ body.role-front_desk #referrals-view {
          the old position here was hidden by `body.member-view .main-nav{display:none}`.) -->
   </div>
 
-  <!-- Per user 2026-05-26 (#48): Quick-access "Recent pages" strip — shows
-       the last 3 tabs visited (excluding current). Like Windows recent files.
-       Rendered live by _renderRecentTabsStrip on every switchTab call.
-       Per user 2026-05-26 (#46/#47): also hosts the master search trigger. -->
-  <div id="recent-tabs-strip-wrap" style="display:flex;align-items:center;gap:8px;padding:6px 36px;background:rgba(31,56,100,.06);border-bottom:1px solid var(--border);font-size:11px;flex-wrap:wrap">
+  <!-- Per user 2026-05-26 (#46/#47): master search trigger — kept in the
+       top bar (Ctrl+K is the most-used shortcut so it stays prominent).
+       Phase 118 (2026-05-29): recent-tabs strip MOVED to the sidebar per
+       user "this recent tabs has to be inside the side bar not here".
+       Top bar is now just the search chip. -->
+  <div style="display:flex;align-items:center;gap:8px;padding:6px 36px;background:rgba(31,56,100,.06);border-bottom:1px solid var(--border);font-size:11px;flex-wrap:wrap">
     <button type="button" onclick="_openMasterSearch()" title="Search everything — clinics, MVAs, patients, referrals, sections (Ctrl+K)" style="background:#fff;border:1px solid var(--border);color:#1F3864;border-radius:14px;padding:4px 13px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;display:inline-flex;align-items:center;gap:5px">🔍 Search… <span style="background:#f1f5f9;color:#64748b;border-radius:3px;padding:1px 5px;font-size:9px;font-weight:600">Ctrl K</span></button>
-    <span style="color:var(--border);font-weight:700">|</span>
-    <span style="color:var(--muted);font-weight:700;letter-spacing:.04em;text-transform:uppercase">⏱ Recent:</span>
-    <div id="recent-tabs-strip" style="display:flex;gap:6px;flex-wrap:wrap"></div>
   </div>
 
   <!-- Master search modal (per user 2026-05-26 #46/#47). Covers lists AND
@@ -59358,6 +59356,16 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
     <div class="md-role" id="md-user-role">Marketing Team</div>
   </div>
   <div class="member-drawer-body">
+    <!-- Phase 118 (2026-05-29): "Recent" strip relocated from the top
+         bar into the sidebar per user "this recent tabs has to be inside
+         the side bar not here". IDs unchanged so _renderRecentTabsStrip
+         keeps working as-is. Hidden by default (display:none); the
+         render function flips display:flex when there are recent tabs.
+         Sidebar is white — chips are light navy on muted background. -->
+    <div id="recent-tabs-strip-wrap" style="display:none;flex-direction:column;gap:6px;padding:10px 14px 12px;background:#f8fafc;border-bottom:1px solid var(--border);margin-bottom:4px">
+      <div class="md-section-label" style="margin:0 0 4px 0;padding:0">⏱ Recent</div>
+      <div id="recent-tabs-strip" style="display:flex;gap:5px;flex-wrap:wrap"></div>
+    </div>
     <!-- Primary destinations — Azure-style accordion. Items with sub-tabs
          (Team, Businesses, Finances) show a chevron and expand to reveal
          their sub-nav when active. Only one accordion group is expanded
