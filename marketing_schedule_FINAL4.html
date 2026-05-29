@@ -36211,39 +36211,73 @@ function _rpOptUpdateRadiusDisplay(){
 }
 window._rpOptUpdateRadiusDisplay = _rpOptUpdateRadiusDisplay;
 
-// Phase 56: fit-mode — compute minimum radius covering N closest clinic+MVA
+// Phase 56: fit-mode — compute minimum radius covering N closest green/yellow
 // pins, then set it as the circle radius + recompute targets.
+// Phase 108 (2026-05-28) — bug-fix pass:
+//   1. Was iterating CLINIC_BANK + MVA_ATTORNEYS only. The downstream
+//      _rpOptRecomputeCircleTargets ALSO iterates OUTREACH. So the radius
+//      was sized to fit N clinics/MVAs, but the resulting target list
+//      could include extra outreach pins → "fit 5" might show 7 stops.
+//      FIX: include OUTREACH here too so both sides agree on the universe.
+//   2. _RP_OPT_CIRCLE_EXCLUDED (pins the user unchecked) was ignored when
+//      sizing — the radius covered N including excluded pins, but the
+//      target list dropped them → final count was less than N. FIX: skip
+//      excluded pins in the distance set so the user gets EXACTLY N.
+//   3. The 20-mile cap silently failed when the Nth nearest pin was
+//      farther — radius clamped to 20 and the actual target count fell
+//      short. FIX: removed the cap (the input itself is bounded 1-50
+//      visits so this can't run away) and toast when the user asked for
+//      more than exist.
+//   4. Padding bumped from 2% to a small mile offset (+0.05 mi or 1.5%,
+//      whichever is larger) so the Nth pin sits clearly inside even
+//      when the cluster is tight.
 function _rpOptOnFitCountChange(){
-  if(!window._RP_OPT_CIRCLE || !window._RP_OPT_CIRCLE.center) return;
+  if(!window._RP_OPT_CIRCLE || !window._RP_OPT_CIRCLE.center){
+    if(typeof showToast === 'function') showToast('Set the circle center first (click a spot on the map).');
+    return;
+  }
   var inp = document.getElementById('rp-opt-circle-fit-count');
   var n = parseInt(inp && inp.value, 10);
   if(isNaN(n) || n < 1) return;
   n = Math.max(1, Math.min(50, n));
   var c = window._RP_OPT_CIRCLE.center;
+  var excluded = window._RP_OPT_CIRCLE_EXCLUDED || {};
   var distances = [];
   function consider(name){
-    // Phase 57: only count green/yellow toward the fit target
+    if(!name) return;
+    if(excluded[name]) return;                    // Phase 108 fix #2
     if(typeof _rpOptIsGreenOrYellow === 'function' && !_rpOptIsGreenOrYellow(name)) return;
     var coord = (typeof _rpGetVisualCoord === 'function') ? _rpGetVisualCoord(name) : null;
     if(!coord && typeof getCoordForBusiness === 'function') coord = getCoordForBusiness(name);
     if(!coord) return;
     distances.push(_rpHaversineMiles(c, coord));
   }
-  if(typeof CLINIC_BANK !== 'undefined') CLINIC_BANK.forEach(function(o){ if(o && o.n) consider(o.n); });
-  if(typeof MVA_ATTORNEYS !== 'undefined') MVA_ATTORNEYS.forEach(function(o){ if(o && o.firm) consider(o.firm); });
+  if(typeof CLINIC_BANK    !== 'undefined') CLINIC_BANK.forEach(function(o){ if(o && o.n)    consider(o.n); });
+  if(typeof MVA_ATTORNEYS  !== 'undefined') MVA_ATTORNEYS.forEach(function(o){ if(o && o.firm) consider(o.firm); });
+  if(typeof OUTREACH       !== 'undefined') OUTREACH.forEach(function(o){     if(o && o.name) consider(o.name); });   // Phase 108 fix #1
   if(distances.length === 0){
-    if(typeof showToast === 'function') showToast('No green/yellow clinics or MVAs found near the center.');
+    if(typeof showToast === 'function') showToast('No eligible green/yellow pins near the center. Move the center or loosen filters.');
     return;
   }
   distances.sort(function(a, b){ return a - b; });
-  var idx = Math.min(n, distances.length) - 1;
-  // Slight padding (2%) so the Nth pin sits clearly inside, not on the edge
-  var newR = Math.max(0.1, Math.min(20, distances[idx] * 1.02));
+  var wantN = n;
+  var available = distances.length;
+  var idx = Math.min(wantN, available) - 1;
+  var rawR = distances[idx];
+  // Padding so the Nth pin sits clearly inside, not on the edge.
+  // Take the larger of (+0.05 mi) and (1.5% pad) so tight clusters still
+  // get a visible buffer ring.
+  var newR = Math.max(0.1, Math.max(rawR + 0.05, rawR * 1.015));   // Phase 108 fix #3 + #4
   window._RP_OPT_CIRCLE.radius = newR;
   _rpOptDrawCircle();
   _rpOptRecomputeCircleTargets();
   var displayEl = document.getElementById('rp-opt-circle-fit-radius-display');
   if(displayEl) displayEl.textContent = '±' + newR.toFixed(2) + ' mi';
+  // Phase 108: tell the user when we couldn't honor the requested count.
+  if(wantN > available && typeof showToast === 'function'){
+    showToast('⚠ Only ' + available + ' eligible green/yellow pins near the center — circle sized to fit all of them.');
+  }
+  try { console.log('[fit] wantN=' + wantN + ' available=' + available + ' Nth_dist=' + rawR.toFixed(3) + ' mi → radius=' + newR.toFixed(3) + ' mi'); } catch(_){}
 }
 window._rpOptOnFitCountChange = _rpOptOnFitCountChange;
 window._rpOptArmCircleMode = _rpOptArmCircleMode;
