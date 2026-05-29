@@ -3870,7 +3870,31 @@ body.role-front_desk #referrals-view {
       <div id="rp-opt-wrap" style="display:none;margin-bottom:10px">
         <div style="background:linear-gradient(135deg,#1e3a8a,#2563eb);color:#fff;border-radius:10px;padding:13px 15px;margin-bottom:12px">
           <div style="font-size:13px;font-weight:800">🎯 Pick &amp; Plan — pick the stops, we find the order</div>
-          <div style="font-size:11px;opacity:.9;margin-top:3px;line-height:1.45">Either click pins one-by-one OR draw a circle on the map to grab everything inside. Pick one as <b>starting point</b> and we compute the shortest visit order. <b>Only green + yellow clinics</b> are pickable (recently-visited red/orange are skipped).</div>
+          <div style="font-size:11px;opacity:.9;margin-top:3px;line-height:1.45">Either click pins one-by-one OR draw a circle on the map to grab everything inside. Pick one as <b>starting point</b> (or use the Starting from box below to anchor at a WCG facility). We compute the shortest visit order. <b>Only green + yellow clinics</b> are pickable (recently-visited red/orange are skipped).</div>
+        </div>
+        <!-- Phase 117b (2026-05-29) — optional "Starting from" anchor that
+             accepts a WCG facility (Frisco ER / Castle Hills ER / Richardson /
+             UC Plano) OR any clinic. When filled with a FACILITY, the TSP
+             starts from that facility's coord but the facility is NOT added
+             to the target list and is NOT committed to the schedule (it's
+             a home-base, not a visit). When empty (default), the existing
+             radio-among-targets start-picker takes over. -->
+        <div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:10px">
+          <div style="font-size:11px;font-weight:700;color:#1F3864;margin-bottom:4px">🚩 Starting from <span style="color:var(--muted);font-weight:400">(optional — anchor at a facility or any clinic)</span></div>
+          <div style="position:relative">
+            <input type="text" id="rp-opt-anchor-search" placeholder="e.g. Frisco ER, Richardson… (leave empty to pick a target as start)"
+                   autocomplete="off"
+                   oninput="if(typeof _rpOptAnchorSearch==='function')_rpOptAnchorSearch()"
+                   onfocus="if(typeof _rpOptAnchorSearch==='function')_rpOptAnchorSearch()"
+                   onblur="setTimeout(function(){var b=document.getElementById('rp-opt-anchor-suggest');if(b)b.style.display='none';},180)"
+                   style="width:100%;border:1px solid var(--border);border-radius:6px;padding:7px 10px;font-size:12px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box">
+            <div id="rp-opt-anchor-suggest" style="display:none;position:absolute;left:0;right:0;top:100%;margin-top:2px;background:#fff;border:1px solid var(--border);border-radius:6px;max-height:220px;overflow-y:auto;z-index:10;box-shadow:0 8px 20px rgba(31,56,100,.12)"></div>
+          </div>
+          <input type="hidden" id="rp-opt-anchor-value">
+          <div id="rp-opt-anchor-chip" style="display:none;margin-top:6px;padding:6px 10px;background:#dcfce7;border:1px solid #86efac;border-left:3px solid #16a34a;border-radius:6px;font-size:11px;color:#14532d;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
+            <span>✓ Starts from: <b id="rp-opt-anchor-chip-name"></b></span>
+            <button type="button" onclick="if(typeof _rpOptClearAnchor==='function')_rpOptClearAnchor()" style="background:#fff;color:#7f1d1d;border:1px solid #fecaca;border-radius:5px;padding:3px 9px;font-size:10px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">✕ Clear</button>
+          </div>
         </div>
         <!-- Phase 53 (2026-05-28): sub-mode toggle. Pick mode = click pins
              one-by-one (original). Circle mode = click map to set center,
@@ -27983,6 +28007,9 @@ function openRoutePlanner(){
     window._RP_OPT_SUB_MODE = 'pin';
     window._RP_OPT_CIRCLE = null;
     window._RP_OPT_CIRCLE_EXCLUDED = {};
+    // Phase 117b (2026-05-29): reset Pick & Plan "Starting from" anchor
+    window._RP_OPT_ANCHOR = null;
+    try { if(typeof _rpOptClearAnchor === 'function') _rpOptClearAnchor(); } catch(_){}
     if(window._RP_AI) window._RP_AI.autoSuggestLast = null;
     if(typeof _rpClearStartMarker === 'function') _rpClearStartMarker();
     if(typeof _rpClearEndMarker === 'function') _rpClearEndMarker();
@@ -34319,7 +34346,10 @@ function _rpOptRenderTargetList(){
   var n = window._RP_OPT_TARGETS.length;
   if(count) count.textContent = '(' + n + ')';
   if(optBtn){
-    var enabled = (n >= 3 && window._RP_OPT_START_NAME);
+    // Phase 117b (2026-05-29): start can come from the START_NAME radio
+    // OR from the anchor input (facility / home-base). Either satisfies.
+    var hasStart = !!window._RP_OPT_START_NAME || !!(window._RP_OPT_ANCHOR && window._RP_OPT_ANCHOR.coord);
+    var enabled = (n >= 3 && hasStart);
     optBtn.disabled = !enabled;
     optBtn.style.background = enabled ? 'linear-gradient(135deg,#1e3a8a,#2563eb)' : '#cbd5e1';
     optBtn.style.color = enabled ? '#fff' : '#94a3b8';
@@ -34474,16 +34504,129 @@ function _rpOptSolveTSP(targets, startName){
 }
 window._rpOptSolveTSP = _rpOptSolveTSP;
 
+// ════════════════════════════════════════════════════════════════════════════
+// PHASE 117b (2026-05-29) — "STARTING FROM" ANCHOR for Pick & Plan
+// User: facilities (Frisco ER / Castle Hills ER / Richardson / UC Plano)
+// should be selectable as the start in Pick & Plan, same as Corridor.
+// They're NOT visits — never added to targets list, never committed to
+// day.rows. The TSP starts FROM the anchor's coord, visits the targets
+// in optimal order, ends at the last target (open path, no return).
+//
+// Anchor input also accepts a regular clinic — in that case the route
+// starts there but the clinic is also NOT added to targets/schedule
+// (the user already has that clinic on the schedule manually, presumably,
+// or just wants the route to fan out from a known landmark).
+// ════════════════════════════════════════════════════════════════════════════
+window._RP_OPT_ANCHOR = null;   // { name, coord, kind, value }
+
+function _rpOptAnchorSearch(){
+  var inp = document.getElementById('rp-opt-anchor-search');
+  var box = document.getElementById('rp-opt-anchor-suggest');
+  if(!inp || !box) return;
+  var q = (inp.value || '').toLowerCase().trim();
+  var pool = window._RP_POOL || [];
+  // Facilities first, then anything matching the query
+  var matches = pool.filter(function(p){
+    if(!q) return p.kind === 'facility';   // empty → only show facilities (home bases)
+    return p.name.toLowerCase().indexOf(q) >= 0 || (p.city || '').toLowerCase().indexOf(q) >= 0;
+  });
+  matches.sort(function(a, b){
+    var ka = a.kind === 'facility' ? 0 : 1;
+    var kb = b.kind === 'facility' ? 0 : 1;
+    if(ka !== kb) return ka - kb;
+    return (a.name || '').localeCompare(b.name || '');
+  });
+  matches = matches.slice(0, 10);
+  if(matches.length === 0){
+    box.innerHTML = '<div style="padding:8px 12px;font-size:11px;color:var(--muted);font-style:italic">No matches. Type a facility (Frisco ER, Castle Hills ER, Richardson, UC Plano) or a clinic name.</div>';
+    box.style.display = 'block';
+    return;
+  }
+  var typeChip = { facility:'WCG', clinic:'Clinic', mva:'MVA' };
+  box.innerHTML = matches.map(function(p, i){
+    var safeName = String(p.name).replace(/</g,'&lt;');
+    var isFacility = p.kind === 'facility';
+    var bg = isFacility ? '#f3e8ff' : '#fff';
+    var leftBorder = isFacility ? '#7030A0' : '#e2e8f0';
+    return '<div onmousedown="event.preventDefault();_rpOptAnchorPick(' + i + ')" '
+      + 'style="padding:8px 12px;cursor:pointer;border-bottom:1px solid #f1f5f9;border-left:4px solid ' + leftBorder + ';font-size:12px;background:' + bg + ';display:flex;align-items:center;justify-content:space-between;gap:8px" '
+      + 'onmouseover="this.style.background=\'#f1f5f9\'" onmouseout="this.style.background=\'' + bg + '\'">'
+      + '<span style="font-weight:700;color:#1F3864">' + p.icon + ' ' + safeName + ' <span style="color:var(--muted);font-weight:400;font-size:10px">' + (p.city || '') + '</span></span>'
+      + '<span style="font-size:9px;font-weight:700;color:#fff;background:' + (isFacility ? '#7030A0' : '#64748b') + ';padding:2px 7px;border-radius:8px">' + (typeChip[p.kind] || 'Other') + '</span>'
+      + '</div>';
+  }).join('');
+  window._RP_OPT_ANCHOR_MATCHES = matches;
+  box.style.display = 'block';
+}
+window._rpOptAnchorSearch = _rpOptAnchorSearch;
+
+function _rpOptAnchorPick(idx){
+  var matches = window._RP_OPT_ANCHOR_MATCHES || [];
+  var p = matches[idx];
+  if(!p) return;
+  // Resolve coord — facility uses getRouteCoord(value), clinic uses getCoordForBusiness(name)
+  var coord = null;
+  if(typeof getCoordForBusiness === 'function') coord = getCoordForBusiness(p.name);
+  if(!coord && typeof getRouteCoord === 'function') coord = getRouteCoord(p.value);
+  if(!coord){
+    if(typeof showToast === 'function') showToast('Could not resolve location for ' + p.name);
+    return;
+  }
+  window._RP_OPT_ANCHOR = { name: p.name, coord: coord, kind: p.kind, value: p.value };
+  var inp = document.getElementById('rp-opt-anchor-search');
+  var hid = document.getElementById('rp-opt-anchor-value');
+  var box = document.getElementById('rp-opt-anchor-suggest');
+  if(inp) inp.value = p.icon + ' ' + p.name;
+  if(hid) hid.value = p.value;
+  if(box) box.style.display = 'none';
+  // Render chip
+  var chip = document.getElementById('rp-opt-anchor-chip');
+  var chipName = document.getElementById('rp-opt-anchor-chip-name');
+  if(chip){
+    chip.style.display = 'flex';
+    if(chipName) chipName.innerHTML = String(p.name).replace(/</g,'&lt;') + (p.kind === 'facility' ? ' <span style="font-size:9px;background:#7030A0;color:#fff;padding:1px 6px;border-radius:8px;margin-left:4px">🏥 home base — not a visit</span>' : ' <span style="font-size:9px;background:#64748b;color:#fff;padding:1px 6px;border-radius:8px;margin-left:4px">anchor — not a visit</span>');
+  }
+  // Sync the optimize button so it enables (anchor satisfies the "start" requirement)
+  if(typeof _rpOptRenderPickStatus === 'function') _rpOptRenderPickStatus();
+  if(typeof showToast === 'function') showToast('🚩 Starting from: ' + p.name + ' (not counted as a visit)');
+}
+window._rpOptAnchorPick = _rpOptAnchorPick;
+
+function _rpOptClearAnchor(){
+  window._RP_OPT_ANCHOR = null;
+  var inp = document.getElementById('rp-opt-anchor-search'); if(inp) inp.value = '';
+  var hid = document.getElementById('rp-opt-anchor-value');  if(hid) hid.value = '';
+  var chip = document.getElementById('rp-opt-anchor-chip');  if(chip) chip.style.display = 'none';
+  if(typeof _rpOptRenderPickStatus === 'function') _rpOptRenderPickStatus();
+}
+window._rpOptClearAnchor = _rpOptClearAnchor;
+
 function _rpOptOptimize(){
   if(window._RP_OPT_TARGETS.length < 3){
     if(typeof showToast === 'function') showToast('Pick at least 3 targets first.');
     return;
   }
-  if(!window._RP_OPT_START_NAME){
-    if(typeof showToast === 'function') showToast('Pick which target is your starting point.');
-    return;
+  // Phase 117b: if an anchor is set, it satisfies the "starting point"
+  // requirement — skip the start-radio check, prepend a virtual anchor
+  // target to the TSP input, and mark it so commit can filter it out.
+  var anchor = window._RP_OPT_ANCHOR;
+  var targetsForTsp, startNameForTsp;
+  if(anchor && anchor.coord){
+    targetsForTsp = [{
+      name: anchor.name, coord: { lat: anchor.coord.lat, lng: anchor.coord.lng },
+      bizType: anchor.kind === 'facility' ? 'facility' : 'clinic',
+      _phase117Anchor: true
+    }].concat(window._RP_OPT_TARGETS);
+    startNameForTsp = anchor.name;
+  } else {
+    if(!window._RP_OPT_START_NAME){
+      if(typeof showToast === 'function') showToast('Pick which target is your starting point — or type a facility / clinic into "Starting from" above.');
+      return;
+    }
+    targetsForTsp = window._RP_OPT_TARGETS;
+    startNameForTsp = window._RP_OPT_START_NAME;
   }
-  var ordered = _rpOptSolveTSP(window._RP_OPT_TARGETS, window._RP_OPT_START_NAME);
+  var ordered = _rpOptSolveTSP(targetsForTsp, startNameForTsp);
   if(!ordered || ordered.length === 0){
     if(typeof showToast === 'function') showToast('Could not optimize the route. Try different targets.');
     return;
@@ -34694,6 +34837,11 @@ function _rpOptCommitOrderedToDay(ordered, di, me, removed, phase59Removed, phas
     var insertedNames = [];
     ordered.forEach(function(p){
       if(!p || !p.name) return;
+      // Phase 117b (2026-05-29): skip the virtual anchor — it's the
+      // starting point (facility "home base" or just-an-anchor clinic),
+      // NOT a visit. Never push it to day.rows. The route polyline
+      // already shows it as stop "S" for context.
+      if(p._phase117Anchor) return;
       var exists = (S.days[di].rows || []).some(function(r){ return r && r.clinic === p.name; });
       if(exists){ skipped++; return; }
       S.days[di].rows.push({
