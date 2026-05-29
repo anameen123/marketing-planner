@@ -35984,62 +35984,93 @@ function _rpOptOptimize(){
       });
     }
   } catch(_){}
-  // Compute total miles (haversine × 1.4 urban factor)
+  // Compute haversine fallback (used if OSRM is unreachable).
   var rawMi = 0;
   for(var i = 0; i < ordered.length - 1; i++){
     rawMi += _rpHaversineMiles(ordered[i].coord, ordered[i+1].coord);
   }
-  var totalMi = rawMi * 1.4;
-  var totalMin = Math.round((totalMi / 30) * 60);
-  // Draw the route on the map (reuse the Phase 39 live-route renderer with
-  // dummy A/B = first stop / last stop)
-  if(typeof _rpClearLiveRoute === 'function') _rpClearLiveRoute();
-  try {
-    if(_DV_MAP && typeof L !== 'undefined'){
-      var pts = ordered.map(function(p){ return [p.coord.lat, p.coord.lng]; });
-      var glow = L.polyline(pts, { color: '#ffffff', weight: 9, opacity: 0.85, interactive: false, lineCap: 'round', lineJoin: 'round' }).addTo(_DV_MAP);
-      var line = L.polyline(pts, { color: '#2563eb', weight: 5, opacity: 1, interactive: false, lineCap: 'round', lineJoin: 'round' }).addTo(_DV_MAP);
-      var markers = [];
-      ordered.forEach(function(p, i){
-        var label = (i === 0) ? 'S' : String(i);
-        var bg = (i === 0) ? '#16a34a' : '#2563eb';
-        var m = L.marker([p.coord.lat, p.coord.lng], {
-          icon: L.divIcon({
-            className: 'rp-opt-stop',
-            html: '<div style="background:'+bg+';color:#fff;width:24px;height:24px;border-radius:50%;border:2.5px solid #fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;font-family:DM Sans,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.45)">' + label + '</div>',
-            iconSize: [24, 24], iconAnchor: [12, 12]
-          }),
-          interactive: false,
-          zIndexOffset: 9200
-        }).addTo(_DV_MAP);
-        markers.push(m);
-      });
-      window._DV_LIVE_ROUTE = { glow: glow, line: line, markers: markers };
-      _DV_MAP.fitBounds(L.latLngBounds(pts).pad(0.15), { maxZoom: 13 });
+  var fallbackMi = rawMi * 1.4;
+  var fallbackMin = Math.round((fallbackMi / 30) * 60);
+  // Phase 129 (2026-05-29): fetch REAL OSRM driving distance/time/geometry
+  // for the optimized order. The user explicitly asked: "for the miles
+  // and time here they need to be extracted from the google maps (real
+  // value)". Falls back silently to the haversine estimate if OSRM is
+  // unreachable, with a warning chip in the result panel.
+  var coordsForOsrm = ordered.map(function(p){ return p.coord; });
+  if(typeof _phase123ShowFetchingOverlay === 'function') _phase123ShowFetchingOverlay(true);
+  _phase123FetchRealRoute(coordsForOsrm).then(function(real){
+    if(typeof _phase123ShowFetchingOverlay === 'function') _phase123ShowFetchingOverlay(false);
+    // Stash for the confirm modal — _rpOptInsertIntoDay reuses it.
+    window._RP_OPT_REAL_ROUTE = real;
+    var totalMi, totalMin, srcChip;
+    if(real && real.ok){
+      totalMi = real.distanceMi;
+      totalMin = real.durationMin;
+      srcChip = '<div style="background:rgba(34,197,94,.18);color:#dcfce7;font-size:9px;font-weight:700;padding:2px 8px;border-radius:10px;margin-top:6px;display:inline-block">✓ Real road-network drive</div>';
+    } else {
+      totalMi = fallbackMi;
+      totalMin = fallbackMin;
+      srcChip = '<div style="background:rgba(251,191,36,.22);color:#fef3c7;font-size:9px;font-weight:700;padding:2px 8px;border-radius:10px;margin-top:6px;display:inline-block">⚠ Estimate (router unreachable)</div>';
     }
-  } catch(_){}
-  // Render result panel
-  var res = document.getElementById('rp-opt-result');
-  if(res){
-    res.style.display = 'block';
-    var orderHtml = ordered.map(function(p, i){
-      var label = (i === 0) ? '<b>S</b>' : '<b>' + i + '</b>';
-      var icon = p.bizType === 'mva' ? '⚖' : p.bizType === 'outreach' ? '🏘' : '🏥';
-      return '<div style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:11px"><span style="width:20px;text-align:center">'+label+'</span><span>'+icon+'</span><span style="flex:1;color:#0f172a">' + String(p.name).replace(/</g,'&lt;') + '</span></div>';
-    }).join('');
-    res.innerHTML = '<div style="background:linear-gradient(135deg,#1e3a8a,#2563eb);color:#fff;border-radius:10px;padding:14px 16px;margin-bottom:10px">'
-      + '<div style="font-size:13px;font-weight:800">🤖 Route optimized</div>'
-      + '<div style="display:flex;gap:16px;margin-top:6px;font-size:11px"><div><div style="opacity:.85;font-size:9px;text-transform:uppercase;letter-spacing:.05em">Total drive</div><div style="font-size:18px;font-weight:800">'+totalMi.toFixed(1)+' mi · '+totalMin+' min</div></div><div><div style="opacity:.85;font-size:9px;text-transform:uppercase;letter-spacing:.05em">Stops</div><div style="font-size:18px;font-weight:800">'+ordered.length+'</div></div></div>'
-      + '</div>'
-      + '<div style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:10px">'
-      + '<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px">Optimized order (nearest-neighbor + 2-opt)</div>'
-      + orderHtml + '</div>'
-      + '<div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap">'
-      + '<button type="button" onclick="_rpOptEditPicks()" style="background:#fff;color:#1F3864;border:1px solid var(--border);border-radius:8px;padding:9px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">✏ Edit picks</button>'
-      + '<button type="button" onclick="_rpOptInsertIntoDay()" style="background:linear-gradient(135deg,#15803d,#16a34a);color:#fff;border:none;border-radius:8px;padding:9px 22px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;box-shadow:0 2px 8px rgba(22,163,74,.35)">✓ Add to schedule →</button>'
-      + '</div>';
-  }
-  if(typeof showToast === 'function') showToast('🤖 Optimized: '+ordered.length+' stops · '+totalMi.toFixed(1)+' mi · '+totalMin+' min');
+    // Draw the real OSRM polyline OR fall back to straight-line preview.
+    if(typeof _rpClearLiveRoute === 'function') _rpClearLiveRoute();
+    if(typeof _phase123ClearRealRoute === 'function') _phase123ClearRealRoute();
+    try {
+      if(_DV_MAP && typeof L !== 'undefined'){
+        if(real && real.ok && real.geometry && typeof _phase123DrawRealRoute === 'function'){
+          _phase123DrawRealRoute(real.geometry);
+        } else {
+          var pts = ordered.map(function(p){ return [p.coord.lat, p.coord.lng]; });
+          var glow = L.polyline(pts, { color: '#ffffff', weight: 9, opacity: 0.85, interactive: false, lineCap: 'round', lineJoin: 'round' }).addTo(_DV_MAP);
+          var line = L.polyline(pts, { color: '#2563eb', weight: 5, opacity: 1, interactive: false, lineCap: 'round', lineJoin: 'round' }).addTo(_DV_MAP);
+          window._DV_LIVE_ROUTE = { glow: glow, line: line, markers: [] };
+        }
+        // Numbered stop markers (separate from the polyline)
+        var ptsForMarkers = ordered.map(function(p){ return [p.coord.lat, p.coord.lng]; });
+        ordered.forEach(function(p, i){
+          var label = (i === 0) ? 'S' : String(i);
+          var bg = (i === 0) ? '#16a34a' : '#2563eb';
+          var m = L.marker([p.coord.lat, p.coord.lng], {
+            icon: L.divIcon({
+              className: 'rp-opt-stop',
+              html: '<div style="background:'+bg+';color:#fff;width:24px;height:24px;border-radius:50%;border:2.5px solid #fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;font-family:DM Sans,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.45)">' + label + '</div>',
+              iconSize: [24, 24], iconAnchor: [12, 12]
+            }),
+            interactive: false,
+            zIndexOffset: 9200
+          }).addTo(_DV_MAP);
+          // Track markers separately so they get cleared on close
+          if(!window._DV_LIVE_ROUTE) window._DV_LIVE_ROUTE = { markers: [] };
+          if(!window._DV_LIVE_ROUTE.markers) window._DV_LIVE_ROUTE.markers = [];
+          window._DV_LIVE_ROUTE.markers.push(m);
+        });
+        _DV_MAP.fitBounds(L.latLngBounds(ptsForMarkers).pad(0.15), { maxZoom: 13 });
+      }
+    } catch(_){}
+    // Render result panel with REAL numbers + source chip
+    var res = document.getElementById('rp-opt-result');
+    if(res){
+      res.style.display = 'block';
+      var orderHtml = ordered.map(function(p, i){
+        var label = (i === 0) ? '<b>S</b>' : '<b>' + i + '</b>';
+        var icon = p.bizType === 'mva' ? '⚖' : p.bizType === 'outreach' ? '🏘' : '🏥';
+        return '<div style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:11px"><span style="width:20px;text-align:center">'+label+'</span><span>'+icon+'</span><span style="flex:1;color:#0f172a">' + String(p.name).replace(/</g,'&lt;') + '</span></div>';
+      }).join('');
+      res.innerHTML = '<div style="background:linear-gradient(135deg,#1e3a8a,#2563eb);color:#fff;border-radius:10px;padding:14px 16px;margin-bottom:10px">'
+        + '<div style="font-size:13px;font-weight:800">🤖 Route optimized</div>'
+        + '<div style="display:flex;gap:16px;margin-top:6px;font-size:11px"><div><div style="opacity:.85;font-size:9px;text-transform:uppercase;letter-spacing:.05em">Total drive</div><div style="font-size:18px;font-weight:800">'+totalMi.toFixed(1)+' mi · '+totalMin+' min</div></div><div><div style="opacity:.85;font-size:9px;text-transform:uppercase;letter-spacing:.05em">Stops</div><div style="font-size:18px;font-weight:800">'+ordered.length+'</div></div></div>'
+        + srcChip
+        + '</div>'
+        + '<div style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:10px">'
+        + '<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px">Optimized order (nearest-neighbor + 2-opt)</div>'
+        + orderHtml + '</div>'
+        + '<div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap">'
+        + '<button type="button" onclick="_rpOptEditPicks()" style="background:#fff;color:#1F3864;border:1px solid var(--border);border-radius:8px;padding:9px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">✏ Edit picks</button>'
+        + '<button type="button" onclick="_rpOptInsertIntoDay()" style="background:linear-gradient(135deg,#15803d,#16a34a);color:#fff;border:none;border-radius:8px;padding:9px 22px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;box-shadow:0 2px 8px rgba(22,163,74,.35)">✓ Add to schedule →</button>'
+        + '</div>';
+    }
+    if(typeof showToast === 'function') showToast('🤖 Optimized: '+ordered.length+' stops · '+totalMi.toFixed(1)+' mi · '+totalMin+' min');
+  });
 }
 window._rpOptOptimize = _rpOptOptimize;
 
@@ -36077,17 +36108,85 @@ function _rpOptInsertIntoDay(){
     if(typeof showToast === 'function') showToast('Open a day on the calendar first.');
     return;
   }
+  // Phase 129 (2026-05-29): show the SAME confirmation modal the corridor
+  // uses (Phase 123) — real distance + ETA + leg-by-leg breakdown — and
+  // only proceed with the commit pipeline on Confirm. Cancel keeps the
+  // result panel intact so the rep can re-edit picks. User: "same
+  // confirmation windows i told you that it's supposed to appear in the
+  // first option once we click on add to schedule it will show us the
+  // route created and the the the corridor thing and ask them to confirm
+  // or go back to the page to edit".
+  if(!window._PHASE129_OPT_CONFIRMED){
+    var real = window._RP_OPT_REAL_ROUTE;
+    var fbMi = 0;
+    for(var i = 0; i < ordered.length - 1; i++){
+      fbMi += _rpHaversineMiles(ordered[i].coord, ordered[i+1].coord);
+    }
+    var fbTotal = fbMi * 1.4;
+    var fbMin = Math.round((fbTotal / 30) * 60);
+    var startNm = (ordered[0] && ordered[0].name) || 'Start';
+    var endNm   = (ordered[ordered.length-1] && ordered[ordered.length-1].name) || 'End';
+    // For Pick & Plan, the LAST stop is also a target (not a separate End
+    // anchor). Treat the breakdown stops as ALL middle stops + the final
+    // stop labelled as a destination.
+    var stopNames = ordered.slice(1, -1).map(function(p){ return p && p.name; });
+    if(typeof _phase123ShowConfirmModal === 'function'){
+      _phase123ShowConfirmModal({
+        real: real || { ok: false, error: 'No OSRM data cached' },
+        fallbackMi: fbTotal,
+        fallbackMin: fbMin,
+        stopCount: ordered.length - 1,
+        startName: startNm,
+        endName: endNm,
+        stopNames: stopNames,
+        onCancel: function(){
+          if(typeof showToast === 'function') showToast('Not added — go back and edit your picks or order.');
+        },
+        onConfirm: function(){
+          window._PHASE129_OPT_CONFIRMED = true;
+          try { _rpOptInsertIntoDay(); }
+          finally { window._PHASE129_OPT_CONFIRMED = false; }
+        }
+      });
+      return;
+    }
+  }
   var me = (CURRENT_USER && CURRENT_USER.name) || '';
   var removed = 0;
-  // Phase 54: OVERRIDE — remove prior-route's inserted rows from this day
-  // before adding the new ones, so re-generating fully replaces.
+  // Phase 129 (2026-05-29): scoped OVERRIDE for the editing route only —
+  // mirrors Phase 122b's _rpV5RunPhase54Override for the corridor side.
+  // User: "if i update the route created already then it will override
+  // from everywhere just like the first option that i discussed today".
+  // We only clear rows when this commit is updating an EXISTING route
+  // (the chip click path sets _RP_EDITING_ROUTE_ID). For a brand-new
+  // route, nothing to override. The scoping uses both the matching
+  // _routeId on each row AND the saved-route's insertedNames list so
+  // legacy rows with no _routeId (saved before Phase 122) still get
+  // cleaned when the name matches.
   var priorSet = {};
   try {
-    var priorSaved = (typeof _rpLoadCurrentRoute === 'function') ? _rpLoadCurrentRoute() : null;
+    var editId = window._RP_EDITING_ROUTE_ID || null;
+    var priorSaved = null;
+    if(editId && typeof _rpGetRouteById === 'function' && typeof _rpGetCurrentDayIso === 'function'){
+      priorSaved = _rpGetRouteById(_rpGetCurrentDayIso(), editId);
+    }
+    // Back-compat: also try the v1 path (covers routes saved before Phase 122)
+    if(!priorSaved && typeof _rpLoadCurrentRoute === 'function'){
+      priorSaved = _rpLoadCurrentRoute();
+    }
     if(priorSaved && Array.isArray(priorSaved.insertedNames) && priorSaved.insertedNames.length > 0){
       priorSaved.insertedNames.forEach(function(n){ priorSet[n] = true; });
       var beforeLen = S.days[di].rows.length;
-      S.days[di].rows = (S.days[di].rows || []).filter(function(r){ return !(r && r.clinic && priorSet[r.clinic]); });
+      S.days[di].rows = (S.days[di].rows || []).filter(function(r){
+        if(!r || !r.clinic) return true;
+        // If editing a specific route, only drop rows tagged with that
+        // routeId. If the row has no _routeId (legacy), fall back to
+        // name-match so the override still works.
+        if(editId && r._routeId){
+          return !(r._routeId === editId && priorSet[r.clinic]);
+        }
+        return !priorSet[r.clinic];
+      });
       removed = beforeLen - S.days[di].rows.length;
     }
   } catch(_){}
@@ -36172,6 +36271,23 @@ window._rpOptInsertIntoDay = _rpOptInsertIntoDay;
 // _rpV5CommitPicksToDay helper for Corridor — keeps both commit paths in sync.
 function _rpOptCommitOrderedToDay(ordered, di, me, removed, phase59Removed, phase59ExtraInserted){
   try {
+    // Phase 129 (2026-05-29): resolve the routeId for THIS commit so
+    // every row gets stamped (mirrors Phase 122b on the corridor side).
+    // If editing an existing route (chip click), reuse its id so the
+    // override scoping above and the saved-route record agree. Otherwise
+    // mint a fresh id so this becomes a new chip alongside any others.
+    var routeIdForThis = window._RP_EDITING_ROUTE_ID
+      || ('r_' + (S.days[di] && S.days[di].date || 'unknown') + '_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6));
+    // Phase 129: paint the REAL OSRM polyline on commit (matches the
+    // corridor side after Phase 123 confirm). If OSRM is unreachable the
+    // straight-line preview drawn during Optimize stays put.
+    try {
+      var real = window._RP_OPT_REAL_ROUTE;
+      if(real && real.ok && real.geometry && typeof _phase123DrawRealRoute === 'function'){
+        if(typeof _rpClearLiveRoute === 'function') _rpClearLiveRoute();
+        _phase123DrawRealRoute(real.geometry);
+      }
+    } catch(_){}
     var added = 0, skipped = 0;
     var insertedNames = [];
     ordered.forEach(function(p){
@@ -36187,7 +36303,8 @@ function _rpOptCommitOrderedToDay(ordered, di, me, removed, phase59Removed, phas
         clinic: p.name, member: me, memberConfirmed: !!me,
         status: 'Pending', city: '', rowConfirmed: false,
         rd: '', relationship: '', leadNotes: '', cancelReason: '',
-        spending: null, _spId: null
+        spending: null, _spId: null,
+        _routeId: routeIdForThis   // Phase 129: tag for multi-route grouping + override
       });
       added++;
       insertedNames.push(p.name);
@@ -36198,6 +36315,7 @@ function _rpOptCommitOrderedToDay(ordered, di, me, removed, phase59Removed, phas
     try {
       if(typeof _rpSaveCurrentRoute === 'function'){
         _rpSaveCurrentRoute({
+          routeId:    routeIdForThis,   // Phase 129: pin save to same id as stamped rows
           mode: 'optimize',
           optTargets: (window._RP_OPT_TARGETS || []).slice(),
           optStartName: window._RP_OPT_START_NAME || null,
@@ -36216,6 +36334,11 @@ function _rpOptCommitOrderedToDay(ordered, di, me, removed, phase59Removed, phas
       if(extras.length) msg += ' (' + extras.join(' · ') + ')';
       showToast(msg);
     }
+    // Phase 129 (2026-05-29): clear the editing flag so the NEXT Plan-a-
+    // Route click starts a fresh new route (instead of accidentally
+    // overwriting the one we just committed). Mirrors Phase 122b on the
+    // corridor side.
+    window._RP_EDITING_ROUTE_ID = null;
     if(typeof closeRoutePlanner === 'function') closeRoutePlanner({ force: true });
   } catch(e){
     console.error('[_rpOptInsertIntoDay] failed:', e);
