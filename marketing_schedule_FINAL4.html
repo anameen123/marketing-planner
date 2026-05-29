@@ -205,6 +205,35 @@ input.rp-no-spinner::-webkit-inner-spin-button {
   margin: 0;
 }
 input.rp-no-spinner { -moz-appearance: textfield; }
+/* Phase 135 (2026-05-29) — Confirmed-route lock state. After the rep
+   confirms a route, the planner inputs (Start/End/visits/width/find
+   /generate/mode toggles/candidate checkboxes) all freeze so they can
+   review what they confirmed. Anything inside the locked box that
+   doesn't have .rp-locked-ok becomes pointer-events:none + 55% opacity
+   + not-allowed cursor. The "✏ Edit route" and "✓ Add to schedule"
+   buttons are explicitly marked .rp-locked-ok so they stay clickable. */
+#route-planner-box.rp-locked .modal-body input:not(.rp-locked-ok),
+#route-planner-box.rp-locked .modal-body select:not(.rp-locked-ok),
+#route-planner-box.rp-locked .modal-body textarea:not(.rp-locked-ok),
+#route-planner-box.rp-locked .modal-body button:not(.rp-locked-ok){
+  pointer-events: none !important;
+  opacity: .55 !important;
+  cursor: not-allowed !important;
+}
+#route-planner-box.rp-locked .modal-body label{ cursor: default !important; }
+/* Lock banner shown at the top of the confirmed-route panel */
+.rp-locked-banner{
+  background: linear-gradient(135deg,#15803d,#16a34a);
+  color: #fff;
+  padding: 9px 14px;
+  border-radius: 8px;
+  font-size: 11.5px;
+  font-weight: 700;
+  margin: 0 0 10px 0;
+  display: flex; align-items: center; gap: 8px;
+  font-family: 'DM Sans', sans-serif;
+  box-shadow: 0 2px 8px rgba(22,163,74,.28);
+}
 /* Per user 2026-05-25 Phase 7: row fill-state coloring for unconfirmed
    rows (light amber, "needs filling") vs confirmed rows (light blue,
    "done"). These take precedence over the biz-type colors but yield to
@@ -29971,6 +30000,199 @@ function _phase124bReorderViaOsrm(picks, A, B){
 }
 window._phase124bReorderViaOsrm = _phase124bReorderViaOsrm;
 
+// ════════════════════════════════════════════════════════════════════════════
+// PHASE 135 (2026-05-29) — CONFIRM LOCKS INPUTS + EDIT + COMPARE MODAL
+// User: "once we confirm the route in the corridor then the route inputs
+// are locked and this process is for the user to review the real path
+// ... if they want to return then either confirm or go back to the page
+// where they can edit the input ... what i can see is after i confirmed
+// the route all the input are available for me to play with and change
+// but probably it won't affect the route that i confirmed which is
+// messed up ... confirm the route is to preview the inputs has to be
+// locked except for the add to schedule click but we can unlock them if
+// we click on an edit which will change the route so it will override
+// the previous data and will ask to confirm new route or keep previous
+// route and you will show both time and distance".
+//
+// State machine:
+//   picking   → inputs free, no confirmed snapshot
+//   confirmed → after Phase 123 Confirm → inputs locked, snapshot stashed,
+//               only Add to schedule + Edit are clickable
+//   editing   → after Edit click → inputs unlocked, snapshot KEPT (for
+//               comparison), polyline still shows the confirmed route
+//   re-gen    → user clicks Generate again → fetch OSRM, then show the
+//               compare modal (NEW vs OLD) instead of the plain confirm.
+//               "Use new" replaces snapshot. "Keep previous" reverts
+//               picks/totals/geometry to the confirmed snapshot.
+// ════════════════════════════════════════════════════════════════════════════
+window._RP_V5_CONFIRMED_SNAPSHOT = null;
+
+function _rpV5SetLocked(locked){
+  var box = document.getElementById('route-planner-box');
+  if(box){ box.classList.toggle('rp-locked', !!locked); }
+  // Disarm any pin-pick mode so map clicks for Start/End re-pick don't
+  // bypass the panel lock.
+  if(locked){
+    try {
+      window._RP_DIALOG_AWAITING = null;
+      window._RP_DIALOG_PENDING  = null;
+      if(typeof _rpRenderPickStatus === 'function') _rpRenderPickStatus();
+    } catch(_){}
+  }
+}
+window._rpV5SetLocked = _rpV5SetLocked;
+
+function _rpV5StashConfirmedSnapshot(realResult, picks, totalMi, totalMin){
+  try {
+    var snap = {
+      realResult: realResult || null,
+      picks: (picks || []).slice(),
+      pickNames: (picks || []).map(function(p){ return p && p.name; }).filter(Boolean),
+      totalMi: totalMi,
+      totalMin: totalMin,
+      geometry: (realResult && realResult.ok) ? realResult.geometry : null,
+      realRouteSource: (realResult && realResult.ok) ? 'osrm' : 'estimate',
+      startName: window._RP_START_NAME || null,
+      endName:   window._RP_END_NAME   || null,
+      startCoord: window._RP_START_COORD ? { lat: window._RP_START_COORD.lat, lng: window._RP_START_COORD.lng } : null,
+      endCoord:   window._RP_END_COORD   ? { lat: window._RP_END_COORD.lat,   lng: window._RP_END_COORD.lng   } : null,
+      // Flat picks keyset so we can restore checkboxes on Keep-previous
+      flatPickSet: (function(){
+        var s = {};
+        (picks || []).forEach(function(p){ if(p && p.name) s[p.name] = true; });
+        return s;
+      })(),
+      confirmedAt: new Date().toISOString()
+    };
+    window._RP_V5_CONFIRMED_SNAPSHOT = snap;
+  } catch(e){ console.warn('[135] snapshot stash failed:', e); }
+}
+window._rpV5StashConfirmedSnapshot = _rpV5StashConfirmedSnapshot;
+
+function _rpV5UnlockForEdit(){
+  // Drop the lock so the rep can edit inputs / picks / endpoints.
+  // KEEP the snapshot — it's the baseline for the comparison modal on
+  // the next Generate. Also keep the drawn polyline so the rep sees
+  // what they confirmed while they edit.
+  _rpV5SetLocked(false);
+  if(typeof showToast === 'function') showToast('✏ Edit mode — change anything, then Generate again to compare with your confirmed route.');
+}
+window._rpV5UnlockForEdit = _rpV5UnlockForEdit;
+
+function _rpV5RestoreConfirmedSnapshot(){
+  // "Keep previous" path: revert picks + totals + drawn polyline to
+  // the snapshot so Add to schedule commits the original confirmed
+  // route, not the edits.
+  var snap = window._RP_V5_CONFIRMED_SNAPSHOT;
+  if(!snap) return;
+  try {
+    if(window._RP_V5_LAST){
+      _RP_V5_LAST.lastTotalMi      = snap.totalMi;
+      _RP_V5_LAST.lastTotalMin     = snap.totalMin;
+      _RP_V5_LAST.realRouteSource  = snap.realRouteSource;
+      _RP_V5_LAST.realRouteGeometry = snap.geometry;
+    }
+    // Restore the flat picks set so the candidate list matches the
+    // confirmed route on next render.
+    window._RP_V5_FLAT_PICKS = {};
+    Object.keys(snap.flatPickSet || {}).forEach(function(nm){
+      window._RP_V5_FLAT_PICKS[nm] = true;
+    });
+    // Restore the slot-picks list which the commit reads from
+    window._RP_SLOT_PICKS = (snap.picks || []).map(function(p){
+      return {
+        name: p.name, bizType: p.bizType, coord: p.coord,
+        days: p.days, dist: p.absPerp,
+        leadStatus: 'not_visited', leadLevel: 0
+      };
+    });
+    // Redraw the confirmed OSRM polyline (clears any preview line that
+    // the in-progress edit may have drawn).
+    try { if(typeof _rpClearLiveRoute === 'function') _rpClearLiveRoute(); } catch(_){}
+    try { if(typeof _phase123ClearRealRoute === 'function') _phase123ClearRealRoute(); } catch(_){}
+    if(snap.geometry && typeof _phase123DrawRealRoute === 'function'){
+      _phase123DrawRealRoute(snap.geometry);
+    }
+  } catch(e){ console.warn('[135] restore snapshot failed:', e); }
+}
+window._rpV5RestoreConfirmedSnapshot = _rpV5RestoreConfirmedSnapshot;
+
+function _phase135ShowCompareModal(opts){
+  // opts: { newData, oldData, onUseNew, onKeepOld }
+  // newData / oldData: { totalMi, totalMin, picks, sourceLabel }
+  try {
+    var modalId = 'phase135-compare-modal';
+    var existing = document.getElementById(modalId);
+    if(existing) existing.remove();
+    var modal = document.createElement('div');
+    modal.id = modalId;
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.6);z-index:99999;display:flex;align-items:center;justify-content:center;font-family:DM Sans,sans-serif;animation:fadeIn .15s ease-out;padding:20px';
+    document.body.appendChild(modal);
+    function esc(s){ return String(s||'').replace(/</g,'&lt;'); }
+    var n = opts.newData || {};
+    var o = opts.oldData || {};
+    var dMi  = (n.totalMi  || 0) - (o.totalMi  || 0);
+    var dMin = (n.totalMin || 0) - (o.totalMin || 0);
+    var deltaTxt = '';
+    if(Math.abs(dMi) > 0.05 || Math.abs(dMin) >= 1){
+      var sMi  = dMi  >= 0 ? '+' : '−';
+      var sMin = dMin >= 0 ? '+' : '−';
+      var dColor = dMi >= 0 ? '#dc2626' : '#16a34a';
+      deltaTxt = '<div style="text-align:center;margin:10px 0 14px 0;font-size:12px;color:' + dColor + ';font-weight:800">'
+        + 'New is ' + sMi + Math.abs(dMi).toFixed(1) + ' mi · ' + sMin + Math.abs(dMin) + ' min vs your confirmed route'
+        + '</div>';
+    } else {
+      deltaTxt = '<div style="text-align:center;margin:10px 0 14px 0;font-size:11.5px;color:var(--muted);font-style:italic">No meaningful difference — distance/time are essentially the same.</div>';
+    }
+    function col(label, data, isNew){
+      var bg = isNew ? 'linear-gradient(135deg,#15803d,#16a34a)' : 'linear-gradient(135deg,#64748b,#475569)';
+      return ''
+        + '<div style="flex:1;background:#fff;border:2px solid ' + (isNew ? '#16a34a' : '#cbd5e1') + ';border-radius:12px;overflow:hidden">'
+        +   '<div style="background:' + bg + ';color:#fff;padding:8px 12px;font-size:11px;font-weight:800;text-align:center;letter-spacing:.3px">' + label + '</div>'
+        +   '<div style="padding:14px 12px;text-align:center">'
+        +     '<div style="font-size:22px;font-weight:800;color:#1F3864;letter-spacing:-.3px">' + (data.totalMi || 0).toFixed(1) + ' mi</div>'
+        +     '<div style="font-size:14px;color:#64748b;font-weight:600;margin-top:2px">' + (data.totalMin || 0) + ' min</div>'
+        +     '<div style="font-size:10px;color:#94a3b8;margin-top:6px">' + ((data.picks || []).length) + ' stop' + (((data.picks || []).length) === 1 ? '' : 's') + '</div>'
+        +   '</div>'
+        + '</div>';
+    }
+    modal.innerHTML = ''
+      + '<div style="background:#fff;border-radius:14px;padding:22px 24px;max-width:540px;width:100%;box-shadow:0 30px 70px rgba(15,23,42,.45);max-height:90vh;overflow-y:auto">'
+      +   '<div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:14px">'
+      +     '<div style="background:linear-gradient(135deg,#7030A0,#5b21b6);color:#fff;width:42px;height:42px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">↔</div>'
+      +     '<div>'
+      +       '<div style="font-size:14px;font-weight:800;color:#1F3864">Compare routes</div>'
+      +       '<div style="font-size:11px;color:var(--muted);margin-top:2px">Your edits produced a new route. Pick which one to use for Add to schedule.</div>'
+      +     '</div>'
+      +   '</div>'
+      +   '<div style="display:flex;gap:10px;margin-top:6px">'
+      +     col('CONFIRMED', o, false)
+      +     col('NEW (after edit)', n, true)
+      +   '</div>'
+      +   deltaTxt
+      +   '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:6px;flex-wrap:wrap">'
+      +     '<button type="button" id="phase135-keep-old" style="background:#fff;color:#475569;border:1px solid var(--border);border-radius:8px;padding:9px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">↩ Keep previous</button>'
+      +     '<button type="button" id="phase135-use-new" style="background:linear-gradient(135deg,#15803d,#16a34a);color:#fff;border:none;border-radius:8px;padding:9px 22px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;box-shadow:0 2px 8px rgba(22,163,74,.35)">✓ Use new route →</button>'
+      +   '</div>'
+      + '</div>';
+    function close(){ try { modal.remove(); } catch(_){} }
+    modal.querySelector('#phase135-keep-old').addEventListener('click', function(){
+      close();
+      if(typeof opts.onKeepOld === 'function') opts.onKeepOld();
+    });
+    modal.querySelector('#phase135-use-new').addEventListener('click', function(){
+      close();
+      if(typeof opts.onUseNew === 'function') opts.onUseNew();
+    });
+    modal.addEventListener('click', function(e){ if(e.target === modal){ close(); if(typeof opts.onKeepOld === 'function') opts.onKeepOld(); } });
+  } catch(e){
+    console.error('[135] compare modal failed:', e);
+    // Fail-open with new
+    if(typeof opts.onUseNew === 'function') opts.onUseNew();
+  }
+}
+window._phase135ShowCompareModal = _phase135ShowCompareModal;
+
 function _phase123ShowFetchingOverlay(show){
   var id = 'phase123-fetching-overlay';
   var el = document.getElementById(id);
@@ -30271,6 +30493,14 @@ function closeRoutePlanner(opts){
     window._RP_V5_LAST = null;
     window._RP_V5_FLAT_PICKS = {};
     window._RP_INSIDE_RECT_STATS = null;
+    // Phase 135 (2026-05-29): drop the confirmed-route snapshot + clear
+    // the lock-state CSS class so the next open starts in picking mode
+    // with editable inputs.
+    window._RP_V5_CONFIRMED_SNAPSHOT = null;
+    try {
+      var rpBox = document.getElementById('route-planner-box');
+      if(rpBox) rpBox.classList.remove('rp-locked');
+    } catch(_){}
   } catch(_){}
   // Phase 53: tear down any AI Optimize circle layer + map click handler.
   if(typeof _rpOptDisarmCircleMode === 'function') _rpOptDisarmCircleMode();
@@ -40758,37 +40988,68 @@ function _rpV5GenerateRoute(){
       onConfirm: function(realResult){
         var totalMi  = (realResult && realResult.ok) ? realResult.distanceMi  : fallbackMi;
         var totalMin = (realResult && realResult.ok) ? realResult.durationMin : fallbackMin;
-        // Snapshot baseline on FIRST generate (not re-edit)
-        if(!_RP_V5_LAST.originalTotalMi){
-          _RP_V5_LAST.originalTotalMi  = totalMi;
-          _RP_V5_LAST.originalTotalMin = totalMin;
+        // ── Phase 135 (2026-05-29) — apply the route to _RP_V5_LAST,
+        // draw the OSRM polyline, lock the inputs, stash the snapshot. ──
+        function applyAsConfirmed(){
+          // Snapshot baseline on FIRST generate (not re-edit)
+          if(!_RP_V5_LAST.originalTotalMi){
+            _RP_V5_LAST.originalTotalMi  = totalMi;
+            _RP_V5_LAST.originalTotalMin = totalMin;
+          }
+          _RP_V5_LAST.lastTotalMi  = totalMi;
+          _RP_V5_LAST.lastTotalMin = totalMin;
+          _RP_V5_LAST.realRouteSource = (realResult && realResult.ok) ? 'osrm' : 'estimate';
+          _RP_V5_LAST.realRouteGeometry = (realResult && realResult.ok) ? realResult.geometry : null;
+          _RP_START_NAME = startName;
+          _RP_END_NAME   = endName;
+          _RP_N          = allPicks.length;
+          _RP_SLOT_PICKS = allPicks.map(function(p){
+            return {
+              name: p.name, bizType: p.bizType, coord: p.coord,
+              days: p.days, dist: p.absPerp,
+              leadStatus: 'not_visited', leadLevel: 0
+            };
+          });
+          if(_RP_V5_LAST.realRouteGeometry){
+            try { if(typeof _rpClearLiveRoute === 'function') _rpClearLiveRoute(); } catch(_){}
+            _phase123DrawRealRoute(_RP_V5_LAST.realRouteGeometry);
+          }
+          if(typeof _rpRefreshHighlights === 'function') _rpRefreshHighlights();
+          if(typeof _rpUpdateStatus === 'function') _rpUpdateStatus();
+          if(typeof _rpFinalizeSmart === 'function') _rpFinalizeSmart();
+          _RP_V5_EDIT_MODE = false;
+          // Phase 135: stash snapshot + lock the planner inputs. This is
+          // the "preview" state where the rep reviews what they
+          // confirmed; everything's frozen except Add to schedule / Edit.
+          if(typeof _rpV5StashConfirmedSnapshot === 'function'){
+            _rpV5StashConfirmedSnapshot(realResult, allPicks, totalMi, totalMin);
+          }
+          if(typeof _rpV5SetLocked === 'function') _rpV5SetLocked(true);
+          _rpV5ShowLocked();
         }
-        _RP_V5_LAST.lastTotalMi  = totalMi;
-        _RP_V5_LAST.lastTotalMin = totalMin;
-        _RP_V5_LAST.realRouteSource = (realResult && realResult.ok) ? 'osrm' : 'estimate';
-        _RP_V5_LAST.realRouteGeometry = (realResult && realResult.ok) ? realResult.geometry : null;
-        _RP_START_NAME = startName;
-        _RP_END_NAME   = endName;
-        _RP_N          = allPicks.length;
-        _RP_SLOT_PICKS = allPicks.map(function(p){
-          return {
-            name: p.name, bizType: p.bizType, coord: p.coord,
-            days: p.days, dist: p.absPerp,
-            leadStatus: 'not_visited', leadLevel: 0
-          };
-        });
-        // Draw the real road-network polyline on the dashboard map — this
-        // is what Google Maps will navigate. Clears the green candidate
-        // preview line and stamps the actual driving path in royal blue.
-        if(_RP_V5_LAST.realRouteGeometry){
-          try { if(typeof _rpClearLiveRoute === 'function') _rpClearLiveRoute(); } catch(_){}
-          _phase123DrawRealRoute(_RP_V5_LAST.realRouteGeometry);
+        // Phase 135: if a confirmed snapshot already exists, this is a
+        // RE-GENERATE after Edit → show compare modal (new vs old).
+        // "Use new" applies as confirmed (replaces snapshot). "Keep
+        // previous" reverts the picks/totals/polyline back to the
+        // snapshot but still re-locks the panel, so Add to schedule
+        // commits the original confirmed route.
+        var prior = window._RP_V5_CONFIRMED_SNAPSHOT;
+        if(prior && typeof _phase135ShowCompareModal === 'function'){
+          _phase135ShowCompareModal({
+            newData: { totalMi: totalMi, totalMin: totalMin, picks: allPicks },
+            oldData: { totalMi: prior.totalMi, totalMin: prior.totalMin, picks: prior.picks || [] },
+            onUseNew: function(){ applyAsConfirmed(); },
+            onKeepOld: function(){
+              // Restore + re-lock; snapshot unchanged.
+              if(typeof _rpV5RestoreConfirmedSnapshot === 'function') _rpV5RestoreConfirmedSnapshot();
+              if(typeof _rpV5SetLocked === 'function') _rpV5SetLocked(true);
+              _rpV5ShowLocked();
+              if(typeof showToast === 'function') showToast('↩ Kept your previous confirmed route — Add to schedule will use that one.');
+            }
+          });
+          return;
         }
-        if(typeof _rpRefreshHighlights === 'function') _rpRefreshHighlights();
-        if(typeof _rpUpdateStatus === 'function') _rpUpdateStatus();
-        if(typeof _rpFinalizeSmart === 'function') _rpFinalizeSmart();
-        _RP_V5_EDIT_MODE = false;
-        _rpV5ShowLocked();
+        applyAsConfirmed();
       }
     });
   }).catch(function(err){
@@ -40851,9 +41112,17 @@ function _rpV5ShowLocked(){
     +   '</div>'
     + '</div>'
     + '</div>'
+    // Phase 135 (2026-05-29): preview-lock banner above the action
+    // buttons — explains why the inputs are greyed out and reminds the
+    // rep that Edit unlocks them. Marked .rp-locked-ok so the CSS
+    // pointer-events:none rule on .rp-locked doesn't kill the buttons.
+    + '<div class="rp-locked-banner">'
+    +   '<span style="font-size:14px">🔒</span>'
+    +   '<span>Route confirmed — inputs locked for review. Click <b>✏ Edit route</b> to change anything (you\'ll compare new vs this one).</span>'
+    + '</div>'
     + '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">'
-    +   '<button type="button" onclick="_rpV5EditPicks()" style="background:#fff;color:#1F3864;border:1px solid var(--border);border-radius:8px;padding:9px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">✏ Edit picks per level</button>'
-    +   '<button type="button" onclick="_rpV5InsertPicksIntoDay()" style="background:linear-gradient(135deg,#15803d,#16a34a);color:#fff;border:none;border-radius:8px;padding:9px 22px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;box-shadow:0 2px 8px rgba(22,163,74,.35)">✓ Add to schedule →</button>'
+    +   '<button type="button" class="rp-locked-ok" onclick="_rpV5UnlockForEdit()" title="Unlock the planner inputs so you can edit anything. Re-generate to compare with the confirmed route." style="background:#fff;color:#1F3864;border:1px solid var(--border);border-radius:8px;padding:9px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">✏ Edit route</button>'
+    +   '<button type="button" class="rp-locked-ok" onclick="_rpV5InsertPicksIntoDay()" style="background:linear-gradient(135deg,#15803d,#16a34a);color:#fff;border:none;border-radius:8px;padding:9px 22px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;box-shadow:0 2px 8px rgba(22,163,74,.35)">✓ Add to schedule →</button>'
     + '</div>';
   box.innerHTML = html;
 }
@@ -41298,6 +41567,10 @@ function _rpV5CommitPicksToDay(picks, di, me, removed, phase59Removed, phase59Ex
     // a Route click starts a fresh new route. Otherwise the user could
     // accidentally overwrite the route they just committed.
     window._RP_EDITING_ROUTE_ID = null;
+    // Phase 135 (2026-05-29): drop the confirmed-route snapshot now that
+    // it's been committed to the schedule. The next planner session
+    // starts in fresh picking mode.
+    window._RP_V5_CONFIRMED_SNAPSHOT = null;
     if(typeof closeRoutePlanner === 'function') closeRoutePlanner({ force: true });
   } catch(e){
     console.error('[_rpV5InsertPicksIntoDay] failed:', e);
