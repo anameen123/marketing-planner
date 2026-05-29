@@ -29325,6 +29325,23 @@ function _rpRenderStartEndChips(){
   try {
     var startVal = (document.getElementById('rp-start') || {}).value || '';
     var endVal   = (document.getElementById('rp-end')   || {}).value || '';
+    // Phase 116 (2026-05-29): when the picked endpoint's hidden value is
+    // a _facility_* key, tag the chip with "🏥 home base — not counted
+    // as a visit" so the rep visually confirms it won't be added to the
+    // schedule. Pure visual — the underlying logic already excludes
+    // facilities from candidates + day.rows commits, this just makes it
+    // discoverable. Idempotent: re-render replaces the prior note.
+    function isFacilityVal(v){ return typeof v === 'string' && v.indexOf('_facility_') === 0; }
+    function ensureFacilityNote(chipEl, hostId){
+      if(!chipEl) return;
+      var existing = document.getElementById(hostId);
+      if(existing) existing.remove();
+      var note = document.createElement('div');
+      note.id = hostId;
+      note.style.cssText = 'flex-basis:100%;margin-top:5px;padding:5px 8px;background:rgba(112,48,160,.10);border:1px solid #c4b5fd;border-left:3px solid #7030A0;border-radius:5px;font-size:10px;color:#5b21b6;font-weight:700;line-height:1.4';
+      note.innerHTML = '🏥 WCG home base — won\'t count as a visit, won\'t be added to the schedule';
+      chipEl.appendChild(note);
+    }
     var sChip = document.getElementById('rp-start-chip');
     var sName = document.getElementById('rp-start-chip-name');
     if(sChip){
@@ -29332,6 +29349,9 @@ function _rpRenderStartEndChips(){
         var startLbl = (document.getElementById('rp-start-search') || {}).value || startVal;
         sChip.style.display = 'flex';
         if(sName) sName.textContent = startLbl.replace(/^[^A-Za-z0-9]+/, '');
+        // Phase 116: append home-base note if facility, else clear it
+        if(isFacilityVal(startVal)) ensureFacilityNote(sChip, 'rp-start-chip-facility-note');
+        else { var s_x = document.getElementById('rp-start-chip-facility-note'); if(s_x) s_x.remove(); }
       } else {
         sChip.style.display = 'none';
       }
@@ -29343,6 +29363,8 @@ function _rpRenderStartEndChips(){
         var endLbl = (document.getElementById('rp-end-search') || {}).value || endVal;
         eChip.style.display = 'flex';
         if(eName) eName.textContent = endLbl.replace(/^[^A-Za-z0-9]+/, '');
+        if(isFacilityVal(endVal)) ensureFacilityNote(eChip, 'rp-end-chip-facility-note');
+        else { var e_x = document.getElementById('rp-end-chip-facility-note'); if(e_x) e_x.remove(); }
       } else {
         eChip.style.display = 'none';
       }
