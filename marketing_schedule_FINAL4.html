@@ -25382,6 +25382,32 @@ function renderAllBusinessPins(){
           _rpRwHandleMapPick({ lat: lat, lng: lng });
           return;
         }
+        // Phase 109 (2026-05-28): CORRIDOR — once candidates exist, a pin
+        // click on any candidate name toggles its picked state (same as
+        // the checkbox in the list). User: "I tried to deselect one of
+        // the points and it didn't work" — root cause was that pin
+        // clicks did nothing in this phase. Map ↔ list now sync.
+        // Gate: must have candidates AND the clicked name must be one.
+        try {
+          var planOpen = (typeof _isRoutePlannerOpen === 'function') && _isRoutePlannerOpen();
+          var hasCands = !!(window._RP_V5_LAST && Array.isArray(window._RP_V5_LAST.flatCandidates) && window._RP_V5_LAST.flatCandidates.length > 0);
+          if(planOpen && hasCands && typeof _rpV5ToggleFlat === 'function'){
+            var isCand = window._RP_V5_LAST.flatCandidates.some(function(c){ return c && c.name === name; });
+            if(isCand){
+              if(ev && ev.originalEvent){
+                if(ev.originalEvent.stopPropagation) ev.originalEvent.stopPropagation();
+                if(ev.originalEvent.preventDefault) ev.originalEvent.preventDefault();
+                if(ev.originalEvent.stopImmediatePropagation) ev.originalEvent.stopImmediatePropagation();
+              }
+              if(L && L.DomEvent && L.DomEvent.stop) L.DomEvent.stop(ev);
+              if(_DV_MAP && _DV_MAP.closePopup) _DV_MAP.closePopup();
+              marker.closePopup && marker.closePopup();
+              var nowOn = !window._RP_V5_FLAT_PICKS[name];
+              _rpV5ToggleFlat(name, nowOn);
+              return;
+            }
+          }
+        } catch(_){}
         // Corridor S/E preview-then-confirm flow
         if(typeof _RP_DIALOG_AWAITING === 'undefined' || !_RP_DIALOG_AWAITING) return;
         if(typeof _rpDialogConsumePinClick !== 'function') return;
@@ -27597,11 +27623,40 @@ function renderDayMap(di){
       if((retry|0) < 5) setTimeout(function(){ _fitWhenReady((retry|0)+1); }, 250);
       return;
     }
-    if(pts.length > 0){
+    // Phase 109 (2026-05-28): if the day has visits, fit to those + the
+    // facilities. If NOT, the previous default fit only to facilities —
+    // which zoomed into a tiny area showing maybe 4 purple pins. User
+    // wanted "the default to cover all the pins on the map". So on an
+    // empty day, fit to EVERY clinic/MVA pin in the bank for the metro-
+    // wide overview.
+    var dayHasVisits = (day && Array.isArray(day.rows) && day.rows.some(function(r){
+      return r && r.clinic && getCoordForBusiness(r.clinic);
+    }));
+    var fitPts = pts;
+    if(!dayHasVisits){
+      var allPts = [];
+      try {
+        if(typeof CLINIC_BANK !== 'undefined') CLINIC_BANK.forEach(function(c){
+          if(!c || !c.n) return;
+          var co = (typeof _rpGetVisualCoord === 'function') ? _rpGetVisualCoord(c.n) : null;
+          if(!co && typeof getCoordForBusiness === 'function') co = getCoordForBusiness(c.n);
+          if(co) allPts.push([co.lat, co.lng]);
+        });
+        if(typeof MVA_ATTORNEYS !== 'undefined') MVA_ATTORNEYS.forEach(function(m){
+          if(!m || !m.firm) return;
+          var co = (typeof _rpGetVisualCoord === 'function') ? _rpGetVisualCoord(m.firm) : null;
+          if(!co && typeof getCoordForBusiness === 'function') co = getCoordForBusiness(m.firm);
+          if(co) allPts.push([co.lat, co.lng]);
+        });
+      } catch(_){}
+      if(allPts.length > 0) fitPts = pts.concat(allPts);
+    }
+    if(fitPts.length > 0){
       try {
         // minZoom guarantees we never zoom further out than DFW metro — even
         // if a stray pin is at the wrong continent, the map stays useful.
-        _DV_MAP.fitBounds(L.latLngBounds(pts).pad(0.2), { maxZoom: 12 });
+        // maxZoom 12 for visits (so you see neighborhood), 11 for whole-bank fit.
+        _DV_MAP.fitBounds(L.latLngBounds(fitPts).pad(0.15), { maxZoom: dayHasVisits ? 12 : 11 });
         if(_DV_MAP.getZoom() < 9) _DV_MAP.setView([33.07, -96.78], 10);
       } catch(e){
         try { _DV_MAP.setView([33.07, -96.78], 10); } catch(_){}
@@ -28086,6 +28141,8 @@ function _rpPickEndpoint(which, idx){
   // Visual: refresh start/end highlights on the map.
   if(typeof _rpRefreshHighlights === 'function') _rpRefreshHighlights();
   if(typeof _rpUpdateStatus === 'function') _rpUpdateStatus();
+  // Phase 109: endpoint changed → candidate list (if any) is now stale.
+  if(typeof _rpV5MarkStale === 'function') _rpV5MarkStale(which === 'start' ? 'Start changed' : 'End changed');
   // Per user 2026-05-26: draw the Start→End straight-line centerline on
   // the map as soon as both endpoints are resolved.
   if(typeof _rpRefreshCenterline === 'function') _rpRefreshCenterline();
@@ -29855,6 +29912,8 @@ function _rpV4OnWidthChange(){
     var hint = document.getElementById('rp-base-width-hint');
     if(hint) hint.textContent = String(w);
   } catch(_){}
+  // Phase 109: width edited → candidate list is stale. Locks until Re-run.
+  if(typeof _rpV5MarkStale === 'function') _rpV5MarkStale('corridor width changed');
   // Phase 35 (2026-05-27): per user, DO NOT redraw the rectangle on every
   // keystroke. Show an "Apply" button instead. The user types, sees the
   // pending value, clicks Apply, THEN the rectangle redraws + corridor
@@ -31414,6 +31473,11 @@ function _rpAdjustTargetVisits(delta){
 window._rpAdjustTargetVisits = _rpAdjustTargetVisits;
 
 function _rpOnTargetVisitsChange(){
+  // Phase 109: mark stale immediately so the candidate list locks until
+  // the user re-runs Find candidates. The auto-fit still recomputes the
+  // corridor width below (so the rectangle updates live), but the list
+  // can't be interacted with while it's pointing at the old geometry.
+  if(typeof _rpV5MarkStale === 'function') _rpV5MarkStale('max-visits changed');
   // Auto-trigger the fit when the user changes the target visits, BUT
   // throttle so rapid typing doesn't spam the compute.
   if(window._rpTargetVisitsTimer) clearTimeout(window._rpTargetVisitsTimer);
@@ -36918,6 +36982,9 @@ function _rpV5Start(){
     if(typeof showToast === 'function') showToast('Fill the required fields before finding candidates.');
     return;
   }
+  // Phase 109: building a fresh list — drop any "stale" state from a
+  // previous edit cycle so the rep can interact with the new list.
+  if(typeof _rpV5ClearStale === 'function') _rpV5ClearStale();
   // Phase 43 (2026-05-28): in visits-mode, reconcile the corridor half-width
   // with the current target visits BEFORE running the algorithm. Prevents
   // the user clicking Find Candidates faster than the 350ms auto-fit throttle
@@ -37247,6 +37314,14 @@ window._rpV5ShowFlatList = _rpV5ShowFlatList;
 
 function _rpV5ToggleFlat(name, on){
   if(!name) return;
+  // Phase 109 (2026-05-28): if the candidate list is STALE (user edited
+  // Start / End / width / max-visits after Find Candidates), don't let
+  // them toggle — the underlying corridor doesn't match the list any
+  // more. Surface a toast that points them at the re-run.
+  if(window._RP_V5_STALE){
+    if(typeof showToast === 'function') showToast('⚠ Candidate list is stale — click 🔍 Find candidates again to refresh.');
+    return;
+  }
   if(on) _RP_V5_FLAT_PICKS[name] = true;
   else delete _RP_V5_FLAT_PICKS[name];
   // Flip pin colour immediately
@@ -37273,6 +37348,46 @@ function _rpV5ClearAllPicks(){
   if(typeof _rpV5SyncGenerateBtn === 'function') _rpV5SyncGenerateBtn();
 }
 
+// Phase 109 (2026-05-28): mark the candidate list as stale (user edited
+// an upstream input — Start/End/width/visits). Greys out the list +
+// disables the Generate button + shows a re-run banner. _rpV5Start
+// clears this flag when it builds a fresh list.
+function _rpV5MarkStale(reason){
+  if(!window._RP_V5_LAST) return;     // no list yet — nothing to stale
+  window._RP_V5_STALE = true;
+  try {
+    var box = document.getElementById('rp-results');
+    if(box){
+      // Add a translucent overlay + grey filter so the list visually locks
+      box.style.opacity = '0.45';
+      box.style.pointerEvents = 'none';
+      box.style.filter = 'grayscale(0.4)';
+      // Inject a re-run banner if not already there
+      if(!document.getElementById('rp-stale-banner')){
+        var b = document.createElement('div');
+        b.id = 'rp-stale-banner';
+        b.style.cssText = 'background:linear-gradient(135deg,#fef3c7,#fde68a);border:1px solid #f59e0b;border-left:4px solid #d97706;border-radius:8px;padding:9px 12px;margin-bottom:10px;font-size:12px;color:#78350f;font-weight:700;display:flex;align-items:center;justify-content:space-between;gap:10px;pointer-events:auto;opacity:1;filter:none';
+        b.innerHTML = '<span>⚠ Inputs changed — candidate list is stale ' + (reason ? '<span style="font-weight:500;color:#92400e">(' + reason + ')</span>' : '') + '. Click 🔍 Find candidates again to refresh.</span>'
+          + '<button type="button" onclick="if(typeof _rpV5Start===\'function\')_rpV5Start();" style="background:#d97706;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;white-space:nowrap">🔍 Re-run</button>';
+        box.parentNode.insertBefore(b, box);
+      }
+    }
+  } catch(_){}
+  if(typeof _rpV5SyncGenerateBtn === 'function') _rpV5SyncGenerateBtn();
+}
+window._rpV5MarkStale = _rpV5MarkStale;
+
+function _rpV5ClearStale(){
+  window._RP_V5_STALE = false;
+  try {
+    var box = document.getElementById('rp-results');
+    if(box){ box.style.opacity = ''; box.style.pointerEvents = ''; box.style.filter = ''; }
+    var b = document.getElementById('rp-stale-banner');
+    if(b) b.remove();
+  } catch(_){}
+}
+window._rpV5ClearStale = _rpV5ClearStale;
+
 // Phase 102 (2026-05-28): Generate-route button is DISABLED until the
 // user has picked at least one candidate. User: "find candidates should
 // be before creating a route and once i select tha candidates then the
@@ -37286,7 +37401,8 @@ function _rpV5SyncGenerateBtn(){
     var pickCount = Object.keys(window._RP_V5_FLAT_PICKS || {}).length;
     var startOk = !!(document.getElementById('rp-start') || {}).value;
     var endOk   = !!(document.getElementById('rp-end')   || {}).value;
-    var ready   = (pickCount > 0) && startOk && endOk;
+    var stale   = !!window._RP_V5_STALE;
+    var ready   = (pickCount > 0) && startOk && endOk && !stale;
     btn.disabled = !ready;
     if(ready){
       btn.style.opacity = '1';
@@ -37298,10 +37414,12 @@ function _rpV5SyncGenerateBtn(){
       btn.style.cursor = 'not-allowed';
       if(!startOk || !endOk){
         btn.title = 'Pick Start and End first.';
+      } else if(stale){
+        btn.title = 'Inputs changed — click 🔍 Find candidates again to refresh the list.';
       } else {
         btn.title = 'Pick at least one candidate first (click "🔍 Find candidates", then check the boxes on the list).';
       }
-      btn.textContent = 'Generate route →';
+      btn.textContent = stale ? 'Re-find candidates first' : 'Generate route →';
     }
   } catch(_){}
 }
