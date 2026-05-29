@@ -28515,6 +28515,7 @@ function openRoutePlanner(){
     if(typeof _rpClearSelectionHalo === 'function') _rpClearSelectionHalo();
     if(typeof _rpClearPreviewRing === 'function') _rpClearPreviewRing();
     if(typeof _rpClearLiveRoute === 'function') _rpClearLiveRoute();
+    if(typeof _phase123ClearRealRoute === 'function') _phase123ClearRealRoute();
   } catch(_){}
   // Phase 45 (2026-05-28): browsers (esp. Firefox) auto-restore form
   // input values across page reloads. So after refresh, opening the
@@ -28525,6 +28526,14 @@ function openRoutePlanner(){
     var sLblRP = document.getElementById('rp-start-search');   if(sLblRP) sLblRP.value = '';
     var eInpRP = document.getElementById('rp-end');           if(eInpRP) eInpRP.value = '';
     var eLblRP = document.getElementById('rp-end-search');     if(eLblRP) eLblRP.value = '';
+    // Phase 123 (2026-05-29): Phase 45 wiped Start/End but left the visits +
+    // corridor inputs alone, so browser autofill could surface old values
+    // (user reported "default num for max visits is 2 only" on a session
+    // where a previous run had bumped it down to 2). Reset to the HTML
+    // defaults — Max visits = 5, corridor half-width = 3 mi.
+    var tvInpRP = document.getElementById('rp-target-visits'); if(tvInpRP) tvInpRP.value = '5';
+    var cwInpRP = document.getElementById('rp-corridor');      if(cwInpRP) cwInpRP.value = '3';
+    window._RP_APPLIED_HALFWIDTH = 3;
     window._RP_START_NAME = '';
     window._RP_END_NAME = '';
     window._RP_START_COORD = null;
@@ -29357,6 +29366,183 @@ function _rpRefreshLiveRoute(){
   } catch(e){ console.error('[_rpRefreshLiveRoute] failed:', e); }
 }
 window._rpRefreshLiveRoute = _rpRefreshLiveRoute;
+
+// ════════════════════════════════════════════════════════════════════════════
+// PHASE 123 (2026-05-29) — REAL DRIVING ROUTE (OSRM)
+// User: "those numbers are not real actually ... get real numbers from
+// google maps not fake ones ... once we click on create a route a window
+// will show the real distance and time from google maps to that then we
+// confirm ... once we confirm then the route same as the one on google
+// maps will appear on our map here inside the dashboard".
+//
+// The old flow used haversine × 1.4 + 30mph guesstimate. This phase wires
+// a real driving-router (OSRM public demo — open-source car routing on
+// OSM road data, no key, no card, returns Google-Maps-equivalent driving
+// distance + duration + actual road geometry).
+//
+// Flow:
+//   1) Generate route → build picks list (existing logic unchanged)
+//   2) Show "Fetching real route from road network..." overlay
+//   3) Call OSRM with Start + picks + End coords
+//   4) On success → show confirm modal with REAL distance + ETA
+//   5) On confirm → draw the real OSRM polyline on the map + store real
+//      numbers in _RP_V5_LAST so _rpV5ShowLocked displays them
+//   6) On cancel → return to the candidate list, nothing committed
+// If OSRM is unreachable, the modal falls back to the haversine estimate
+// with a clear warning so the rep knows the numbers are approximate.
+// ════════════════════════════════════════════════════════════════════════════
+window._PHASE123_REAL_ROUTE_LAYER = null;
+window._PHASE123_OSRM_BASE = 'https://router.project-osrm.org/route/v1/driving/';
+
+function _phase123FetchRealRoute(coords){
+  // coords = array of {lat, lng} in trip order (Start, pick1, pick2, ..., End)
+  return new Promise(function(resolve){
+    if(!Array.isArray(coords) || coords.length < 2){
+      resolve({ ok: false, error: 'Need at least Start + End coordinates.' });
+      return;
+    }
+    var coordStr = coords.map(function(c){ return c.lng + ',' + c.lat; }).join(';');
+    var url = window._PHASE123_OSRM_BASE + encodeURIComponent(coordStr).replace(/%2C/g,',').replace(/%3B/g,';')
+            + '?overview=full&geometries=geojson&steps=false';
+    var ctl = (typeof AbortController === 'function') ? new AbortController() : null;
+    var timer = setTimeout(function(){ try { ctl && ctl.abort(); } catch(_){} }, 10000);
+    fetch(url, ctl ? { signal: ctl.signal } : undefined)
+      .then(function(r){ if(!r.ok) throw new Error('OSRM HTTP ' + r.status); return r.json(); })
+      .then(function(j){
+        clearTimeout(timer);
+        if(!j || j.code !== 'Ok' || !j.routes || !j.routes.length){
+          resolve({ ok: false, error: (j && j.message) || 'OSRM returned no route.' });
+          return;
+        }
+        var r = j.routes[0];
+        var meters = r.distance || 0;
+        var seconds = r.duration || 0;
+        resolve({
+          ok: true,
+          distanceMi: meters / 1609.344,
+          durationMin: Math.round(seconds / 60),
+          geometry: r.geometry,   // GeoJSON LineString {type, coordinates:[[lng,lat],...]}
+          osrmRaw: r
+        });
+      })
+      .catch(function(e){
+        clearTimeout(timer);
+        resolve({ ok: false, error: (e && e.message) || 'Network error reaching OSRM.' });
+      });
+  });
+}
+window._phase123FetchRealRoute = _phase123FetchRealRoute;
+
+function _phase123DrawRealRoute(geometry){
+  try {
+    _phase123ClearRealRoute();
+    if(!geometry || !geometry.coordinates || !Array.isArray(geometry.coordinates) || !geometry.coordinates.length) return;
+    if(typeof _DV_MAP === 'undefined' || !_DV_MAP || typeof L === 'undefined') return;
+    var latlngs = geometry.coordinates.map(function(c){ return [c[1], c[0]]; });
+    // Two-layer stack — white halo for legibility over the basemap, royal blue
+    // solid line on top. Visually distinct from the bright-green candidate
+    // preview line so the rep can tell which is which at a glance.
+    var halo = L.polyline(latlngs, {
+      color: '#ffffff', weight: 11, opacity: 0.95, interactive: false, lineCap: 'round', lineJoin: 'round'
+    }).addTo(_DV_MAP);
+    var line = L.polyline(latlngs, {
+      color: '#1d4ed8', weight: 6, opacity: 1, interactive: false, lineCap: 'round', lineJoin: 'round'
+    }).addTo(_DV_MAP);
+    window._PHASE123_REAL_ROUTE_LAYER = { halo: halo, line: line };
+  } catch(e){
+    try { console.warn('[123] draw real route failed:', e); } catch(_){}
+  }
+}
+window._phase123DrawRealRoute = _phase123DrawRealRoute;
+
+function _phase123ClearRealRoute(){
+  try {
+    var L0 = window._PHASE123_REAL_ROUTE_LAYER;
+    if(L0 && typeof _DV_MAP !== 'undefined' && _DV_MAP){
+      if(L0.halo) _DV_MAP.removeLayer(L0.halo);
+      if(L0.line) _DV_MAP.removeLayer(L0.line);
+    }
+  } catch(_){}
+  window._PHASE123_REAL_ROUTE_LAYER = null;
+}
+window._phase123ClearRealRoute = _phase123ClearRealRoute;
+
+function _phase123ShowConfirmModal(opts){
+  // opts: { real, fallbackMi, fallbackMin, stopCount, startName, endName,
+  //         onConfirm, onCancel }
+  try {
+    var modalId = 'phase123-confirm-modal';
+    var existing = document.getElementById(modalId);
+    if(existing) existing.remove();
+    var modal = document.createElement('div');
+    modal.id = modalId;
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.6);z-index:99999;display:flex;align-items:center;justify-content:center;font-family:DM Sans,sans-serif;animation:fadeIn .15s ease-out;padding:20px';
+    document.body.appendChild(modal);
+
+    function esc(s){ return String(s||'').replace(/</g,'&lt;'); }
+
+    var real = opts.real || { ok: false };
+    var miStr, minStr, sourceLabel, sourceColor, warningHtml = '';
+    if(real.ok){
+      miStr = real.distanceMi.toFixed(1);
+      minStr = real.durationMin;
+      sourceLabel = 'Real driving distance — OSM road network';
+      sourceColor = '#15803d';
+    } else {
+      miStr = (opts.fallbackMi || 0).toFixed(1);
+      minStr = opts.fallbackMin || 0;
+      sourceLabel = 'Estimate (couldn\'t reach the road-network router)';
+      sourceColor = '#b45309';
+      warningHtml = '<div style="background:#fffbeb;border:1px solid #fde68a;border-left:3px solid #f59e0b;border-radius:8px;padding:9px 12px;margin-top:10px;font-size:11px;color:#78350f;line-height:1.5">⚠ <b>Routing service unreachable.</b> Showing straight-line × 1.4 estimate at 30 mph. The committed route will still draw — open it in Google Maps for the exact path.<br><span style="opacity:.75">Details: ' + esc(real.error || 'unknown') + '</span></div>';
+    }
+
+    modal.innerHTML = ''
+      + '<div style="background:#fff;border-radius:14px;padding:22px 24px;max-width:520px;width:100%;box-shadow:0 30px 70px rgba(15,23,42,.45);max-height:90vh;overflow-y:auto">'
+      +   '<div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:14px">'
+      +     '<div style="background:linear-gradient(135deg,#1d4ed8,#1F3864);color:#fff;width:42px;height:42px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">🗺️</div>'
+      +     '<div>'
+      +       '<div style="font-size:14px;font-weight:800;color:#1F3864">Confirm route</div>'
+      +       '<div style="font-size:11px;color:var(--muted);margin-top:2px">' + esc(opts.startName || 'Start') + ' → ' + opts.stopCount + ' stop' + (opts.stopCount===1?'':'s') + ' → ' + esc(opts.endName || 'End') + '</div>'
+      +     '</div>'
+      +   '</div>'
+      +   '<div style="background:linear-gradient(135deg,#eff6ff,#dbeafe);border:1px solid #93c5fd;border-radius:12px;padding:16px;text-align:center;margin-bottom:6px">'
+      +     '<div style="font-size:28px;font-weight:800;color:#1d4ed8;letter-spacing:-.5px">' + miStr + ' mi <span style="color:#94a3b8;font-weight:600">·</span> ' + minStr + ' min</div>'
+      +     '<div style="font-size:11px;color:' + sourceColor + ';font-weight:700;margin-top:4px">' + (real.ok ? '✓ ' : '⚠ ') + sourceLabel + '</div>'
+      +   '</div>'
+      +   warningHtml
+      +   '<div style="font-size:11.5px;color:var(--muted);margin:14px 0 12px 0;line-height:1.55">On confirm, this exact road-network path draws on the dashboard map (royal-blue line) so what you see matches what Google Maps will navigate. The green dashed line just shows which clinics are included — it\'s not the drive path.</div>'
+      +   '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px">'
+      +     '<button type="button" id="phase123-cancel" style="background:#fff;color:#475569;border:1px solid var(--border);border-radius:8px;padding:9px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">← Re-edit picks</button>'
+      +     '<button type="button" id="phase123-confirm" style="background:linear-gradient(135deg,#15803d,#16a34a);color:#fff;border:none;border-radius:8px;padding:9px 22px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;box-shadow:0 2px 8px rgba(22,163,74,.35)">✓ Confirm route →</button>'
+      +   '</div>'
+      + '</div>';
+
+    var cancelBtn  = modal.querySelector('#phase123-cancel');
+    var confirmBtn = modal.querySelector('#phase123-confirm');
+    function close(){ try { modal.remove(); } catch(_){} }
+    cancelBtn.addEventListener('click', function(){ close(); if(typeof opts.onCancel === 'function') opts.onCancel(); });
+    confirmBtn.addEventListener('click', function(){ close(); if(typeof opts.onConfirm === 'function') opts.onConfirm(real); });
+    modal.addEventListener('click', function(e){ if(e.target === modal){ close(); if(typeof opts.onCancel === 'function') opts.onCancel(); } });
+  } catch(e){
+    try { console.warn('[123] confirm modal failed:', e); } catch(_){}
+    // Fail-open — proceed with whatever data we have
+    if(typeof opts.onConfirm === 'function') opts.onConfirm(opts.real || { ok: false });
+  }
+}
+window._phase123ShowConfirmModal = _phase123ShowConfirmModal;
+
+function _phase123ShowFetchingOverlay(show){
+  var id = 'phase123-fetching-overlay';
+  var el = document.getElementById(id);
+  if(!show){ if(el) el.remove(); return; }
+  if(el) return;
+  el = document.createElement('div');
+  el.id = id;
+  el.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.4);z-index:99998;display:flex;align-items:center;justify-content:center;font-family:DM Sans,sans-serif';
+  el.innerHTML = '<div style="background:#fff;border-radius:12px;padding:20px 28px;box-shadow:0 20px 50px rgba(15,23,42,.35);display:flex;align-items:center;gap:14px"><div style="width:24px;height:24px;border:3px solid #dbeafe;border-top-color:#1d4ed8;border-radius:50%;animation:spin 0.9s linear infinite"></div><div><div style="font-size:13px;font-weight:800;color:#1F3864">Fetching real driving route...</div><div style="font-size:11px;color:var(--muted);margin-top:2px">Asking the road network for actual distance + ETA</div></div></div><style>@keyframes spin{to{transform:rotate(360deg)}}</style>';
+  document.body.appendChild(el);
+}
+window._phase123ShowFetchingOverlay = _phase123ShowFetchingOverlay;
 
 // Re-read Start, End, and the current half-width input and (re)draw the
 // box. Called any time an endpoint OR the half-width changes.
@@ -32216,7 +32402,28 @@ function _rpComputeWidthForVisits(A, B, targetN){
   // width" mode and drag manually.
   var maxCap = 6;
   var perps = [];
+  // Phase 123 (2026-05-29): mirror the exclusions that _rpV5FindForLevel
+  // applies — Start/End names, today's already-scheduled clinics, and
+  // dead-end leads. Previously compute counted these but find dropped
+  // them, so asking for 5 visits returned 4 (the off-by-one the user
+  // reported). Now compute and find see the same population.
+  var _sNm = (window._RP_START_NAME || '').toString().toLowerCase();
+  var _eNm = (window._RP_END_NAME   || '').toString().toLowerCase();
+  var _scheduled = (typeof _rpScheduledClinicsForActiveDay === 'function')
+    ? _rpScheduledClinicsForActiveDay() : {};
   function consider(name){
+    if(!name) return;
+    // Exclude S/E themselves (they're the endpoints, not stops)
+    var _nLc = String(name).toLowerCase();
+    if(_sNm && _nLc === _sNm) return;
+    if(_eNm && _nLc === _eNm) return;
+    // Skip clinics already on today's schedule
+    if(_scheduled[name]) return;
+    // Skip dead-end leads
+    if(typeof getClinicLead === 'function'){
+      var _lead = getClinicLead(name);
+      if(_lead && _lead.status === 'dead_end') return;
+    }
     var c = (typeof _rpGetVisualCoord === 'function') ? _rpGetVisualCoord(name) : null;
     if(!c && typeof getCoordForBusiness === 'function') c = getCoordForBusiness(name);
     if(!c) return;
@@ -39327,22 +39534,14 @@ function _rpV5GenerateRoute(){
   if(connection.skipped.length > 0 && typeof showToast === 'function'){
     showToast('🔗 Connected ' + allPicks.length + ' · skipped ' + connection.skipped.length + ' (Δy > ±' + halfWidthMi + ' mi)');
   }
-  // Compute fresh total for this generation
+  // Haversine fallback estimate — used if OSRM is unreachable. Real numbers
+  // come from Phase 123 fetch below.
   var prev = _RP_V5_LAST.A;
   var rawMi = 0;
   allPicks.forEach(function(p){ rawMi += _rpHaversineMiles(prev, p.coord); prev = p.coord; });
   rawMi += _rpHaversineMiles(prev, _RP_V5_LAST.B);
-  var totalMi = rawMi * 1.4;
-  var totalMin = Math.round((totalMi / 30) * 60);
-  // Snapshot the "before edit" baseline. On the FIRST Generate (not an edit
-  // re-generate) we set originalTotalMi/Min so future edits show the delta
-  // against the originally locked-in plan.
-  if(!_RP_V5_LAST.originalTotalMi){
-    _RP_V5_LAST.originalTotalMi  = totalMi;
-    _RP_V5_LAST.originalTotalMin = totalMin;
-  }
-  _RP_V5_LAST.lastTotalMi  = totalMi;
-  _RP_V5_LAST.lastTotalMin = totalMin;
+  var fallbackMi = rawMi * 1.4;
+  var fallbackMin = Math.round((fallbackMi / 30) * 60);
   // Resolve start/end names for the finalize flow
   var startName = (document.getElementById('rp-start-search') || {}).value || 'Start';
   var endName   = (document.getElementById('rp-end-search')   || {}).value || '';
@@ -39357,24 +39556,62 @@ function _rpV5GenerateRoute(){
       return;
     }
   }
-  _RP_START_NAME = startName;
-  _RP_END_NAME   = endName;
-  _RP_N          = allPicks.length;
-  _RP_SLOT_PICKS = allPicks.map(function(p){
-    return {
-      name: p.name, bizType: p.bizType, coord: p.coord,
-      days: p.days, dist: p.absPerp,
-      leadStatus: 'not_visited', leadLevel: 0
-    };
+  // Phase 123 (2026-05-29): fetch REAL driving distance/time/geometry from
+  // the OSM road network. Then show the confirm modal so the rep sees real
+  // numbers before we commit. On confirm we draw the real polyline; on
+  // cancel we return to the candidate list untouched.
+  var coordsForOsrm = [_RP_V5_LAST.A].concat(allPicks.map(function(p){ return p.coord; })).concat([_RP_V5_LAST.B]);
+  _phase123ShowFetchingOverlay(true);
+  _phase123FetchRealRoute(coordsForOsrm).then(function(real){
+    _phase123ShowFetchingOverlay(false);
+    _phase123ShowConfirmModal({
+      real: real,
+      fallbackMi: fallbackMi,
+      fallbackMin: fallbackMin,
+      stopCount: allPicks.length,
+      startName: startName,
+      endName: endName,
+      onCancel: function(){
+        // Stay on the candidate list — nothing committed.
+        if(typeof showToast === 'function') showToast('Route not confirmed — keep editing your picks and click Generate route again.');
+      },
+      onConfirm: function(realResult){
+        var totalMi  = (realResult && realResult.ok) ? realResult.distanceMi  : fallbackMi;
+        var totalMin = (realResult && realResult.ok) ? realResult.durationMin : fallbackMin;
+        // Snapshot baseline on FIRST generate (not re-edit)
+        if(!_RP_V5_LAST.originalTotalMi){
+          _RP_V5_LAST.originalTotalMi  = totalMi;
+          _RP_V5_LAST.originalTotalMin = totalMin;
+        }
+        _RP_V5_LAST.lastTotalMi  = totalMi;
+        _RP_V5_LAST.lastTotalMin = totalMin;
+        _RP_V5_LAST.realRouteSource = (realResult && realResult.ok) ? 'osrm' : 'estimate';
+        _RP_V5_LAST.realRouteGeometry = (realResult && realResult.ok) ? realResult.geometry : null;
+        _RP_START_NAME = startName;
+        _RP_END_NAME   = endName;
+        _RP_N          = allPicks.length;
+        _RP_SLOT_PICKS = allPicks.map(function(p){
+          return {
+            name: p.name, bizType: p.bizType, coord: p.coord,
+            days: p.days, dist: p.absPerp,
+            leadStatus: 'not_visited', leadLevel: 0
+          };
+        });
+        // Draw the real road-network polyline on the dashboard map — this
+        // is what Google Maps will navigate. Clears the green candidate
+        // preview line and stamps the actual driving path in royal blue.
+        if(_RP_V5_LAST.realRouteGeometry){
+          try { if(typeof _rpClearLiveRoute === 'function') _rpClearLiveRoute(); } catch(_){}
+          _phase123DrawRealRoute(_RP_V5_LAST.realRouteGeometry);
+        }
+        if(typeof _rpRefreshHighlights === 'function') _rpRefreshHighlights();
+        if(typeof _rpUpdateStatus === 'function') _rpUpdateStatus();
+        if(typeof _rpFinalizeSmart === 'function') _rpFinalizeSmart();
+        _RP_V5_EDIT_MODE = false;
+        _rpV5ShowLocked();
+      }
+    });
   });
-  if(typeof _rpRefreshHighlights === 'function') _rpRefreshHighlights();
-  if(typeof _rpUpdateStatus === 'function') _rpUpdateStatus();
-  if(typeof _rpFinalizeSmart === 'function') _rpFinalizeSmart();
-  // Keep the planner open with a "locked in" view so the user can edit.
-  // (Old behavior was closeRoutePlanner() here — now deferred to the
-  // explicit "Done" button in _rpV5ShowLocked.)
-  _RP_V5_EDIT_MODE = false;   // not yet in edit mode; viewing the lock
-  _rpV5ShowLocked();
 }
 window._rpV5GenerateRoute = _rpV5GenerateRoute;
 
@@ -39406,13 +39643,19 @@ function _rpV5ShowLocked(){
       + 'Was '+origMi.toFixed(1)+' mi · '+origMin+' min  →  Now '+mi.toFixed(1)+' mi · '+min+' min  ('+sMi+Math.abs(dMi).toFixed(1)+' mi · '+sMin+Math.abs(dMin)+' min)'
       + '</div>';
   }
+  // Phase 123 (2026-05-29): badge the displayed mi/min with their source.
+  // 'osrm' = real road-network drive · 'estimate' = haversine fallback
+  // (used only when the router was unreachable). Defaults to estimate for
+  // legacy callers that didn't set the source.
+  var realSrc = (_RP_V5_LAST.realRouteSource || 'estimate');
+  var srcLabel = (realSrc === 'osrm') ? '✓ Real road-network drive' : 'Estimated (router unreachable)';
   var html = '<div style="background:linear-gradient(135deg,#15803d,#16a34a);border-radius:10px;padding:16px;color:#fff;margin-bottom:12px">'
     + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">'
     +   '<div><div style="font-size:13px;font-weight:800">✅ Route locked into the day</div>'
     +     '<div style="font-size:11px;opacity:.9;margin-top:2px">Stops added in order along Start → End.</div>'+deltaBlock+'</div>'
     +   '<div style="text-align:right">'
     +     '<div style="font-size:20px;font-weight:800">'+mi.toFixed(1)+' mi · '+min+' min</div>'
-    +     '<div style="font-size:10px;opacity:.85">'+(_RP_SLOT_PICKS ? _RP_SLOT_PICKS.length : 0)+' stops · estimated</div>'
+    +     '<div style="font-size:10px;opacity:.85">'+(_RP_SLOT_PICKS ? _RP_SLOT_PICKS.length : 0)+' stops · '+srcLabel+'</div>'
     +   '</div>'
     + '</div>'
     + '</div>'
