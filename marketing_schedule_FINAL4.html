@@ -27792,7 +27792,151 @@ window._rpLockInRoute = _rpLockInRoute;
 //     If the day has more, we use the first 10 and toast a warning.
 //   - Canceled rows are skipped (no point routing to them).
 //   - Rows without resolvable coords are skipped (can't deep-link a name only).
-function exportDayRouteToGoogleMaps(){
+// ════════════════════════════════════════════════════════════════════════════
+// PHASE 122c (2026-05-29) — GOOGLE MAPS ROUTE PICKER
+// User: "now the google map then will show one of them how when we click on
+// show on google maps then the member needs to select which route before
+// opening and that selection will determine which route should be shown on
+// google maps". Pops only when the day has multiple routes the viewer owns.
+// "All routes" stays available so the rep can navigate the whole day if
+// they want. On pick, exportDayRouteToGoogleMaps re-enters with the id.
+// ════════════════════════════════════════════════════════════════════════════
+function _phase122cShowRoutePicker(routes, onPick){
+  try {
+    var modalId = 'phase122c-route-picker';
+    var existing = document.getElementById(modalId);
+    if(existing) existing.remove();
+    var modal = document.createElement('div');
+    modal.id = modalId;
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99999;display:flex;align-items:center;justify-content:center;font-family:DM Sans,sans-serif;animation:fadeIn .15s ease-out';
+    document.body.appendChild(modal);
+    function esc(s){ return String(s||'').replace(/</g,'&lt;'); }
+    // Sort oldest-first so "Route 1" stays Route 1
+    var sorted = routes.slice().sort(function(a,b){ return new Date(a.savedAt || 0) - new Date(b.savedAt || 0); });
+    var rows = sorted.map(function(r, idx){
+      var safeId = String(r.routeId || '').replace(/'/g,"\\'");
+      var modeName = r.mode === 'corridor' ? 'Corridor' : r.mode === 'optimize' ? 'Pick & Plan' : (r.mode || 'route');
+      var stopCount = (r.insertedNames || []).length;
+      var startLbl = (r.startLabel || r.startName || '?').replace(/^_facility_/, '🏥 ').replace(/_/g, ' ');
+      var endLbl   = (r.endLabel || r.endName || '?').replace(/^_facility_/, '🏥 ').replace(/_/g, ' ');
+      return '<button type="button" onclick="document.getElementById(\'' + modalId + '\').remove();var cb=window._PHASE122C_PICK_CB;window._PHASE122C_PICK_CB=null;if(cb)cb(\'' + safeId + '\');" style="display:block;width:100%;text-align:left;background:#fff;border:1px solid var(--border);border-left:4px solid #16a34a;border-radius:8px;padding:11px 14px;margin-bottom:8px;cursor:pointer;font-family:DM Sans,sans-serif;transition:background .15s" onmouseover="this.style.background=\'#f0fdf4\'" onmouseout="this.style.background=\'#fff\'">'
+        + '<div style="font-size:13px;font-weight:800;color:#15803d">📍 Route ' + (idx + 1) + ' · ' + modeName + ' · ' + stopCount + ' stop' + (stopCount === 1 ? '' : 's') + '</div>'
+        + '<div style="font-size:11px;color:#1F3864;margin-top:3px">' + esc(startLbl) + ' → ' + esc(endLbl) + '</div>'
+        + '</button>';
+    }).join('');
+    modal.innerHTML = ''
+      + '<div style="background:#fff;border-radius:14px;padding:22px;max-width:520px;width:92%;box-shadow:0 20px 60px rgba(0,0,0,.4);max-height:80vh;overflow-y:auto">'
+      +   '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
+      +     '<div style="font-size:14px;font-weight:800;color:#1F3864">🗺️ Which route to open?</div>'
+      +     '<button type="button" onclick="document.getElementById(\'' + modalId + '\').remove();window._PHASE122C_PICK_CB=null;" style="background:transparent;border:0;font-size:18px;color:#94a3b8;cursor:pointer;line-height:1" title="Cancel">&#10005;</button>'
+      +   '</div>'
+      +   '<div style="font-size:11px;color:var(--muted);margin-bottom:12px">This day has ' + sorted.length + ' routes. Pick one to navigate in Google Maps, or open all of them stitched together.</div>'
+      +   rows
+      +   '<div style="margin-top:8px;padding-top:10px;border-top:1px solid var(--border)">'
+      +     '<button type="button" onclick="document.getElementById(\'' + modalId + '\').remove();var cb=window._PHASE122C_PICK_CB;window._PHASE122C_PICK_CB=null;if(cb)cb(null);" style="display:block;width:100%;background:#1F3864;color:#fff;border:none;border-radius:8px;padding:10px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">🗺️ All routes (stitched together)</button>'
+      +   '</div>'
+      + '</div>';
+    window._PHASE122C_PICK_CB = onPick;
+  } catch(e){
+    console.error('[122c] picker failed — falling through to All:', e);
+    if(typeof onPick === 'function') onPick(null);
+  }
+}
+window._phase122cShowRoutePicker = _phase122cShowRoutePicker;
+
+// ════════════════════════════════════════════════════════════════════════════
+// PHASE 122c (2026-05-29) — SCHEDULE SEPARATOR INJECTOR
+// User: "we can just seprate them by a empty row that has new route started".
+// Runs after renderDayTable. Walks the visible source rows in order, pairs
+// them with the rendered <tr> nodes, and inserts a divider row whenever the
+// adjacent rows belong to different routes (different _routeId). Routes are
+// numbered in the order they FIRST appear in the schedule so the labels line
+// up with what the rep sees in the chip strip above.
+// ════════════════════════════════════════════════════════════════════════════
+function _phase122cInjectScheduleSeparators(di){
+  try {
+    if(typeof S === 'undefined' || !S || !S.days || !S.days[di]) return;
+    var day = S.days[di];
+    var rows = day.rows || [];
+    var tbody = document.getElementById('day-tbody');
+    if(!tbody) return;
+
+    // Build the visible subset in source order, same filter renderDayTable used
+    function _visible(r){
+      if(!r) return false;
+      if(!(r.isManual || r.editing || r.clinic || r.member)) return false;
+      // Respect the active member filter the day view applied
+      var filterMember = (typeof _CAL_MEMBER_FILTER === 'string') ? _CAL_MEMBER_FILTER : '';
+      var showAll      = (typeof _DAY_VIEW_SHOW_ALL !== 'undefined') ? _DAY_VIEW_SHOW_ALL : false;
+      var isAdminNow   = (typeof isAdmin === 'function') && isAdmin();
+      if(filterMember && !showAll && !isAdminNow){
+        var members = [];
+        if(typeof getRowMembers === 'function') members = getRowMembers(r) || [];
+        if(!members.length && r.member) members = [r.member];
+        if(members.indexOf(filterMember) < 0) return false;
+      }
+      return true;
+    }
+    var visibleRows = [];
+    rows.forEach(function(r){ if(_visible(r)) visibleRows.push(r); });
+    if(visibleRows.length < 2) return; // can't transition
+
+    // Detect whether any transitions exist (skip work if all rows share an id)
+    var distinctIds = {};
+    var anyTagged = false;
+    visibleRows.forEach(function(r){
+      if(r && r._routeId){ distinctIds[r._routeId] = true; anyTagged = true; }
+    });
+    var idKeys = Object.keys(distinctIds);
+    if(!anyTagged || idKeys.length < 2) return; // single route (or none) → no separators
+
+    // Number routes by FIRST-APPEARANCE order in the schedule
+    var routeNum = {};
+    var nextNum = 1;
+    visibleRows.forEach(function(r){
+      var id = r && r._routeId;
+      if(!id) return;
+      if(!routeNum[id]){ routeNum[id] = nextNum++; }
+    });
+
+    // Collect rendered <tr> nodes for the source rows. Skip the trailing
+    // ".add-visit-row" + any pre-existing separator rows we may have inserted
+    // on a prior pass (safety against double-injection).
+    var allTRs = Array.prototype.slice.call(tbody.querySelectorAll(':scope > tr'));
+    var dataTRs = allTRs.filter(function(tr){
+      if(tr.classList.contains('add-visit-row')) return false;
+      if(tr.classList.contains('phase122c-sep-row')) { tr.remove(); return false; }
+      return true;
+    });
+
+    // Pair source-row N with rendered <tr> N. If counts don't line up we bail —
+    // better no separators than misplaced ones.
+    if(dataTRs.length !== visibleRows.length) return;
+
+    var colspan = window._DV_SELECT_MODE ? 12 : 11;
+    for(var i = 1; i < visibleRows.length; i++){
+      var prev = visibleRows[i - 1];
+      var curr = visibleRows[i];
+      var prevId = prev && prev._routeId;
+      var currId = curr && curr._routeId;
+      // Only inject between two ROUTE-tagged rows that differ. Don't separate
+      // a tagged row from an untagged manual-entry row — that's just a stray
+      // gap; not a route change.
+      if(!prevId || !currId) continue;
+      if(prevId === currId) continue;
+      var num = routeNum[currId] || '?';
+      var sep = document.createElement('tr');
+      sep.className = 'phase122c-sep-row';
+      sep.innerHTML = '<td colspan="' + colspan + '" style="padding:6px 12px;background:linear-gradient(90deg,#f0fdf4,#dcfce7,#f0fdf4);border-top:1px dashed #16a34a;border-bottom:1px dashed #16a34a;text-align:center;font-size:11px;font-weight:800;color:#15803d;letter-spacing:.5px;font-family:DM Sans,sans-serif">── Route ' + num + ' started ──</td>';
+      dataTRs[i].parentNode.insertBefore(sep, dataTRs[i]);
+    }
+  } catch(e){
+    try { console.warn('[122c] separator injection failed:', e); } catch(_){}
+  }
+}
+window._phase122cInjectScheduleSeparators = _phase122cInjectScheduleSeparators;
+
+function exportDayRouteToGoogleMaps(filterRouteId){
   var di = (typeof S !== 'undefined' && S.currentDay != null) ? S.currentDay : null;
   if(di == null){
     if(typeof showToast === 'function') showToast('Open a day on the calendar first, then export.');
@@ -27803,6 +27947,30 @@ function exportDayRouteToGoogleMaps(){
     if(typeof showToast === 'function') showToast('No visits on this day to export.');
     return;
   }
+  // Phase 122c (2026-05-29): if the day has multiple routes AND the
+  // caller didn't already pick one, show a picker first. Each route's
+  // chip is sourced from the v2 saved-routes list; "All routes" is also
+  // offered so reps can navigate the whole day in one trip if they want.
+  if(!filterRouteId && typeof _rpListRoutes === 'function'){
+    var allRoutes = _rpListRoutes();
+    // Filter to routes the viewer owns (members) — admin sees all
+    var me = (window.CURRENT_USER && CURRENT_USER.name) || '';
+    var isAdmin0 = (typeof isAdmin === 'function') && isAdmin();
+    if(me && !isAdmin0){
+      allRoutes = allRoutes.filter(function(r){ return !r.owner || r.owner === me; });
+    }
+    if(allRoutes.length > 1){
+      _phase122cShowRoutePicker(allRoutes, function(pickedId){
+        // Re-enter with the picked id (or null = "All routes")
+        exportDayRouteToGoogleMaps(pickedId || '__all__');
+      });
+      return;
+    }
+  }
+  // Use the editing flag as the default route id when only one chip
+  // existed and the user has it open. If filterRouteId === '__all__',
+  // skip the per-route filter entirely.
+  var effectiveFilter = (filterRouteId === '__all__') ? null : (filterRouteId || null);
   // Phase 10b v2 (per user 2026-05-25 "huge mess" feedback): use STREET
   // ADDRESS when we have it, falling back to "Clinic Name, City, TX".
   // Either way Google Maps shows the actual business name in the route —
@@ -27848,6 +28016,10 @@ function exportDayRouteToGoogleMaps(){
   var droppedDone = 0;
   day.rows.forEach(function(r){
     if(!r || !r.clinic) return;
+    // Phase 122c: per-route filter — when set, skip rows not tagged with
+    // the chosen routeId. Untagged legacy rows (pre-122b) stay visible
+    // for back-compat (single-route days).
+    if(effectiveFilter && r._routeId && r._routeId !== effectiveFilter) return;
     if(r.status === 'Canceled' || r.status === 'Completed' || r.status === 'Postponed'){
       droppedDone++;
       return;
@@ -44543,6 +44715,10 @@ function refresh(di){
   try {
     if(S.currentDay===di){
       try { renderDayTable(di); } catch(e){ try { console.warn('[refresh] renderDayTable threw:', e); } catch(_){} }
+      // Phase 122c (2026-05-29): inject "── Route N ──" separator rows
+      // BETWEEN groups when the day has multiple routes. Runs post-
+      // render so we don't have to touch the existing renderDayTable.
+      try { if(typeof _phase122cInjectScheduleSeparators === 'function') _phase122cInjectScheduleSeparators(di); } catch(e){ try { console.warn('[refresh] separators threw:', e); } catch(_){} }
       try { if(typeof renderDayMap === 'function') renderDayMap(di); } catch(e){ try { console.warn('[refresh] renderDayMap threw:', e); } catch(_){} }
     }
     try { renderCalGrid(); } catch(e){ try { console.warn('[refresh] renderCalGrid threw:', e); } catch(_){} }
