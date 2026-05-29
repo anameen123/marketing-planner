@@ -60730,10 +60730,14 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
          ahsan) — front-desk, Manager, and Duaa don't see it (JS visibility
          gate in renderTeamChatVisibility). Help is the role-aware guide;
          Profile edits display name + position. -->
-    <div class="md-section-label">Account</div>
+    <!-- Phase 125 (2026-05-29): Team Chat + Learn moved up into "Tools" so
+         "Account" becomes the LAST item, sitting directly above Sign Out
+         per user "the account should be directly above the sign out". -->
     <button id="sidebar-chat-btn" class="md-nav-item" data-tooltip="Team Chat" onclick="memberDrawerGo('chat')" style="display:none"><span class="md-ico">💬</span><span class="md-lbl">Team Chat</span><span id="sidebar-chat-badge" style="display:none;background:#ef4444;color:#fff;font-size:9px;font-weight:700;padding:1px 6px;border-radius:10px;margin-left:auto">0</span></button>
     <button class="md-nav-item" data-tooltip="Learn how to use" onclick="memberDrawerGo('help')"><span class="md-ico">📖</span><span class="md-lbl">Learn how to use me</span></button>
-    <button class="md-nav-item" data-tooltip="Profile" onclick="memberDrawerGo('profile')"><span class="md-ico">🪪</span><span class="md-lbl">Profile</span></button>
+
+    <div class="md-section-label">Account</div>
+    <button class="md-nav-item" data-tooltip="Account" onclick="memberDrawerGo('profile')"><span class="md-ico">🪪</span><span class="md-lbl">Account</span></button>
   </div>
   <div class="member-drawer-footer">
     <button class="md-signout-btn" onclick="toggleMemberDrawer(false); confirmAndLogout();">↩ Sign out</button>
@@ -60857,15 +60861,30 @@ window.memberDrawerGo = memberDrawerGo;
 // every other group. Sets `.expanded` on the parent button (which rotates
 // the chevron) and `.is-open` on the .md-subnav container (which animates
 // the slide-down). Items without sub-nav simply collapse everything.
-function _toggleSidebarAccordion(tab){
+//
+// Phase 125 (2026-05-29): user reported "when i click on the arrow it
+// will drop the list but if i click back it does not pull it up". The
+// old version unconditionally re-expanded the target, so clicking the
+// same chevron twice never collapsed it. Now: if the target is already
+// expanded AND the caller didn't force-open, collapse it instead. If
+// `forceOpen` is true (used by sub-tab navigation that needs the group
+// open so the sub-item is visible), skip the toggle.
+function _toggleSidebarAccordion(tab, forceOpen){
   var drawer = document.getElementById('member-drawer');
   if(!drawer) return;
   var parentKey = ({team:'team', businesses:'businesses', finances:'finances'})[tab] || null;
-  // Collapse all groups first
+  // Was the target already expanded? Used to decide toggle-off below.
+  var wasExpanded = false;
+  if(parentKey){
+    var existing = drawer.querySelector('.md-nav-item[data-parent="'+parentKey+'"]');
+    wasExpanded = !!(existing && existing.classList.contains('expanded'));
+  }
+  // Collapse all groups first (so only one is ever open at a time)
   drawer.querySelectorAll('.md-nav-item[data-parent]').forEach(function(b){ b.classList.remove('expanded'); });
   drawer.querySelectorAll('.md-subnav').forEach(function(s){ s.classList.remove('is-open'); });
-  // Expand the matching one (if any)
-  if(parentKey){
+  // Expand the matching one UNLESS it was just collapsed by the click
+  // (and the caller didn't force-open it).
+  if(parentKey && !(wasExpanded && !forceOpen)){
     var btn = drawer.querySelector('.md-nav-item[data-parent="'+parentKey+'"]');
     var sub = drawer.querySelector('.md-subnav[data-parent="'+parentKey+'"]');
     if(btn) btn.classList.add('expanded');
@@ -60886,7 +60905,10 @@ function memberDrawerSubGo(parent, sub){
   if(parent === 'businesses' && typeof switchClinicTab === 'function')   switchClinicTab(sub);
   if(parent === 'finances'   && typeof switchFinancesTab === 'function') switchFinancesTab(sub);
   // Keep the parent expanded and paint the sub-item active
-  _toggleSidebarAccordion(parent);
+  // Phase 125 (2026-05-29): pass forceOpen so the toggle never collapses
+  // the parent — a sub-tab click must always leave the group visible
+  // so the user sees what they just selected.
+  _toggleSidebarAccordion(parent, true);
   _paintMemberSidebarActive(parent);
   _paintSidebarSubActive(parent, sub);
   // Close drawer on phone (no need to keep it open after clicking a sub-tab)
