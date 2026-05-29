@@ -28136,7 +28136,13 @@ function exportDayRouteToGoogleMaps(filterRouteId){
   // Build the URL we'll open (single-stop place card OR full directions URL).
   var url, isSingle = (stops.length === 1);
   if(isSingle){
-    url = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(stops[0].query);
+    // Phase 134a (2026-05-29): for a single stop, build a navigation URL
+    // (driving directions from current location) instead of a place
+    // card. Same dir_action=navigate so mobile launches turn-by-turn.
+    url = 'https://www.google.com/maps/dir/?api=1'
+        + '&destination=' + encodeURIComponent(stops[0].query)
+        + '&travelmode=driving'
+        + '&dir_action=navigate';
   } else {
     var origin      = stops[0].query;
     var destination = stops[stops.length - 1].query;
@@ -28145,7 +28151,15 @@ function exportDayRouteToGoogleMaps(filterRouteId){
         + '&origin='      + encodeURIComponent(origin)
         + '&destination=' + encodeURIComponent(destination)
         + (waypoints ? '&waypoints=' + encodeURIComponent(waypoints) : '')
-        + '&travelmode=driving';
+        + '&travelmode=driving'
+        // Phase 134a (2026-05-29): dir_action=navigate makes Google Maps
+        // start TURN-BY-TURN navigation immediately when opened on mobile
+        // (in the Google Maps app), instead of just showing the route as
+        // a static review. User: "I need them to have the ability to
+        // start that trip on google maps otherwise why would we show it".
+        // On desktop the param is harmless — desktop Google Maps has no
+        // nav mode, so it opens the standard directions view either way.
+        + '&dir_action=navigate';
   }
   // Phase 69 (2026-05-28): confirm BEFORE opening the external Google Maps
   // page in a new tab. Per user — surface the destination + count so they
