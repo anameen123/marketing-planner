@@ -16909,6 +16909,13 @@ window.openCreateReferralForm = openCreateReferralForm;
 function closeCreateReferralForm(){
   var modal = document.getElementById('create-referral-modal');
   if(modal) modal.style.display = 'none';
+  // Phase 120b: clear the editing flag so a Cancel mid-edit doesn't
+  // leak into the NEXT Create — would silently overwrite the previously-
+  // edited referral on the next save otherwise.
+  window._PR_EDITING_ID = null;
+  // Also wipe the blue "EDITING" banner we set in _prPrefillEditForm
+  var errEl = document.getElementById('cr-form-err');
+  if(errEl){ errEl.style.display = 'none'; errEl.innerHTML = ''; errEl.removeAttribute('style'); }
 }
 window.closeCreateReferralForm = closeCreateReferralForm;
 
@@ -17470,6 +17477,24 @@ function _crSaveReferral(){
     preContactConfirmed: preContactConfirmed, // gate enforced at submit
     followUpActions: []                        // audit log appended by follow-up engine (Phase B)
   };
+  // Phase 120b (2026-05-29): if we're EDITING an existing referral (the
+  // user clicked ✏ Edit), override instead of pushing a new entry. The
+  // helper drops the linked patient log, clears approval/counter state,
+  // applies the edited fields, resets status to Pending. Flag clears
+  // after the override so the next Create starts fresh.
+  if(window._PR_EDITING_ID){
+    var existing = (PENDING_REFERRALS || []).find(function(r){ return r.id === window._PR_EDITING_ID; });
+    if(existing){
+      try { _prApplyEditOverride(existing, entry); }
+      catch(e){ console.error('[120b] override failed:', e); }
+      window._PR_EDITING_ID = null;
+      closeCreateReferralForm();
+      if(typeof showToast === 'function') showToast('✓ Referral edited — previous approval/counter undone, status reset to Pending for re-approval.');
+      return;
+    }
+    // Referral disappeared between open and save → fall through to push as new
+    window._PR_EDITING_ID = null;
+  }
   PENDING_REFERRALS.push(entry);
   _savePendingReferrals();
   closeCreateReferralForm();
@@ -17691,6 +17716,24 @@ function renderPendingReferrals(){
     // Marketing creator retraction (before front desk approves)
     if(isCreator && !isFD && r.status === 'pending' && (r.createdBy === (CURRENT_USER && CURRENT_USER.name) || (typeof isAdmin === 'function' && isAdmin()))){
       actions += '<div style="margin-top:6px"><button onclick="retractPendingReferral(\'' + r.id + '\')" style="background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:5px;padding:4px 10px;font-size:10px;font-weight:600;cursor:pointer">↩ Cancel this referral</button></div>';
+    }
+    // Phase 120b (2026-05-29): Edit button per row. User: "if a front
+    // desk member selected successful by mistake he should be able to
+    // open the referrals ... edit which will open the create a referral
+    // page again and whatever changes we make will override the previous
+    // one and override any action or counter resulted from the previous
+    // one before the edit". Visible to:
+    //   • Creator (own referrals, any status except retracted)
+    //   • Admin (everyone, any status except retracted)
+    //   • Destination front desk (referrals to their facility, any
+    //     status — they're the ones who picked Successful/Unsuccessful
+    //     and the most likely to need to fix a misclick)
+    var meName    = (CURRENT_USER && CURRENT_USER.name) || '';
+    var isMyRef   = !!meName && r.createdBy === meName;
+    var isDestFD  = isFD && CURRENT_USER && CURRENT_USER.facilityKey === r.destinationFacility;
+    var canEdit   = (r.status !== 'retracted') && (isMyRef || isAdminViewer || isDestFD);
+    if(canEdit){
+      actions += '<div style="margin-top:6px"><button onclick="_prOpenEditReferral(\'' + r.id + '\')" style="background:#fff;color:#1F3864;border:1px solid #c4b5fd;border-radius:5px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">✏ Edit referral</button></div>';
     }
     // Phase 19b late-referral badge — appears on pending rows past the
     // ETA + 10 min trigger. Click → re-open follow-up modal for this ref.
@@ -18096,6 +18139,164 @@ function _crFinalizeRetract(ref){
   if(typeof renderReferralLog === 'function') renderReferralLog();
   if(typeof showToast === 'function') showToast('Approval retracted. Referral is pending again.');
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+// PHASE 120b (2026-05-29) — EDIT REFERRAL (override + undo prior counter)
+// User: "if a front desk member selected successful by mistake he should be
+// able to open the referrals ... edit which will open the create a referral
+// page again and whatever changes we make will override the previous one
+// and override any action or counter resulted from the previous one before
+// the edit".
+//
+// Flow:
+//  1. _prOpenEditReferral(refId) → permission check → stash
+//     window._PR_EDITING_ID → openCreateReferralForm() → pre-fill every
+//     field from the existing referral.
+//  2. _crSaveReferral (already exists) detects the flag at save time and
+//     calls _prApplyEditOverride(ref, formValues) instead of pushing a
+//     new entry. That helper:
+//       • removes the linked patient log if any (so counters drop)
+//       • clears approved/declined/incomplete state + approver fields
+//       • applies the edited form values
+//       • resets status to 'pending' so the FD re-approves with the
+//         corrected info
+//       • recomputes counters from the new REFERRAL_LOG state
+//  3. Flag clears on close + on successful save. If the user cancels the
+//     modal, the flag clears too so the next Create starts fresh.
+// ════════════════════════════════════════════════════════════════════════════
+function _prOpenEditReferral(refId){
+  var ref = (PENDING_REFERRALS || []).find(function(r){ return r.id === refId; });
+  if(!ref){ if(typeof showToast === 'function') showToast('Referral not found.'); return; }
+  // Permission check — creator OR admin OR destination FD
+  var meName   = (CURRENT_USER && CURRENT_USER.name) || '';
+  var isFD     = (CURRENT_USER && CURRENT_USER.role === 'front_desk');
+  var isAdmin0 = (typeof isAdmin === 'function') && isAdmin();
+  var isMine   = !!meName && ref.createdBy === meName;
+  var isDestFD = isFD && CURRENT_USER && CURRENT_USER.facilityKey === ref.destinationFacility;
+  if(!(isMine || isAdmin0 || isDestFD)){
+    if(typeof showToast === 'function') showToast('You can only edit referrals you created (or ones destined for your facility).');
+    return;
+  }
+  // Stash the editing id so _crSaveReferral knows to override instead of push
+  window._PR_EDITING_ID = refId;
+  // Open the create form
+  if(typeof openCreateReferralForm !== 'function'){
+    if(typeof showToast === 'function') showToast('Edit unavailable — Create Referral form not loaded.');
+    window._PR_EDITING_ID = null;
+    return;
+  }
+  openCreateReferralForm();
+  // Pre-fill after the modal renders (give the form's reset code a tick)
+  setTimeout(function(){ _prPrefillEditForm(ref); }, 50);
+}
+window._prOpenEditReferral = _prOpenEditReferral;
+
+function _prPrefillEditForm(ref){
+  try {
+    // Creator type + name
+    var creatorType = ref.creatorRole === 'uc_plano_fd' ? 'uc_plano_fd' : 'member';
+    document.querySelectorAll('input[name="cr-creator-type"]').forEach(function(r){ r.checked = (r.value === creatorType); });
+    if(typeof _crCreatorTypeChanged === 'function') _crCreatorTypeChanged();
+    if(creatorType === 'member'){
+      var memSel = document.getElementById('cr-creator-member');
+      if(memSel) memSel.value = ref.createdBy || '';
+    } else {
+      var ucName = document.getElementById('cr-creator-ucplano-name');
+      if(ucName) ucName.value = ref.createdBy || '';
+    }
+    // Source (only for member referrals — UC Plano source is implicit)
+    if(ref.sourceType && ref.sourceName){
+      var sTypeRadio = document.querySelector('input[name="cr-source-type"][value="' + ref.sourceType + '"]');
+      if(sTypeRadio){
+        sTypeRadio.checked = true;
+        if(typeof _crSourceTypeChanged === 'function') _crSourceTypeChanged();
+      }
+      var srcInp = document.getElementById('cr-source');
+      if(srcInp){
+        srcInp.value = ref.sourceName;
+        if(srcInp.dataset) srcInp.dataset.sourceType = ref.sourceType;
+      }
+    }
+    // Destination
+    if(ref.destinationFacility){
+      var destRadio = document.querySelector('input[name="cr-dest"][value="' + ref.destinationFacility + '"]');
+      if(destRadio) destRadio.checked = true;
+    }
+    // Patient name + phones
+    var nameEl = document.getElementById('cr-patient-name'); if(nameEl) nameEl.value = ref.patientName || '';
+    var pPhone = document.getElementById('cr-patient-phone'); if(pPhone) pPhone.value = ref.patientPhone || '';
+    var cPhone = document.getElementById('cr-clinic-phone');  if(cPhone) cPhone.value = ref.sourceClinicPhone || '';
+    // Expected date + time (split the ISO)
+    if(ref.expectedAt){
+      var dt = new Date(ref.expectedAt);
+      if(!isNaN(dt.getTime())){
+        var dEl = document.getElementById('cr-expected-date');
+        var tEl = document.getElementById('cr-expected-time');
+        if(dEl) dEl.value = dt.getFullYear() + '-' + String(dt.getMonth()+1).padStart(2,'0') + '-' + String(dt.getDate()).padStart(2,'0');
+        if(tEl) tEl.value = String(dt.getHours()).padStart(2,'0') + ':' + String(dt.getMinutes()).padStart(2,'0');
+      }
+    }
+    // Chief complaint (stored in r.notes)
+    var nEl = document.getElementById('cr-notes'); if(nEl) nEl.value = ref.notes || '';
+    // Ride radio (if applicable)
+    if(ref.rideRequested){
+      var rideRadio = document.querySelector('input[name="cr-ride"][value="' + ref.rideRequested + '"]');
+      if(rideRadio) rideRadio.checked = true;
+    }
+    // Pre-contact confirmations (set to true since we're editing existing — user already did this once)
+    var pcPat = document.getElementById('cr-precontact-patient-chk'); if(pcPat) pcPat.checked = ref.preContactConfirmed === true;
+    var pcCli = document.getElementById('cr-precontact-clinic-chk');  if(pcCli) pcCli.checked = ref.preContactConfirmed === true;
+    // Reapply conditional visibility now that values are in
+    if(typeof _crUpdateConditionalFields === 'function') _crUpdateConditionalFields();
+    // Banner above the form so the user knows they're EDITING (not creating)
+    var errEl = document.getElementById('cr-form-err');
+    if(errEl){
+      errEl.style.display = 'block';
+      errEl.style.background = '#dbeafe';
+      errEl.style.border = '1px solid #93c5fd';
+      errEl.style.color = '#1e3a8a';
+      errEl.innerHTML = '✏ <b>Editing referral</b> — saving will OVERRIDE the previous version and undo any approval / counter set before the edit. Status will reset to Pending and the destination front desk will re-approve.';
+    }
+    if(typeof showToast === 'function') showToast('✏ Editing referral — fields pre-filled');
+  } catch(e){ console.error('[120b] prefill failed:', e); }
+}
+window._prPrefillEditForm = _prPrefillEditForm;
+
+function _prApplyEditOverride(ref, edits){
+  // Step 1 — drop the linked patient log if there is one. This reverses
+  // any approval-side counters (the patient row is what increments them).
+  if(ref.linkedPatientLogId && Array.isArray(REFERRAL_LOG)){
+    var idx = REFERRAL_LOG.findIndex(function(e){ return e.id === ref.linkedPatientLogId; });
+    if(idx >= 0){ REFERRAL_LOG.splice(idx, 1); }
+  }
+  ref.linkedPatientLogId = null;
+  // Step 2 — clear approval / decline / incomplete state.
+  ['approvedAt', 'approvedBy', 'approvedByAdmin', 'declinedAt', 'declinedBy', 'incompletedAt', 'autoExpired', 'retractedAt', 'retractedBy', 'rideBookedBy', 'rideBookedAt', 'rideBookingNote', 'rideBookingStatus', 'followUpShownAt', 'followUpShownForETA', 'followUpEtaUpdatedAt'].forEach(function(k){ delete ref[k]; });
+  // Step 3 — apply edited fields. `edits` carries the same shape as a
+  // freshly-built entry from _crSaveReferral.
+  Object.keys(edits).forEach(function(k){
+    // Don't overwrite identity / audit-trail fields
+    if(k === 'id' || k === 'createdAt' || k === 'followUpActions') return;
+    ref[k] = edits[k];
+  });
+  // Append an "edited" audit log entry so the trail shows what happened
+  if(!Array.isArray(ref.followUpActions)) ref.followUpActions = [];
+  ref.followUpActions.push({
+    at: new Date().toISOString(),
+    by: (CURRENT_USER && CURRENT_USER.name) || '?',
+    action: 'note',
+    note: '✏ Referral edited — previous approval / counter undone, status reset to Pending'
+  });
+  // Step 4 — reset status to pending so FD re-approves
+  ref.status = 'pending';
+  // Persist + recompute counters
+  if(typeof _savePendingReferrals === 'function') _savePendingReferrals();
+  if(typeof _saveReferralLog === 'function')      _saveReferralLog();
+  if(typeof _recomputeReferralCountsFromLog === 'function') _recomputeReferralCountsFromLog();
+  if(typeof renderPendingReferrals === 'function') renderPendingReferrals();
+  if(typeof renderReferralLog === 'function')      renderReferralLog();
+}
+window._prApplyEditOverride = _prApplyEditOverride;
 
 // Marketing creator cancels a pending referral they made (before front desk
 // has approved/declined). Decline + Retract are front-desk actions; this is
