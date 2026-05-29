@@ -29196,7 +29196,10 @@ function _rpDrawCorridorBox(A, B, halfWidthMi){
   // the drag handles) are deactivated. When "Fix corridor width" is
   // active, the max-visits input is disabled (already handled by
   // _rpSetCorridorMode). One mode at a time, no mixing.
-  var manualMode = (window._RP_CORRIDOR_MODE === 'width');
+  // Phase 127 (2026-05-29): drag handles are always available now (both
+  // inputs are always editable + bidirectionally coupled). User: "if I
+  // change the width manually, it's gonna change the visits".
+  var manualMode = true;
   if(manualMode){
     var midA = { lat: (A.lat + B.lat) / 2, lng: (A.lng + B.lng) / 2 };
     var handlePos1 = { lat: midA.lat + offLat, lng: midA.lng + offLng };
@@ -29244,15 +29247,22 @@ function _rpDrawCorridorBox(A, B, halfWidthMi){
       var perp = parseFloat(wInp && wInp.value) || halfWidthMi;
       if(typeof showToast === 'function') showToast('🎯 Corridor width = ±' + perp + ' mi');
       if(typeof _rpRenderApplyWidthBtn === 'function') _rpRenderApplyWidthBtn();
+      // Phase 127 (2026-05-29): dragging the corridor edge = user's intent
+      // is to size by width → drop the visits hard-cap so every inside-
+      // rectangle pin makes the candidate list AND the visits input syncs
+      // to the actual count.
+      window._RP_APPLIED_HALFWIDTH = perp;
+      window._RP_CORRIDOR_MODE = 'width';
       // Full redraw now that the drag is over — snaps the OTHER handle to
       // its new symmetric position and rebuilds the polygon cleanly.
       _rpDrawCorridorBox(A, B, perp);
-      // Phase 85 (2026-05-28): re-render the candidate list with the new
-      // width so the rep sees an updated set of pre-checked candidates.
-      // Same flow as changing the # of visits — drag changes width →
-      // candidates refresh → all pre-checked → rep deselects what they
-      // don't want.
-      if(typeof runRoutePlannerV4 === 'function'){
+      // Phase 127: rebuild the V5 candidate list (with every inside-pin
+      // pre-checked) so the rep can deselect via map or list. The old
+      // path called runRoutePlannerV4 — that rendered the legacy bucket
+      // view, leaving the V5 list stale and the new pins unclickable.
+      if(typeof _rpV5Start === 'function'){
+        try { _rpV5Start(); } catch(_){}
+      } else if(typeof runRoutePlannerV4 === 'function'){
         try { runRoutePlannerV4(); } catch(_){}
       }
     }
@@ -29979,6 +29989,33 @@ function closeRoutePlanner(opts){
   if(typeof _rpClearCorridorBox === 'function') _rpClearCorridorBox();
   // Phase 39: clear the live route polyline too.
   if(typeof _rpClearLiveRoute === 'function') _rpClearLiveRoute();
+  // Phase 127 (2026-05-29): clear the Phase 123 royal-blue OSRM driving
+  // polyline. Adding it to OPEN was Phase 123's only cleanup hook — but
+  // closing the planner without re-opening (e.g. clicking ✕) left the
+  // line painted on the map. User reported "there are still a lot of
+  // glue" after close. Also clear the route-stop number markers that
+  // _rpDrawLiveRoute / _rpFinalizeSmart may have stamped (Phase 39 only
+  // hits the in-progress preview; finalized markers belong to
+  // _rpClearLiveRoute's markers array which IS cleared, but the OSRM
+  // polyline is a separate layer pair).
+  if(typeof _phase123ClearRealRoute === 'function') _phase123ClearRealRoute();
+  // Phase 127: kill any in-flight OSRM fetch overlay / confirm modal so
+  // closing mid-fetch doesn't strand them on screen.
+  try {
+    if(typeof _phase123ShowFetchingOverlay === 'function') _phase123ShowFetchingOverlay(false);
+    var pcm = document.getElementById('phase123-confirm-modal');
+    if(pcm) pcm.remove();
+    window._PHASE123_PICK_CB = null;
+  } catch(_){}
+  // Phase 127: tear down the planner's run-state (_RP_V5_LAST) so the
+  // Phase 124a zoom-replay hook doesn't re-stamp suggested/picked
+  // highlights after the planner is gone. Saved-route resume reads
+  // from localStorage, not this in-memory state, so this is safe.
+  try {
+    window._RP_V5_LAST = null;
+    window._RP_V5_FLAT_PICKS = {};
+    window._RP_INSIDE_RECT_STATS = null;
+  } catch(_){}
   // Phase 53: tear down any AI Optimize circle layer + map click handler.
   if(typeof _rpOptDisarmCircleMode === 'function') _rpOptDisarmCircleMode();
   // Phase 33 (2026-05-27): per user, closing the planner WITHOUT generating
@@ -31216,9 +31253,24 @@ function _rpApplyHalfWidth(){
     var inpEl = document.getElementById('rp-corridor');
     var halfW = parseFloat(inpEl && inpEl.value) || 3;
     window._RP_APPLIED_HALFWIDTH = halfW;
+    // Phase 127 (2026-05-29): editing width = user's intent is to size by
+    // width → drop the visits hard-cap so every in-rectangle candidate
+    // is included AND the visits input syncs to the actual count.
+    window._RP_CORRIDOR_MODE = 'width';
     if(typeof _rpRefreshCorridorBox === 'function') _rpRefreshCorridorBox();
     _rpRenderApplyWidthBtn();
-    if(_RP_V4_LAST) runRoutePlannerV4();
+    // Phase 127: re-run the V5 candidate finder so the list is rebuilt
+    // with every inside-rectangle pin pre-checked (the same UX as
+    // visits-mode), letting the rep deselect via map or list. The old
+    // path called runRoutePlannerV4 which only rendered the legacy V4
+    // bucket view — V5 list never refreshed in width mode → user
+    // reported "I couldn't even click on the light blue ones to select
+    // them at candidates".
+    if(typeof _rpV5Start === 'function'){
+      try { _rpV5Start(); } catch(_){}
+    } else if(_RP_V4_LAST) {
+      runRoutePlannerV4();
+    }
     if(typeof showToast === 'function') showToast('🟦 Corridor width applied: ±' + halfW + ' mi (total width ' + (halfW * 2) + ' mi)');
     // Verification log so the user / devtools can see the actual dimensions
     var totalMi = (window._RP_V5_LAST && window._RP_V5_LAST.totalMi) || null;
@@ -32732,6 +32784,43 @@ window._rpComputeWidthForVisits = _rpComputeWidthForVisits;
 //   'width'  — user fixes corridor half-width, visit count is whatever fits
 // State lives on window._RP_CORRIDOR_MODE.
 window._RP_CORRIDOR_MODE = 'visits';
+
+// ════════════════════════════════════════════════════════════════════════════
+// PHASE 127 (2026-05-29) — BIDIRECTIONAL VISITS ⇄ WIDTH SYNC
+// User: "if I change the width manually, it's gonna change the visits
+// depending on the one on the clinic fence that was included inside the
+// area, the rectangular area. And if I change the visits manually, the
+// number, it will change the rectangular width. So they... instead of
+// the, uh, them being two options, they... it has to be you know, one
+// process with either this or that ... like in the spending where if
+// you something, but the cost per each, it will show you the total."
+//
+// Reads the post-_rpV5Start candidate list and writes its count to the
+// visits input. Endpoint clinics (Phase 126) are added in so the input
+// reflects the user's TOTAL visit count, not just middle stops.
+// _PHASE127_SUPPRESS_VISITS_HANDLER guards against the input listener
+// firing back into _rpOnTargetVisitsChange, which would trigger another
+// auto-compute → another _rpV5Start → infinite loop.
+// ════════════════════════════════════════════════════════════════════════════
+window._PHASE127_SUPPRESS_VISITS_HANDLER = false;
+function _phase127SyncVisitsFromActual(){
+  try {
+    var inp = document.getElementById('rp-target-visits');
+    if(!inp) return;
+    var last = window._RP_V5_LAST;
+    if(!last || !Array.isArray(last.flatCandidates)) return;
+    var corridorN = last.flatCandidates.length;
+    var endpointN = (typeof _phase126EndpointVisitCount === 'function') ? _phase126EndpointVisitCount() : 0;
+    var total = corridorN + endpointN;
+    if(total < 1) total = 1;
+    if(String(inp.value) === String(total)) return;
+    window._PHASE127_SUPPRESS_VISITS_HANDLER = true;
+    inp.value = total;
+    setTimeout(function(){ window._PHASE127_SUPPRESS_VISITS_HANDLER = false; }, 50);
+  } catch(_){}
+}
+window._phase127SyncVisitsFromActual = _phase127SyncVisitsFromActual;
+
 function _rpSetCorridorMode(mode){
   if(mode !== 'visits' && mode !== 'width') return;
   window._RP_CORRIDOR_MODE = mode;
@@ -32758,26 +32847,26 @@ function _rpSetCorridorMode(mode){
     visitsBtn.setAttribute('style', mode === 'visits' ? active : inactive);
     widthBtn.setAttribute('style',  mode === 'width'  ? active : inactive);
   }
-  // Grey out the inactive input cell + show its "derived" hint
+  // Phase 127 (2026-05-29): per user "it has to be one process with either
+  // this or that. I changed this. It will change that" — both inputs are
+  // ALWAYS editable now. The mode pills only express the user's preferred
+  // primary direction (and toggle the secondary visual chrome like the
+  // "Driven by # of visits" hint + drag-handle creation). Neither input
+  // ever disables.
   var visitsInp = document.getElementById('rp-target-visits');
   var widthInp  = document.getElementById('rp-corridor');
   var visitsCell = document.getElementById('rp-visits-cell');
   var widthCell  = document.getElementById('rp-width-cell');
   var widthHint  = document.getElementById('rp-width-derived-hint');
+  if(visitsInp) visitsInp.disabled = false;
+  if(widthInp)  widthInp.disabled  = false;
+  if(visitsCell) visitsCell.style.opacity = '1';
+  if(widthCell)  widthCell.style.opacity  = '1';
   if(mode === 'visits'){
-    if(visitsInp){ visitsInp.disabled = false; }
-    if(widthInp){ widthInp.disabled = true; }
-    if(visitsCell) visitsCell.style.opacity = '1';
-    if(widthCell)  widthCell.style.opacity  = '0.55';
-    if(widthHint){ widthHint.style.display = 'block'; widthHint.textContent = 'Driven by # of visits'; }
-    // Apply button + AdjustWidth buttons disabled
-    var aw = document.getElementById('rp-apply-width-btn'); if(aw) aw.style.display = 'none';
+    if(widthHint){ widthHint.style.display = 'block'; widthHint.textContent = '⇄ Auto-fits to visit count (edit either)'; }
+    var aw1 = document.getElementById('rp-apply-width-btn'); if(aw1) aw1.style.display = 'none';
   } else {
-    if(visitsInp){ visitsInp.disabled = true; }
-    if(widthInp){ widthInp.disabled = false; }
-    if(visitsCell) visitsCell.style.opacity = '0.55';
-    if(widthCell)  widthCell.style.opacity  = '1';
-    if(widthHint){ widthHint.style.display = 'none'; }
+    if(widthHint){ widthHint.style.display = 'block'; widthHint.textContent = '⇄ Drag the blue edges or type — visits auto-update'; }
   }
   // Recompute immediately if both ends are set so the rectangle reflects
   // the new mode without an extra click.
@@ -32807,6 +32896,15 @@ function _rpAdjustTargetVisits(delta){
 window._rpAdjustTargetVisits = _rpAdjustTargetVisits;
 
 function _rpOnTargetVisitsChange(){
+  // Phase 127 (2026-05-29): when we programmatically set the visits input
+  // from _phase127SyncVisitsFromActual (after a width-driven recompute),
+  // the input's 'input' event fires synchronously and re-enters this
+  // handler — which would kick off ANOTHER auto-compute and loop. The
+  // suppression flag breaks the cycle.
+  if(window._PHASE127_SUPPRESS_VISITS_HANDLER) return;
+  // Phase 127: editing the visits input means the user's intent now bounds
+  // by visit count → enable the hard-cap in _rpV5Start.
+  window._RP_CORRIDOR_MODE = 'visits';
   // Phase 109: mark stale immediately so the candidate list locks until
   // the user re-runs Find candidates. The auto-fit still recomputes the
   // corridor width below (so the rectangle updates live), but the list
@@ -38689,6 +38787,10 @@ function _rpV5Start(){
   }
   // Phase 102: now that picks are auto-checked, enable Generate route.
   if(typeof _rpV5SyncGenerateBtn === 'function') _rpV5SyncGenerateBtn();
+  // Phase 127 (2026-05-29): bidirectional sync — write the actual candidate
+  // count (plus any endpoint-clinic visits) back into the visits input so
+  // the rep sees the real total regardless of which way they edited.
+  if(typeof _phase127SyncVisitsFromActual === 'function') _phase127SyncVisitsFromActual();
 }
 window._rpV5Start = _rpV5Start;
 
