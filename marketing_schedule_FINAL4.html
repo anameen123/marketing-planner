@@ -40238,10 +40238,26 @@ function _rpV5GenerateRoute(){
   startName = _strip(startName);
   endName   = _strip(endName);
   if(!endName || /round\s*trip/i.test(endName) || endKey === '__same__') endName = startName;
-  if(typeof _rpResolveCoord === 'function'){
-    if(!_rpResolveCoord(startName) || !_rpResolveCoord(endName)){
-      if(typeof showToast === 'function') showToast('Start or End not resolvable on the map — re-pick from suggestions.');
-      return;
+  // Phase 130 (2026-05-29): trust the stashed coords (Phase 34b) BEFORE
+  // re-running name-based resolution. _rpResolveCoord re-strips the
+  // search-input value and tries to match against CLINIC_BANK / facility
+  // labels — but when the rep picked a facility via the dropdown, the
+  // value sometimes ends up as the underscored key (_facility_frisco_er
+  // → stripped to "facility_frisco_er") which matches neither the
+  // facility's label ("Frisco ER") nor its key (with the leading
+  // underscore intact). Result: "Start or End not resolvable on the
+  // map — re-pick from suggestions" even though everything is fine.
+  // The stashed coord IS the source of truth — captured the moment the
+  // user confirmed Start/End. If it's set, skip the redundant
+  // re-resolution.
+  var startCoordOk = !!window._RP_START_COORD;
+  var endCoordOk = !!window._RP_END_COORD || endKey === '__same__';
+  if(!startCoordOk || !endCoordOk){
+    if(typeof _rpResolveCoord === 'function'){
+      if(!_rpResolveCoord(startName) || !_rpResolveCoord(endName)){
+        if(typeof showToast === 'function') showToast('Start or End not resolvable on the map — re-pick from suggestions.');
+        return;
+      }
     }
   }
   // Phase 124b (2026-05-29): re-order picks by REAL driving time before
