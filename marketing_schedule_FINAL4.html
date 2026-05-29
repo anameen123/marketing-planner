@@ -33229,6 +33229,26 @@ function _phase126IsFacilityVal(v){
 }
 window._phase126IsFacilityVal = _phase126IsFacilityVal;
 
+// Phase 137 (2026-05-29): label-side check. _RP_START_NAME / _RP_END_NAME
+// hold the human-readable label ("Frisco ER") instead of the underscored
+// key, so _phase126IsFacilityVal misses them and the commit pushed the
+// facility as a schedule row. This walks ROUTE_COORDS for every entry
+// flagged type:'facility' and checks the raw string + a stripped form
+// (no leading icon, no " · City" suffix) against the label OR the key.
+function _phase126IsFacilityLabel(s){
+  if(!s || typeof ROUTE_COORDS === 'undefined' || !ROUTE_COORDS) return false;
+  var raw = String(s);
+  var stripped = raw.replace(/^[^A-Za-z0-9]+/, '').split(' · ')[0].trim();
+  for(var k in ROUTE_COORDS){
+    var rc = ROUTE_COORDS[k];
+    if(!rc || rc.type !== 'facility') continue;
+    if(k === raw || k === stripped) return true;
+    if(rc.label && (rc.label === raw || rc.label === stripped)) return true;
+  }
+  return false;
+}
+window._phase126IsFacilityLabel = _phase126IsFacilityLabel;
+
 function _phase126EndpointVisitCount(){
   // Read the current rp-start / rp-end input values; count those that
   // aren't WCG facilities AND aren't the round-trip sentinel. Returns 0,
@@ -41387,20 +41407,38 @@ function _rpV5CommitPicksToDay(picks, di, me, removed, phase59Removed, phase59Ex
     // their display names from the saved planner state. The Start row
     // goes BEFORE the corridor picks, the End row goes AFTER — matching
     // the OSRM travel order [Start → picks... → End].
-    function _ph126ResolveEndpointName(val, label){
-      if(!val || _phase126IsFacilityVal(val) || val === '__same__') return null;
-      // Prefer the captured label (clinic name with city suffix etc.);
-      // strip any leading icon/decoration the search-pick stamped on.
-      var raw = (label || val).toString();
+    // Phase 137 (2026-05-29): check EVERY facility signal — the raw
+    // val (sometimes the key, sometimes the label), the search-input
+    // label, AND the hidden input value (always the key on dropdown
+    // picks). Any positive → it's a WCG facility (home base) → don't
+    // push a row. User reported "I selected Frisco as the first
+    // destination, and it actually created a row for it on the
+    // schedule. The problem is it should not."
+    function _ph126ResolveEndpointName(val, label, hiddenVal){
+      if(!val && !label && !hiddenVal) return null;
+      if(val === '__same__' || hiddenVal === '__same__') return null;
+      // Underscored key check on every input we have
+      if(_phase126IsFacilityVal(val))       return null;
+      if(_phase126IsFacilityVal(hiddenVal)) return null;
+      // Label-side check against ROUTE_COORDS facility entries
+      if(_phase126IsFacilityLabel(val))      return null;
+      if(_phase126IsFacilityLabel(label))    return null;
+      if(_phase126IsFacilityLabel(hiddenVal))return null;
+      // Survived → real clinic / MVA endpoint, return the clean name
+      var raw = (label || val || hiddenVal).toString();
       return raw.replace(/^[^A-Za-z0-9]+/, '').split(' · ')[0].trim();
     }
+    var startHidden = (document.getElementById('rp-start') || {}).value;
+    var endHidden   = (document.getElementById('rp-end')   || {}).value;
     var startEndpointName = _ph126ResolveEndpointName(
-      window._RP_START_NAME || (document.getElementById('rp-start') || {}).value,
-      (document.getElementById('rp-start-search') || {}).value
+      window._RP_START_NAME,
+      (document.getElementById('rp-start-search') || {}).value,
+      startHidden
     );
     var endEndpointName = _ph126ResolveEndpointName(
-      window._RP_END_NAME || (document.getElementById('rp-end') || {}).value,
-      (document.getElementById('rp-end-search') || {}).value
+      window._RP_END_NAME,
+      (document.getElementById('rp-end-search') || {}).value,
+      endHidden
     );
     function _ph126PushRow(name){
       if(!name) return;
