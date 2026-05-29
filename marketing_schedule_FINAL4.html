@@ -26148,6 +26148,34 @@ function _rpDrawFacilityPins(){
       }),
       zIndexOffset: 8000   // above clinic pins but below S/E start markers
     }).bindPopup('<div style="font-family:DM Sans,sans-serif;font-size:12px;text-align:center"><b style="color:#1F3864;font-size:14px">🏥 '+f.name+'</b><br><span style="color:#64748b;font-size:10px">WCG facility · home base</span></div>');
+    // Phase 121 (2026-05-29): facility pins now consume S/E pick clicks
+    // when the planner is in pin-pick mode. User: "I still can't select
+    // the pins for the locations I mentioned as start or ending point
+    // in the corridor thing". Without this, facility pins only opened
+    // the popup. Now: in S/E pick mode, click goes through the SAME
+    // _rpDialogConsumePinClick handler as a clinic pin — the existing
+    // facility detection downstream (Phase 116 home-base chip + Phase
+    // 117b Pick & Plan anchor) handles the "not a visit" semantics.
+    marker.on('click', function(ev){
+      try {
+        var awaiting = (typeof _RP_DIALOG_AWAITING !== 'undefined') && _RP_DIALOG_AWAITING;
+        if(awaiting && typeof _rpDialogConsumePinClick === 'function'){
+          if(ev && ev.originalEvent){
+            if(ev.originalEvent.stopPropagation) ev.originalEvent.stopPropagation();
+            if(ev.originalEvent.preventDefault) ev.originalEvent.preventDefault();
+            if(ev.originalEvent.stopImmediatePropagation) ev.originalEvent.stopImmediatePropagation();
+          }
+          if(L && L.DomEvent && L.DomEvent.stop) L.DomEvent.stop(ev);
+          if(_DV_MAP && _DV_MAP.closePopup) _DV_MAP.closePopup();
+          marker.closePopup && marker.closePopup();
+          // The facility pick uses the FACILITY KEY (e.g. _facility_frisco_er)
+          // as the canonical name, mirroring what _rpPickEndpoint stashes
+          // via the search dropdown (line 28386). That key is what the
+          // saved-payload + Phase 116 chip detect.
+          _rpDialogConsumePinClick(f.key || f.name, { lat: f.lat, lng: f.lng });
+        }
+      } catch(e){ console.warn('[121] facility S/E click failed:', e); }
+    });
     _DV_FACILITY_LAYER.addLayer(marker);
   });
 }
@@ -28745,6 +28773,19 @@ function _rpPickEndpoint(which, idx){
   } else {
     console.warn('[_rpPickEndpoint] could not resolve coord for', p.name, '(value=' + p.value + ')');
   }
+  // Phase 121 (2026-05-29): RESET the previous start/end pin's state
+  // before stamping the new one so we don't accumulate multiple S (or
+  // multiple E) badges on the map. Same fix as the pin-click path in
+  // _rpConfirmPendingPick — both paths can change Start/End.
+  try {
+    var oldNameSrch = (which === 'start')
+      ? (window._RP_START_NAME || null)
+      : (window._RP_END_NAME   || null);
+    var newPickName = p.value || p.name;
+    if(oldNameSrch && oldNameSrch !== newPickName && typeof _rpSetPinState === 'function'){
+      try { _rpSetPinState(oldNameSrch, 'reset'); } catch(_){}
+    }
+  } catch(_){}
   // Per user 2026-05-24: update the route-planner globals + the map.
   // Without this, picking from the search dropdown only wrote the hidden
   // value — the map never zoomed to show the corridor between Start and
@@ -29652,6 +29693,38 @@ function _rpConfirmPendingPick(){
   // Phase 24: clear the bright-blue preview ring now that we've placed the
   // permanent S / E marker.
   if(typeof _rpClearPreviewRing === 'function') _rpClearPreviewRing();
+  // Phase 121 (2026-05-29): reset the PREVIOUS start/end pin so we don't
+  // end up with multiple S (or multiple E) badges on the map. User saw
+  // 3 S markers after picking start three times. The previous name is
+  // in the corresponding hidden input (rp-start / rp-end) was the OLD
+  // value BEFORE this confirm wrote the new one a few lines up. We
+  // snapshotted before overwrite via _RP_DIALOG_SNAPSHOT, so use that.
+  try {
+    var snap2 = window._RP_DIALOG_SNAPSHOT || {};
+    var oldName = (which === 'start')
+      ? (window._RP_START_NAME || snap2.startVal || null)
+      : (window._RP_END_NAME   || snap2.endVal   || null);
+    if(oldName && oldName !== pending.name && typeof _rpSetPinState === 'function'){
+      // Reset the OLD endpoint pin back to its default state so the S/E
+      // badge disappears. Safe no-op if oldName is a facility key or
+      // any name not in _RP_PIN_REGISTRY.
+      try { _rpSetPinState(oldName, 'reset'); } catch(_){}
+    }
+    // Also keep window._RP_*_NAME / _COORD globals in sync — the
+    // pin-click path otherwise leaves them stale until search-pick
+    // touches them, which is what made successive picks accumulate.
+    // Use pending.coord — it's the canonical click-time coord captured
+    // during preview, and we're outside the try block where the local
+    // `coord` was scoped.
+    var c2 = (pending && pending.coord) ? pending.coord : null;
+    if(which === 'start'){
+      window._RP_START_NAME = pending.name;
+      if(c2) window._RP_START_COORD = { lat: c2.lat, lng: c2.lng };
+    } else if(which === 'end'){
+      window._RP_END_NAME = pending.name;
+      if(c2) window._RP_END_COORD = { lat: c2.lat, lng: c2.lng };
+    }
+  } catch(_){}
   // Phase 31: flip the underlying clinic pin from PREVIEW state into its
   // committed STATE ('start' or 'end'). The pending pin's name is the
   // canonical key — we just exited pin-pick mode so use pending.name.
