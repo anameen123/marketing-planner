@@ -30025,6 +30025,11 @@ function closeRoutePlanner(opts){
     var pcm = document.getElementById('phase123-confirm-modal');
     if(pcm) pcm.remove();
     window._PHASE123_PICK_CB = null;
+    // Phase 131 (2026-05-29): clear the Pick & Plan in-flight guard
+    // and the confirm sentinel so a close mid-fetch doesn't lock the
+    // NEXT session into the "already optimizing" rejection branch.
+    window._PHASE131_OPT_IN_FLIGHT = false;
+    window._PHASE129_OPT_CONFIRMED = false;
   } catch(_){}
   // Phase 127: tear down the planner's run-state (_RP_V5_LAST) so the
   // Phase 124a zoom-replay hook doesn't re-stamp suggested/picked
@@ -35699,7 +35704,12 @@ function _rpOptRenderStartPicker(){
   var box = document.getElementById('rp-opt-start-picker');
   var opts = document.getElementById('rp-opt-start-options');
   if(!box || !opts) return;
-  if(window._RP_OPT_TARGETS.length < 3){
+  // Phase 131 (2026-05-29): step-1 lets the rep confirm with as few as
+  // 1 target (Phase 128), so step-2 must also work with 1+ targets —
+  // previously the picker stayed hidden until 3+ which left a confirmed
+  // wizard stuck at step 2 with no visible UI. The picker visibility
+  // is also gated by the wizard step (only shown at step 2 or after).
+  if(window._RP_OPT_TARGETS.length < 1){
     box.style.display = 'none';
     return;
   }
@@ -35941,8 +35951,14 @@ function _rpOptClearAnchor(){
 window._rpOptClearAnchor = _rpOptClearAnchor;
 
 function _rpOptOptimize(){
-  if(window._RP_OPT_TARGETS.length < 3){
-    if(typeof showToast === 'function') showToast('Pick at least 3 targets first.');
+  // Phase 131 (2026-05-29): minimum was 3 here but the wizard + target
+  // list both gate on >= 1 now (Phase 128/131). Optimize with 1 target +
+  // an anchor = trivially "Start → Stop"; 2 targets = "Stop1 → Stop2".
+  // The TSP solver handles N=1 fine. Stay at >=1 to match the rest of
+  // the flow — user couldn't see why Optimize was disabled when the
+  // earlier steps said they were ready.
+  if(window._RP_OPT_TARGETS.length < 1){
+    if(typeof showToast === 'function') showToast('Pick at least 1 target first.');
     return;
   }
   // Phase 117b: if an anchor is set, it satisfies the "starting point"
@@ -35997,8 +36013,18 @@ function _rpOptOptimize(){
   // value)". Falls back silently to the haversine estimate if OSRM is
   // unreachable, with a warning chip in the result panel.
   var coordsForOsrm = ordered.map(function(p){ return p.coord; });
+  // Phase 131 (2026-05-29): in-flight guard so rapid double-clicks on
+  // Optimize don't race two OSRM fetches against each other (the second
+  // could clobber _RP_OPT_REAL_ROUTE with stale data after the first
+  // resolved later).
+  if(window._PHASE131_OPT_IN_FLIGHT){
+    if(typeof showToast === 'function') showToast('⏳ Already optimizing — wait for the current run to finish.');
+    return;
+  }
+  window._PHASE131_OPT_IN_FLIGHT = true;
   if(typeof _phase123ShowFetchingOverlay === 'function') _phase123ShowFetchingOverlay(true);
   _phase123FetchRealRoute(coordsForOsrm).then(function(real){
+    window._PHASE131_OPT_IN_FLIGHT = false;
     if(typeof _phase123ShowFetchingOverlay === 'function') _phase123ShowFetchingOverlay(false);
     // Stash for the confirm modal — _rpOptInsertIntoDay reuses it.
     window._RP_OPT_REAL_ROUTE = real;
@@ -36070,6 +36096,18 @@ function _rpOptOptimize(){
         + '</div>';
     }
     if(typeof showToast === 'function') showToast('🤖 Optimized: '+ordered.length+' stops · '+totalMi.toFixed(1)+' mi · '+totalMin+' min');
+  }).catch(function(err){
+    // Phase 131 (2026-05-29): any throw inside the .then chain (e.g.,
+    // _DV_MAP wiped mid-render, ordered list mutated by an Edit Picks
+    // click during the fetch) used to leave the overlay frozen and the
+    // result panel empty. Clear the in-flight guard, hide the overlay,
+    // and surface a toast so the rep can re-try.
+    window._PHASE131_OPT_IN_FLIGHT = false;
+    try { if(typeof _phase123ShowFetchingOverlay === 'function') _phase123ShowFetchingOverlay(false); } catch(_){}
+    try { console.error('[_rpOptOptimize] async chain failed:', err); } catch(_){}
+    if(typeof showToast === 'function'){
+      showToast('Couldn\'t optimize the route — ' + ((err && err.message) || 'unknown error') + '. Try clicking Optimize again.');
+    }
   });
 }
 window._rpOptOptimize = _rpOptOptimize;
@@ -36179,10 +36217,15 @@ function _rpOptInsertIntoDay(){
       var beforeLen = S.days[di].rows.length;
       S.days[di].rows = (S.days[di].rows || []).filter(function(r){
         if(!r || !r.clinic) return true;
-        // If editing a specific route, only drop rows tagged with that
-        // routeId. If the row has no _routeId (legacy), fall back to
-        // name-match so the override still works.
-        if(editId && r._routeId){
+        // Phase 131 (2026-05-29): when EDITING a specific route, ONLY
+        // touch rows tagged with that route's _routeId. Untagged rows
+        // are manual entries (Add Visit) or rows from a different
+        // route on the same day — name match alone is too aggressive
+        // and was wiping the rep's manual entries that happened to
+        // share a clinic name with the prior route. For a NEW route
+        // (no editId), name-match remains as the legacy back-compat
+        // path so pre-Phase-122 routes still get cleaned up.
+        if(editId){
           return !(r._routeId === editId && priorSet[r.clinic]);
         }
         return !priorSet[r.clinic];
@@ -40329,6 +40372,18 @@ function _rpV5GenerateRoute(){
         _rpV5ShowLocked();
       }
     });
+  }).catch(function(err){
+    // Phase 131 (2026-05-29): any throw in the .then chain above (e.g.,
+    // _RP_V5_LAST cleared mid-flight, an unhandled rejection from a
+    // helper, or a coord-access on null) used to leave the "Fetching
+    // real driving route..." overlay frozen on screen with no way out.
+    // Hide the overlay + show a toast so the rep can re-try or close
+    // the planner. Console keeps the full error for debugging.
+    try { if(typeof _phase123ShowFetchingOverlay === 'function') _phase123ShowFetchingOverlay(false); } catch(_){}
+    try { console.error('[_rpV5GenerateRoute] async chain failed:', err); } catch(_){}
+    if(typeof showToast === 'function'){
+      showToast('Couldn\'t generate the route — ' + ((err && err.message) || 'unknown error') + '. Try clicking Generate route again.');
+    }
   });
 }
 window._rpV5GenerateRoute = _rpV5GenerateRoute;
