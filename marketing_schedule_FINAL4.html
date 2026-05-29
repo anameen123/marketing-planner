@@ -27886,7 +27886,7 @@ function _phase122cShowRoutePicker(routes, onPick){
       var startLbl = (r.startLabel || r.startName || '?').replace(/^_facility_/, '🏥 ').replace(/_/g, ' ');
       var endLbl   = (r.endLabel || r.endName || '?').replace(/^_facility_/, '🏥 ').replace(/_/g, ' ');
       return '<button type="button" onclick="document.getElementById(\'' + modalId + '\').remove();var cb=window._PHASE122C_PICK_CB;window._PHASE122C_PICK_CB=null;if(cb)cb(\'' + safeId + '\');" style="display:block;width:100%;text-align:left;background:#fff;border:1px solid var(--border);border-left:4px solid #16a34a;border-radius:8px;padding:11px 14px;margin-bottom:8px;cursor:pointer;font-family:DM Sans,sans-serif;transition:background .15s" onmouseover="this.style.background=\'#f0fdf4\'" onmouseout="this.style.background=\'#fff\'">'
-        + '<div style="font-size:13px;font-weight:800;color:#15803d">📍 Route ' + (idx + 1) + ' · ' + modeName + ' · ' + stopCount + ' stop' + (stopCount === 1 ? '' : 's') + '</div>'
+        + '<div style="font-size:13px;font-weight:800;color:#15803d">📍 Route ' + (r.seqNum || (idx + 1)) + ' · ' + modeName + ' · ' + stopCount + ' stop' + (stopCount === 1 ? '' : 's') + '</div>'
         + '<div style="font-size:11px;color:#1F3864;margin-top:3px">' + esc(startLbl) + ' → ' + esc(endLbl) + '</div>'
         + '</button>';
     }).join('');
@@ -27956,13 +27956,28 @@ function _phase122cInjectScheduleSeparators(di){
     var idKeys = Object.keys(distinctIds);
     if(!anyTagged || idKeys.length < 2) return; // single route (or none) → no separators
 
-    // Number routes by FIRST-APPEARANCE order in the schedule
+    // Phase 133 (2026-05-29): number routes from the persistent seqNum
+    // on each saved-route record so deleting Route 1 doesn't renumber
+    // Route 2 → 1 in the separator. Falls back to first-appearance
+    // order for routeIds we can't resolve in v2 storage (legacy rows
+    // or sessions where the storage helpers aren't loaded).
     var routeNum = {};
     var nextNum = 1;
+    var iso = (S.days[di] && S.days[di].date) || null;
+    var v2Routes = [];
+    try {
+      if(typeof _rpListRoutes === 'function' && iso) v2Routes = _rpListRoutes(iso) || [];
+    } catch(_){}
+    var routeIdToSeq = {};
+    v2Routes.forEach(function(r){
+      if(r && r.routeId && r.seqNum) routeIdToSeq[r.routeId] = r.seqNum;
+    });
     visibleRows.forEach(function(r){
       var id = r && r._routeId;
       if(!id) return;
-      if(!routeNum[id]){ routeNum[id] = nextNum++; }
+      if(!routeNum[id]){
+        routeNum[id] = routeIdToSeq[id] || nextNum++;
+      }
     });
 
     // Collect rendered <tr> nodes for the source rows. Skip the trailing
@@ -40916,6 +40931,45 @@ function _rpGetCurrentDayIso(){
 window._rpGetCurrentDayIso = _rpGetCurrentDayIso;
 
 // ════════════════════════════════════════════════════════════════════════════
+// PHASE 133 (2026-05-29) — PERSISTENT ROUTE SEQUENCE NUMBERS
+// User: "we need to give the option to create route number 2 but in this
+// case there is no route 2 because i deleted all the visits from the
+// first route". Phase 122c numbered chips by array index (idx + 1), so
+// deleting Route 1 made the next-created route become "Route 1" again
+// — confusing when the rep mentally already burned the first slot. Now
+// each route record carries a `seqNum` field assigned at SAVE time from
+// a per-day monotonic counter (wcg_route_seq_v1_{iso}). The counter
+// only ever increments, so deleting routes leaves their slot burned and
+// the next new route gets the next number. Chips / GMaps picker /
+// schedule separator all read seqNum (falling back to idx+1 for legacy
+// records that didn't get the field).
+// ════════════════════════════════════════════════════════════════════════════
+function _rpRouteSeqKey(iso){
+  return 'wcg_route_seq_v1_' + (iso || 'unknown');
+}
+function _rpPeekRouteSeq(iso){
+  // Read the current high-water mark without bumping it.
+  iso = iso || (typeof _rpGetCurrentDayIso === 'function' ? _rpGetCurrentDayIso() : null);
+  if(!iso) return 0;
+  try {
+    var raw = localStorage.getItem(_rpRouteSeqKey(iso));
+    return parseInt(raw, 10) || 0;
+  } catch(_){ return 0; }
+}
+function _rpNextRouteSeq(iso){
+  iso = iso || (typeof _rpGetCurrentDayIso === 'function' ? _rpGetCurrentDayIso() : null);
+  if(!iso) return 1;
+  try {
+    var n = _rpPeekRouteSeq(iso) + 1;
+    localStorage.setItem(_rpRouteSeqKey(iso), String(n));
+    return n;
+  } catch(_){ return 1; }
+}
+window._rpRouteSeqKey  = _rpRouteSeqKey;
+window._rpPeekRouteSeq = _rpPeekRouteSeq;
+window._rpNextRouteSeq = _rpNextRouteSeq;
+
+// ════════════════════════════════════════════════════════════════════════════
 // PHASE 122a (2026-05-29) — MULTI-ROUTE STORAGE LAYER
 // User: "we need to be able to create another route for ourselves as a
 // member which will result in two routes on the schedule we can just
@@ -40982,11 +41036,25 @@ function _rpSaveRouteRecord(payload){
     var all = _rpListRoutes(iso);
     if(payload.routeId){
       var idx = all.findIndex(function(r){ return r.routeId === payload.routeId; });
-      if(idx >= 0) all[idx] = payload;
-      else all.push(payload);
+      if(idx >= 0){
+        // UPDATE existing route — preserve its seqNum so the chip number
+        // doesn't change while editing. Phase 133 (2026-05-29).
+        if(all[idx].seqNum && !payload.seqNum) payload.seqNum = all[idx].seqNum;
+        all[idx] = payload;
+      } else {
+        // routeId set but no matching record — new chip via resume
+        // weirdness. Mint a seqNum if missing.
+        if(!payload.seqNum && typeof _rpNextRouteSeq === 'function'){
+          payload.seqNum = _rpNextRouteSeq(iso);
+        }
+        all.push(payload);
+      }
     } else {
-      // New route — synthesize a deterministic but unique id
+      // New route — synthesize a deterministic but unique id + seqNum
       payload.routeId = 'r_' + iso + '_' + all.length + '_' + Math.random().toString(36).slice(2, 8);
+      if(!payload.seqNum && typeof _rpNextRouteSeq === 'function'){
+        payload.seqNum = _rpNextRouteSeq(iso);
+      }
       all.push(payload);
     }
     localStorage.setItem(_rpSavedRoutesKeyV2(iso), JSON.stringify(all));
@@ -41219,7 +41287,11 @@ function _rpSyncCurrentRouteChip(){
     var stopCount = 0;
     if(route.mode === 'corridor') stopCount = (route.flatPicks || []).length;
     else if(route.mode === 'optimize') stopCount = (route.optTargets || []).length;
-    var label = routes.length === 1 ? 'Current route' : ('Route ' + (idx + 1));
+    // Phase 133 (2026-05-29): prefer the persistent seqNum so deleting a
+    // route doesn't renumber its survivors. Falls back to idx+1 for
+    // legacy records that pre-date seqNum.
+    var routeNum = route.seqNum || (idx + 1);
+    var label = routes.length === 1 ? 'Current route' : ('Route ' + routeNum);
     var title = 'Edit ' + label + ' — ' + modeName + ' · ' + stopCount + ' stop' + (stopCount === 1 ? '' : 's');
     var safeId = String(route.routeId || '').replace(/'/g, "\\'");
     return '<button type="button"'
