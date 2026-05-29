@@ -3892,7 +3892,7 @@ body.role-front_desk #referrals-view {
               <option value="_facility_frisco_er">Frisco ER</option>
               <option value="_facility_castle_hills_er">Castle Hills ER</option>
               <option value="_facility_plano_uc">Urgent Care Plano</option>
-              <option value="_facility_richardson">Richardson</option>
+              <option value="_facility_richardson">Main office (Richardson)</option>
             </select>
           </div>
 
@@ -25061,12 +25061,18 @@ window.initGoogleMap = initGoogleMap;
 
 var ROUTE_COORDS = {
   // WCG facilities (highest priority — usually the start/end point)
-  '_facility_frisco_er':       { lat: 33.1577, lng: -96.8094, label: 'Frisco ER',         type: 'facility' },
-  '_facility_castle_hills_er': { lat: 32.9947, lng: -96.8881, label: 'Castle Hills ER',   type: 'facility' },
-  '_facility_plano_uc':        { lat: 33.0464, lng: -96.7558, label: 'Urgent Care Plano', type: 'facility' },
-  // Per user 2026-05-25: add Richardson as 4th facility. Address:
-  // 101 W Renner Rd, Richardson, TX 75080 (near 75/Renner intersection).
-  '_facility_richardson':      { lat: 32.9893, lng: -96.7437, label: 'Richardson',        type: 'facility' },
+  // Phase 138 (2026-05-29) — added address + city + addressVerified
+  // fields per user "those needs to be associated with an addresses
+  // the 4 locations". City-level fallbacks for now (addressVerified:
+  // false) — Google Maps will geocode the business name + city which
+  // lands on or near the actual facility. Replace `address` with real
+  // street addresses and flip addressVerified:true when you have them.
+  // Phase 138: Richardson renamed to "Main office" per user "the one
+  // in Richardson call it Main office".
+  '_facility_frisco_er':       { lat: 33.1577, lng: -96.8094, label: 'Frisco ER',         type: 'facility', address: 'Frisco, TX 75035',     addressVerified: false, city: 'Frisco' },
+  '_facility_castle_hills_er': { lat: 32.9947, lng: -96.8881, label: 'Castle Hills ER',   type: 'facility', address: 'Lewisville, TX 75056', addressVerified: false, city: 'Lewisville' },
+  '_facility_plano_uc':        { lat: 33.0464, lng: -96.7558, label: 'Urgent Care Plano', type: 'facility', address: 'Plano, TX 75093',      addressVerified: false, city: 'Plano' },
+  '_facility_richardson':      { lat: 32.9893, lng: -96.7437, label: 'Main office',       type: 'facility', address: '101 W Renner Rd, Richardson, TX 75080', addressVerified: true,  city: 'Richardson' },
   // 21 approved cities — centroid
   'Frisco':         { lat: 33.1507, lng: -96.8236 },
   'Plano':          { lat: 33.0198, lng: -96.6989 },
@@ -28205,6 +28211,24 @@ function exportDayRouteToGoogleMaps(filterRouteId){
     if(typeof OUTREACH !== 'undefined'){
       var o = OUTREACH.find(function(x){ return (x.name || '').toLowerCase() === low; });
       if(o) return pickAddress(o, 'name', 'city');
+    }
+    // Phase 138 (2026-05-29): also resolve facility rows. End-facility
+    // visits get pushed with the facility's label (e.g. "Main office")
+    // as the clinic name — none of CLINIC_BANK / MVA_ATTORNEYS /
+    // OUTREACH carry them. Walk ROUTE_COORDS by label so these stops
+    // get a usable Google Maps address.
+    if(typeof ROUTE_COORDS !== 'undefined' && ROUTE_COORDS){
+      for(var rk in ROUTE_COORDS){
+        var rc = ROUTE_COORDS[rk];
+        if(!rc || rc.type !== 'facility') continue;
+        if(rc.label && rc.label.toLowerCase() === low){
+          // Mirror the pickAddress logic: verified → use; else build
+          // "Label, City, TX" so Google Maps geocodes the named place
+          var hasReal = rc.address && rc.address.trim() && rc.address !== 'TBD';
+          if(hasReal && rc.addressVerified === true) return rc.address;
+          return (rc.label + (rc.city ? ', ' + rc.city : '') + ', TX').trim();
+        }
+      }
     }
     return null;
   }
@@ -41410,63 +41434,93 @@ function _rpV5CommitPicksToDay(picks, di, me, removed, phase59Removed, phase59Ex
     // Phase 137 (2026-05-29): check EVERY facility signal — the raw
     // val (sometimes the key, sometimes the label), the search-input
     // label, AND the hidden input value (always the key on dropdown
-    // picks). Any positive → it's a WCG facility (home base) → don't
-    // push a row. User reported "I selected Frisco as the first
-    // destination, and it actually created a row for it on the
-    // schedule. The problem is it should not."
-    function _ph126ResolveEndpointName(val, label, hiddenVal){
+    // picks). Any positive → it's a WCG facility (home base).
+    // Phase 138 (2026-05-29): asymmetric handling per user "if one
+    // of those 4 were selected as end point create a row for them
+    // and assign it to admin to avoid confusion, if they were
+    // selected as starting point then don't create a row for them".
+    //   isStart=true  → facility → null (no row).
+    //   isStart=false → facility → return name, caller assigns admin.
+    // Returns { name, isFacility } so the push-row helper knows which
+    // member to stamp.
+    function _ph126ResolveEndpointName(val, label, hiddenVal, isStart){
       if(!val && !label && !hiddenVal) return null;
       if(val === '__same__' || hiddenVal === '__same__') return null;
-      // Underscored key check on every input we have
-      if(_phase126IsFacilityVal(val))       return null;
-      if(_phase126IsFacilityVal(hiddenVal)) return null;
-      // Label-side check against ROUTE_COORDS facility entries
-      if(_phase126IsFacilityLabel(val))      return null;
-      if(_phase126IsFacilityLabel(label))    return null;
-      if(_phase126IsFacilityLabel(hiddenVal))return null;
-      // Survived → real clinic / MVA endpoint, return the clean name
+      var isFacility = false;
+      if(_phase126IsFacilityVal(val))         isFacility = true;
+      if(_phase126IsFacilityVal(hiddenVal))   isFacility = true;
+      if(_phase126IsFacilityLabel(val))       isFacility = true;
+      if(_phase126IsFacilityLabel(label))     isFacility = true;
+      if(_phase126IsFacilityLabel(hiddenVal)) isFacility = true;
+      if(isFacility && isStart) return null;   // Start-facility → no row
       var raw = (label || val || hiddenVal).toString();
-      return raw.replace(/^[^A-Za-z0-9]+/, '').split(' · ')[0].trim();
+      var clean = raw.replace(/^[^A-Za-z0-9]+/, '').split(' · ')[0].trim();
+      if(!clean) return null;
+      return { name: clean, isFacility: isFacility };
     }
     var startHidden = (document.getElementById('rp-start') || {}).value;
     var endHidden   = (document.getElementById('rp-end')   || {}).value;
-    var startEndpointName = _ph126ResolveEndpointName(
+    var startEndpointInfo = _ph126ResolveEndpointName(
       window._RP_START_NAME,
       (document.getElementById('rp-start-search') || {}).value,
-      startHidden
+      startHidden,
+      true   // isStart → facility means null
     );
-    var endEndpointName = _ph126ResolveEndpointName(
+    var endEndpointInfo = _ph126ResolveEndpointName(
       window._RP_END_NAME,
       (document.getElementById('rp-end-search') || {}).value,
-      endHidden
+      endHidden,
+      false  // !isStart → facility STILL creates a row, assigned to admin
     );
-    function _ph126PushRow(name){
+    // Back-compat helpers below use plain names — keep those readable.
+    var startEndpointName = startEndpointInfo ? startEndpointInfo.name : null;
+    var endEndpointName   = endEndpointInfo   ? endEndpointInfo.name   : null;
+    // Resolve admin name once (for end-facility rows).
+    var _phase138AdminName = '';
+    try {
+      _phase138AdminName = (typeof USERS !== 'undefined' && USERS.admin && USERS.admin.name) || 'Admin';
+    } catch(_){ _phase138AdminName = 'Admin'; }
+    // Phase 138: assignToAdmin flag — end-facility rows are stamped
+    // with the admin's name instead of the current rep's, "to avoid
+    // confusion" per user. The facility row exists for trip context
+    // but isn't the rep's visit.
+    function _ph126PushRow(name, assignToAdmin){
       if(!name) return;
       var exists = (S.days[di].rows || []).some(function(r){ return r && r.clinic === name; });
       if(exists){ skipped++; return; }
+      var assignedMember = assignToAdmin ? _phase138AdminName : me;
       S.days[di].rows.push({
         clinic: name,
-        member: me,
-        memberConfirmed: !!me,
+        member: assignedMember,
+        memberConfirmed: !!assignedMember,
         status: 'Pending',
         city: '',
         rowConfirmed: false,
         rd: '', relationship: '', leadNotes: '', cancelReason: '',
         spending: null, _spId: null,
-        _routeId: routeIdForThis
+        _routeId: routeIdForThis,
+        // Phase 138 marker so downstream code (audit, filters) can
+        // recognize this as a route-endpoint facility row.
+        _phase138FacilityEndpoint: !!assignToAdmin
       });
       added++;
       insertedNames.push(name);
     }
-    // Start endpoint first (if it's a real clinic)
-    _ph126PushRow(startEndpointName);
-    // Corridor picks
+    // Start endpoint first (only when it's a real clinic — Start-facility
+    // returned null above so this no-ops for facilities)
+    _ph126PushRow(startEndpointName, false);
+    // Corridor picks (always the current rep)
     picks.forEach(function(p){
       if(!p || !p.name) return;
-      _ph126PushRow(p.name);
+      _ph126PushRow(p.name, false);
     });
-    // End endpoint last (if it's a real clinic AND not the same as Start)
-    if(endEndpointName && endEndpointName !== startEndpointName) _ph126PushRow(endEndpointName);
+    // End endpoint last. Phase 138: if the End is a facility, push it
+    // with admin assignment. If it's a real clinic, push it as the rep's
+    // visit like any other stop. Skip duplicates of Start.
+    if(endEndpointName && endEndpointName !== startEndpointName){
+      var endIsFacility = !!(endEndpointInfo && endEndpointInfo.isFacility);
+      _ph126PushRow(endEndpointName, endIsFacility);
+    }
     if(typeof _saveS === 'function') _saveS();
     if(typeof refresh === 'function') refresh(di);
     // Phase 52 / 54: save the planner state + the inserted-names list so
