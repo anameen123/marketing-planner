@@ -39645,6 +39645,13 @@ window._rpV5InsertPicksIntoDay = _rpV5InsertPicksIntoDay;
 function _rpSavedRouteKey(dayIso){
   return 'wcg_saved_route_v1_' + (dayIso || 'unknown');
 }
+// Phase 122a (2026-05-29): v2 storage key supports MULTIPLE routes per day.
+// Format: [{routeId, mode, startName, startCoord, endName, endCoord, ...
+// insertedNames, flatPicks, savedAt, dayIso, owner}, ...]. Migration from
+// the v1 single-route shape happens lazily on first read.
+function _rpSavedRoutesKeyV2(dayIso){
+  return 'wcg_saved_routes_v2_' + (dayIso || 'unknown');
+}
 
 function _rpGetCurrentDayIso(){
   try {
@@ -39655,33 +39662,147 @@ function _rpGetCurrentDayIso(){
 }
 window._rpGetCurrentDayIso = _rpGetCurrentDayIso;
 
-function _rpSaveCurrentRoute(payload){
+// ════════════════════════════════════════════════════════════════════════════
+// PHASE 122a (2026-05-29) — MULTI-ROUTE STORAGE LAYER
+// User: "we need to be able to create another route for ourselves as a
+// member which will result in two routes on the schedule we can just
+// separate them by a empty row that has new route started ... when we
+// click on show on google maps then the member needs to select which
+// route before opening".
+//
+// Single-route per day was a fixed assumption from Phase 52. Now a day
+// can host any number of saved routes. Each has its own routeId, its
+// own list of inserted rows, and its own owner (member name) so a
+// member only sees / edits their own routes.
+//
+// Migration: on first read, if v1 key exists + v2 doesn't, copy the v1
+// payload into a v2 array of one (with a synthetic routeId so all
+// existing flows keep working). v1 stays around as a fallback for
+// older code paths that haven't been ported yet.
+// ════════════════════════════════════════════════════════════════════════════
+function _rpListRoutes(iso){
+  iso = iso || _rpGetCurrentDayIso();
+  if(!iso) return [];
+  try {
+    var raw = localStorage.getItem(_rpSavedRoutesKeyV2(iso));
+    if(raw){
+      var arr = JSON.parse(raw);
+      if(Array.isArray(arr)) return arr;
+    }
+    // Migrate from v1 single-route shape if v2 is empty
+    var rawV1 = localStorage.getItem(_rpSavedRouteKey(iso));
+    if(rawV1){
+      var single = JSON.parse(rawV1);
+      if(single && typeof single === 'object'){
+        if(!single.routeId) single.routeId = 'r_' + (single.savedAt || iso) + '_v1';
+        var arrMig = [single];
+        localStorage.setItem(_rpSavedRoutesKeyV2(iso), JSON.stringify(arrMig));
+        return arrMig;
+      }
+    }
+  } catch(e){ console.warn('[122a] list routes failed:', e); }
+  return [];
+}
+window._rpListRoutes = _rpListRoutes;
+
+function _rpGetRouteById(iso, routeId){
+  if(!routeId) return null;
+  var all = _rpListRoutes(iso);
+  return all.find(function(r){ return r.routeId === routeId; }) || null;
+}
+window._rpGetRouteById = _rpGetRouteById;
+
+// Save a route. If payload.routeId matches an existing one, REPLACES it
+// (edit). Otherwise APPENDS as a new route with a fresh routeId. The
+// resulting array is written to v2 storage AND the v1 single-route key
+// is updated with the MOST RECENT route so older fallback paths keep
+// resolving a "current route" without seeing stale data.
+function _rpSaveRouteRecord(payload){
   try {
     var iso = _rpGetCurrentDayIso();
     if(!iso) return;
     payload.savedAt = new Date().toISOString();
     payload.dayIso  = iso;
-    localStorage.setItem(_rpSavedRouteKey(iso), JSON.stringify(payload));
-    console.log('[savedRoute] saved for', iso, payload);
+    if(!payload.owner){
+      payload.owner = (window.CURRENT_USER && CURRENT_USER.name) || '';
+    }
+    var all = _rpListRoutes(iso);
+    if(payload.routeId){
+      var idx = all.findIndex(function(r){ return r.routeId === payload.routeId; });
+      if(idx >= 0) all[idx] = payload;
+      else all.push(payload);
+    } else {
+      // New route — synthesize a deterministic but unique id
+      payload.routeId = 'r_' + iso + '_' + all.length + '_' + Math.random().toString(36).slice(2, 8);
+      all.push(payload);
+    }
+    localStorage.setItem(_rpSavedRoutesKeyV2(iso), JSON.stringify(all));
+    // Write the MOST RECENT route back into v1 for back-compat with code
+    // that hasn't been ported to the v2 list helpers yet (Phase 86
+    // map-reset, Phase 100 chip lookup, etc.).
+    var mostRecent = all.slice().sort(function(a,b){ return new Date(b.savedAt || 0) - new Date(a.savedAt || 0); })[0];
+    if(mostRecent) localStorage.setItem(_rpSavedRouteKey(iso), JSON.stringify(mostRecent));
+    console.log('[122a] saved route', payload.routeId, 'for', iso, '(total routes:', all.length, ')');
     if(typeof _rpSyncCurrentRouteChip === 'function') _rpSyncCurrentRouteChip();
-  } catch(e){ console.warn('[savedRoute] save failed:', e); }
+    return payload.routeId;
+  } catch(e){ console.warn('[122a] save route failed:', e); }
+}
+window._rpSaveRouteRecord = _rpSaveRouteRecord;
+
+function _rpDeleteRouteById(iso, routeId){
+  iso = iso || _rpGetCurrentDayIso();
+  if(!iso || !routeId) return;
+  try {
+    var all = _rpListRoutes(iso).filter(function(r){ return r.routeId !== routeId; });
+    if(all.length === 0){
+      localStorage.removeItem(_rpSavedRoutesKeyV2(iso));
+      localStorage.removeItem(_rpSavedRouteKey(iso));
+    } else {
+      localStorage.setItem(_rpSavedRoutesKeyV2(iso), JSON.stringify(all));
+      var mostRecent = all.slice().sort(function(a,b){ return new Date(b.savedAt || 0) - new Date(a.savedAt || 0); })[0];
+      if(mostRecent) localStorage.setItem(_rpSavedRouteKey(iso), JSON.stringify(mostRecent));
+    }
+    if(typeof _rpSyncCurrentRouteChip === 'function') _rpSyncCurrentRouteChip();
+  } catch(e){ console.warn('[122a] delete route failed:', e); }
+}
+window._rpDeleteRouteById = _rpDeleteRouteById;
+
+function _rpSaveCurrentRoute(payload){
+  // Back-compat wrapper — delegates to the v2 multi-route helper. If
+  // window._RP_EDITING_ROUTE_ID is set (user clicked an existing chip),
+  // the payload uses THAT id so the save updates instead of appends.
+  if(window._RP_EDITING_ROUTE_ID && !payload.routeId){
+    payload.routeId = window._RP_EDITING_ROUTE_ID;
+  }
+  return _rpSaveRouteRecord(payload);
 }
 window._rpSaveCurrentRoute = _rpSaveCurrentRoute;
 
 function _rpLoadCurrentRoute(){
+  // Back-compat — return the route currently being edited if any, else
+  // the most-recent route on the day. Code paths that need ALL routes
+  // (chip renderer, GMaps picker) should use _rpListRoutes directly.
   try {
     var iso = _rpGetCurrentDayIso();
     if(!iso) return null;
-    var raw = localStorage.getItem(_rpSavedRouteKey(iso));
-    return raw ? JSON.parse(raw) : null;
+    if(window._RP_EDITING_ROUTE_ID){
+      var r = _rpGetRouteById(iso, window._RP_EDITING_ROUTE_ID);
+      if(r) return r;
+    }
+    var all = _rpListRoutes(iso);
+    if(all.length === 0) return null;
+    return all.slice().sort(function(a,b){ return new Date(b.savedAt || 0) - new Date(a.savedAt || 0); })[0];
   } catch(_){ return null; }
 }
 window._rpLoadCurrentRoute = _rpLoadCurrentRoute;
 
 function _rpClearCurrentRoute(){
+  // Back-compat — clears ALL routes for the day. Multi-route callers
+  // should use _rpDeleteRouteById to target a specific one.
   try {
     var iso = _rpGetCurrentDayIso();
     if(!iso) return;
+    localStorage.removeItem(_rpSavedRoutesKeyV2(iso));
     localStorage.removeItem(_rpSavedRouteKey(iso));
     if(typeof _rpSyncCurrentRouteChip === 'function') _rpSyncCurrentRouteChip();
   } catch(_){}
