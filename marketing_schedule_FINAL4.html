@@ -25632,10 +25632,15 @@ function renderAllBusinessPins(){
         // the points and it didn't work" — root cause was that pin
         // clicks did nothing in this phase. Map ↔ list now sync.
         // Gate: must have candidates AND the clicked name must be one.
+        // Phase 109 hotfix (regression audit): if the user is mid-edit
+        // of Start/End (Phase 31 preview-then-confirm flow set
+        // _RP_DIALOG_AWAITING), STAND DOWN so the pin click can reach
+        // _rpDialogConsumePinClick below for the new endpoint.
         try {
           var planOpen = (typeof _isRoutePlannerOpen === 'function') && _isRoutePlannerOpen();
           var hasCands = !!(window._RP_V5_LAST && Array.isArray(window._RP_V5_LAST.flatCandidates) && window._RP_V5_LAST.flatCandidates.length > 0);
-          if(planOpen && hasCands && typeof _rpV5ToggleFlat === 'function'){
+          var awaitingSE = (typeof _RP_DIALOG_AWAITING !== 'undefined') && !!_RP_DIALOG_AWAITING;
+          if(planOpen && hasCands && !awaitingSE && typeof _rpV5ToggleFlat === 'function'){
             var isCand = window._RP_V5_LAST.flatCandidates.some(function(c){ return c && c.name === name; });
             if(isCand){
               if(ev && ev.originalEvent){
