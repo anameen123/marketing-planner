@@ -3622,22 +3622,32 @@ body.role-front_desk #referrals-view {
                distance between it and the other clicks reduces misclick
                risk. The spacer pushes it to the edge of the flex row. -->
           <span style="flex:1 1 auto;min-width:8px"></span>
-          <button id="dv-gmaps-export-btn" type="button" onclick="exportDayRouteToGoogleMaps();_dvScrollToMap();"
-                  title="Open the day's FULL route in Google Maps — all pending stops as waypoints. On phone, you'll see the route preview and need to tap the blue arrow to start (Google's safety design for multi-stop routes)."
-                  style="background:#1e40af;border:none;color:#fff;border-radius:6px;padding:5px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;display:inline-flex;align-items:center;gap:5px;line-height:1.1">
-            🗺️ Full route
-          </button>
-          <!-- Phase 134c (2026-05-29): Next-stop nav button — single-
-               destination URL with dir_action=navigate so Google Maps
-               auto-starts turn-by-turn on the phone. The multi-stop
-               button above CAN'T auto-start (Google blocks it for
-               safety on multi-stop), so this gives the rep the
-               one-tap navigation experience for the next pending
-               clinic. After arriving, tap again for the next one. -->
+          <!-- Phase 134d (2026-05-29): swapped the visual hierarchy.
+               User kept landing on the multi-stop preview screen on
+               their iPhone and asking "where's the start button?".
+               Google blocks auto-start for multi-stop URLs (safety
+               design). Phase 134c added a single-stop auto-nav button
+               but it was the secondary action — easy to miss. Now
+               "🧭 Start Navigation" is the BIG primary green button
+               (auto-starts turn-by-turn to the next pending stop)
+               and the multi-stop "Preview full route" is a smaller
+               secondary outlined button.
+               PRIMARY action: single-stop URL + dir_action=navigate
+               → Google Maps app opens directly in turn-by-turn nav.
+               No preview screen, no tap-to-confirm. -->
           <button id="dv-gmaps-next-btn" type="button" onclick="exportNextStopToGoogleMaps();_dvScrollToMap();"
-                  title="Navigate to ONLY the next pending stop — Google Maps auto-starts turn-by-turn on phone (no tap-to-confirm). Use this when you just want to get to the next clinic; tap again after arriving."
-                  style="background:#15803d;border:none;color:#fff;border-radius:6px;padding:5px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;display:inline-flex;align-items:center;gap:5px;line-height:1.1;margin-left:5px">
-            🧭 Next stop
+                  title="Tap → Google Maps opens and starts turn-by-turn navigation immediately to your next pending stop. After arriving, mark Completed and tap again for the next one."
+                  style="background:linear-gradient(135deg,#15803d,#16a34a);border:none;color:#fff;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:800;cursor:pointer;font-family:DM Sans,sans-serif;display:inline-flex;align-items:center;gap:6px;line-height:1.1;box-shadow:0 2px 6px rgba(22,163,74,.35)">
+            🧭 Start Navigation
+          </button>
+          <!-- SECONDARY: opens the full multi-stop route in Google Maps
+               for review only. On phone you'll see Preview / Add stops
+               and have to tap the blue arrow to actually start —
+               that's Google's design, not something we can override. -->
+          <button id="dv-gmaps-export-btn" type="button" onclick="exportDayRouteToGoogleMaps();_dvScrollToMap();"
+                  title="Open the full multi-stop route in Google Maps for review. NOTE: Google won't auto-start nav for multi-stop routes — you'll see Preview + Add stops and need to tap the blue arrow. Use 🧭 Start Navigation above for one-tap nav."
+                  style="background:#fff;border:1px solid #cbd5e1;color:#475569;border-radius:6px;padding:5px 10px;font-size:10px;font-weight:600;cursor:pointer;font-family:DM Sans,sans-serif;display:inline-flex;align-items:center;gap:4px;line-height:1.1;margin-left:5px">
+            🗺️ Preview full route
           </button>
         </div>
       </div>
