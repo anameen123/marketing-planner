@@ -41848,18 +41848,45 @@ function _rpSyncSavedRouteToSchedule(di){
           var v2arr = null;
           try { v2arr = JSON.parse(rawV2); } catch(_){}
           if(Array.isArray(v2arr) && v2arr.length > 0){
+            // Phase 136 (2026-05-29): build the set of routeIds STILL on
+            // the schedule. _routeId is stamped on every row a route
+            // committed (Phase 122b/129), so the presence of that tag
+            // is the authoritative signal that the route is alive.
+            // Insertedmes is a secondary safety net for legacy rows
+            // committed before Phase 122 (no _routeId stamp).
+            var liveRouteIds = {};
+            (S.days[di].rows || []).forEach(function(r){
+              if(r && r._routeId) liveRouteIds[r._routeId] = true;
+            });
             var droppedRouteCount = 0, prunedNameCount = 0;
             var kept = [];
             v2arr.forEach(function(rec){
-              if(!rec || !Array.isArray(rec.insertedNames)){
-                kept.push(rec);   // unknown shape — leave alone
+              if(!rec){ droppedRouteCount++; return; }   // garbage → drop
+              // Phase 136: primary check — does ANY row carry this
+              // route's _routeId? If no, the route is orphaned and gets
+              // dropped regardless of insertedNames state. Catches the
+              // case where insertedNames has gotten stale or where the
+              // row was deleted but the saved record never got its
+              // names trimmed.
+              var routeIsAlive = rec.routeId && liveRouteIds[rec.routeId];
+              if(rec.routeId && !routeIsAlive && (!Array.isArray(rec.insertedNames) || rec.insertedNames.length === 0)){
+                // routeId tag has zero matching rows AND no
+                // insertedNames safety net → definitely dead.
+                droppedRouteCount++;
+                return;
+              }
+              if(!Array.isArray(rec.insertedNames)){
+                // No insertedNames at all — fall back to routeId-only
+                // signal. If routeId is alive, keep; else drop.
+                if(routeIsAlive){ kept.push(rec); }
+                else            { droppedRouteCount++; }
                 return;
               }
               var beforeN = rec.insertedNames.length;
               var afterN = rec.insertedNames.filter(function(n){ return onSchedule[n]; });
-              if(afterN.length === 0){
-                // EVERY inserted row from this route was deleted → drop
-                // the whole route record (no override-confirm trigger).
+              if(afterN.length === 0 && !routeIsAlive){
+                // EVERY inserted row from this route was deleted AND no
+                // row carries the routeId tag → drop the whole record.
                 droppedRouteCount++;
                 prunedNameCount += beforeN;
                 return;
@@ -41877,6 +41904,13 @@ function _rpSyncSavedRouteToSchedule(di){
             if(droppedRouteCount > 0 || prunedNameCount > 0){
               if(kept.length === 0){
                 localStorage.removeItem(v2key);
+                // Also clear the v1 mirror — _rpSaveRouteRecord writes
+                // the most-recent route to v1 for back-compat, but if
+                // we just emptied v2 there's nothing recent to mirror.
+                try {
+                  var v1Mirror = (typeof _rpSavedRouteKey === 'function') ? _rpSavedRouteKey(iso) : null;
+                  if(v1Mirror) localStorage.removeItem(v1Mirror);
+                } catch(_){}
               } else {
                 localStorage.setItem(v2key, JSON.stringify(kept));
               }
