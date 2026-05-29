@@ -3622,32 +3622,21 @@ body.role-front_desk #referrals-view {
                distance between it and the other clicks reduces misclick
                risk. The spacer pushes it to the edge of the flex row. -->
           <span style="flex:1 1 auto;min-width:8px"></span>
-          <!-- Phase 134d (2026-05-29): swapped the visual hierarchy.
-               User kept landing on the multi-stop preview screen on
-               their iPhone and asking "where's the start button?".
-               Google blocks auto-start for multi-stop URLs (safety
-               design). Phase 134c added a single-stop auto-nav button
-               but it was the secondary action — easy to miss. Now
-               "🧭 Start Navigation" is the BIG primary green button
-               (auto-starts turn-by-turn to the next pending stop)
-               and the multi-stop "Preview full route" is a smaller
-               secondary outlined button.
-               PRIMARY action: single-stop URL + dir_action=navigate
-               → Google Maps app opens directly in turn-by-turn nav.
-               No preview screen, no tap-to-confirm. -->
-          <button id="dv-gmaps-next-btn" type="button" onclick="exportNextStopToGoogleMaps();_dvScrollToMap();"
-                  title="Tap → Google Maps opens and starts turn-by-turn navigation immediately to your next pending stop. After arriving, mark Completed and tap again for the next one."
-                  style="background:linear-gradient(135deg,#15803d,#16a34a);border:none;color:#fff;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:800;cursor:pointer;font-family:DM Sans,sans-serif;display:inline-flex;align-items:center;gap:6px;line-height:1.1;box-shadow:0 2px 6px rgba(22,163,74,.35)">
-            🧭 Start Navigation
-          </button>
-          <!-- SECONDARY: opens the full multi-stop route in Google Maps
-               for review only. On phone you'll see Preview / Add stops
-               and have to tap the blue arrow to actually start —
-               that's Google's design, not something we can override. -->
+          <!-- Phase 134e (2026-05-29): reverted to a single Show-on-
+               Google-Maps button per user "next stop button I didn't
+               ask for it ... whenever someone clicks on show on map
+               then you will see which visit were not completed and
+               create a path for it". Existing exportDayRouteToGoogle
+               Maps already does this: Phase 60 status filter drops
+               Canceled / Completed / Postponed; Phase 122c per-route
+               filter scopes to a chip when one's open; rows are
+               iterated in schedule order (top-to-bottom). Every click
+               re-reads the schedule, so completing a visit + re-
+               clicking gives a fresh path without that stop. -->
           <button id="dv-gmaps-export-btn" type="button" onclick="exportDayRouteToGoogleMaps();_dvScrollToMap();"
-                  title="Open the full multi-stop route in Google Maps for review. NOTE: Google won't auto-start nav for multi-stop routes — you'll see Preview + Add stops and need to tap the blue arrow. Use 🧭 Start Navigation above for one-tap nav."
-                  style="background:#fff;border:1px solid #cbd5e1;color:#475569;border-radius:6px;padding:5px 10px;font-size:10px;font-weight:600;cursor:pointer;font-family:DM Sans,sans-serif;display:inline-flex;align-items:center;gap:4px;line-height:1.1;margin-left:5px">
-            🗺️ Preview full route
+                  title="Build a Google Maps path from this day's still-pending visits (in schedule order, top to bottom). Every tap re-reads the schedule, so completed/canceled/postponed stops are skipped automatically. Opens Google Maps to navigate the path."
+                  style="background:linear-gradient(135deg,#1e40af,#1d4ed8);border:none;color:#fff;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:800;cursor:pointer;font-family:DM Sans,sans-serif;display:inline-flex;align-items:center;gap:6px;line-height:1.1;box-shadow:0 2px 6px rgba(29,78,216,.35)">
+            🗺️ Show on Google Maps
           </button>
         </div>
       </div>
@@ -28330,112 +28319,10 @@ function exportDayRouteToGoogleMaps(filterRouteId){
 }
 window.exportDayRouteToGoogleMaps = exportDayRouteToGoogleMaps;
 
-// ════════════════════════════════════════════════════════════════════════════
-// PHASE 134c (2026-05-29) — NEXT-STOP AUTO-NAV
-// User (with iPhone screenshot of the multi-stop preview): "you see what
-// it shows him". Google Maps deliberately won't auto-start turn-by-turn
-// for multi-stop URLs — the rep has to tap the blue arrow. For a SINGLE
-// destination, dir_action=navigate DOES auto-start. So this helper
-// picks the next pending stop only and opens GMaps in nav mode.
-//
-// Same filters as exportDayRouteToGoogleMaps:
-//   • per-route _routeId scope (when a chip is active, scoped to that
-//     route only; otherwise scans all routes the viewer owns)
-//   • drops Canceled / Completed / Postponed (already-done stops
-//     aren't candidates for "next")
-// "Next" = the first remaining Pending stop in row order — matches the
-// schedule's natural sequence.
-// ════════════════════════════════════════════════════════════════════════════
-function exportNextStopToGoogleMaps(){
-  var di = (typeof S !== 'undefined' && S.currentDay != null) ? S.currentDay : null;
-  if(di == null){
-    if(typeof showToast === 'function') showToast('Open a day on the calendar first, then navigate.');
-    return;
-  }
-  var day = S.days[di];
-  if(!day || !Array.isArray(day.rows) || day.rows.length === 0){
-    if(typeof showToast === 'function') showToast('No visits on this day to navigate to.');
-    return;
-  }
-  // Per-route scoping — if the rep is editing a specific route chip,
-  // limit "next" to that route's rows. Otherwise consider all rows the
-  // viewer owns (admin sees all).
-  var editId = window._RP_EDITING_ROUTE_ID || null;
-  // Find the next Pending row in order
-  var nextRow = null;
-  for(var i = 0; i < day.rows.length; i++){
-    var r = day.rows[i];
-    if(!r || !r.clinic) continue;
-    if(editId && r._routeId && r._routeId !== editId) continue;
-    var st = r.status || 'Pending';
-    if(st === 'Canceled' || st === 'Completed' || st === 'Postponed') continue;
-    nextRow = r;
-    break;
-  }
-  if(!nextRow){
-    if(typeof showToast === 'function') showToast('🎉 No pending stops left — nothing to navigate to.');
-    return;
-  }
-  // Resolve the address (same logic exportDayRouteToGoogleMaps uses)
-  function _addressFor(name){
-    if(!name) return null;
-    var low = String(name).toLowerCase();
-    function pickAddress(entry, nameField, cityField){
-      if(!entry) return null;
-      var hasReal = entry.address && entry.address.trim() && entry.address !== 'TBD';
-      if(hasReal && entry.addressVerified === true) return entry.address;
-      return (entry[nameField] + (entry[cityField] ? ', ' + entry[cityField] : '') + ', TX').trim();
-    }
-    if(typeof CLINIC_BANK !== 'undefined'){
-      var c = CLINIC_BANK.find(function(x){ return (x.n || '').toLowerCase() === low; });
-      if(c) return pickAddress(c, 'n', 'c');
-    }
-    if(typeof MVA_ATTORNEYS !== 'undefined'){
-      var m = MVA_ATTORNEYS.find(function(x){ return (x.firm || '').toLowerCase() === low; });
-      if(m) return pickAddress(m, 'firm', 'city');
-    }
-    if(typeof OUTREACH !== 'undefined'){
-      var o = OUTREACH.find(function(x){ return (x.name || '').toLowerCase() === low; });
-      if(o) return pickAddress(o, 'name', 'city');
-    }
-    return null;
-  }
-  var query = _addressFor(nextRow.clinic);
-  if(!query){
-    var c = (typeof getCoordForBusiness === 'function') ? getCoordForBusiness(nextRow.clinic) : null;
-    if(c && c.lat != null && c.lng != null) query = c.lat + ',' + c.lng;
-  }
-  if(!query){
-    if(typeof showToast === 'function') showToast('No address or coords for "' + nextRow.clinic + '". Add an address first.');
-    return;
-  }
-  // Build a single-destination directions URL with dir_action=navigate
-  // → Google Maps auto-starts turn-by-turn on phone. No tap-to-confirm.
-  var url = 'https://www.google.com/maps/dir/?api=1'
-          + '&destination=' + encodeURIComponent(query)
-          + '&travelmode=driving'
-          + '&dir_action=navigate';
-  // Confirm before launching nav (user shouldn't accidentally enter
-  // turn-by-turn). Same showConfirm helper the multi-stop button uses.
-  var msg = '🧭 Navigate to <b>' + String(nextRow.clinic).replace(/</g,'&lt;') + '</b>?';
-  var sub = '<div style="margin-top:8px;font-size:11px;color:#475569;line-height:1.5">Opens Google Maps and <b>starts turn-by-turn navigation immediately</b> on phone. After arriving, mark the visit Completed + tap 🧭 Next stop again for the next one.</div>';
-  function _go(){
-    window.open(url, '_blank', 'noopener');
-    if(typeof showToast === 'function') showToast('🧭 Navigating to ' + nextRow.clinic + '…');
-  }
-  if(typeof showConfirm === 'function'){
-    showConfirm({
-      icon: '🧭',
-      msg: msg,
-      sub: sub,
-      yesLabel: 'Start navigation',
-      onConfirm: _go
-    });
-  } else {
-    if(window.confirm('Navigate to ' + nextRow.clinic + '?\n\nOpens Google Maps with turn-by-turn directions.')) _go();
-  }
-}
-window.exportNextStopToGoogleMaps = exportNextStopToGoogleMaps;
+// Phase 134c reverted (Phase 134e, 2026-05-29) — user explicitly
+// asked to remove the Next-stop button and go back to a single Show-
+// on-Google-Maps button. exportNextStopToGoogleMaps + its helpers
+// removed; the multi-stop exporter above is the only entry point.
 
 // Called from openDay() to refresh the map with this day's visits.
 // ── ETA HELPERS (per user 2026-05-22, no API key needed) ───────────────────
