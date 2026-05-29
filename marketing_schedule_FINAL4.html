@@ -3869,6 +3869,18 @@ body.role-front_desk #referrals-view {
           <div style="font-size:13px;font-weight:800">🎯 Pick &amp; Plan — pick the stops, we find the order</div>
           <div style="font-size:11px;opacity:.9;margin-top:3px;line-height:1.45">Either click pins one-by-one OR draw a circle on the map to grab everything inside. Pick one as <b>starting point</b> (or use the Starting from box below to anchor at a WCG facility). We compute the shortest visit order. <b>Only green + yellow clinics</b> are pickable (recently-visited red/orange are skipped).</div>
         </div>
+        <!-- Phase 128 (2026-05-29) — 3-step wizard strip per user "first,
+             make it edit for each step. Confirm. ... if I go edit the
+             first point, then I need to redo the second and the third
+             point. They will be cleared." Each step pill is clickable
+             when reached; clicking a PRIOR completed step cascades all
+             later state to "pending" (current = the one being edited,
+             later = locked again). -->
+        <div id="rp-opt-wiz-strip" style="display:flex;gap:6px;margin-bottom:12px;background:#f8fafc;border:1px solid var(--border);border-radius:10px;padding:6px;font-family:DM Sans,sans-serif">
+          <button id="rp-opt-wiz-1" type="button" onclick="_rpOptWizardEditStep(1)" title="Step 1 — Pick the clinics you want to visit" style="flex:1;background:#1e3a8a;color:#fff;border:none;border-radius:6px;padding:7px 10px;font-size:11px;font-weight:700;cursor:pointer">1. 📌 Pick targets</button>
+          <button id="rp-opt-wiz-2" type="button" onclick="_rpOptWizardEditStep(2)" disabled title="Confirm targets first" style="flex:1;background:#e2e8f0;color:#94a3b8;border:none;border-radius:6px;padding:7px 10px;font-size:11px;font-weight:700;cursor:not-allowed">2. 🚩 Set start</button>
+          <button id="rp-opt-wiz-3" type="button" onclick="_rpOptWizardEditStep(3)" disabled title="Confirm start first" style="flex:1;background:#e2e8f0;color:#94a3b8;border:none;border-radius:6px;padding:7px 10px;font-size:11px;font-weight:700;cursor:not-allowed">3. ⚡ Optimize</button>
+        </div>
         <!-- Phase 117b (2026-05-29) — optional "Starting from" anchor that
              accepts a WCG facility (Frisco ER / Castle Hills ER / Richardson /
              UC Plano) OR any clinic. When filled with a FACILITY, the TSP
@@ -3933,11 +3945,18 @@ body.role-front_desk #referrals-view {
         <div id="rp-opt-target-list" style="background:#f8fafc;border:1px dashed var(--border);border-radius:8px;padding:8px;min-height:70px;font-size:11px;margin-bottom:10px">
           <div style="color:var(--muted);font-style:italic;text-align:center;padding:8px 0">No targets yet — click a pin on the map.</div>
         </div>
+        <!-- Phase 128 — Step 1 confirm button. Shown only at step 1 when
+             ≥1 target is in the list. Click to lock targets + advance
+             to step 2 (start picker). Re-show on edit-back. -->
+        <button id="rp-opt-wiz-confirm-1" type="button" onclick="_rpOptWizardConfirmStep(1)" style="display:none;width:100%;margin-bottom:10px;background:linear-gradient(135deg,#15803d,#16a34a);color:#fff;border:none;border-radius:8px;padding:9px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;box-shadow:0 2px 8px rgba(22,163,74,.35)">✓ Confirm targets → choose start</button>
         <!-- Start selector (visible only when ≥3 targets) -->
         <div id="rp-opt-start-picker" style="display:none;margin-bottom:10px;padding:10px 12px;background:#f0fdf4;border:1px solid #86efac;border-left:3px solid #16a34a;border-radius:8px">
           <div style="font-size:11px;font-weight:700;color:#14532d;margin-bottom:6px">📍 Which target is your <b>starting point</b>?</div>
           <div id="rp-opt-start-options" style="display:flex;flex-direction:column;gap:4px"></div>
+          <div style="font-size:10px;color:#14532d;font-style:italic;margin-top:8px;padding-top:6px;border-top:1px dashed #86efac">— or — type a WCG facility (Frisco ER / Castle Hills / UC Plano / Richardson) or any clinic in the <b>🚩 Starting from</b> box above.</div>
         </div>
+        <!-- Phase 128 — Step 2 confirm button. -->
+        <button id="rp-opt-wiz-confirm-2" type="button" onclick="_rpOptWizardConfirmStep(2)" style="display:none;width:100%;margin-bottom:10px;background:linear-gradient(135deg,#15803d,#16a34a);color:#fff;border:none;border-radius:8px;padding:9px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;box-shadow:0 2px 8px rgba(22,163,74,.35)">✓ Confirm start → optimize route</button>
         <!-- Footer buttons -->
         <div style="display:flex;justify-content:space-between;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid var(--border);flex-wrap:wrap">
           <button id="rp-opt-clear-btn" type="button" onclick="_rpOptClearAll()" style="background:#fff;color:#7f1d1d;border:1px solid #fecaca;border-radius:6px;padding:8px 14px;font-size:11px;font-weight:600;cursor:pointer;font-family:DM Sans,sans-serif">✕ Clear all</button>
@@ -35366,6 +35385,12 @@ function _rpOptInit(){
   _rpOptRenderTargetList();
   _rpOptRenderStartPicker();
   _rpOptRenderPickStatus();
+  // Phase 128 (2026-05-29): always start the wizard at step 1 on fresh open.
+  // Cleanup any leftover ORDERED state from a prior session so step 3's
+  // result panel doesn't flash on first paint.
+  window._RP_OPT_ORDERED = null;
+  window._RP_OPT_START_NAME = null;
+  if(typeof _rpOptWizardSetStep === 'function') _rpOptWizardSetStep(1);
   if(typeof showToast === 'function') showToast('🎯 Pick & Plan: click any pin on the map to add it to your targets.');
 }
 window._rpOptInit = _rpOptInit;
@@ -35376,6 +35401,136 @@ function _rpOptDisarm(){
   _rpOptRenderPickStatus();
 }
 window._rpOptDisarm = _rpOptDisarm;
+
+// ════════════════════════════════════════════════════════════════════════════
+// PHASE 128 (2026-05-29) — PICK & PLAN 3-STEP WIZARD
+// User: "first, make it edit for each step. Okay? And confirm... if I go
+// edit the first point, then I need to redo the second and the third
+// point. They will be cleared. Okay? It's a three step process for this".
+//
+// Step 1 — Pick targets (pin-by-pin OR circle). Confirm to lock.
+// Step 2 — Set starting point (a WCG facility from list/pin OR a target).
+//          Confirm to lock.
+// Step 3 — Optimize the order + commit to the schedule.
+//
+// Editing a prior step cascades the reset: edit step 1 → wipes 2+3, edit
+// step 2 → wipes 3. Same chip override system as corridor (Phase 122)
+// applies once committed.
+// ════════════════════════════════════════════════════════════════════════════
+window._RP_OPT_WIZ_STEP = 1;
+
+function _rpOptWizardSetStep(n){
+  if(n < 1) n = 1; if(n > 3) n = 3;
+  window._RP_OPT_WIZ_STEP = n;
+  // Step pill styling — current step is bold blue, completed steps are
+  // green-clickable, future steps are grey-disabled.
+  var step1 = document.getElementById('rp-opt-wiz-1');
+  var step2 = document.getElementById('rp-opt-wiz-2');
+  var step3 = document.getElementById('rp-opt-wiz-3');
+  function paint(btn, state){
+    if(!btn) return;
+    if(state === 'current'){
+      btn.style.background = '#1e3a8a';
+      btn.style.color = '#fff';
+      btn.style.cursor = 'default';
+      btn.disabled = false;
+      btn.title = 'Currently editing this step';
+    } else if(state === 'done'){
+      btn.style.background = '#16a34a';
+      btn.style.color = '#fff';
+      btn.style.cursor = 'pointer';
+      btn.disabled = false;
+      btn.title = 'Click to edit (later steps will reset)';
+    } else { // pending
+      btn.style.background = '#e2e8f0';
+      btn.style.color = '#94a3b8';
+      btn.style.cursor = 'not-allowed';
+      btn.disabled = true;
+      btn.title = 'Finish the previous step first';
+    }
+  }
+  paint(step1, n === 1 ? 'current' : 'done');
+  paint(step2, n === 2 ? 'current' : (n > 2 ? 'done' : 'pending'));
+  paint(step3, n === 3 ? 'current' : 'pending');
+  // Show/hide the in-panel controls per step
+  function setDisplay(id, show){ var el = document.getElementById(id); if(el) el.style.display = show ? '' : 'none'; }
+  // Step 1 controls — sub-mode toggle (pin/circle), circle controls,
+  // target list, target list confirm button
+  var subModeRow = document.querySelector('#rp-opt-wrap > div[style*="background:#f1f5f9"]');
+  if(subModeRow) subModeRow.style.display = (n === 1) ? 'flex' : 'none';
+  setDisplay('rp-opt-circle-controls', n === 1 && window._RP_OPT_SUB_MODE === 'circle');
+  setDisplay('rp-opt-pick-status', n === 1);
+  setDisplay('rp-opt-wiz-confirm-1', n === 1 && window._RP_OPT_TARGETS.length >= 1);
+  // Step 2 controls — start picker (radio over targets + facility chip box)
+  setDisplay('rp-opt-start-picker', n === 2);
+  setDisplay('rp-opt-wiz-confirm-2', n === 2 && (!!window._RP_OPT_START_NAME || !!(window._RP_OPT_ANCHOR && window._RP_OPT_ANCHOR.coord)));
+  // Step 3 = footer (optimize button) — keep visible at step 3 only
+  var footer = document.getElementById('rp-opt-optimize-btn');
+  if(footer && footer.parentElement) footer.parentElement.style.display = (n === 3) ? 'flex' : 'none';
+  // When the rep enters step 2, arm the pin listener with the
+  // facility-only intent so clicking a facility pin sets the anchor.
+  // (Targets list also re-renders the start-radio.)
+  if(n === 2){
+    if(typeof _rpOptRenderStartPicker === 'function') _rpOptRenderStartPicker();
+    // Disable adding new targets — step 1 is locked.
+    window._RP_OPT_AWAITING_PICK = false;
+  } else if(n === 1){
+    // Re-arm pin-clicks so the rep can add/remove targets again.
+    window._RP_OPT_AWAITING_PICK = (window._RP_OPT_SUB_MODE !== 'circle');
+  } else if(n === 3){
+    window._RP_OPT_AWAITING_PICK = false;
+  }
+}
+window._rpOptWizardSetStep = _rpOptWizardSetStep;
+
+function _rpOptWizardConfirmStep(currentStep){
+  if(currentStep === 1){
+    if(window._RP_OPT_TARGETS.length < 1){
+      if(typeof showToast === 'function') showToast('Pick at least one target before confirming step 1.');
+      return;
+    }
+    _rpOptWizardSetStep(2);
+    if(typeof showToast === 'function') showToast('✓ Targets locked. Now pick the starting point.');
+  } else if(currentStep === 2){
+    var hasStart = !!window._RP_OPT_START_NAME || !!(window._RP_OPT_ANCHOR && window._RP_OPT_ANCHOR.coord);
+    if(!hasStart){
+      if(typeof showToast === 'function') showToast('Pick a starting point (from the targets or the Starting from box) before confirming step 2.');
+      return;
+    }
+    _rpOptWizardSetStep(3);
+    if(typeof showToast === 'function') showToast('✓ Start locked. Click Optimize to compute the order.');
+  }
+}
+window._rpOptWizardConfirmStep = _rpOptWizardConfirmStep;
+
+function _rpOptWizardEditStep(targetStep){
+  // Allow clicking any step pill that's <= current step (going forward
+  // requires explicit confirm). Going BACK cascades: target=1 wipes
+  // start + order, target=2 wipes order only.
+  if(targetStep > window._RP_OPT_WIZ_STEP) return;
+  if(targetStep === window._RP_OPT_WIZ_STEP) return;  // already here
+  if(targetStep <= 1){
+    // Reset start + order
+    if(window._RP_OPT_START_NAME && typeof _rpSetPinState === 'function'){
+      try { _rpSetPinState(window._RP_OPT_START_NAME, 'suggested'); } catch(_){}
+    }
+    window._RP_OPT_START_NAME = null;
+    window._RP_OPT_ORDERED = null;
+    if(typeof _rpOptClearAnchor === 'function') _rpOptClearAnchor();
+    // Hide the result panel
+    var res = document.getElementById('rp-opt-result');
+    if(res){ res.style.display = 'none'; res.innerHTML = ''; }
+    if(typeof _rpOptRenderStartPicker === 'function') _rpOptRenderStartPicker();
+    if(typeof _rpOptRenderTargetList === 'function') _rpOptRenderTargetList();
+  }
+  if(targetStep <= 2){
+    window._RP_OPT_ORDERED = null;
+    var res2 = document.getElementById('rp-opt-result');
+    if(res2){ res2.style.display = 'none'; res2.innerHTML = ''; }
+  }
+  _rpOptWizardSetStep(targetStep);
+}
+window._rpOptWizardEditStep = _rpOptWizardEditStep;
 
 // Phase 57 (2026-05-28): only green/yellow pins are pickable in AI Optimize.
 // Matches the Corridor rule — fresh (red, 0-13d) and warm (orange, 7-13d)
@@ -35500,12 +35655,24 @@ function _rpOptRenderTargetList(){
   if(optBtn){
     // Phase 117b (2026-05-29): start can come from the START_NAME radio
     // OR from the anchor input (facility / home-base). Either satisfies.
+    // Phase 128 (2026-05-29): also gated on wizard step 3 reached.
     var hasStart = !!window._RP_OPT_START_NAME || !!(window._RP_OPT_ANCHOR && window._RP_OPT_ANCHOR.coord);
-    var enabled = (n >= 3 && hasStart);
+    var wizReady = (window._RP_OPT_WIZ_STEP || 1) >= 3;
+    var enabled = (n >= 1 && hasStart && wizReady);
     optBtn.disabled = !enabled;
     optBtn.style.background = enabled ? 'linear-gradient(135deg,#1e3a8a,#2563eb)' : '#cbd5e1';
     optBtn.style.color = enabled ? '#fff' : '#94a3b8';
     optBtn.style.cursor = enabled ? 'pointer' : 'not-allowed';
+  }
+  // Phase 128: refresh the step-1 confirm button visibility (visible when
+  // at step 1 with ≥1 target).
+  var confirm1 = document.getElementById('rp-opt-wiz-confirm-1');
+  if(confirm1){
+    var atStep1 = (window._RP_OPT_WIZ_STEP || 1) === 1;
+    confirm1.style.display = (atStep1 && n >= 1) ? '' : 'none';
+    if(atStep1 && n >= 1){
+      confirm1.textContent = '✓ Confirm ' + n + ' target' + (n===1?'':'s') + ' → choose start';
+    }
   }
   if(n === 0){
     box.innerHTML = '<div style="color:var(--muted);font-style:italic;text-align:center;padding:8px 0">No targets yet — click a pin on the map.</div>';
@@ -35572,6 +35739,12 @@ function _rpOptSetStart(name){
   } catch(_){}
   window._RP_OPT_START_NAME = name;
   _rpOptRenderTargetList();   // re-enables Optimize button
+  // Phase 128 (2026-05-29): a start was just picked → if we're at step 2,
+  // surface the "Confirm start" button so the rep can advance.
+  if((window._RP_OPT_WIZ_STEP || 1) === 2){
+    var c2a = document.getElementById('rp-opt-wiz-confirm-2');
+    if(c2a) c2a.style.display = '';
+  }
 }
 window._rpOptSetStart = _rpOptSetStart;
 
@@ -35740,6 +35913,13 @@ function _rpOptAnchorPick(idx){
   }
   // Sync the optimize button so it enables (anchor satisfies the "start" requirement)
   if(typeof _rpOptRenderPickStatus === 'function') _rpOptRenderPickStatus();
+  if(typeof _rpOptRenderTargetList === 'function') _rpOptRenderTargetList();
+  // Phase 128 (2026-05-29): anchor picked counts as start → surface
+  // the Step 2 confirm button if we're at step 2.
+  if((window._RP_OPT_WIZ_STEP || 1) === 2){
+    var c2b = document.getElementById('rp-opt-wiz-confirm-2');
+    if(c2b) c2b.style.display = '';
+  }
   if(typeof showToast === 'function') showToast('🚩 Starting from: ' + p.name + ' (not counted as a visit)');
 }
 window._rpOptAnchorPick = _rpOptAnchorPick;
@@ -35750,6 +35930,13 @@ function _rpOptClearAnchor(){
   var hid = document.getElementById('rp-opt-anchor-value');  if(hid) hid.value = '';
   var chip = document.getElementById('rp-opt-anchor-chip');  if(chip) chip.style.display = 'none';
   if(typeof _rpOptRenderPickStatus === 'function') _rpOptRenderPickStatus();
+  // Phase 128 (2026-05-29): if we cleared the anchor and there's no
+  // start-radio either, hide the Step 2 confirm again.
+  if((window._RP_OPT_WIZ_STEP || 1) === 2){
+    var c2c = document.getElementById('rp-opt-wiz-confirm-2');
+    if(c2c && !window._RP_OPT_START_NAME) c2c.style.display = 'none';
+  }
+  if(typeof _rpOptRenderTargetList === 'function') _rpOptRenderTargetList();
 }
 window._rpOptClearAnchor = _rpOptClearAnchor;
 
