@@ -38678,6 +38678,80 @@ window._rpV5ShowLocked = _rpV5ShowLocked;
 // replace" to proceed; anything else bails and leaves both the prior
 // schedule + the planner state intact (so they can keep editing).
 // ════════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════════════
+// PHASE 115 (2026-05-29) — ADMIN MEMBER PICKER for route commits
+// User: "whatever route is created all the visits added to the calendar
+// will be automatically assigned to the one adding it. In case of admin
+// only he will select."
+//
+// Members auto-assign to themselves (handled in _rpV5InsertPicksIntoDay
+// without prompting). Admin sees this picker once per commit. On Confirm
+// the picked name is stashed in window._PHASE115_ADMIN_PICK and the
+// commit pipeline re-enters with `me` set to that name. Flag clears
+// after commit so the NEXT route commit prompts again.
+// ════════════════════════════════════════════════════════════════════════════
+function _phase115ShowAdminMemberPicker(picks, onConfirm){
+  try {
+    var modalId = 'phase115-admin-picker-modal';
+    var existing = document.getElementById(modalId);
+    if(existing) existing.remove();
+    var modal = document.createElement('div');
+    modal.id = modalId;
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99999;display:flex;align-items:center;justify-content:center;font-family:DM Sans,sans-serif;animation:fadeIn .15s ease-out';
+    document.body.appendChild(modal);
+    function esc(s){ return String(s||'').replace(/</g,'&lt;'); }
+    var members = (typeof MEMBERS !== 'undefined' && Array.isArray(MEMBERS)) ? MEMBERS.slice() : [];
+    // Pre-select the admin's own name if they happen to be in the members
+    // list (some admins also visit clinics); otherwise no default.
+    var meName = (window.CURRENT_USER && CURRENT_USER.name) || '';
+    var defaultPick = members.indexOf(meName) >= 0 ? meName : '';
+    var stopCount = (picks || []).filter(function(p){ return p && p.name; }).length;
+    var memberRows = members.length === 0
+      ? '<div style="font-size:11px;color:#dc2626;font-style:italic">No marketing members configured. Add one in Team admin first.</div>'
+      : members.map(function(m){
+          var safeM = esc(m);
+          var checked = (m === defaultPick) ? ' checked' : '';
+          return '<label style="display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:12px;background:#fff;margin-bottom:6px;transition:background .15s" onmouseover="this.style.background=\'#f8fafc\'" onmouseout="this.style.background=\'#fff\'">'
+            + '<input type="radio" name="p115-member"' + checked + ' value="' + safeM + '" style="accent-color:#7030A0;cursor:pointer">'
+            + '<span style="font-weight:700;color:#1F3864">' + safeM + '</span>'
+            + (m === meName ? '<span style="margin-left:auto;font-size:9px;background:#fef3c7;color:#92400e;padding:2px 6px;border-radius:4px;font-weight:700">YOU (admin)</span>' : '')
+            + '</label>';
+        }).join('');
+    modal.innerHTML = ''
+      + '<div style="background:#fff;border-radius:14px;padding:22px;max-width:480px;width:92%;box-shadow:0 20px 60px rgba(0,0,0,.4);max-height:80vh;overflow-y:auto">'
+      +   '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'
+      +     '<div style="font-size:11px;font-weight:700;color:#7030A0;text-transform:uppercase;letter-spacing:.05em">🛡️ Admin override · Assign route</div>'
+      +     '<button type="button" id="p115-x" style="background:transparent;border:0;font-size:18px;color:#94a3b8;cursor:pointer;line-height:1" title="Cancel">&#10005;</button>'
+      +   '</div>'
+      +   '<div style="font-size:13px;font-weight:700;color:#1F3864;margin-bottom:4px">Which marketing member owns this route?</div>'
+      +   '<div style="font-size:11px;color:var(--muted);margin-bottom:14px">' + stopCount + ' stop' + (stopCount === 1 ? '' : 's') + ' will be added to the schedule and assigned to the member you pick below. Members can only act on their own visits — pick carefully.</div>'
+      +   '<div style="margin-bottom:14px;max-height:300px;overflow-y:auto;padding:2px">' + memberRows + '</div>'
+      +   '<div style="display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap">'
+      +     '<button type="button" id="p115-cancel" style="background:#fff;color:#1F3864;border:1px solid var(--border);border-radius:8px;padding:9px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">← Cancel</button>'
+      +     '<button type="button" id="p115-confirm" ' + (members.length === 0 ? 'disabled' : '') + ' style="background:' + (members.length === 0 ? '#cbd5e1' : 'linear-gradient(135deg,#7030A0,#9333ea)') + ';color:#fff;border:none;border-radius:8px;padding:9px 22px;font-size:12px;font-weight:700;cursor:' + (members.length === 0 ? 'not-allowed' : 'pointer') + ';font-family:DM Sans,sans-serif">✓ Assign & add to schedule</button>'
+      +   '</div>'
+      + '</div>';
+    function close(){ try { modal.remove(); } catch(_){} }
+    document.getElementById('p115-x').onclick      = close;
+    document.getElementById('p115-cancel').onclick = close;
+    document.getElementById('p115-confirm').onclick = function(){
+      var radio = modal.querySelector('input[name="p115-member"]:checked');
+      if(!radio || !radio.value){
+        if(typeof showToast === 'function') showToast('Pick a member first.');
+        return;
+      }
+      var pickedName = radio.value;
+      close();
+      if(typeof onConfirm === 'function') try { onConfirm(pickedName); } catch(e){ console.error('[p115] confirm cb failed:', e); }
+    };
+  } catch(e){
+    console.error('[_phase115ShowAdminMemberPicker] failed — falling back to admin name:', e);
+    var fallback = (window.CURRENT_USER && CURRENT_USER.name) || '';
+    if(typeof onConfirm === 'function') onConfirm(fallback);
+  }
+}
+window._phase115ShowAdminMemberPicker = _phase115ShowAdminMemberPicker;
+
 function _phase100ShowOverrideConfirm(priorSaved, newPicks, onConfirm){
   try {
     var modalId = 'phase100-override-modal';
@@ -38776,7 +38850,29 @@ function _rpV5InsertPicksIntoDay(){
         return;
       }
     }
-    var me = (CURRENT_USER && CURRENT_USER.name) || '';
+    // Phase 115 (2026-05-29) — assignment rule. User: "whatever route is
+    // created all the visits added to the calendar will be automatically
+    // assigned to the one adding it. In case of admin only he will select."
+    // Members → auto-assign to themselves (no prompt).
+    // Admin → pop a member picker once per commit; the picked name flows
+    // into `me` and gets written onto every inserted row.
+    // The flag _PHASE115_ADMIN_PICK is set inside the modal's "Confirm"
+    // handler so the re-entry skips the prompt.
+    var me;
+    var isAdminCreator = (typeof isAdmin === 'function') && isAdmin();
+    if(isAdminCreator && !window._PHASE115_ADMIN_PICK){
+      _phase115ShowAdminMemberPicker(picks, function(pickedName){
+        window._PHASE115_ADMIN_PICK = pickedName;
+        try { _rpV5InsertPicksIntoDay(); }
+        finally { window._PHASE115_ADMIN_PICK = null; }
+      });
+      return;
+    }
+    if(isAdminCreator && window._PHASE115_ADMIN_PICK){
+      me = window._PHASE115_ADMIN_PICK;
+    } else {
+      me = (CURRENT_USER && CURRENT_USER.name) || '';
+    }
     var added = 0, skipped = 0, removed = 0;
     // Phase 93 (2026-05-28): RESTRUCTURED — Phase 59 detection now runs
     // BEFORE Phase 54 override. Previously the order was:
