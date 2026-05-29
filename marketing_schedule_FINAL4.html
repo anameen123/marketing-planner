@@ -26072,19 +26072,32 @@ function renderAllBusinessPins(){
     // a single visible pin. Spread each pin to a deterministic polar
     // position around the city centroid based on a hash of the name, so:
     //   • Each clinic gets a unique, stable position (re-renders match)
-    //   • Pins fan out across ~2-3 km area (city-scale visible)
+    //   • Pins stay near the city center (closer to roads)
     //   • If we later switch to per-clinic geocoded coords, this code is
     //     a no-op since BUSINESS_GEOCODES coords are already unique.
     // Skip the dither for pins that already came from BUSINESS_GEOCODES
     // (those are real addresses — leave them where they are).
+    //
+    // Phase 141 (2026-05-29): shrunk the radius from 0.3-3.3 km to
+    // ~50-550m. User reported "the plans that are really created on
+    // the route does not match or connect the real pins ... PIN's
+    // locations are random on the map that you just put them". The
+    // old 3.3 km max put pins in residential blocks far from any
+    // arterial road, so OSRM's snap-to-road landed at the nearest
+    // arterial — visually disconnected from the pin. Tighter radius
+    // keeps the pin within walking distance of the actual road network,
+    // so the polyline reads as "passing through" the pin even when the
+    // underlying coord is just a city centroid placeholder.
     var lat = coord.lat, lng = coord.lng;
     if(!(typeof BUSINESS_GEOCODES !== 'undefined' && BUSINESS_GEOCODES[name])){
       // Hash the name to a stable angle + radius
       var h = 0;
       for(var _i = 0; _i < name.length; _i++) h = ((h << 5) - h + name.charCodeAt(_i)) | 0;
       var angle = (Math.abs(h) % 360) * Math.PI / 180;
-      // Radius 0.003°–0.030° ≈ 0.3–3.3 km from centroid
-      var radius = 0.003 + ((Math.abs(h >> 8) % 100) / 100) * 0.027;
+      // Phase 141: radius 0.0005°–0.005° ≈ 55m–550m from centroid
+      // (was 0.003°–0.030° ≈ 330m–3.3km). Same deterministic seed →
+      // same offset for same name, just much smaller magnitude.
+      var radius = 0.0005 + ((Math.abs(h >> 8) % 100) / 100) * 0.0045;
       lat += Math.cos(angle) * radius;
       lng += Math.sin(angle) * radius;
     }
