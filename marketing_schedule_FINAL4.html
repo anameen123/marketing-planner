@@ -3594,9 +3594,21 @@ body.role-front_desk #referrals-view {
                risk. The spacer pushes it to the edge of the flex row. -->
           <span style="flex:1 1 auto;min-width:8px"></span>
           <button id="dv-gmaps-export-btn" type="button" onclick="exportDayRouteToGoogleMaps();_dvScrollToMap();"
-                  title="Open the day's route in Google Maps for navigation. Builds a deep link with all stops in order; opens the Google Maps app on phone."
+                  title="Open the day's FULL route in Google Maps — all pending stops as waypoints. On phone, you'll see the route preview and need to tap the blue arrow to start (Google's safety design for multi-stop routes)."
                   style="background:#1e40af;border:none;color:#fff;border-radius:6px;padding:5px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;display:inline-flex;align-items:center;gap:5px;line-height:1.1">
-            🗺️ Open in Google Maps
+            🗺️ Full route
+          </button>
+          <!-- Phase 134c (2026-05-29): Next-stop nav button — single-
+               destination URL with dir_action=navigate so Google Maps
+               auto-starts turn-by-turn on the phone. The multi-stop
+               button above CAN'T auto-start (Google blocks it for
+               safety on multi-stop), so this gives the rep the
+               one-tap navigation experience for the next pending
+               clinic. After arriving, tap again for the next one. -->
+          <button id="dv-gmaps-next-btn" type="button" onclick="exportNextStopToGoogleMaps();_dvScrollToMap();"
+                  title="Navigate to ONLY the next pending stop — Google Maps auto-starts turn-by-turn on phone (no tap-to-confirm). Use this when you just want to get to the next clinic; tap again after arriving."
+                  style="background:#15803d;border:none;color:#fff;border-radius:6px;padding:5px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;display:inline-flex;align-items:center;gap:5px;line-height:1.1;margin-left:5px">
+            🧭 Next stop
           </button>
         </div>
       </div>
@@ -28278,6 +28290,113 @@ function exportDayRouteToGoogleMaps(filterRouteId){
   }
 }
 window.exportDayRouteToGoogleMaps = exportDayRouteToGoogleMaps;
+
+// ════════════════════════════════════════════════════════════════════════════
+// PHASE 134c (2026-05-29) — NEXT-STOP AUTO-NAV
+// User (with iPhone screenshot of the multi-stop preview): "you see what
+// it shows him". Google Maps deliberately won't auto-start turn-by-turn
+// for multi-stop URLs — the rep has to tap the blue arrow. For a SINGLE
+// destination, dir_action=navigate DOES auto-start. So this helper
+// picks the next pending stop only and opens GMaps in nav mode.
+//
+// Same filters as exportDayRouteToGoogleMaps:
+//   • per-route _routeId scope (when a chip is active, scoped to that
+//     route only; otherwise scans all routes the viewer owns)
+//   • drops Canceled / Completed / Postponed (already-done stops
+//     aren't candidates for "next")
+// "Next" = the first remaining Pending stop in row order — matches the
+// schedule's natural sequence.
+// ════════════════════════════════════════════════════════════════════════════
+function exportNextStopToGoogleMaps(){
+  var di = (typeof S !== 'undefined' && S.currentDay != null) ? S.currentDay : null;
+  if(di == null){
+    if(typeof showToast === 'function') showToast('Open a day on the calendar first, then navigate.');
+    return;
+  }
+  var day = S.days[di];
+  if(!day || !Array.isArray(day.rows) || day.rows.length === 0){
+    if(typeof showToast === 'function') showToast('No visits on this day to navigate to.');
+    return;
+  }
+  // Per-route scoping — if the rep is editing a specific route chip,
+  // limit "next" to that route's rows. Otherwise consider all rows the
+  // viewer owns (admin sees all).
+  var editId = window._RP_EDITING_ROUTE_ID || null;
+  // Find the next Pending row in order
+  var nextRow = null;
+  for(var i = 0; i < day.rows.length; i++){
+    var r = day.rows[i];
+    if(!r || !r.clinic) continue;
+    if(editId && r._routeId && r._routeId !== editId) continue;
+    var st = r.status || 'Pending';
+    if(st === 'Canceled' || st === 'Completed' || st === 'Postponed') continue;
+    nextRow = r;
+    break;
+  }
+  if(!nextRow){
+    if(typeof showToast === 'function') showToast('🎉 No pending stops left — nothing to navigate to.');
+    return;
+  }
+  // Resolve the address (same logic exportDayRouteToGoogleMaps uses)
+  function _addressFor(name){
+    if(!name) return null;
+    var low = String(name).toLowerCase();
+    function pickAddress(entry, nameField, cityField){
+      if(!entry) return null;
+      var hasReal = entry.address && entry.address.trim() && entry.address !== 'TBD';
+      if(hasReal && entry.addressVerified === true) return entry.address;
+      return (entry[nameField] + (entry[cityField] ? ', ' + entry[cityField] : '') + ', TX').trim();
+    }
+    if(typeof CLINIC_BANK !== 'undefined'){
+      var c = CLINIC_BANK.find(function(x){ return (x.n || '').toLowerCase() === low; });
+      if(c) return pickAddress(c, 'n', 'c');
+    }
+    if(typeof MVA_ATTORNEYS !== 'undefined'){
+      var m = MVA_ATTORNEYS.find(function(x){ return (x.firm || '').toLowerCase() === low; });
+      if(m) return pickAddress(m, 'firm', 'city');
+    }
+    if(typeof OUTREACH !== 'undefined'){
+      var o = OUTREACH.find(function(x){ return (x.name || '').toLowerCase() === low; });
+      if(o) return pickAddress(o, 'name', 'city');
+    }
+    return null;
+  }
+  var query = _addressFor(nextRow.clinic);
+  if(!query){
+    var c = (typeof getCoordForBusiness === 'function') ? getCoordForBusiness(nextRow.clinic) : null;
+    if(c && c.lat != null && c.lng != null) query = c.lat + ',' + c.lng;
+  }
+  if(!query){
+    if(typeof showToast === 'function') showToast('No address or coords for "' + nextRow.clinic + '". Add an address first.');
+    return;
+  }
+  // Build a single-destination directions URL with dir_action=navigate
+  // → Google Maps auto-starts turn-by-turn on phone. No tap-to-confirm.
+  var url = 'https://www.google.com/maps/dir/?api=1'
+          + '&destination=' + encodeURIComponent(query)
+          + '&travelmode=driving'
+          + '&dir_action=navigate';
+  // Confirm before launching nav (user shouldn't accidentally enter
+  // turn-by-turn). Same showConfirm helper the multi-stop button uses.
+  var msg = '🧭 Navigate to <b>' + String(nextRow.clinic).replace(/</g,'&lt;') + '</b>?';
+  var sub = '<div style="margin-top:8px;font-size:11px;color:#475569;line-height:1.5">Opens Google Maps and <b>starts turn-by-turn navigation immediately</b> on phone. After arriving, mark the visit Completed + tap 🧭 Next stop again for the next one.</div>';
+  function _go(){
+    window.open(url, '_blank', 'noopener');
+    if(typeof showToast === 'function') showToast('🧭 Navigating to ' + nextRow.clinic + '…');
+  }
+  if(typeof showConfirm === 'function'){
+    showConfirm({
+      icon: '🧭',
+      msg: msg,
+      sub: sub,
+      yesLabel: 'Start navigation',
+      onConfirm: _go
+    });
+  } else {
+    if(window.confirm('Navigate to ' + nextRow.clinic + '?\n\nOpens Google Maps with turn-by-turn directions.')) _go();
+  }
+}
+window.exportNextStopToGoogleMaps = exportNextStopToGoogleMaps;
 
 // Called from openDay() to refresh the map with this day's visits.
 // ── ETA HELPERS (per user 2026-05-22, no API key needed) ───────────────────
