@@ -34831,6 +34831,37 @@ window._phase59BestInsertion = _phase59BestInsertion;
 
 // Scan the day for pre-existing Pending visits that need integration.
 // Returns array of { ri, name, coord, row } sorted by row index.
+// ════════════════════════════════════════════════════════════════════════════
+// PHASE 114 (2026-05-29) — OWNERSHIP RESTRICTION for pre-existing visits
+// User: "when someone creates a route and there is already a visit on the
+// schedule above, then that visit needs to be assigned to the same person
+// creating the route to interact with ... so you will just create a
+// restriction not design it from scratch".
+//
+// Rule: a route-creator can only see / fold / replace-endpoint / remove
+// pre-existing visits ASSIGNED TO THEM (row.member matches the current
+// user). Visits assigned to OTHER members are skipped — they stay on the
+// schedule untouched, they don't appear in the Phase 59 modal, Phase 76
+// banner, or Phase 103 outsider classifier.
+//
+// Admin bypass: admins see all visits regardless of assignment (consistent
+// with every other "every action by a member can't be touched by another
+// member except admin" rule baked into this app).
+// ════════════════════════════════════════════════════════════════════════════
+function _phase114CurrentUserOwnsRow(row){
+  if(!row || !row.clinic) return false;
+  // Admin sees everything
+  if(typeof isAdmin === 'function' && isAdmin()) return true;
+  var me = (window.CURRENT_USER && CURRENT_USER.name) || '';
+  if(!me) return false;
+  // Rows with no assigned member (legacy / orphan) — let the current user
+  // claim them (otherwise nobody can ever route them). Same defensive
+  // behaviour the day-table edit handler uses.
+  if(!row.member) return true;
+  return row.member === me;
+}
+window._phase114CurrentUserOwnsRow = _phase114CurrentUserOwnsRow;
+
 function _phase59FindPreExistingPending(di, newPickNames, priorInsertedSet){
   var out = [];
   try {
@@ -34850,6 +34881,8 @@ function _phase59FindPreExistingPending(di, newPickNames, priorInsertedSet){
       if(!r || !r.clinic) return;
       if((r.status || 'Pending') !== 'Pending') return;   // only re-route Pending visits
       if(skipSet[r.clinic]) return;
+      // Phase 114: ownership gate — skip rows assigned to other members.
+      if(!_phase114CurrentUserOwnsRow(r)) return;
       var coord = (typeof _rpGetVisualCoord === 'function') ? _rpGetVisualCoord(r.clinic) : null;
       if(!coord && typeof getCoordForBusiness === 'function') coord = getCoordForBusiness(r.clinic);
       if(!coord) return;   // no location → can't classify
@@ -37697,6 +37730,8 @@ function _rpV5FindPreExistingInsideCorridor(){
     if(!r || !r.clinic) return;
     if((r.status || 'Pending') !== 'Pending') return;
     if(inCandidates[r.clinic]) return;
+    // Phase 114 (2026-05-29): ownership gate — only this user's visits.
+    if(typeof _phase114CurrentUserOwnsRow === 'function' && !_phase114CurrentUserOwnsRow(r)) return;
     var coord = (typeof _rpGetVisualCoord === 'function') ? _rpGetVisualCoord(r.clinic) : null;
     if(!coord && typeof getCoordForBusiness === 'function') coord = getCoordForBusiness(r.clinic);
     if(!coord) return;
@@ -37817,6 +37852,8 @@ function _rpV5FindPreExistingOutsiders(){
     if((r.status || 'Pending') !== 'Pending') return;
     if(inCandidates[r.clinic]) return;
     if(r.clinic === startName || r.clinic === endName) return;
+    // Phase 114 (2026-05-29): ownership gate — only this user's visits.
+    if(typeof _phase114CurrentUserOwnsRow === 'function' && !_phase114CurrentUserOwnsRow(r)) return;
     var coord = (typeof _rpGetVisualCoord === 'function') ? _rpGetVisualCoord(r.clinic) : null;
     if(!coord && typeof getCoordForBusiness === 'function') coord = getCoordForBusiness(r.clinic);
     if(!coord) return;
