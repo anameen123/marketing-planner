@@ -3622,25 +3622,30 @@ body.role-front_desk #referrals-view {
                distance between it and the other clicks reduces misclick
                risk. The spacer pushes it to the edge of the flex row. -->
           <span style="flex:1 1 auto;min-width:8px"></span>
-          <!-- Phase 134g (2026-05-29): final UX — ONE button per user
-               "I want to create a full path ... it will show me the
-               full path, but missing the first one that was completed
-               ... each stop represents a destination of clinic or MVA
-               on our path ... I click on navigation, it will remove
-               that as well ... a path till the end with the stops
-               that represent visits that I have not done yet".
-               Single multi-stop URL. Reads schedule fresh on every
-               tap → drops Completed / Canceled / Postponed → builds
-               an origin-→-waypoints-→-destination path of the rest
-               in schedule order. Google Maps shows the path with
-               its own native "Start" button — tapping it launches
-               turn-by-turn nav. Complete a visit and tap again →
-               that stop is gone from the new path. -->
-          <button id="dv-gmaps-export-btn" type="button" onclick="exportDayRouteToGoogleMaps();_dvScrollToMap();"
-                  title="Build a multi-stop navigation path of all your pending visits — schedule order, top-to-bottom, skipping anything already Completed/Canceled/Postponed. Opens Google Maps with the path; tap Start in Google Maps to begin turn-by-turn. Complete a stop, tap this button again, and the path rebuilds without that stop."
-                  style="background:linear-gradient(135deg,#15803d,#16a34a);border:none;color:#fff;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:800;cursor:pointer;font-family:DM Sans,sans-serif;display:inline-flex;align-items:center;gap:6px;line-height:1.1;box-shadow:0 2px 6px rgba(22,163,74,.35)">
-            🧭 Navigate route
-          </button>
+          <!-- Phase 139a (2026-05-29) — restored Phase 134f's paired
+               buttons per user "The map was just working fine ... So
+               return it back. You messed up everything. Undo the
+               last thing that you did".
+               LEFT (primary blue): multi-stop preview — reads the
+                  schedule, drops Completed/Canceled/Postponed, builds
+                  a path of remaining stops in row order, opens Google
+                  Maps as preview so the rep sees total time/distance.
+               RIGHT (secondary green): single-stop auto-nav to the
+                  NEXT pending visit. dir_action=navigate launches
+                  turn-by-turn immediately. Mark Completed, tap again
+                  for the next clinic. -->
+          <span style="display:inline-flex;align-items:stretch;border-radius:8px;overflow:hidden;box-shadow:0 2px 6px rgba(29,78,216,.30)">
+            <button id="dv-gmaps-export-btn" type="button" onclick="exportDayRouteToGoogleMaps();_dvScrollToMap();"
+                    title="Preview the day's pending visits in Google Maps — reads the schedule top-to-bottom, drops Completed/Canceled/Postponed. Opens the multi-stop route so you can see total time and distance for the rest of the day. Tap 🧭 Start Navigation on the right for one-tap turn-by-turn to the next clinic."
+                    style="background:linear-gradient(135deg,#1e40af,#1d4ed8);border:none;color:#fff;padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;font-family:DM Sans,sans-serif;display:inline-flex;align-items:center;gap:6px;line-height:1.1;border-right:1px solid rgba(255,255,255,.22)">
+              🗺️ Preview full route
+            </button>
+            <button id="dv-gmaps-next-btn" type="button" onclick="exportNextStopToGoogleMaps();_dvScrollToMap();"
+                    title="Start turn-by-turn navigation to your next pending stop — auto-launches Google Maps in nav mode (no preview screen, no tap-to-start). After arriving, mark the visit Completed and tap again for the next clinic."
+                    style="background:linear-gradient(135deg,#15803d,#16a34a);border:none;color:#fff;padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;font-family:DM Sans,sans-serif;display:inline-flex;align-items:center;gap:6px;line-height:1.1">
+              🧭 Start Navigation
+            </button>
+          </span>
         </div>
       </div>
       <!-- Phase 77b: collapsible body starts HERE — controls above stay
@@ -23841,6 +23846,29 @@ function _evApproveReview(){
   // Re-call confirmEditVisit — this time the review-skip branch fires
   // and the actual apply runs.
   if(typeof confirmEditVisit === 'function') confirmEditVisit();
+  // Phase 139b (2026-05-29): safety net per user "When I confirmed the
+  // follow-up, when I confirmed, it did not close it automatically. I
+  // had to close it by myself click. So the confirm should, of course,
+  // close." confirmEditVisit reaches closeEditVisit() at line 23752 on
+  // the success path, but if some intermediate logic threw silently or
+  // a downstream helper held a reference, the modal could linger.
+  // 250ms after the re-run, check: if the edit-visit modal is still
+  // visible AND no error message is showing in #ev-form-err → force
+  // close. If an error IS showing (validation failed), leave the modal
+  // open so the rep can see + fix the error.
+  setTimeout(function(){
+    try {
+      var m = document.getElementById('edit-visit-modal');
+      if(!m || m.style.display === 'none') return;   // already closed
+      var err = document.getElementById('ev-form-err');
+      var errVisible = err && err.style.display !== 'none' && err.textContent && err.textContent.trim().length > 0;
+      if(errVisible) return;   // user has an error to fix — leave open
+      if(typeof closeEditVisit === 'function'){
+        closeEditVisit();
+        try { console.log('[Phase 139b] safety-net force-closed edit-visit modal after confirm'); } catch(_){}
+      }
+    } catch(_){}
+  }, 250);
 }
 window._evApproveReview = _evApproveReview;
 
@@ -28346,10 +28374,115 @@ function exportDayRouteToGoogleMaps(filterRouteId){
 }
 window.exportDayRouteToGoogleMaps = exportDayRouteToGoogleMaps;
 
-// Phase 134g (2026-05-29) — exportNextStopToGoogleMaps removed.
-// User: "I want to create a full path" (multi-stop) instead of
-// single-stop next-only nav. Multi-stop URL in exportDayRouteToGoogle
-// Maps handles the whole flow now.
+// ════════════════════════════════════════════════════════════════════════════
+// PHASE 139a (2026-05-29) — RESTORED START NAVIGATION (single-stop auto-nav)
+// User reverted Phase 134g: "Start Navigation will take you to the next
+// route. It was just working fine." Re-adds the paired green button
+// next to Preview full route. Google's multi-stop URLs deliberately
+// won't auto-start turn-by-turn (their safety design) — single-
+// destination URLs WITH dir_action=navigate DO. So this helper picks
+// only the next pending stop and opens GMaps in nav mode.
+//
+// Same filters as the multi-stop exporter:
+//   • per-route _routeId scope (if a chip is active)
+//   • skips Canceled / Completed / Postponed
+// "Next" = the first remaining Pending row in row order.
+// ════════════════════════════════════════════════════════════════════════════
+function exportNextStopToGoogleMaps(){
+  var di = (typeof S !== 'undefined' && S.currentDay != null) ? S.currentDay : null;
+  if(di == null){
+    if(typeof showToast === 'function') showToast('Open a day on the calendar first, then navigate.');
+    return;
+  }
+  var day = S.days[di];
+  if(!day || !Array.isArray(day.rows) || day.rows.length === 0){
+    if(typeof showToast === 'function') showToast('No visits on this day to navigate to.');
+    return;
+  }
+  // Per-route scope (matches Phase 122c on the multi-stop side)
+  var editId = window._RP_EDITING_ROUTE_ID || null;
+  var nextRow = null;
+  for(var i = 0; i < day.rows.length; i++){
+    var r = day.rows[i];
+    if(!r || !r.clinic) continue;
+    if(editId && r._routeId && r._routeId !== editId) continue;
+    var st = r.status || 'Pending';
+    if(st === 'Canceled' || st === 'Completed' || st === 'Postponed') continue;
+    nextRow = r;
+    break;
+  }
+  if(!nextRow){
+    if(typeof showToast === 'function') showToast('🎉 No pending stops left — nothing to navigate to.');
+    return;
+  }
+  // Resolve the address — same chain the multi-stop exporter uses,
+  // including Phase 138's ROUTE_COORDS facility fallback.
+  function _addressFor(name){
+    if(!name) return null;
+    var low = String(name).toLowerCase();
+    function pickAddress(entry, nameField, cityField){
+      if(!entry) return null;
+      var hasReal = entry.address && entry.address.trim() && entry.address !== 'TBD';
+      if(hasReal && entry.addressVerified === true) return entry.address;
+      return (entry[nameField] + (entry[cityField] ? ', ' + entry[cityField] : '') + ', TX').trim();
+    }
+    if(typeof CLINIC_BANK !== 'undefined'){
+      var c = CLINIC_BANK.find(function(x){ return (x.n || '').toLowerCase() === low; });
+      if(c) return pickAddress(c, 'n', 'c');
+    }
+    if(typeof MVA_ATTORNEYS !== 'undefined'){
+      var m = MVA_ATTORNEYS.find(function(x){ return (x.firm || '').toLowerCase() === low; });
+      if(m) return pickAddress(m, 'firm', 'city');
+    }
+    if(typeof OUTREACH !== 'undefined'){
+      var o = OUTREACH.find(function(x){ return (x.name || '').toLowerCase() === low; });
+      if(o) return pickAddress(o, 'name', 'city');
+    }
+    if(typeof ROUTE_COORDS !== 'undefined' && ROUTE_COORDS){
+      for(var rk in ROUTE_COORDS){
+        var rc = ROUTE_COORDS[rk];
+        if(!rc || rc.type !== 'facility') continue;
+        if(rc.label && rc.label.toLowerCase() === low){
+          var hasRealF = rc.address && rc.address.trim() && rc.address !== 'TBD';
+          if(hasRealF && rc.addressVerified === true) return rc.address;
+          return (rc.label + (rc.city ? ', ' + rc.city : '') + ', TX').trim();
+        }
+      }
+    }
+    return null;
+  }
+  var query = _addressFor(nextRow.clinic);
+  if(!query){
+    var c = (typeof getCoordForBusiness === 'function') ? getCoordForBusiness(nextRow.clinic) : null;
+    if(c && c.lat != null && c.lng != null) query = c.lat + ',' + c.lng;
+  }
+  if(!query){
+    if(typeof showToast === 'function') showToast('No address or coords for "' + nextRow.clinic + '". Add an address first.');
+    return;
+  }
+  var url = 'https://www.google.com/maps/dir/?api=1'
+          + '&destination=' + encodeURIComponent(query)
+          + '&travelmode=driving'
+          + '&dir_action=navigate';
+  var msg = '🧭 Start navigation to <b>' + String(nextRow.clinic).replace(/</g,'&lt;') + '</b>?';
+  var sub = '<div style="margin-top:8px;font-size:11px;color:#475569;line-height:1.5">Opens Google Maps and starts <b>turn-by-turn navigation immediately</b>. After arriving, mark the visit Completed + tap 🧭 Start Navigation again for the next clinic in the schedule.</div>';
+  function _go(){
+    window.open(url, '_blank', 'noopener');
+    if(typeof showToast === 'function') showToast('🧭 Navigating to ' + nextRow.clinic + '…');
+  }
+  if(typeof showConfirm === 'function'){
+    showConfirm({
+      icon: '🧭',
+      msg: msg,
+      sub: sub,
+      yesLabel: 'Start navigation',
+      onConfirm: _go
+    });
+  } else {
+    if(window.confirm('Start navigation to ' + nextRow.clinic + '?\n\nOpens Google Maps with turn-by-turn directions.')) _go();
+  }
+}
+window.exportNextStopToGoogleMaps = exportNextStopToGoogleMaps;
 
 // Called from openDay() to refresh the map with this day's visits.
 // ── ETA HELPERS (per user 2026-05-22, no API key needed) ───────────────────
