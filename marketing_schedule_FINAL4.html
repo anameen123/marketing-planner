@@ -2558,9 +2558,13 @@ body.role-front_desk #referrals-view {
       <!-- Section 4b: Pre-contact / ride offer — conditional on creator + phones.
            Per user 2026-05-26: UC Plano gets a ride-offer picker; members get
            a pre-contact confirmation checkbox. -->
+      <!-- Phase 112d (2026-05-29): ride section now shows whenever the
+           PATIENT phone is filled (not only for UC Plano creators). User:
+           "if the number of patient is there, not the clinic number, then
+           they need to call them and ask them if they want a ride". -->
       <div id="cr-ride-section" style="display:none;margin-bottom:14px;padding:11px 13px;background:#eff6ff;border:1px solid #93c5fd;border-radius:8px">
-        <div style="font-size:11px;font-weight:700;color:#1e40af;margin-bottom:6px">🚗 Ride offer (UC Plano)</div>
-        <div style="font-size:10px;color:#1e40af;margin-bottom:8px;line-height:1.45">You have the patient in front of you — ask if they'd like a ride to the destination. <b>You don't book it</b> — the destination front desk (Frisco ER or Castle Hills ER) has the Uber Health account and books the ride after they approve.</div>
+        <div style="font-size:11px;font-weight:700;color:#1e40af;margin-bottom:6px">🚗 Ride offer <span style="color:#dc2626">*</span></div>
+        <div style="font-size:10px;color:#1e40af;margin-bottom:8px;line-height:1.45">You have the patient's phone — call them and ask if they'd like a ride to the destination. <b>You don't book it</b> — the destination front desk (Frisco ER or Castle Hills ER) has the Uber Health account and books the ride after the referral is approved. <span style="color:#dc2626;font-weight:700">Required when patient phone is filled.</span></div>
         <div style="display:flex;flex-direction:column;gap:5px">
           <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:11px;color:#1F3864">
             <input type="radio" name="cr-ride" value="no" onchange="_crUpdateConditionalFields()" style="accent-color:#1e40af">
@@ -17036,7 +17040,10 @@ function _crUpdateConditionalFields(){
   var rideEl  = document.getElementById('cr-ride-section');
   var pPatEl  = document.getElementById('cr-precontact-patient');
   var pCliEl  = document.getElementById('cr-precontact-clinic');
-  if(rideEl) rideEl.style.display = (creatorType === 'uc_plano_fd') ? 'block' : 'none';
+  // Phase 112d (2026-05-29): ride question shows for UC Plano (always) OR
+  // for any creator when patient phone is filled.
+  var showRide = (creatorType === 'uc_plano_fd') || !!patientPhone;
+  if(rideEl) rideEl.style.display = showRide ? 'block' : 'none';
   // For members: which checkbox depends on which phone they entered
   var showPatientPre = (creatorType === 'member' && patientPhone);
   var showClinicPre  = (creatorType === 'member' && !patientPhone && clinicPhone);
@@ -17268,6 +17275,17 @@ function _crSaveReferral(){
   if(!notes || notes.length < 3){
     showErr('Chief complaint is required — describe why the patient is being sent (e.g. "chest pain", "ankle injury").');
     return;
+  }
+  // Phase 112d (2026-05-29): if patient phone is filled, the ride radio
+  // is REQUIRED. Reads cr-patient-phone here (declared further down in the
+  // older flow) — pull early so we can validate the ride answer.
+  var _patientPhoneEarly = ((document.getElementById('cr-patient-phone') || {}).value || '').trim();
+  if(_patientPhoneEarly){
+    var rideRadio = document.querySelector('input[name="cr-ride"]:checked');
+    if(!rideRadio){
+      showErr('You filled the patient phone — answer the ride-offer question (no / declined / accepted).');
+      return;
+    }
   }
   // Phase 11b corrected: creator-type two-path validation.
   var typeRadio = document.querySelector('input[name="cr-creator-type"]:checked');
@@ -17652,6 +17670,96 @@ function _crRenderMonthlySummary(){
     + '</div>';
 }
 window._crRenderMonthlySummary = _crRenderMonthlySummary;
+
+// ════════════════════════════════════════════════════════════════════════════
+// PHASE 112c (2026-05-29) — TIME-WARP TEST HELPERS for the popup engine
+// User: "test it yourself ... create a random referral by for example, put
+// whatever chief complaint you want ... leave it for like the minutes and
+// see if it's gonna appear". The real popup fires at ETA+10min which is
+// too slow to verify in a single session. These helpers let you fast-
+// forward any referral so the popup triggers immediately.
+//
+// FROM DEVTOOLS CONSOLE:
+//   _phase112SimulateLateReferral()      — backdates the newest PENDING
+//                                          referral so it's already late
+//   _phase112TimeWarp(15)                — backdates ALL pending referrals'
+//                                          ETA by 15 min
+//   _phase112ResetWarp()                 — wipes followUpShownAt so the
+//                                          popup can re-fire on the same
+//                                          referral after dismissal
+// These ONLY mutate the referral state — they don't change Date.now() or
+// anything global. Safe to leave the helpers in production; users won't
+// trigger them by accident.
+// ════════════════════════════════════════════════════════════════════════════
+function _phase112SimulateLateReferral(minBack){
+  minBack = minBack || 15;
+  if(!Array.isArray(PENDING_REFERRALS) || PENDING_REFERRALS.length === 0){
+    console.warn('[112c] No referrals to test on. Create one first via 📥 Create Referral.');
+    return null;
+  }
+  // Find newest pending
+  var pending = PENDING_REFERRALS.filter(function(r){ return r.status === 'pending'; });
+  if(pending.length === 0){
+    console.warn('[112c] No PENDING referrals (all are resolved). Create a new one.');
+    return null;
+  }
+  pending.sort(function(a, b){ return new Date(b.createdAt) - new Date(a.createdAt); });
+  var ref = pending[0];
+  var oldEta = ref.expectedAt;
+  var newEtaTs = Date.now() - minBack * 60 * 1000;
+  ref.expectedAt = new Date(newEtaTs).toISOString();
+  // Clear any previous show-flag so the popup re-evaluates
+  delete ref.followUpShownAt;
+  delete ref.followUpShownForETA;
+  console.log('[112c] Backdated referral', ref.id, 'expectedAt:', oldEta, '→', ref.expectedAt, '(' + minBack + ' min ago)');
+  if(typeof _savePendingReferrals === 'function') _savePendingReferrals();
+  if(typeof renderPendingReferrals === 'function') renderPendingReferrals();
+  if(typeof _crShowFollowUpPopupIfNeeded === 'function'){
+    setTimeout(function(){ _crShowFollowUpPopupIfNeeded(); }, 100);
+  }
+  return ref;
+}
+window._phase112SimulateLateReferral = _phase112SimulateLateReferral;
+
+function _phase112TimeWarp(minBack){
+  minBack = minBack || 15;
+  if(!Array.isArray(PENDING_REFERRALS)) return 0;
+  var n = 0;
+  PENDING_REFERRALS.forEach(function(ref){
+    if(ref.status !== 'pending' || !ref.expectedAt) return;
+    var t = new Date(ref.expectedAt);
+    if(isNaN(t.getTime())) return;
+    ref.expectedAt = new Date(t.getTime() - minBack * 60 * 1000).toISOString();
+    delete ref.followUpShownAt;
+    delete ref.followUpShownForETA;
+    n++;
+  });
+  console.log('[112c] Backdated ETA by ' + minBack + ' min on ' + n + ' pending referrals');
+  if(typeof _savePendingReferrals === 'function') _savePendingReferrals();
+  if(typeof renderPendingReferrals === 'function') renderPendingReferrals();
+  if(typeof _crShowFollowUpPopupIfNeeded === 'function'){
+    setTimeout(function(){ _crShowFollowUpPopupIfNeeded(); }, 100);
+  }
+  return n;
+}
+window._phase112TimeWarp = _phase112TimeWarp;
+
+function _phase112ResetWarp(){
+  if(!Array.isArray(PENDING_REFERRALS)) return 0;
+  var n = 0;
+  PENDING_REFERRALS.forEach(function(ref){
+    if(ref.followUpShownAt || ref.followUpShownForETA){
+      delete ref.followUpShownAt;
+      delete ref.followUpShownForETA;
+      n++;
+    }
+  });
+  console.log('[112c] Cleared followUpShownAt on ' + n + ' referrals');
+  if(typeof _savePendingReferrals === 'function') _savePendingReferrals();
+  if(typeof _crShowFollowUpPopupIfNeeded === 'function') _crShowFollowUpPopupIfNeeded();
+  return n;
+}
+window._phase112ResetWarp = _phase112ResetWarp;
 
 // ── PHASE 11c: APPROVE / DECLINE / RETRACT actions ────────────────────
 // Front-desk at the destination facility approves → opens the patient-log
