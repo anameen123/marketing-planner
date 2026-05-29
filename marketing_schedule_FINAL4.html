@@ -41060,13 +41060,17 @@ function _rpV5ShowLocked(){
     // buttons — explains why the inputs are greyed out and reminds the
     // rep that Edit unlocks them. Marked .rp-locked-ok so the CSS
     // pointer-events:none rule on .rp-locked doesn't kill the buttons.
+    // Phase 138 (2026-05-29): sharpen the sequential flow — Edit (←
+    // back to picking) and Add to schedule (→ forward to commit) read
+    // as one continuous decision so the rep sees Edit as a back-step,
+    // not a sibling action.
     + '<div class="rp-locked-banner">'
     +   '<span style="font-size:14px">🔒</span>'
-    +   '<span>Route confirmed — inputs locked for review. Click <b>✏ Edit route</b> to change anything (you\'ll compare new vs this one).</span>'
+    +   '<span>Route confirmed — inputs are locked while you review. Click <b>← Edit route</b> to go back and change anything (a comparison will pop on re-generate).</span>'
     + '</div>'
     + '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">'
-    +   '<button type="button" class="rp-locked-ok" onclick="_rpV5UnlockForEdit()" title="Unlock the planner inputs so you can edit anything. Re-generate to compare with the confirmed route." style="background:#fff;color:#1F3864;border:1px solid var(--border);border-radius:8px;padding:9px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">✏ Edit route</button>'
-    +   '<button type="button" class="rp-locked-ok" onclick="_rpV5InsertPicksIntoDay()" style="background:linear-gradient(135deg,#15803d,#16a34a);color:#fff;border:none;border-radius:8px;padding:9px 22px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;box-shadow:0 2px 8px rgba(22,163,74,.35)">✓ Add to schedule →</button>'
+    +   '<button type="button" class="rp-locked-ok" onclick="_rpV5UnlockForEdit()" title="Go back to editing — unlocks Start/End, the corridor sizing, and the candidate picks. Re-generate to compare with this confirmed route." style="background:#fff;color:#1F3864;border:1px solid var(--border);border-radius:8px;padding:9px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">← Edit route</button>'
+    +   '<button type="button" class="rp-locked-ok" onclick="_rpV5InsertPicksIntoDay()" style="background:linear-gradient(135deg,#15803d,#16a34a);color:#fff;border:none;border-radius:8px;padding:9px 22px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;box-shadow:0 2px 8px rgba(22,163,74,.35)">Add to schedule →</button>'
     + '</div>';
   box.innerHTML = html;
 }
