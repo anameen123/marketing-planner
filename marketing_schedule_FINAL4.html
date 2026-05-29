@@ -15420,18 +15420,43 @@ window.submitMismatchReason = submitMismatchReason;
 // SUB-TAB SWITCHER (List view ↔ Calendar view)
 // ═══════════════════════════════════════════════════════════════════════
 function switchReferralSubtab(which){
+  // Phase 119 (2026-05-29): 3-tab nav — Outgoing / Calendar / Logged.
+  // Outgoing = pending-referrals panel (what members create).
+  // Calendar = month grid of logged patients.
+  // List     = logged patients table ("All entries" → renamed "Logged patients").
+  var paneOut  = document.getElementById('rl-pane-outgoing');
   var paneList = document.getElementById('rl-pane-list');
   var paneCal  = document.getElementById('rl-pane-calendar');
+  var tabOut   = document.getElementById('rl-subtab-outgoing');
   var tabList  = document.getElementById('rl-subtab-list');
   var tabCal   = document.getElementById('rl-subtab-calendar');
   if(!paneList || !paneCal) return;
   var active   = '#7030A0';   // purple
   var inactive = 'var(--muted)';
-  if(which === 'calendar'){
+  function setTab(el, on){
+    if(!el) return;
+    el.style.color = on ? active : inactive;
+    el.style.borderBottomColor = on ? active : 'transparent';
+  }
+  if(which === 'outgoing'){
+    if(paneOut)  paneOut.style.display  = '';
+    paneList.style.display = 'none';
+    paneCal.style.display  = 'none';
+    setTab(tabOut, true);  setTab(tabList, false); setTab(tabCal, false);
+    // Render pending list + empty-state hint
+    if(typeof renderPendingReferrals === 'function') renderPendingReferrals();
+    setTimeout(function(){
+      var wrap = document.getElementById('pending-referrals-wrap');
+      var empty = document.getElementById('rl-outgoing-empty');
+      if(empty){
+        empty.style.display = (wrap && wrap.style.display !== 'none') ? 'none' : 'block';
+      }
+    }, 50);
+  } else if(which === 'calendar'){
+    if(paneOut)  paneOut.style.display  = 'none';
     paneList.style.display = 'none';
     paneCal.style.display  = '';
-    if(tabList){ tabList.style.color = inactive; tabList.style.borderBottomColor = 'transparent'; }
-    if(tabCal){  tabCal.style.color  = active;   tabCal.style.borderBottomColor  = active; }
+    setTab(tabOut, false); setTab(tabList, false); setTab(tabCal, true);
     // Init calendar to current month if first open
     if(typeof RL_CAL_MONTH === 'undefined' || RL_CAL_MONTH == null){
       var now = new Date();
@@ -15439,10 +15464,11 @@ function switchReferralSubtab(which){
     }
     renderReferralCalendar();
   } else {
+    // 'list' — Logged patients
+    if(paneOut)  paneOut.style.display  = 'none';
     paneList.style.display = '';
     paneCal.style.display  = 'none';
-    if(tabList){ tabList.style.color = active;   tabList.style.borderBottomColor = active; }
-    if(tabCal){  tabCal.style.color  = inactive; tabCal.style.borderBottomColor  = 'transparent'; }
+    setTab(tabOut, false); setTab(tabList, true); setTab(tabCal, false);
     renderReferralLog();
   }
 }
@@ -46242,14 +46268,16 @@ function switchTab(tab, opts){
   if(tab==='feed'){ renderFeed(); if(typeof renderAdminFeed==='function') renderAdminFeed(); }
   if(tab==='leads-page')renderLeadsPage();
   if(tab==='referrals'){
-    // Per user 2026-05-23: Calendar is the default sub-tab. Render both so
-    // either pane is fresh whichever the user is looking at, but ensure the
-    // Calendar one paints since it's the visible default.
+    // Phase 119 (2026-05-29): Default sub-tab is now OUTGOING (pending
+    // referrals) per user — most action happens there. Render all three
+    // panes so any switch lands on fresh data, but explicitly hand off
+    // to switchReferralSubtab('outgoing') for the initial paint so the
+    // correct tab styling + empty-state hint render.
+    if(typeof renderPendingReferrals === 'function') renderPendingReferrals();
     if(typeof renderReferralCalendar === 'function') renderReferralCalendar();
     if(typeof renderReferralLog === 'function') renderReferralLog();
-    // Per user 2026-05-24: restore the collapsed/expanded state of the
-    // channel + per-member panels from localStorage.
     if(typeof _rlRestorePanelStates === 'function') _rlRestorePanelStates();
+    if(typeof switchReferralSubtab === 'function') switchReferralSubtab('outgoing');
   }
   if(tab==='members'){
     // Default behavior: clicking the Team tab button takes you to the FIRST
@@ -57454,6 +57482,25 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
     </div>
   </div>
 
+  <!-- Phase 119 (2026-05-29): 3-tab nav — Outgoing / Calendar / Logged.
+       Splits the page so the OUTGOING referrals (what members create)
+       and INCOMING logged patients (what front desk records) live in
+       separate panes. Default = Outgoing (most-actioned tab). -->
+  <div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:18px">
+    <button id="rl-subtab-outgoing" onclick="switchReferralSubtab('outgoing')"
+            style="padding:11px 22px;font-size:13px;font-weight:600;color:var(--purple);cursor:pointer;border:none;background:none;border-bottom:3px solid var(--purple);font-family:'DM Sans',sans-serif;margin-bottom:-2px">📥 Outgoing referrals</button>
+    <button id="rl-subtab-calendar" onclick="switchReferralSubtab('calendar')"
+            style="padding:11px 22px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;border:none;background:none;border-bottom:3px solid transparent;font-family:'DM Sans',sans-serif;margin-bottom:-2px">📅 Calendar (by day)</button>
+    <button id="rl-subtab-list" onclick="switchReferralSubtab('list')"
+            style="padding:11px 22px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;border:none;background:none;border-bottom:3px solid transparent;font-family:'DM Sans',sans-serif;margin-bottom:-2px">📋 Logged patients</button>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       SUB-TAB 1 (DEFAULT): OUTGOING REFERRALS
+       What MEMBERS create. Goes from Pending → Successful/Unsuccessful.
+       Front desk users see only referrals destined for their facility.
+       ═══════════════════════════════════════════════════════════════ -->
+  <div id="rl-pane-outgoing">
   <!-- Phase 11b: Pending Referrals panel (the two-stage flow). Marketing
        members + admin see ALL pending; front-desk users see only the ones
        destined for their facility. Renders via renderPendingReferrals(). -->
@@ -57484,17 +57531,15 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
     <div id="pr-monthly-summary" style="margin-bottom:10px"></div>
     <div id="pr-list" style="display:flex;flex-direction:column;gap:8px"></div>
   </div>
-
-  <!-- Sub-tab nav. Per user 2026-05-23: Calendar is the DEFAULT — that's
-       how front-desk most often wants to see "what happened on day X?".
-       List view is the alternative when they want to scan across multiple
-       days or filter heavily. -->
-  <div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:18px">
-    <button id="rl-subtab-calendar" onclick="switchReferralSubtab('calendar')"
-            style="padding:11px 22px;font-size:13px;font-weight:600;color:var(--purple);cursor:pointer;border:none;background:none;border-bottom:3px solid var(--purple);font-family:'DM Sans',sans-serif;margin-bottom:-2px">📅 By day (calendar)</button>
-    <button id="rl-subtab-list" onclick="switchReferralSubtab('list')"
-            style="padding:11px 22px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;border:none;background:none;border-bottom:3px solid transparent;font-family:'DM Sans',sans-serif;margin-bottom:-2px">📋 All entries (list)</button>
+  <!-- Phase 119: empty-state hint when no outgoing referrals exist.
+       The pending-referrals-wrap above hides itself if there's nothing
+       to show; without this, the outgoing pane looks broken. -->
+  <div id="rl-outgoing-empty" style="display:none;background:#f8fafc;border:1px dashed var(--border);border-radius:10px;padding:24px 18px;text-align:center;font-size:12px;color:var(--muted);line-height:1.6">
+    📥 <b>No outgoing referrals yet.</b><br>
+    Click <b>📥 Create Referral</b> above to start one.<br>
+    <span style="font-size:10px;color:#94a3b8;display:block;margin-top:6px">Once created, you'll see Pending / Successful / Unsuccessful rows + monthly counters here.</span>
   </div>
+  </div><!-- /rl-pane-outgoing -->
 
   <!-- ═══════════════════════════════════════════════════════════════════
        SUB-TAB 1: LIST VIEW (the existing referrals UI)
@@ -57564,7 +57609,8 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
        for each day. Click a day → drill-down panel below with all entries
        and shift totals for that day.
        ═══════════════════════════════════════════════════════════════ -->
-  <div id="rl-pane-calendar">
+  <!-- Phase 119: Calendar pane now hidden by default (Outgoing is the default tab). -->
+  <div id="rl-pane-calendar" style="display:none">
 
     <!-- Monthly capture-rate summary banner (logged ÷ reported) -->
     <div id="rl-cal-month-summary" style="display:none;margin-bottom:14px"></div>
