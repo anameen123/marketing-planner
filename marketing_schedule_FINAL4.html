@@ -13817,8 +13817,43 @@ function _crRenderFollowUpModal(refs){
   document.body.appendChild(modal);
 }
 function _crCloseFollowUpModal(){
+  // Phase 112e (2026-05-29): user wants the modal NOT dismissable without
+  // an action — "they cannot actually close it on x. They need to confirm
+  // that they called the patient." Check whether any of the visible refs
+  // got a follow-up action logged in the last 60 seconds (i.e. during
+  // this popup session). If not, demand a confirmation.
   var m = document.getElementById('cr-followup-modal');
-  if(m) m.remove();
+  if(!m) return;
+  try {
+    var refIds = [];
+    var cards = m.querySelectorAll('[data-refid]');
+    cards.forEach(function(c){ refIds.push(c.getAttribute('data-refid')); });
+    var cutoff = Date.now() - 60 * 1000;
+    var anyLogged = refIds.some(function(rid){
+      var ref = (PENDING_REFERRALS || []).find(function(r){ return r.id === rid; });
+      if(!ref || !Array.isArray(ref.followUpActions)) return false;
+      return ref.followUpActions.some(function(a){
+        if(!a || !a.at) return false;
+        return new Date(a.at).getTime() >= cutoff;
+      });
+    });
+    if(!anyLogged){
+      var ok = window.confirm(
+        '⚠ You haven\'t logged a call or action yet.\n\n' +
+        'The front desk is responsible for this referral — close anyway?\n\n' +
+        'OK = close without logging (recorded as "dismissed without action")\n' +
+        'Cancel = stay on the popup to call the patient / clinic'
+      );
+      if(!ok) return;
+      // User chose to bail anyway — record the dismissal for accountability
+      refIds.forEach(function(rid){
+        if(typeof _crLogFollowUpAction === 'function'){
+          _crLogFollowUpAction(rid, 'note', '⚠ Dismissed late-patient popup without logging a call');
+        }
+      });
+    }
+  } catch(_){}
+  m.remove();
 }
 window._crCloseFollowUpModal = _crCloseFollowUpModal;
 
