@@ -3600,7 +3600,10 @@ body.role-front_desk #referrals-view {
            don't crash. -->
       <div style="background:#f1f3f9;border-radius:12px;padding:5px;display:flex;gap:4px;margin-bottom:14px;box-shadow:inset 0 1px 2px rgba(15,23,42,.06)">
         <button id="rp-mode-corridor" type="button" onclick="_rpSetMode('corridor')" style="flex:1;padding:9px 14px;font-size:12px;font-weight:700;color:#fff;cursor:pointer;border:none;background:var(--purple);border-radius:9px;font-family:'DM Sans',sans-serif;display:inline-flex;align-items:center;justify-content:center;gap:6px;box-shadow:0 2px 6px rgba(112,48,160,.22);transition:all .15s">🧭 Corridor</button>
-        <button id="rp-mode-optimize" type="button" onclick="_rpSetMode('optimize')" style="flex:1;padding:9px 14px;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;border:none;background:transparent;border-radius:9px;font-family:'DM Sans',sans-serif;display:inline-flex;align-items:center;justify-content:center;gap:6px;transition:all .15s">🤖 AI Optimize</button>
+        <!-- Phase 117 (2026-05-29): renamed "🤖 AI Optimize" → "🎯 Pick & Plan"
+             per user. Internal mode key 'optimize' UNCHANGED for back-compat
+             with every saved route, render path, and state check. -->
+        <button id="rp-mode-optimize" type="button" onclick="_rpSetMode('optimize')" style="flex:1;padding:9px 14px;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;border:none;background:transparent;border-radius:9px;font-family:'DM Sans',sans-serif;display:inline-flex;align-items:center;justify-content:center;gap:6px;transition:all .15s">🎯 Pick &amp; Plan</button>
       </div>
 
       <!-- Phase 34 (2026-05-27): per user, no more "with AI / without"
@@ -3866,7 +3869,7 @@ body.role-front_desk #referrals-view {
            problem via nearest-neighbor + 2-opt and draw the route. -->
       <div id="rp-opt-wrap" style="display:none;margin-bottom:10px">
         <div style="background:linear-gradient(135deg,#1e3a8a,#2563eb);color:#fff;border-radius:10px;padding:13px 15px;margin-bottom:12px">
-          <div style="font-size:13px;font-weight:800">🤖 AI Optimize — pick the stops, we find the order</div>
+          <div style="font-size:13px;font-weight:800">🎯 Pick &amp; Plan — pick the stops, we find the order</div>
           <div style="font-size:11px;opacity:.9;margin-top:3px;line-height:1.45">Either click pins one-by-one OR draw a circle on the map to grab everything inside. Pick one as <b>starting point</b> and we compute the shortest visit order. <b>Only green + yellow clinics</b> are pickable (recently-visited red/orange are skipped).</div>
         </div>
         <!-- Phase 53 (2026-05-28): sub-mode toggle. Pick mode = click pins
@@ -34184,7 +34187,7 @@ function _rpOptInit(){
   _rpOptRenderTargetList();
   _rpOptRenderStartPicker();
   _rpOptRenderPickStatus();
-  if(typeof showToast === 'function') showToast('🤖 AI Optimize: click any pin on the map to add it to your targets.');
+  if(typeof showToast === 'function') showToast('🎯 Pick & Plan: click any pin on the map to add it to your targets.');
 }
 window._rpOptInit = _rpOptInit;
 
@@ -38794,7 +38797,7 @@ function _phase100ShowOverrideConfirm(priorSaved, newPicks, onConfirm){
       ? ('saved ' + new Date(priorSaved.savedAt).toLocaleString('en-US', { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' }))
       : '';
     var modeName = (priorSaved && priorSaved.mode === 'corridor') ? 'Corridor'
-      : (priorSaved && priorSaved.mode === 'optimize') ? 'AI Optimize'
+      : (priorSaved && priorSaved.mode === 'optimize') ? 'Pick & Plan'
       : (priorSaved && priorSaved.mode) || 'planner';
     modal.innerHTML = ''
       + '<div style="background:#fff;border-radius:14px;padding:22px;max-width:560px;width:92%;box-shadow:0 20px 60px rgba(0,0,0,.4);max-height:80vh;overflow-y:auto">'
@@ -39194,7 +39197,7 @@ function _rpSyncCurrentRouteChip(){
   if(btns.length === 0) return;
   var saved = _rpLoadCurrentRoute();
   if(saved && saved.mode){
-    var modeName = saved.mode === 'corridor' ? 'Corridor' : saved.mode === 'optimize' ? 'AI Optimize' : saved.mode;
+    var modeName = saved.mode === 'corridor' ? 'Corridor' : saved.mode === 'optimize' ? 'Pick & Plan' : saved.mode;
     var stopCount = 0;
     if(saved.mode === 'corridor') stopCount = (saved.flatPicks || []).length;
     else if(saved.mode === 'optimize') stopCount = (saved.optTargets || []).length;
