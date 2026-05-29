@@ -2591,8 +2591,13 @@ body.role-front_desk #referrals-view {
         </label>
       </div>
 
-      <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">📝 Notes (optional)</div>
-      <textarea id="cr-notes" rows="2" placeholder="Chief complaint hint, # of patients expected, anything the front desk should know…" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box;resize:vertical;min-height:50px"></textarea>
+      <!-- Phase 112a (2026-05-29): renamed Notes → Chief complaint and made
+           it REQUIRED per user. The chief complaint is what the destination
+           clinic needs to triage on arrival — referrals shouldn't go in
+           without one. Validation in _crSaveReferral. -->
+      <div style="font-size:10px;font-weight:700;color:#7c2d12;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">🩺 Chief complaint <span style="color:#dc2626">*</span></div>
+      <textarea id="cr-notes" rows="2" placeholder="Why is the patient being sent? e.g. chest pain, MVA fender-bender, twisted ankle…" required style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box;resize:vertical;min-height:50px"></textarea>
+      <div style="font-size:10px;color:var(--muted);margin-top:4px;font-style:italic">Required — the destination front desk needs this to triage on arrival.</div>
 
       <div id="cr-form-err" style="display:none;margin-top:12px;background:#fee2e2;border:1px solid #fca5a5;color:#991b1b;border-radius:6px;padding:8px 12px;font-size:12px"></div>
     </div>
@@ -15861,7 +15866,10 @@ function _rlRenderCalDayDetail(iso){
       var typeIcon = r.sourceType === 'mva' ? '⚖' : r.sourceType === 'wcg_facility' ? '🏥' : '🏥';
       var statusColor = r.status === 'pending' ? '#f59e0b' : r.status === 'approved' ? '#16a34a' : r.status === 'declined' ? '#9ca3af' : r.status === 'incomplete' ? '#dc2626' : '#64748b';
       var statusBg = r.status === 'pending' ? '#fffbeb' : r.status === 'approved' ? '#f0fdf4' : r.status === 'incomplete' ? '#fef2f2' : '#f8fafc';
-      var statusLabel = r.status === 'pending' ? '⏳ Pending' : r.status === 'approved' ? '✓ Approved' : r.status === 'declined' ? '✗ Declined' : r.status === 'incomplete' ? '⏰ Incomplete (no-show)' : '↩ Retracted';
+      // Phase 112a (2026-05-29): renamed display labels per user — internal
+    // status keys (approved/declined) unchanged for back-compat, only the
+    // human-visible badge shows Successful / Unsuccessful now.
+    var statusLabel = r.status === 'pending' ? '⏳ Pending' : r.status === 'approved' ? '✓ Successful' : r.status === 'declined' ? '✗ Unsuccessful' : r.status === 'incomplete' ? '⏰ Incomplete (no-show)' : '↩ Retracted';
       var expDt = r.expectedAt ? new Date(r.expectedAt) : null;
       var expTime = (expDt && !isNaN(expDt.getTime())) ? expDt.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}) : '—';
       var creatorLbl = r.creatorRole === 'uc_plano_fd' ? ('🏥 UC Plano · ' + (r.createdBy || '?')) : ('👥 ' + (r.createdBy || '—'));
@@ -17253,7 +17261,14 @@ function _crSaveReferral(){
   var timeEl = document.getElementById('cr-expected-time');
   if(!dateEl || !dateEl.value){ showErr('Pick the expected arrival date.'); return; }
   var expectedAt = dateEl.value + 'T' + ((timeEl && timeEl.value) || '12:00') + ':00';
-  var notes = (document.getElementById('cr-notes') || {}).value || '';
+  // Phase 112a (2026-05-29): chief complaint (stored in r.notes for now, key
+  // unchanged for back-compat) is REQUIRED — the destination clinic uses it
+  // to triage the patient on arrival. Min 3 chars so "x" doesn't pass.
+  var notes = ((document.getElementById('cr-notes') || {}).value || '').trim();
+  if(!notes || notes.length < 3){
+    showErr('Chief complaint is required — describe why the patient is being sent (e.g. "chest pain", "ankle injury").');
+    return;
+  }
   // Phase 11b corrected: creator-type two-path validation.
   var typeRadio = document.querySelector('input[name="cr-creator-type"]:checked');
   if(!typeRadio){ showErr('Pick who is creating this referral — Marketing member or UC Plano front desk.'); return; }
@@ -17385,6 +17400,11 @@ function renderPendingReferrals(){
     return;
   }
   wrap.style.display = 'block';
+  // Phase 112b (2026-05-29): monthly counters + ratios summary card at the
+  // top of the list. Read-only. Computed from the FULL PENDING_REFERRALS
+  // (not the current filter view) so the rep sees the real numbers, and
+  // scoped per-facility for FD users so they see only their own.
+  try { _crRenderMonthlySummary(); } catch(e){ console.warn('[112b] monthly summary failed:', e); }
   // Filter
   var statusSel = document.getElementById('pr-status-filter');
   var statusFilter = (statusSel && statusSel.value) || 'all';
@@ -17415,7 +17435,10 @@ function renderPendingReferrals(){
     var typeIcon = r.sourceType === 'mva' ? '⚖' : '🏥';
     var statusColor = r.status === 'pending' ? '#f59e0b' : r.status === 'approved' ? '#16a34a' : r.status === 'declined' ? '#9ca3af' : r.status === 'incomplete' ? '#dc2626' : '#64748b';
     var statusBg = r.status === 'pending' ? '#fffbeb' : r.status === 'approved' ? '#f0fdf4' : r.status === 'incomplete' ? '#fef2f2' : '#f8fafc';
-    var statusLabel = r.status === 'pending' ? '⏳ Pending' : r.status === 'approved' ? '✓ Approved' : r.status === 'declined' ? '✗ Declined' : r.status === 'incomplete' ? '⏰ Incomplete (no-show)' : '↩ Retracted';
+    // Phase 112a (2026-05-29): renamed display labels per user — internal
+    // status keys (approved/declined) unchanged for back-compat, only the
+    // human-visible badge shows Successful / Unsuccessful now.
+    var statusLabel = r.status === 'pending' ? '⏳ Pending' : r.status === 'approved' ? '✓ Successful' : r.status === 'declined' ? '✗ Unsuccessful' : r.status === 'incomplete' ? '⏰ Incomplete (no-show)' : '↩ Retracted';
     var expDt = r.expectedAt ? new Date(r.expectedAt) : null;
     var expStr = (expDt && !isNaN(expDt.getTime())) ? expDt.toLocaleString('en-US',{weekday:'short',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) : '—';
     var creatorLbl = r.creatorRole === 'uc_plano_fd' ? ('UC Plano FD · ' + (r.createdBy || '?')) : (r.createdBy || '—');
@@ -17430,12 +17453,15 @@ function renderPendingReferrals(){
       isAdminViewer
     );
     if(canApprove){
+      // Phase 112a (2026-05-29): renamed Approve→Successful, Decline→Unsuccessful
+      // in the button labels. Handlers (approvePendingReferral / declinePendingReferral)
+      // unchanged — they still set status='approved'/'declined' internally.
       var approveLabel = isAdminViewer && !(isFD && CURRENT_USER.facilityKey === r.destinationFacility)
-        ? '✓ Approve & log patient (admin override)'
-        : '✓ Approve & log patient';
+        ? '✓ Mark Successful & log patient (admin override)'
+        : '✓ Mark Successful & log patient';
       actions = '<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">'
         + '<button onclick="approvePendingReferral(\'' + r.id + '\')" style="background:#16a34a;border:none;color:#fff;border-radius:6px;padding:7px 14px;font-size:11px;font-weight:700;cursor:pointer">' + approveLabel + '</button>'
-        + '<button onclick="declinePendingReferral(\'' + r.id + '\')" style="background:transparent;border:1px solid #fca5a5;color:#991b1b;border-radius:6px;padding:7px 14px;font-size:11px;font-weight:600;cursor:pointer">✗ Decline</button>'
+        + '<button onclick="declinePendingReferral(\'' + r.id + '\')" style="background:transparent;border:1px solid #fca5a5;color:#991b1b;border-radius:6px;padding:7px 14px;font-size:11px;font-weight:600;cursor:pointer">✗ Mark Unsuccessful</button>'
         + '</div>';
     } else if(r.status === 'approved' && r.approvedAt){
       // Retraction window — 1 hour for the approving staff
@@ -17538,7 +17564,8 @@ function renderPendingReferrals(){
       + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap">'
       +   '<div style="flex:1;min-width:0">'
       +     '<div style="font-size:13px;font-weight:700;color:#0f172a">' + typeIcon + ' ' + r.sourceName.replace(/</g,'&lt;') + ' <span style="color:var(--muted);font-weight:400;font-size:11px">→ ' + facLabel + '</span>' + (r.patientName ? ' <span style="color:var(--muted);font-weight:400;font-size:11px"> · ' + r.patientName.replace(/</g,'&lt;') + '</span>' : '') + '</div>'
-      +     '<div style="font-size:10px;color:var(--muted);margin-top:2px">Created by <b>' + creatorLbl.replace(/</g,'&lt;') + '</b> · Expected ' + expStr + (r.notes ? ' · Notes: ' + r.notes.replace(/</g,'&lt;') : '') + '</div>'
+      +     '<div style="font-size:10px;color:var(--muted);margin-top:2px">Created by <b>' + creatorLbl.replace(/</g,'&lt;') + '</b> · Expected ' + expStr + '</div>'
+      +     (r.notes ? '<div style="margin-top:4px;padding:5px 8px;background:#fef2f2;border:1px solid #fecaca;border-left:3px solid #dc2626;border-radius:4px;font-size:11px;color:#7f1d1d"><span style="font-weight:700">🩺 Chief complaint:</span> ' + r.notes.replace(/</g,'&lt;') + '</div>' : '<div style="margin-top:4px;font-size:10px;color:#dc2626;font-style:italic">⚠ No chief complaint recorded</div>')
       +     rideBookingBanner
       +     lateBadge
       +     auditTrail
@@ -17551,6 +17578,80 @@ function renderPendingReferrals(){
   }).join('');
 }
 window.renderPendingReferrals = renderPendingReferrals;
+
+// ════════════════════════════════════════════════════════════════════════════
+// PHASE 112b (2026-05-29) — MONTHLY REFERRAL SUMMARY (read-only)
+// User wants visible monthly totals + success/unsuccess ratios on the
+// referrals panel itself. Computed from PENDING_REFERRALS, scoped to the
+// FD's facility if the viewer is front-desk. Two windows shown:
+//   • THIS MONTH (live — updates as referrals land/resolve)
+//   • LAST MONTH (frozen — for compare)
+// Counts ALL referrals created in the window (any status). Ratios are
+// over the closed referrals (success + unsuccess + incomplete), so a
+// pending one doesn't drag the success rate down until it resolves.
+// ════════════════════════════════════════════════════════════════════════════
+function _crRenderMonthlySummary(){
+  var host = document.getElementById('pr-monthly-summary');
+  if(!host) return;
+  var all = Array.isArray(PENDING_REFERRALS) ? PENDING_REFERRALS : [];
+  var isFD = (CURRENT_USER && CURRENT_USER.role === 'front_desk');
+  if(isFD && CURRENT_USER.facilityKey){
+    all = all.filter(function(r){ return r.destinationFacility === CURRENT_USER.facilityKey; });
+  }
+  var now = new Date();
+  var y = now.getFullYear(), m = now.getMonth();
+  function monthOf(ts){
+    if(!ts) return null;
+    var d = new Date(ts);
+    if(isNaN(d.getTime())) return null;
+    return d.getFullYear() * 12 + d.getMonth();
+  }
+  var thisIdx = y * 12 + m;
+  var lastIdx = thisIdx - 1;
+  function bucket(idx){
+    var rows = all.filter(function(r){ return monthOf(r.createdAt) === idx; });
+    var total = rows.length;
+    var pending = rows.filter(function(r){ return r.status === 'pending'; }).length;
+    var ok      = rows.filter(function(r){ return r.status === 'approved'; }).length;
+    var no      = rows.filter(function(r){ return r.status === 'declined' || r.status === 'incomplete'; }).length;
+    var closed  = ok + no;
+    var pctOk   = closed ? Math.round((ok / closed) * 100) : null;
+    var pctNo   = closed ? Math.round((no / closed) * 100) : null;
+    return { total: total, pending: pending, ok: ok, no: no, closed: closed, pctOk: pctOk, pctNo: pctNo };
+  }
+  var cur  = bucket(thisIdx);
+  var prev = bucket(lastIdx);
+  var monthLabel = now.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+  var prevDate = new Date(y, m - 1, 1);
+  var prevLabel = prevDate.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+  function statCard(title, sub, b, accent){
+    function pctChip(v, color){
+      return v == null
+        ? '<span style="font-size:10px;color:#94a3b8">—</span>'
+        : '<span style="background:' + color + ';color:#fff;font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px">' + v + '%</span>';
+    }
+    return '<div style="flex:1;min-width:200px;background:#fff;border:1px solid ' + accent + '33;border-left:4px solid ' + accent + ';border-radius:8px;padding:10px 12px">'
+      + '<div style="font-size:10px;font-weight:800;color:' + accent + ';text-transform:uppercase;letter-spacing:.05em">' + title + '</div>'
+      + '<div style="font-size:10px;color:var(--muted);margin-top:1px">' + sub + '</div>'
+      + '<div style="margin-top:6px;display:flex;align-items:baseline;gap:6px;flex-wrap:wrap">'
+      +   '<span style="font-size:20px;font-weight:800;color:#0f172a">' + b.total + '</span>'
+      +   '<span style="font-size:10px;color:var(--muted)">total referral' + (b.total === 1 ? '' : 's') + '</span>'
+      + '</div>'
+      + '<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:6px;font-size:10px;color:#475569">'
+      +   '<span title="Pending — not yet resolved">⏳ ' + b.pending + '</span>'
+      +   '<span title="Successful (Approved) — patient confirmed at destination">' + pctChip(b.pctOk, '#16a34a') + ' ' + b.ok + ' ok</span>'
+      +   '<span title="Unsuccessful or incomplete — patient declined or didn\'t show">' + pctChip(b.pctNo, '#dc2626') + ' ' + b.no + ' no</span>'
+      + '</div>'
+      + '<div style="margin-top:3px;font-size:9px;color:#94a3b8;font-style:italic">Ratio is over ' + b.closed + ' closed referral' + (b.closed === 1 ? '' : 's') + (b.pending > 0 ? ' (excludes ' + b.pending + ' pending)' : '') + '</div>'
+      + '</div>';
+  }
+  host.innerHTML = ''
+    + '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:stretch">'
+    +   statCard('This month', monthLabel + (isFD ? ' · ' + ((REFERRAL_FACILITIES.find(function(f){return f.key === CURRENT_USER.facilityKey;}) || {}).label || CURRENT_USER.facilityKey) : ''), cur, '#7c3aed')
+    +   statCard('Last month', prevLabel + ' (frozen)', prev, '#64748b')
+    + '</div>';
+}
+window._crRenderMonthlySummary = _crRenderMonthlySummary;
 
 // ── PHASE 11c: APPROVE / DECLINE / RETRACT actions ────────────────────
 // Front-desk at the destination facility approves → opens the patient-log
@@ -56914,16 +57015,21 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
         <!-- Per user 2026-05-26 (#29): default to All so approved /
              declined / incomplete referrals stay visible without
              toggling. The persistent record matters as much as pending. -->
+        <!-- Phase 112a (2026-05-29): renamed Approved → Successful, Declined → Unsuccessful in the filter dropdown labels. Values unchanged. -->
         <select id="pr-status-filter" onchange="renderPendingReferrals()" style="border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:11px;font-family:'DM Sans',sans-serif;background:#fff">
           <option value="all" selected>All statuses</option>
           <option value="pending">⏳ Pending only</option>
-          <option value="approved">✓ Approved</option>
-          <option value="declined">✗ Declined</option>
+          <option value="approved">✓ Successful</option>
+          <option value="declined">✗ Unsuccessful</option>
           <option value="incomplete">⏰ Incomplete (auto-expired)</option>
           <option value="retracted">↩ Retracted</option>
         </select>
       </div>
     </div>
+    <!-- Phase 112b (2026-05-29): monthly summary card host — populated by
+         _crRenderMonthlySummary() on every renderPendingReferrals(). Shows
+         this-month totals + success / unsuccessful ratios. Read-only. -->
+    <div id="pr-monthly-summary" style="margin-bottom:10px"></div>
     <div id="pr-list" style="display:flex;flex-direction:column;gap:8px"></div>
   </div>
 
