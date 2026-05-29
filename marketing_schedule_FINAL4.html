@@ -221,6 +221,15 @@ input.rp-no-spinner { -moz-appearance: textfield; }
   cursor: not-allowed !important;
 }
 #route-planner-box.rp-locked .modal-body label{ cursor: default !important; }
+/* Phase 140 (2026-05-29): the mobile Plan/Map tab strip (Phase 134b)
+   is a sibling to .modal-body, not a child — the above selectors don't
+   reach it. Lock the tab pills too so the rep can't accidentally
+   switch to Map view mid-review and bypass the locked-inputs state. */
+#route-planner-box.rp-locked #rp-mobile-tabs button:not(.rp-locked-ok){
+  pointer-events: none !important;
+  opacity: .55 !important;
+  cursor: not-allowed !important;
+}
 /* Lock banner shown at the top of the confirmed-route panel */
 .rp-locked-banner{
   background: linear-gradient(135deg,#15803d,#16a34a);
@@ -36693,6 +36702,14 @@ function _rpOptOptimize(){
   var anchor = window._RP_OPT_ANCHOR;
   var targetsForTsp, startNameForTsp;
   if(anchor && anchor.coord){
+    // Phase 140 (2026-05-29): warn when BOTH anchor AND a radio start
+    // are set — anchor wins silently otherwise, which was confusing
+    // when the rep deliberately picked a target as start AFTER setting
+    // an anchor. Toast explains which one took effect; the rep can
+    // clear the anchor (×) if they meant the radio.
+    if(window._RP_OPT_START_NAME && window._RP_OPT_START_NAME !== anchor.name && typeof showToast === 'function'){
+      showToast('🚩 Using "' + anchor.name + '" (anchor) as Start. Clear the ✕ on the anchor chip to use your radio pick instead.');
+    }
     targetsForTsp = [{
       name: anchor.name, coord: { lat: anchor.coord.lat, lng: anchor.coord.lng },
       bizType: anchor.kind === 'facility' ? 'facility' : 'clinic',
@@ -36856,6 +36873,15 @@ function _rpOptEditPicks(){
       });
     }
     window._RP_OPT_ORDERED = null;
+    // Phase 140 (2026-05-29): re-arm pin pickups so the rep can click
+    // map pins to add/remove targets after switching back to edit mode.
+    // Without this, _rpOptConsumePinClick gates on _RP_OPT_AWAITING_PICK
+    // and silently ignores every pin click, making the map look broken.
+    // Only arm when sub-mode is 'pin' — circle mode handles its own
+    // map interactions separately.
+    if(window._RP_OPT_SUB_MODE !== 'circle'){
+      window._RP_OPT_AWAITING_PICK = true;
+    }
     if(typeof showToast === 'function') showToast('✏ Edit mode: add, remove, or re-pick start, then ⚡ Optimize again.');
   } catch(e){ console.error('[_rpOptEditPicks] failed:', e); }
 }
