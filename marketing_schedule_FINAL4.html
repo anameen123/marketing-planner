@@ -3434,13 +3434,12 @@ body.role-front_desk #referrals-view {
              to the Schedule header; user wants it where they remember it
              from before). Same handler as the Schedule-header copy — both
              chips reflect the same saved state, both call _rpResumeSavedRoute. -->
-        <button id="dv-current-route-btn-map" type="button" onclick="event.stopPropagation();_rpResumeSavedRoute()"
-                title="Edit the last route you generated for this day"
-                style="display:none;background:linear-gradient(135deg,#16a34a,#15803d);border:none;color:#fff;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;align-items:center;gap:5px;line-height:1.1;box-shadow:0 1px 3px rgba(0,0,0,.25)">
-          <span>📍</span>
-          <span>Current route</span>
-          <span style="background:rgba(255,255,255,.25);padding:1px 5px;border-radius:8px;font-size:10px">✏</span>
-        </button>
+        <!-- Phase 122b (2026-05-29): container hosts one chip per saved
+             route for the current day. Filled live by _rpSyncCurrentRoute-
+             Chip(). Single chip when one route, side-by-side chips when
+             multiple. Each chip click sets _RP_EDITING_ROUTE_ID + opens
+             the planner pre-filled for THAT route. -->
+        <span id="dv-current-route-btn-map" style="display:none;flex-wrap:wrap;align-items:center;gap:5px"></span>
       </div>
       <!-- Phase 77b (2026-05-28): controls bar stays OUTSIDE the collapsible
            body so the option buttons (Plan a Route, Show on map, Open in
@@ -3470,7 +3469,7 @@ body.role-front_desk #referrals-view {
              reachable. Per user 2026-05-22 frustration: "I do not see anything." -->
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
           <span id="rp-pick-status" style="font-size:10px;color:var(--muted);font-style:italic"></span>
-          <button id="dv-plan-route-btn" type="button" onclick="_dvExpandDayMap();openRoutePlannerDialog();_dvScrollToMap();"
+          <button id="dv-plan-route-btn" type="button" onclick="window._RP_EDITING_ROUTE_ID=null;_dvExpandDayMap();openRoutePlannerDialog();_dvScrollToMap();"
                   title="Open the route-planner dialog. Fill Start and End by typing (with recency-colored suggestions) or by clicking pins on the map."
                   style="background:linear-gradient(135deg,#7030A0,#9333ea);border:none;color:#fff;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;display:inline-flex;align-items:center;gap:5px;line-height:1.1;box-shadow:0 1px 3px rgba(112,48,160,.3)">
             🧭 Plan a Route
@@ -39551,7 +39550,25 @@ window._rpV5InsertPicksIntoDay = _rpV5InsertPicksIntoDay;
 function _rpV5RunPhase54Override(di, preserveNameSet, picks){
   if(!S.days || !S.days[di]) return 0;
   try {
-    var priorSaved = (typeof _rpLoadCurrentRoute === 'function') ? _rpLoadCurrentRoute() : null;
+    // Phase 122b (2026-05-29): when editing an existing route, scope the
+    // override to ONLY that route's prior insertedNames + ONLY rows
+    // tagged with that route's id. Without this scope, editing Route 2
+    // would also wipe Route 1's rows because _rpLoadCurrentRoute could
+    // resolve to either. When creating a NEW route (no editing flag),
+    // there's no prior version to override — return 0.
+    var editId = window._RP_EDITING_ROUTE_ID || null;
+    if(!editId){
+      // New route — nothing to override. Skip.
+      return 0;
+    }
+    var priorSaved = (typeof _rpGetRouteById === 'function' && typeof _rpGetCurrentDayIso === 'function')
+      ? _rpGetRouteById(_rpGetCurrentDayIso(), editId)
+      : null;
+    if(!priorSaved){
+      // Fallback for back-compat paths (no v2 record yet) — use legacy
+      // loader so the old single-route flow still works.
+      priorSaved = (typeof _rpLoadCurrentRoute === 'function') ? _rpLoadCurrentRoute() : null;
+    }
     if(!priorSaved || !Array.isArray(priorSaved.insertedNames) || priorSaved.insertedNames.length === 0) return 0;
     // Build the keep-set: names Phase 59 folded + names already in new picks
     var keep = {};
@@ -39562,7 +39579,13 @@ function _rpV5RunPhase54Override(di, preserveNameSet, picks){
     if(Object.keys(priorSet).length === 0) return 0;
     var beforeLen = S.days[di].rows.length;
     S.days[di].rows = (S.days[di].rows || []).filter(function(r){
-      return !(r && r.clinic && priorSet[r.clinic]);
+      if(!r || !r.clinic) return true;
+      if(!priorSet[r.clinic]) return true;
+      // Phase 122b: only drop if the row is tagged with the route being
+      // edited. Untagged legacy rows (pre-122b) are also dropped per
+      // the name-match (back-compat with single-route behaviour).
+      if(r._routeId && r._routeId !== editId) return true;
+      return false;
     });
     return beforeLen - S.days[di].rows.length;
   } catch(_){ return 0; }
@@ -39574,6 +39597,13 @@ window._rpV5RunPhase54Override = _rpV5RunPhase54Override;
 // share the exact same insertion logic (no drift between paths).
 function _rpV5CommitPicksToDay(picks, di, me, removed, phase59Removed, phase59ExtraInserted){
   try {
+    // Phase 122b (2026-05-29): resolve the routeId for THIS commit so
+    // every inserted row gets stamped with it. If editing an existing
+    // route (chip click), reuse its id. Otherwise mint a new one — the
+    // _rpSaveCurrentRoute wrapper at the bottom of this function uses
+    // the SAME id so the row stamps and saved-route payload agree.
+    var routeIdForThis = window._RP_EDITING_ROUTE_ID
+      || ('r_' + (S.days[di] && S.days[di].date || 'unknown') + '_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6));
     var added = 0, skipped = 0;
     var insertedNames = [];
     picks.forEach(function(p){
@@ -39588,7 +39618,8 @@ function _rpV5CommitPicksToDay(picks, di, me, removed, phase59Removed, phase59Ex
         city: '',
         rowConfirmed: false,
         rd: '', relationship: '', leadNotes: '', cancelReason: '',
-        spending: null, _spId: null
+        spending: null, _spId: null,
+        _routeId: routeIdForThis   // Phase 122b: which route this row belongs to
       });
       added++;
       insertedNames.push(p.name);
@@ -39600,6 +39631,7 @@ function _rpV5CommitPicksToDay(picks, di, me, removed, phase59Removed, phase59Ex
     try {
       if(typeof _rpSaveCurrentRoute === 'function'){
         var payload = {
+          routeId:    routeIdForThis,   // Phase 122b: pin save to same id
           mode: 'corridor',
           startName:  window._RP_START_NAME || (document.getElementById('rp-start') || {}).value || null,
           startLabel: (document.getElementById('rp-start-search') || {}).value || null,
@@ -39626,6 +39658,10 @@ function _rpV5CommitPicksToDay(picks, di, me, removed, phase59Removed, phase59Ex
       if(extras.length) msg += ' (' + extras.join(' · ') + ')';
       showToast(msg);
     }
+    // Phase 122b (2026-05-29): clear the editing flag so the NEXT Plan
+    // a Route click starts a fresh new route. Otherwise the user could
+    // accidentally overwrite the route they just committed.
+    window._RP_EDITING_ROUTE_ID = null;
     if(typeof closeRoutePlanner === 'function') closeRoutePlanner({ force: true });
   } catch(e){
     console.error('[_rpV5InsertPicksIntoDay] failed:', e);
@@ -39865,39 +39901,77 @@ window._rpSyncSavedRouteToSchedule = _rpSyncSavedRouteToSchedule;
 // Show / hide the "📍 Current route" chip based on whether saved state
 // exists for the currently-open day.
 function _rpSyncCurrentRouteChip(){
-  // Phase 105 (2026-05-28): single chip in the Day Map header now (the
-  // Schedule-header duplicate was removed per user). The id list keeps
-  // dv-current-route-btn as an alias in case any older copy lingers
-  // somewhere — filter(Boolean) tolerates missing IDs.
-  var btns = [
+  // Phase 122b (2026-05-29): multi-route — renders one chip per saved
+  // route for the current day. Member sees only their OWN routes (owner
+  // matches CURRENT_USER.name); admin sees all. Each chip has its own
+  // data-route-id + onclick that sets _RP_EDITING_ROUTE_ID and opens
+  // the planner pre-filled for that specific route.
+  var hosts = [
     document.getElementById('dv-current-route-btn-map'),
     document.getElementById('dv-current-route-btn')
   ].filter(Boolean);
-  if(btns.length === 0) return;
-  var saved = _rpLoadCurrentRoute();
-  if(saved && saved.mode){
-    var modeName = saved.mode === 'corridor' ? 'Corridor' : saved.mode === 'optimize' ? 'Pick & Plan' : saved.mode;
-    var stopCount = 0;
-    if(saved.mode === 'corridor') stopCount = (saved.flatPicks || []).length;
-    else if(saved.mode === 'optimize') stopCount = (saved.optTargets || []).length;
-    var title = 'Edit your ' + modeName + ' route (' + stopCount + ' stops)';
-    btns.forEach(function(b){
-      b.style.display = 'inline-flex';
-      b.title = title;
+  if(hosts.length === 0) return;
+  var routes = (typeof _rpListRoutes === 'function') ? _rpListRoutes() : [];
+  // Owner scope: members see only their own; admin sees all
+  var me = (window.CURRENT_USER && CURRENT_USER.name) || '';
+  var isAdmin0 = (typeof isAdmin === 'function') && isAdmin();
+  if(me && !isAdmin0){
+    routes = routes.filter(function(r){
+      // No owner = legacy (pre-122a) → show to anyone so it's not orphaned
+      return !r.owner || r.owner === me;
     });
-  } else {
-    btns.forEach(function(b){ b.style.display = 'none'; });
   }
+  // Sort oldest-first so "Route 1" stays Route 1 across edits
+  routes.sort(function(a,b){ return new Date(a.savedAt || 0) - new Date(b.savedAt || 0); });
+  if(routes.length === 0){
+    hosts.forEach(function(h){ h.style.display = 'none'; h.innerHTML = ''; });
+    return;
+  }
+  function fmtChip(route, idx){
+    var modeName = route.mode === 'corridor' ? 'Corridor' : route.mode === 'optimize' ? 'Pick & Plan' : (route.mode || 'route');
+    var stopCount = 0;
+    if(route.mode === 'corridor') stopCount = (route.flatPicks || []).length;
+    else if(route.mode === 'optimize') stopCount = (route.optTargets || []).length;
+    var label = routes.length === 1 ? 'Current route' : ('Route ' + (idx + 1));
+    var title = 'Edit ' + label + ' — ' + modeName + ' · ' + stopCount + ' stop' + (stopCount === 1 ? '' : 's');
+    var safeId = String(route.routeId || '').replace(/'/g, "\\'");
+    return '<button type="button"'
+      + ' data-route-id="' + safeId + '"'
+      + ' onclick="event.stopPropagation();_rpResumeSavedRoute(\'' + safeId + '\')"'
+      + ' title="' + title.replace(/"/g, '&quot;') + '"'
+      + ' style="background:linear-gradient(135deg,#16a34a,#15803d);border:none;color:#fff;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;display:inline-flex;align-items:center;gap:5px;line-height:1.1;box-shadow:0 1px 3px rgba(0,0,0,.25)">'
+      +   '<span>📍</span>'
+      +   '<span>' + label + (stopCount > 0 ? ' · ' + stopCount : '') + '</span>'
+      +   '<span style="background:rgba(255,255,255,.25);padding:1px 5px;border-radius:8px;font-size:10px">✏</span>'
+      + '</button>';
+  }
+  var html = routes.map(fmtChip).join('');
+  hosts.forEach(function(h){
+    h.style.display = 'inline-flex';
+    h.innerHTML = html;
+  });
 }
 window._rpSyncCurrentRouteChip = _rpSyncCurrentRouteChip;
 
 // Click handler for the chip — opens the planner + restores state.
-function _rpResumeSavedRoute(){
-  var saved = _rpLoadCurrentRoute();
+// Phase 122b (2026-05-29): accepts an optional routeId so multi-route
+// chips can target a SPECIFIC saved route. Without an id, falls back
+// to _rpLoadCurrentRoute (most-recent route, back-compat).
+function _rpResumeSavedRoute(routeId){
+  var saved = null;
+  if(routeId && typeof _rpGetRouteById === 'function'){
+    var iso = (typeof _rpGetCurrentDayIso === 'function') ? _rpGetCurrentDayIso() : null;
+    saved = _rpGetRouteById(iso, routeId);
+  }
+  if(!saved) saved = _rpLoadCurrentRoute();
   if(!saved){
     if(typeof showToast === 'function') showToast('No saved route for this day.');
     return;
   }
+  // Phase 122b: stash the editing routeId so subsequent commits know to
+  // UPDATE this route instead of appending a new one. Phase 122a's
+  // _rpSaveCurrentRoute wrapper reads it.
+  window._RP_EDITING_ROUTE_ID = saved.routeId || null;
   if(typeof openRoutePlanner !== 'function'){ return; }
   // Open the planner first (which wipes state, then we restore on top)
   openRoutePlanner();
