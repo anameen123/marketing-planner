@@ -32587,6 +32587,38 @@ window._rpAutoSuggestIfReady = _rpAutoSuggestIfReady;
 //   4. Take the Nth smallest |perp| → that's the minimum half-width.
 //      If fewer than N exist, use the largest available |perp| (or cap).
 //   5. Round up to nearest 0.5 mi, clamp 0.5..12.
+// ════════════════════════════════════════════════════════════════════════════
+// PHASE 126 (2026-05-29) — NON-FACILITY ENDPOINTS COUNT AS VISITS
+// User: "if they start or the end is not one of the locations, then it
+// should be counted as a visit. The locations, I mean, the four locations."
+//
+// The 4 WCG facilities (Frisco ER / Castle Hills / UC Plano / Richardson)
+// use the "_facility_*" key prefix and represent home base — they're
+// pickup/drop-off points, not stops. Any other Start/End value is a real
+// clinic or MVA, so it's a visit and should:
+//   (a) count toward the user's max-visits cap (corridor target shrinks)
+//   (b) appear as a row in the schedule on commit (Start first, End last)
+// ════════════════════════════════════════════════════════════════════════════
+function _phase126IsFacilityVal(v){
+  return typeof v === 'string' && v.indexOf('_facility_') === 0;
+}
+window._phase126IsFacilityVal = _phase126IsFacilityVal;
+
+function _phase126EndpointVisitCount(){
+  // Read the current rp-start / rp-end input values; count those that
+  // aren't WCG facilities AND aren't the round-trip sentinel. Returns 0,
+  // 1, or 2 — the number of "real visit" endpoints in the current plan.
+  try {
+    var sVal = (document.getElementById('rp-start') || {}).value || '';
+    var eVal = (document.getElementById('rp-end')   || {}).value || '';
+    var n = 0;
+    if(sVal && !_phase126IsFacilityVal(sVal)) n++;
+    if(eVal && eVal !== '__same__' && !_phase126IsFacilityVal(eVal)) n++;
+    return n;
+  } catch(_){ return 0; }
+}
+window._phase126EndpointVisitCount = _phase126EndpointVisitCount;
+
 function _rpComputeWidthForVisits(A, B, targetN){
   if(!A || !B) return null;
   var totalMi = _rpHaversineMiles(A, B);
@@ -32823,7 +32855,14 @@ function _rpRunAutoCompute(){
     }
     var targetN = parseInt((document.getElementById('rp-target-visits') || {}).value, 10) || 5;
     targetN = Math.max(1, Math.min(20, targetN));
-    var result = _rpComputeWidthForVisits(A, B, targetN);
+    // Phase 126 (2026-05-29): non-facility endpoints count as visits, so
+    // shrink the corridor target by however many real-clinic endpoints
+    // are in play. Floor at 1 so the corridor still tries to find
+    // something even if both endpoints are clinics that already eat the
+    // whole budget — the user gets one extra "buffer" middle stop.
+    var endpointVisits = (typeof _phase126EndpointVisitCount === 'function') ? _phase126EndpointVisitCount() : 0;
+    var corridorN = Math.max(1, targetN - endpointVisits);
+    var result = _rpComputeWidthForVisits(A, B, corridorN);
     if(!result){
       if(typeof showToast === 'function') showToast('🎯 Start and End are too close (need >0.5 mi apart).');
       return;
@@ -32852,13 +32891,20 @@ function _rpRunAutoCompute(){
     var hint = document.getElementById('rp-ai-suggest-n-hint');
     if(hint){
       hint.style.display = 'block';
+      // Phase 126 (2026-05-29): when endpoints are clinics, the corridor
+      // only needs to cover (targetN - endpointVisits) middle stops.
+      // Break the math out in the hint so the rep sees how their cap
+      // gets split between corridor picks and endpoint clinics.
+      var endpointTail = (endpointVisits > 0)
+        ? ' + <b>' + endpointVisits + '</b> endpoint clinic' + (endpointVisits===1?'':'s') + ' = <b>' + targetN + ' total</b>'
+        : '';
       if(result.exact){
-        hint.innerHTML = '🎯 Corridor sized to <b>±' + result.halfWidth + ' mi</b> to cover the closest <b>' + targetN + ' green/yellow visit' + (targetN===1?'':'s') + '</b>. '
+        hint.innerHTML = '🎯 Corridor sized to <b>±' + result.halfWidth + ' mi</b> to cover the closest <b>' + corridorN + ' green/yellow visit' + (corridorN===1?'':'s') + '</b>' + endpointTail + '. '
           + result.available + ' total available within the ±' + result.maxCap + ' mi cap.';
       } else if(result.available === 0){
         hint.innerHTML = '⚠ <b>No green/yellow visits</b> within ±' + result.maxCap + ' mi of this Start→End line. Try a different corridor.';
       } else {
-        hint.innerHTML = '⚠ Only <b>' + result.available + '</b> green/yellow visit' + (result.available===1?'':'s') + ' fit within the <b>±' + result.maxCap + ' mi cap</b> for this route. Asked for ' + targetN + ' — using max corridor. Try a different Start/End for more candidates.';
+        hint.innerHTML = '⚠ Only <b>' + result.available + '</b> green/yellow visit' + (result.available===1?'':'s') + ' fit within the <b>±' + result.maxCap + ' mi cap</b> for this route. Asked for ' + corridorN + ' corridor stop' + (corridorN===1?'':'s') + endpointTail + ' — using max corridor. Try a different Start/End for more candidates.';
       }
     }
     // Phase 79 toast — surface cap-hit prominently
@@ -32866,7 +32912,14 @@ function _rpRunAutoCompute(){
       if(result.atCap){
         showToast('⚠ Only ' + result.available + ' visit' + (result.available===1?'':'s') + ' within ±' + result.maxCap + ' mi · corridor at max width');
       } else {
-        showToast('🎯 Corridor fit to ' + Math.min(targetN, result.available) + ' visits · ±' + result.halfWidth + ' mi');
+        // Phase 126: report corridor stops + endpoint visits separately
+        // so the rep sees the breakdown in the toast.
+        var fitN = Math.min(corridorN, result.available);
+        var totalReached = fitN + endpointVisits;
+        var detail = (endpointVisits > 0)
+          ? (fitN + ' corridor + ' + endpointVisits + ' endpoint = ' + totalReached + ' visits')
+          : (fitN + ' visits');
+        showToast('🎯 Corridor fit · ' + detail + ' · ±' + result.halfWidth + ' mi');
       }
     }
     if(typeof _rpRefreshCorridorBox === 'function') _rpRefreshCorridorBox();
@@ -38454,7 +38507,11 @@ function _rpV5Start(){
         var Async = window._RP_START_COORD || (typeof getRouteCoord === 'function' ? getRouteCoord(startSync) : null) || (typeof getCoordForBusiness === 'function' ? getCoordForBusiness(startSync) : null);
         var Bsync = window._RP_END_COORD   || (typeof getRouteCoord === 'function' ? getRouteCoord(endSync)   : null) || (typeof getCoordForBusiness === 'function' ? getCoordForBusiness(endSync)   : null);
         var targetSync = parseInt((document.getElementById('rp-target-visits') || {}).value, 10) || 5;
-        var fitSync = (Async && Bsync) ? _rpComputeWidthForVisits(Async, Bsync, targetSync) : null;
+        // Phase 126: shrink corridor target by however many non-facility
+        // endpoints exist — they count as visits too.
+        var epSync = (typeof _phase126EndpointVisitCount === 'function') ? _phase126EndpointVisitCount() : 0;
+        var corridorSyncN = Math.max(1, targetSync - epSync);
+        var fitSync = (Async && Bsync) ? _rpComputeWidthForVisits(Async, Bsync, corridorSyncN) : null;
         if(fitSync){
           var wInpSync = document.getElementById('rp-corridor');
           if(wInpSync) wInpSync.value = fitSync.halfWidth;
@@ -38594,9 +38651,15 @@ function _rpV5Start(){
   if(window._RP_CORRIDOR_MODE === 'visits'){
     var targetN = parseInt((document.getElementById('rp-target-visits') || {}).value, 10) || 5;
     targetN = Math.max(1, Math.min(20, targetN));
+    // Phase 126 (2026-05-29): the user's "Max number of visits" is the
+    // TOTAL cap — including any non-facility (real-clinic) endpoints.
+    // Shrink the corridor's slice so corridor stops + endpoint clinics
+    // sum to targetN.
+    var endpointVisitsCap = (typeof _phase126EndpointVisitCount === 'function') ? _phase126EndpointVisitCount() : 0;
+    var corridorCap = Math.max(1, targetN - endpointVisitsCap);
     flatCandidates.sort(function(a, b){ return Math.abs(a.perp) - Math.abs(b.perp); });
-    flatCandidates = flatCandidates.slice(0, targetN);
-    console.log('[_rpV5Start] visits-mode hard-cap → ' + flatCandidates.length + ' (target ' + targetN + ')');
+    flatCandidates = flatCandidates.slice(0, corridorCap);
+    console.log('[_rpV5Start] visits-mode hard-cap → ' + flatCandidates.length + ' corridor (target ' + targetN + ' total · ' + endpointVisitsCap + ' endpoint clinic' + (endpointVisitsCap===1?'':'s') + ')');
   }
   flatCandidates.sort(function(a, b){ return a.t - b.t; });
   _RP_V5_LAST = {
@@ -40248,12 +40311,32 @@ function _rpV5CommitPicksToDay(picks, di, me, removed, phase59Removed, phase59Ex
       || ('r_' + (S.days[di] && S.days[di].date || 'unknown') + '_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6));
     var added = 0, skipped = 0;
     var insertedNames = [];
-    picks.forEach(function(p){
-      if(!p || !p.name) return;
-      var exists = (S.days[di].rows || []).some(function(r){ return r && r.clinic === p.name; });
+    // Phase 126 (2026-05-29): if Start / End are non-facility clinics or
+    // MVAs, they're real visits and belong on the schedule too. Resolve
+    // their display names from the saved planner state. The Start row
+    // goes BEFORE the corridor picks, the End row goes AFTER — matching
+    // the OSRM travel order [Start → picks... → End].
+    function _ph126ResolveEndpointName(val, label){
+      if(!val || _phase126IsFacilityVal(val) || val === '__same__') return null;
+      // Prefer the captured label (clinic name with city suffix etc.);
+      // strip any leading icon/decoration the search-pick stamped on.
+      var raw = (label || val).toString();
+      return raw.replace(/^[^A-Za-z0-9]+/, '').split(' · ')[0].trim();
+    }
+    var startEndpointName = _ph126ResolveEndpointName(
+      window._RP_START_NAME || (document.getElementById('rp-start') || {}).value,
+      (document.getElementById('rp-start-search') || {}).value
+    );
+    var endEndpointName = _ph126ResolveEndpointName(
+      window._RP_END_NAME || (document.getElementById('rp-end') || {}).value,
+      (document.getElementById('rp-end-search') || {}).value
+    );
+    function _ph126PushRow(name){
+      if(!name) return;
+      var exists = (S.days[di].rows || []).some(function(r){ return r && r.clinic === name; });
       if(exists){ skipped++; return; }
       S.days[di].rows.push({
-        clinic: p.name,
+        clinic: name,
         member: me,
         memberConfirmed: !!me,
         status: 'Pending',
@@ -40261,11 +40344,20 @@ function _rpV5CommitPicksToDay(picks, di, me, removed, phase59Removed, phase59Ex
         rowConfirmed: false,
         rd: '', relationship: '', leadNotes: '', cancelReason: '',
         spending: null, _spId: null,
-        _routeId: routeIdForThis   // Phase 122b: which route this row belongs to
+        _routeId: routeIdForThis
       });
       added++;
-      insertedNames.push(p.name);
+      insertedNames.push(name);
+    }
+    // Start endpoint first (if it's a real clinic)
+    _ph126PushRow(startEndpointName);
+    // Corridor picks
+    picks.forEach(function(p){
+      if(!p || !p.name) return;
+      _ph126PushRow(p.name);
     });
+    // End endpoint last (if it's a real clinic AND not the same as Start)
+    if(endEndpointName && endEndpointName !== startEndpointName) _ph126PushRow(endEndpointName);
     if(typeof _saveS === 'function') _saveS();
     if(typeof refresh === 'function') refresh(di);
     // Phase 52 / 54: save the planner state + the inserted-names list so
