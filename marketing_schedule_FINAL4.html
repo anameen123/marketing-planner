@@ -2444,6 +2444,16 @@ body.role-front_desk #referrals-view {
       <!-- Calendar mode container (hidden when in list mode) -->
       <div id="hist-calendar-pane" style="display:none;background:#fff;border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:12px"></div>
 
+      <!-- Phase 156 (2026-05-30): smart text-search above the history
+           table. Mirrors the Phase 152 Gmail-style pattern — type any
+           clinic / doctor / city / status word and the list narrows
+           live. Combines with the month + day filters above. User
+           explicitly asked for filters across the member pages. -->
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+        <input type="text" id="hist-smart-search" placeholder="🔍 Filter visits by clinic, doctor, city, status…" oninput="_histOnSearchInput()" style="flex:1;min-width:220px;border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:12px;font-family:DM Sans,sans-serif;background:#fff">
+        <button type="button" onclick="_histClearSearch()" style="background:#fff;border:1px solid var(--border);border-radius:6px;padding:7px 12px;font-size:11px;font-weight:700;cursor:pointer;color:var(--muted);font-family:DM Sans,sans-serif" title="Clear the search box">✕ Clear</button>
+      </div>
+
       <div class="history-hdr">
         <div class="history-title">Visit History</div>
         <div class="history-meta" id="history-meta"></div>
@@ -12743,6 +12753,33 @@ window.renderUserBadge=renderUserBadge;
 
 function isAdmin(){ return CURRENT_USER&&CURRENT_USER.role==='admin'; }
 
+// Phase 149 (2026-05-30): companion role helpers next to isAdmin() so the
+// referrals overhaul + member-on-member protection can hook into them
+// without re-implementing the role check at every call site. CURRENT_USER
+// roles: 'admin' | 'member' | 'front_desk'. Marketing team members are
+// 'member'. Clinic-side users (UCP Plano, Frisco ER reception, etc.) are
+// 'front_desk'. Admin is admin. These return false on null/undefined so
+// callers don't need a defensive truthy check.
+function isMarketingMember(){ return CURRENT_USER && CURRENT_USER.role === 'member'; }
+window.isMarketingMember = isMarketingMember;
+function isFrontDesk(){ return CURRENT_USER && CURRENT_USER.role === 'front_desk'; }
+window.isFrontDesk = isFrontDesk;
+function getMyName(){ return (CURRENT_USER && (CURRENT_USER.name || CURRENT_USER.username)) || ''; }
+window.getMyName = getMyName;
+function getMyUsername(){ return (CURRENT_USER && CURRENT_USER.username) || ''; }
+window.getMyUsername = getMyUsername;
+// Truthy when "owner" string identifies the current user — used to gate
+// member-on-member edit attempts. Matches by display name OR username so
+// both legacy data (member: "Mike") and newer data (username: "mike2") work.
+function isMine(owner){
+  if(!owner || !CURRENT_USER) return false;
+  var nm = (CURRENT_USER.name || '').toLowerCase();
+  var un = (CURRENT_USER.username || '').toLowerCase();
+  var ow = String(owner).toLowerCase();
+  return ow === nm || ow === un;
+}
+window.isMine = isMine;
+
 // Shared admin-override audit note (per user 2026-05-26). Use this any time
 // admin overrides something a member or front desk did. Renders a yellow
 // banner directly below the affected value: "🛡️ Override by admin · <action>
@@ -14292,7 +14329,28 @@ function addReferralEntry(data){
     patientCount: 1,  // v2: always 1 (one entry = one patient)
     filledByName: String(data.filledByName || '').trim(),
     filledByEmail: (CURRENT_USER && CURRENT_USER.email) || '',
-    adminEdited:  null
+    adminEdited:  null,
+    // Phase 150 (2026-05-30): true when admin logged the patient instead
+    // of the destination FD. filledByName is free-text so admin can type
+    // any FD's name — this flag is the unambiguous "🛡️ logged by admin"
+    // signal the row badge + detail card render. False for normal FD logs
+    // and for the existing approvedByAdmin path (which already stamps).
+    loggedByAdminOverride: (function(){
+      try {
+        if(!(typeof isAdmin === 'function' && isAdmin())) return false;
+        // If this came from an admin approval, that path already stamps
+        // approvedByAdmin — don't double-flag.
+        if(window._crApprovingAsAdmin) return false;
+        return true;
+      } catch(_){ return false; }
+    })(),
+    loggedByAdminName: (function(){
+      try {
+        if(!(typeof isAdmin === 'function' && isAdmin())) return null;
+        if(window._crApprovingAsAdmin) return null;
+        return (CURRENT_USER && CURRENT_USER.name) || null;
+      } catch(_){ return null; }
+    })()
   };
   REFERRAL_LOG.unshift(entry); // newest first
   _saveReferralLog();
@@ -15121,7 +15179,19 @@ function renderReferralLog(){
   var fillerFilter = (pFilter && pFilter.value) || '';
   var paymentFilter = (payFilter && payFilter.value) || '';
   var searchTerm  = ((document.getElementById('rl-filter-search') || {}).value || '').toLowerCase();
+  // Phase 152 (2026-05-30): new high-signal filters layered ON TOP of the
+  // existing dropdown chain. Day-strip + survey segmented control read from
+  // window globals; both default to "all" so legacy callers see the same
+  // list. Picking a day OR a survey mode just narrows the existing filter.
+  var dayFilter = window._RL_FILTER_DAY || null;
+  var surveyMode = window._RL_FILTER_SURVEY || 'all';
   var filtered = REFERRAL_LOG.filter(function(e){
+    if(dayFilter){
+      var d = e.entryDate || (e.ts && e.ts.slice(0,10));
+      if(d !== dayFilter) return false;
+    }
+    if(surveyMode === 'surveyed' && e.isAnonymous) return false;
+    if(surveyMode === 'nosurvey' && !e.isAnonymous) return false;
     if(memFilter){
       // Match if ANY credited member equals the filter (v3 multi-member support)
       var allMembers = Array.isArray(e.memberNames) && e.memberNames.length ? e.memberNames : (e.memberName ? [e.memberName] : []);
@@ -15158,7 +15228,21 @@ function renderReferralLog(){
     return true;
   });
   if(filtered.length === 0){
-    entriesEl.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--muted);font-size:13px;font-style:italic">No entries match the current filters.</div>';
+    // Phase 152 (2026-05-30): include the active day + survey in the empty
+    // message so the rep doesn't think the data is missing when it's just
+    // narrowed. Critical per layout research: "without a visible 'X of Y'
+    // line, filtered-empty days look like broken days."
+    var emptyBits = [];
+    if(window._RL_FILTER_DAY) emptyBits.push('on ' + window._RL_FILTER_DAY);
+    if(window._RL_FILTER_SURVEY === 'surveyed') emptyBits.push('with a survey');
+    if(window._RL_FILTER_SURVEY === 'nosurvey') emptyBits.push('without a survey');
+    var emptyCtx = emptyBits.length ? ' ' + emptyBits.join(' · ') : '';
+    entriesEl.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--muted);font-size:13px"><div style="font-style:italic">No patients logged' + emptyCtx + '.</div>'
+      + (emptyBits.length ? '<button type="button" onclick="_rlJumpToToday()" style="margin-top:12px;background:#fff;border:1px solid var(--border);color:#1F3864;border-radius:8px;padding:7px 14px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">📅 Clear day filter + show all</button>' : '')
+      + '</div>';
+    // Still refresh strip + segment so the counts show context.
+    try { if(typeof _rlRenderDayStrip === 'function') _rlRenderDayStrip(); } catch(_){}
+    try { if(typeof _rlRenderSurveySegment === 'function') _rlRenderSurveySegment(); } catch(_){}
     return;
   }
   // Payment-mix mini-summary (drives the at-a-glance ratio chip above the
@@ -15250,8 +15334,13 @@ function renderReferralLog(){
       ? ' <span title="Override by admin · ' + esc(e.adminOverride.adminName || '') + '" style="font-size:9px;font-weight:700;color:#fff;background:#f59e0b;border-radius:5px;padding:1px 5px;margin-left:4px">🛡️</span>'
       : (e.adminEdited ? ' <span title="Edited by admin" style="font-size:9px;color:#f59e0b">✎</span>' : '');
 
-    rowsHtml += '<tr id="rl-row-' + e.id + '" onclick="_rlToggleExpand(\'' + e.id + '\')" style="' + (i%2===0?'':'background:#fafbfc') + ';border-bottom:1px solid var(--border);cursor:pointer">'
-      + '<td style="padding:9px 6px;text-align:center;font-size:11px;color:var(--muted);width:18px"><span id="rl-arrow-' + e.id + '">▸</span></td>'
+    // Phase 153 (2026-05-30): row click opens the patient-card modal
+    // (replaces the inline expand row). Card shows ALL details — the row
+    // itself stays compact. Inline _rlToggleExpand is still defined (the
+    // detail <tr> below is fine to keep as a defense if openReferralCard
+    // ever fails); we just don't fire toggleExpand from the row anymore.
+    rowsHtml += '<tr id="rl-row-' + e.id + '" onclick="openReferralCard(\'' + e.id + '\')" style="' + (i%2===0?'':'background:#fafbfc') + ';border-bottom:1px solid var(--border);cursor:pointer" title="Click to view full patient card">'
+      + '<td style="padding:9px 6px;text-align:center;font-size:11px;color:var(--muted);width:18px"><span id="rl-arrow-' + e.id + '" title="Open detail card">▸</span></td>'
       + '<td style="padding:9px 12px">' + whenHtml + editedMark + '</td>'
       + '<td style="padding:9px 12px">' + patHtml + '</td>'
       + '<td style="padding:9px 12px">' + srcHtml + '</td>'
@@ -15304,8 +15393,19 @@ function renderReferralLog(){
                 : ''))
       +   (e.approvedByAdmin && typeof _renderAdminOverrideNote === 'function'
             ? _renderAdminOverrideNote({
-                actionLabel: 'Approved the source referral',
+                actionLabel: 'Confirmed the source referral',
                 adminName: e.approvedBy || 'admin',
+                when: e.ts ? new Date(e.ts).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) : '',
+                originalActor: 'destination front desk'
+              })
+            : '')
+      // Phase 154 (2026-05-30): admin-logged-direct override (Phase 150
+      // flag). Separate from approvedByAdmin so we see both badges when
+      // admin both approved the referral AND logged the patient.
+      +   (e.loggedByAdminOverride && typeof _renderAdminOverrideNote === 'function'
+            ? _renderAdminOverrideNote({
+                actionLabel: 'Logged this patient directly',
+                adminName: e.loggedByAdminName || 'admin',
                 when: e.ts ? new Date(e.ts).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) : '',
                 originalActor: 'destination front desk'
               })
@@ -15316,8 +15416,262 @@ function renderReferralLog(){
   });
   rowsHtml += '</tbody></table>';
   entriesEl.innerHTML = _payMixHtml + rowsHtml;
+  // Phase 152 (2026-05-30): keep day-strip + survey segment counts live
+  // after every render. Safe to call here because neither helper triggers
+  // renderReferralLog (they only render their own DOM and update the
+  // window-level filter globals via separate click handlers).
+  try { if(typeof _rlRenderDayStrip === 'function') _rlRenderDayStrip(); } catch(_){}
+  try { if(typeof _rlRenderSurveySegment === 'function') _rlRenderSurveySegment(); } catch(_){}
 }
 window.renderReferralLog = renderReferralLog;
+
+// ════════════════════════════════════════════════════════════════════════════
+// PHASE 152 (2026-05-30) — DAY-STRIP + SURVEY SEGMENTED FILTER for Logged
+// Patients list. Per user 2026-05-30 + the layout research (Acuity / Google
+// Calendar mobile patterns): a sticky 7-day strip centered on today gives
+// the rep instant date-jump on mobile without burning vertical space the way
+// a full month grid does. Survey vs Non-survey is a high-signal split per
+// user ("I prefer to divide them into two lists"), modeled as a segmented
+// control so toggling preserves all other active filters.
+//
+// State globals — both default to "all" so the existing renderReferralLog
+// behavior is unchanged until a chip is clicked.
+//   _RL_FILTER_DAY    : null OR ISO 'YYYY-MM-DD'
+//   _RL_FILTER_SURVEY : 'all' | 'surveyed' | 'nosurvey'
+//   _RL_DAY_STRIP_OFFSET : how many days the strip is shifted from "today"
+//                          (negative = past, positive = future). Drives the
+//                          sliding window so the chosen day stays visible.
+// ════════════════════════════════════════════════════════════════════════════
+window._RL_FILTER_DAY = window._RL_FILTER_DAY || null;
+window._RL_FILTER_SURVEY = window._RL_FILTER_SURVEY || 'all';
+window._RL_DAY_STRIP_OFFSET = window._RL_DAY_STRIP_OFFSET || 0;
+
+function _rlIsoDate(d){
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+window._rlIsoDate = _rlIsoDate;
+
+function _rlRenderDayStrip(){
+  var host = document.getElementById('rl-day-strip');
+  if(!host) return;
+  var today = new Date(); today.setHours(0,0,0,0);
+  var offset = window._RL_DAY_STRIP_OFFSET || 0;
+  // Window spans 7 days centered on (today + offset). Far left = today + offset - 3.
+  var center = new Date(today); center.setDate(center.getDate() + offset);
+  var days = [];
+  for(var i = -3; i <= 3; i++){
+    var d = new Date(center); d.setDate(d.getDate() + i);
+    days.push(d);
+  }
+  var activeIso = window._RL_FILTER_DAY;
+  var todayIso  = _rlIsoDate(today);
+  // Count referrals per day (respects survey + member-scope filters so the
+  // strip's mini-counts match what the rep will see when they tap).
+  var perDay = {};
+  try {
+    (REFERRAL_LOG || []).forEach(function(e){
+      var d = e.entryDate || (e.ts && e.ts.slice(0,10));
+      if(!d) return;
+      perDay[d] = (perDay[d] || 0) + (parseInt(e.patientCount,10) || 1);
+    });
+  } catch(_){}
+  // The chips
+  var html = '<div style="display:flex;align-items:center;gap:4px;padding:2px 0">'
+    + '<button type="button" onclick="_rlShiftDayStrip(-7)" title="Earlier days" style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:13px;font-weight:700;cursor:pointer;color:#1F3864;flex-shrink:0">◀</button>'
+    + '<div style="display:flex;gap:5px;overflow-x:auto;flex:1;scrollbar-width:none;-ms-overflow-style:none;padding:2px 0">';
+  days.forEach(function(d){
+    var iso = _rlIsoDate(d);
+    var isToday = (iso === todayIso);
+    var isActive = (iso === activeIso);
+    var wkLbl = d.toLocaleDateString('en-US', { weekday: 'short' });
+    var dayNum = d.getDate();
+    var monthLbl = d.toLocaleDateString('en-US', { month: 'short' });
+    var count = perDay[iso] || 0;
+    var bg  = isActive ? 'linear-gradient(135deg,#1F3864,#7030A0)' : (isToday ? '#eff6ff' : '#fff');
+    var fg  = isActive ? '#fff' : (isToday ? '#1e40af' : '#1F3864');
+    var bord = isActive ? '#1F3864' : (isToday ? '#bfdbfe' : 'var(--border)');
+    var weight = (isActive || isToday) ? '800' : '600';
+    html += '<button type="button" onclick="_rlSetDay(\'' + iso + '\')" title="' + iso + '" style="background:' + bg + ';color:' + fg + ';border:1px solid ' + bord + ';border-radius:10px;padding:7px 10px;font-size:10px;font-weight:' + weight + ';cursor:pointer;font-family:DM Sans,sans-serif;display:flex;flex-direction:column;align-items:center;gap:1px;min-width:50px;flex-shrink:0;transition:all .12s">'
+      + '<span style="font-size:9px;text-transform:uppercase;letter-spacing:.04em;opacity:.85">' + wkLbl + '</span>'
+      + '<span style="font-size:16px;font-weight:800;line-height:1.05">' + dayNum + '</span>'
+      + '<span style="font-size:8px;opacity:.7">' + monthLbl + '</span>'
+      + (count > 0 ? '<span style="background:' + (isActive ? 'rgba(255,255,255,.25)' : '#fef3c7') + ';color:' + (isActive ? '#fff' : '#7c2d12') + ';font-size:8px;font-weight:700;padding:1px 5px;border-radius:8px;font-family:DM Mono,monospace;margin-top:2px">' + count + '</span>' : '<span style="font-size:8px;opacity:.4;margin-top:2px">·</span>')
+      + '</button>';
+  });
+  html += '</div>'
+    + '<button type="button" onclick="_rlShiftDayStrip(7)" title="Later days" style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:13px;font-weight:700;cursor:pointer;color:#1F3864;flex-shrink:0">▶</button>'
+    + '<button type="button" onclick="_rlSetDay(null)" title="Show all dates" style="background:' + (activeIso ? '#f1f5f9' : 'linear-gradient(135deg,#15803d,#16a34a)') + ';color:' + (activeIso ? 'var(--muted)' : '#fff') + ';border:1px solid ' + (activeIso ? 'var(--border)' : '#16a34a') + ';border-radius:8px;padding:6px 10px;font-size:10px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;flex-shrink:0;margin-left:4px">All</button>';
+  if(activeIso || offset !== 0){
+    html += '<button type="button" onclick="_rlJumpToToday()" title="Jump back to today" style="background:#fff;border:1px solid #fbbf24;color:#92400e;border-radius:8px;padding:6px 10px;font-size:10px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;flex-shrink:0;margin-left:4px">📅 Today</button>';
+  }
+  html += '</div>';
+  host.innerHTML = html;
+}
+window._rlRenderDayStrip = _rlRenderDayStrip;
+
+function _rlSetDay(iso){
+  window._RL_FILTER_DAY = iso || null;
+  if(iso){
+    // Align the strip's center on the picked day so it's visible.
+    var today = new Date(); today.setHours(0,0,0,0);
+    var picked = new Date(iso + 'T12:00:00');
+    var diffDays = Math.round((picked.getTime() - today.getTime()) / (24*60*60*1000));
+    window._RL_DAY_STRIP_OFFSET = diffDays;
+  }
+  _rlRenderDayStrip();
+  if(typeof renderReferralLog === 'function') renderReferralLog();
+}
+window._rlSetDay = _rlSetDay;
+
+function _rlShiftDayStrip(delta){
+  window._RL_DAY_STRIP_OFFSET = (window._RL_DAY_STRIP_OFFSET || 0) + delta;
+  _rlRenderDayStrip();
+}
+window._rlShiftDayStrip = _rlShiftDayStrip;
+
+function _rlJumpToToday(){
+  window._RL_DAY_STRIP_OFFSET = 0;
+  window._RL_FILTER_DAY = null;
+  _rlRenderDayStrip();
+  if(typeof renderReferralLog === 'function') renderReferralLog();
+}
+window._rlJumpToToday = _rlJumpToToday;
+
+function _rlRenderSurveySegment(){
+  var host = document.getElementById('rl-survey-seg');
+  if(!host) return;
+  var mode = window._RL_FILTER_SURVEY || 'all';
+  // Live counts so the rep sees the volume per bucket before they click.
+  var sCount = 0, nCount = 0, aCount = 0;
+  try {
+    (REFERRAL_LOG || []).forEach(function(e){
+      aCount++;
+      if(e.isAnonymous) nCount++;
+      else sCount++;
+    });
+  } catch(_){}
+  var segs = [
+    { key:'all',      label:'All',           count:aCount, color:'#1F3864' },
+    { key:'surveyed', label:'Surveyed',      count:sCount, color:'#15803d' },
+    { key:'nosurvey', label:'Non-surveyed',  count:nCount, color:'#b45309' }
+  ];
+  host.innerHTML = '<div style="display:inline-flex;background:#f1f5f9;border:1px solid var(--border);border-radius:10px;padding:3px;gap:2px">'
+    + segs.map(function(s){
+        var active = (s.key === mode);
+        var bg = active ? '#fff' : 'transparent';
+        var fg = active ? s.color : 'var(--muted)';
+        var shadow = active ? 'box-shadow:0 1px 3px rgba(15,23,42,.12);' : '';
+        return '<button type="button" onclick="_rlSetSurveyMode(\'' + s.key + '\')" style="background:' + bg + ';color:' + fg + ';border:none;border-radius:8px;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;display:inline-flex;align-items:center;gap:5px;transition:all .12s;' + shadow + '">'
+          + s.label
+          + ' <span style="background:' + (active ? '#f8fafc' : '#fff') + ';color:' + fg + ';font-size:9px;font-weight:700;padding:1px 6px;border-radius:8px;font-family:DM Mono,monospace">' + s.count + '</span>'
+          + '</button>';
+      }).join('')
+    + '</div>';
+}
+window._rlRenderSurveySegment = _rlRenderSurveySegment;
+
+function _rlSetSurveyMode(mode){
+  if(mode !== 'all' && mode !== 'surveyed' && mode !== 'nosurvey') return;
+  window._RL_FILTER_SURVEY = mode;
+  _rlRenderSurveySegment();
+  if(typeof renderReferralLog === 'function') renderReferralLog();
+}
+window._rlSetSurveyMode = _rlSetSurveyMode;
+
+// ════════════════════════════════════════════════════════════════════════════
+// PHASE 153 (2026-05-30) — PATIENT CARD DETAIL MODAL
+// Click any logged-patient row → full-screen card with every recorded
+// field. Row stays compact (just primary info); the card shows ALL details
+// the audit needs: source, destination, member, insurance, complaint,
+// timestamps, filler, admin-override notes, etc. Mobile-first — full-
+// screen on phones, centered on desktop.
+// ════════════════════════════════════════════════════════════════════════════
+function openReferralCard(entryId){
+  try {
+    if(!Array.isArray(REFERRAL_LOG)) return;
+    var e = REFERRAL_LOG.find(function(r){ return r.id === entryId; });
+    if(!e){ if(typeof showToast === 'function') showToast('Patient record not found.'); return; }
+    var modalId = 'phase153-patient-card';
+    var existing = document.getElementById(modalId);
+    if(existing) existing.remove();
+    var modal = document.createElement('div');
+    modal.id = modalId;
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.65);z-index:99999;display:flex;align-items:flex-start;justify-content:center;font-family:DM Sans,sans-serif;animation:fadeIn .15s ease-out;padding:20px;overflow-y:auto';
+    document.body.appendChild(modal);
+    function safe(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+    var fac = (typeof REFERRAL_FACILITIES !== 'undefined') ? REFERRAL_FACILITIES.find(function(f){ return f.key === e.destinationFacility; }) : null;
+    var chan = (typeof REFERRAL_CHANNELS !== 'undefined') ? REFERRAL_CHANNELS.find(function(c){ return c.key === e.sourceChannel; }) : null;
+    var when = e.entryDate && e.entryTime ? (e.entryDate + ' · ' + e.entryTime) : (e.ts ? new Date(e.ts).toLocaleString('en-US') : '—');
+    var payment = e.paymentType === 'self_paid' ? '💵 Self-paid'
+                : e.paymentType === 'insurance' ? ('🪪 Insurance' + (e.insuranceName ? ' · ' + safe(e.insuranceName) : ''))
+                : '⚪ Not recorded';
+    var members = Array.isArray(e.memberNames) && e.memberNames.length ? e.memberNames.join(', ') : (e.memberName || (e.noMarketingRep ? '🚫 None (no marketing rep)' : '—'));
+    var sourceLine = chan
+      ? (chan.icon + ' ' + chan.label + (e.sourceBusiness ? ' · ' + safe(e.sourceBusiness) : ''))
+      : (e.sourceChannel || '—');
+    var ageGender = [];
+    if(e.age != null && e.age !== '') ageGender.push(e.age + 'y');
+    if(e.gender) ageGender.push(e.gender);
+    var surveyBadge = e.isAnonymous
+      ? '<span style="background:#fef3c7;color:#7c2d12;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px">⚠ No-survey</span>'
+      : '<span style="background:#dcfce7;color:#166534;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px">✓ Surveyed</span>';
+    function row(label, val, color){
+      if(!val && val !== 0) val = '—';
+      return '<div style="display:flex;justify-content:space-between;gap:14px;padding:8px 0;border-bottom:1px solid #f1f5f9">'
+        + '<span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;flex-shrink:0;max-width:130px">' + label + '</span>'
+        + '<span style="font-size:12px;color:' + (color || 'var(--text)') + ';text-align:right;font-weight:600;word-break:break-word">' + val + '</span>'
+        + '</div>';
+    }
+    var adminBadges = '';
+    if(e.approvedByAdmin){
+      adminBadges += '<div style="margin-top:10px;background:#fef3c7;border-left:3px solid #f59e0b;border-radius:6px;padding:8px 11px;font-size:11px;color:#7c2d12"><b>🛡️ Confirmed by admin</b> · ' + safe(e.approvedBy || 'admin') + '</div>';
+    }
+    if(e.loggedByAdminOverride){
+      adminBadges += '<div style="margin-top:6px;background:#fef3c7;border-left:3px solid #f59e0b;border-radius:6px;padding:8px 11px;font-size:11px;color:#7c2d12"><b>🛡️ Logged by admin</b> · ' + safe(e.loggedByAdminName || 'admin') + ' on behalf of the destination front desk</div>';
+    }
+    if(e.adminEdited){
+      adminBadges += '<div style="margin-top:6px;background:#fef3c7;border-left:3px solid #f59e0b;border-radius:6px;padding:8px 11px;font-size:11px;color:#7c2d12"><b>✎ Last edited by admin</b> · ' + safe(new Date(e.adminEdited).toLocaleString()) + '</div>';
+    }
+    modal.innerHTML = ''
+      + '<div style="background:#fff;border-radius:14px;padding:0;max-width:520px;width:100%;box-shadow:0 30px 70px rgba(15,23,42,.5);max-height:90vh;display:flex;flex-direction:column;overflow:hidden">'
+      // Header bar
+      +   '<div style="background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;padding:18px 22px;display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-shrink:0">'
+      +     '<div style="flex:1;min-width:0">'
+      +       '<div style="font-size:11px;opacity:.85;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Patient referral · ' + safe(when) + '</div>'
+      +       '<div style="font-size:18px;font-weight:800;line-height:1.25">' + (safe(e.patientNumber) || 'Patient #—') + (ageGender.length ? ' <span style="opacity:.7;font-size:13px;font-weight:600">· ' + safe(ageGender.join(' · ')) + '</span>' : '') + '</div>'
+      +       '<div style="margin-top:6px">' + surveyBadge + '</div>'
+      +     '</div>'
+      +     '<button type="button" onclick="document.getElementById(\'' + modalId + '\').remove()" style="background:rgba(255,255,255,.18);border:none;color:#fff;font-size:18px;font-weight:700;width:34px;height:34px;border-radius:8px;cursor:pointer;flex-shrink:0">×</button>'
+      +   '</div>'
+      // Body scroll area
+      +   '<div style="padding:18px 22px;overflow-y:auto;flex:1">'
+      +     row('Source', sourceLine)
+      +     row('Destination', fac ? ('🏥 ' + safe(fac.label) + (fac.city ? ' · ' + safe(fac.city) : '')) : safe(e.destinationFacility))
+      +     row('Chief complaint', safe(e.chiefComplaint))
+      +     row('Payment', payment)
+      +     row('Marketer credited', safe(members))
+      +     row('Logged by', safe(e.filledByName || '—'))
+      +     (e.extraNotes ? row('Notes', safe(e.extraNotes)) : '')
+      +     (e.outreachEventName ? row('Outreach event', safe(e.outreachEventName)) : '')
+      +     (e.otherSpecify ? row('Other source', safe(e.otherSpecify)) : '')
+      +     row('Record ID', '<span style="font-family:DM Mono,monospace;font-size:10px;color:var(--muted)">' + safe(e.id) + '</span>')
+      +     adminBadges
+      +   '</div>'
+      // Footer with Edit + Close
+      +   '<div style="padding:14px 22px;background:#f8fafc;border-top:1px solid var(--border);display:flex;justify-content:space-between;gap:10px;flex-shrink:0">'
+      +     '<button type="button" onclick="document.getElementById(\'' + modalId + '\').remove()" style="background:#fff;color:#475569;border:1px solid var(--border);border-radius:8px;padding:9px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">Close</button>'
+      +     ((typeof editReferralEntry === 'function' && (isAdmin() || (typeof isFrontDesk === 'function' && isFrontDesk())))
+            ? '<button type="button" onclick="document.getElementById(\'' + modalId + '\').remove(); editReferralEntry(\'' + safe(e.id) + '\')" style="background:linear-gradient(135deg,#1F3864,#1e3a8a);color:#fff;border:none;border-radius:8px;padding:9px 22px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">✎ Edit this record</button>'
+            : '')
+      +   '</div>'
+      + '</div>';
+    modal.addEventListener('click', function(ev){ if(ev.target === modal) modal.remove(); });
+  } catch(err){
+    console.error('[153] openReferralCard failed:', err);
+    if(typeof showToast === 'function') showToast('Could not open patient card.');
+  }
+}
+window.openReferralCard = openReferralCard;
 
 // Navigate the per-member monthly counter panel.
 //   delta = -1 (prev), +1 (next), 0 (this month), 'all' (all-time view)
@@ -15623,6 +15977,11 @@ function switchReferralSubtab(which){
     paneList.style.display = '';
     paneCal.style.display  = 'none';
     setTab(tabOut, false); setTab(tabList, true); setTab(tabCal, false);
+    // Phase 152 (2026-05-30): paint the day-strip + survey segmented
+    // control on every tab-switch so the live counts reflect any new
+    // entries logged since the last visit.
+    try { if(typeof _rlRenderDayStrip === 'function') _rlRenderDayStrip(); } catch(_){}
+    try { if(typeof _rlRenderSurveySegment === 'function') _rlRenderSurveySegment(); } catch(_){}
     renderReferralLog();
   }
 }
@@ -16112,8 +16471,8 @@ function _rlRenderCalDayDetail(iso){
       var statusBg = r.status === 'pending' ? '#fffbeb' : r.status === 'approved' ? '#f0fdf4' : r.status === 'incomplete' ? '#fef2f2' : '#f8fafc';
       // Phase 112a (2026-05-29): renamed display labels per user — internal
     // status keys (approved/declined) unchanged for back-compat, only the
-    // human-visible badge shows Successful / Unsuccessful now.
-    var statusLabel = r.status === 'pending' ? '⏳ Pending' : r.status === 'approved' ? '✓ Successful' : r.status === 'declined' ? '✗ Unsuccessful' : r.status === 'incomplete' ? '⏰ Incomplete (no-show)' : '↩ Retracted';
+    // human-visible badge shows Confirmed / Unconfirmed (Phase 147 rename).
+    var statusLabel = r.status === 'pending' ? '⏳ Pending' : r.status === 'approved' ? '✓ Confirmed' : r.status === 'declined' ? '✗ Unconfirmed' : r.status === 'incomplete' ? '⏰ Incomplete (no-show)' : '↩ Retracted';
       var expDt = r.expectedAt ? new Date(r.expectedAt) : null;
       var expTime = (expDt && !isNaN(expDt.getTime())) ? expDt.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}) : '—';
       var creatorLbl = r.creatorRole === 'uc_plano_fd' ? ('🏥 UC Plano · ' + (r.createdBy || '?')) : ('👥 ' + (r.createdBy || '—'));
@@ -16498,6 +16857,20 @@ window._confirmDeleteReferral = _confirmDeleteReferral;
 function openReferralForm(editId){
   var modal = document.getElementById('referral-form-modal');
   if(!modal) return;
+  // ── PHASE 150 (2026-05-30) — FRONT-DESK-ONLY LOG-PATIENT GATE ─────────
+  // Per user 2026-05-30: "login the patient should be only by the front
+  // desks." Marketing members can't log patients directly — they create
+  // referrals; the destination FD then logs. Admin retains access (and
+  // their action gets stamped with the existing Phase 28 override badge
+  // since the form's CURRENT_USER.role !== 'front_desk' path triggers the
+  // admin audit at submit). Edit mode (editId set) also requires FD/admin
+  // since back-editing a patient log is an FD action.
+  if(typeof isMarketingMember === 'function' && isMarketingMember()){
+    if(typeof showToast === 'function'){
+      showToast('🔒 Logging patients is for the destination front desk. Create a Referral instead — the front desk will log the patient when the referral is approved.');
+    }
+    return;
+  }
   // Per user 2026-05-22: reset the survey-mode toggle to 'have' on every open
   // so the form starts in the normal full-record state. When editing an
   // existing record, also 'have' (anonymous entries don't open this dialog).
@@ -17546,6 +17919,37 @@ function _crSaveReferral(){
     if(typeof MEMBERS !== 'undefined' && Array.isArray(MEMBERS) && MEMBERS.indexOf(createdBy) < 0){
       showErr('"' + createdBy + '" is not a current marketing member. Pick from the dropdown.'); return;
     }
+    // ── PHASE 149 (2026-05-30) — MEMBER-ON-MEMBER PROTECTION ─────────────
+    // The "Abraur bug": prior code accepted any member name from the dropdown
+    // even when the signed-in user was someone else. A marketing rep could
+    // create a referral attributed to a teammate (or even to UC Plano staff
+    // by switching the radio). That's exactly the action the user said must
+    // never be allowed: "every member cannot assign or do anything on
+    // behalf of the other one." We now enforce self-only for members. Admin
+    // can still attribute to any member but must confirm + we stamp an
+    // audit flag onto the referral so the row + card show "🛡️ Override by
+    // admin · created on behalf of <member>". Front desk hitting this path
+    // (shouldn't happen — they use UC Plano radio) is blocked outright.
+    if(typeof isAdmin === 'function' && isAdmin()){
+      // Admin path — explicit confirm + stamp audit metadata on the entry
+      if(!isMine(createdBy)){
+        if(!window._PHASE149_CR_ADMIN_CONFIRMED){
+          var ok = window.confirm('Create this referral on behalf of "' + createdBy + '"?\n\nYou are signed in as admin. The row will be stamped with a "Created by admin" override note for the audit trail.');
+          if(!ok){ showErr('Cancelled — pick yourself as the creator or confirm the admin override.'); return; }
+          window._PHASE149_CR_ADMIN_CONFIRMED = true;
+        }
+      }
+    } else if(typeof isMarketingMember === 'function' && isMarketingMember()){
+      // Member path — must match the signed-in user
+      if(!isMine(createdBy)){
+        showErr('You can only create a referral as yourself ("' + getMyName() + '"). Members can\'t create on behalf of another team member — ask admin if this is needed.');
+        return;
+      }
+    } else if(typeof isFrontDesk === 'function' && isFrontDesk()){
+      // Front desk shouldn't be here — they should use the UC Plano radio
+      showErr('Front-desk accounts can\'t create marketing-attributed referrals from this form. Use the UC Plano option, or ask a marketing rep to create it.');
+      return;
+    }
     creatorRole = 'marketing';
   } else if(typeRadio.value === 'uc_plano_fd'){
     var ucInp = document.getElementById('cr-creator-ucplano-name');
@@ -17629,7 +18033,23 @@ function _crSaveReferral(){
     rideBookedAt: null,    // ISO timestamp
     rideBookingNote: null, // free-text note from booker (e.g. ETA, ride id)
     preContactConfirmed: preContactConfirmed, // gate enforced at submit
-    followUpActions: []                        // audit log appended by follow-up engine (Phase B)
+    followUpActions: [],                       // audit log appended by follow-up engine (Phase B)
+    // Phase 149 (2026-05-30): admin-override audit. True when admin created
+    // this on behalf of another member (createdBy !== signed-in admin name).
+    // Drives the "🛡️ Override by admin" badge on the row + card detail.
+    createdByAdminOverride: (function(){
+      try {
+        if(!(typeof isAdmin === 'function' && isAdmin())) return false;
+        if(creatorRole !== 'marketing') return false;
+        return !isMine(createdBy);
+      } catch(_){ return false; }
+    })(),
+    createdByAdminName: (function(){
+      try {
+        if(!(typeof isAdmin === 'function' && isAdmin())) return null;
+        return (CURRENT_USER && CURRENT_USER.name) || null;
+      } catch(_){ return null; }
+    })()
   };
   // Phase 120b (2026-05-29): if we're EDITING an existing referral (the
   // user clicked ✏ Edit), override instead of pushing a new entry. The
@@ -17643,7 +18063,7 @@ function _crSaveReferral(){
       catch(e){ console.error('[120b] override failed:', e); }
       window._PR_EDITING_ID = null;
       closeCreateReferralForm();
-      if(typeof showToast === 'function') showToast('✓ Referral edited — previous approval/counter undone, status reset to Pending for re-approval.');
+      if(typeof showToast === 'function') showToast('✓ Referral edited — previous confirmation/counter undone, status reset to Pending for re-confirmation.');
       return;
     }
     // Referral disappeared between open and save → fall through to push as new
@@ -17651,9 +18071,15 @@ function _crSaveReferral(){
   }
   PENDING_REFERRALS.push(entry);
   _savePendingReferrals();
+  // Phase 149 (2026-05-30): clear the one-shot admin-override confirm flag
+  // so a fresh Create dialog re-prompts the next time admin attributes to
+  // another member. Without this, dismissing the confirm once would let
+  // every subsequent referral that session silently slip the audit stamp.
+  try { window._PHASE149_CR_ADMIN_CONFIRMED = false; } catch(_){}
   closeCreateReferralForm();
   if(typeof renderPendingReferrals === 'function') renderPendingReferrals();
-  if(typeof showToast === 'function') showToast('📥 Referral created — ' + sourceName + ' → ' + ((REFERRAL_FACILITIES.find(function(f){return f.key === destRadio.value;}) || {}).label || destRadio.value));
+  var adminTag = entry.createdByAdminOverride ? ' (🛡️ admin override · on behalf of ' + (entry.createdBy || 'member') + ')' : '';
+  if(typeof showToast === 'function') showToast('📥 Referral created — ' + sourceName + ' → ' + ((REFERRAL_FACILITIES.find(function(f){return f.key === destRadio.value;}) || {}).label || destRadio.value) + adminTag);
 }
 window._crSaveReferral = _crSaveReferral;
 
@@ -17686,8 +18112,8 @@ function _prRenderStatusChips(scopedItems){
   var defs = [
     { key:'all',         label:'All',          icon:'',   color:'#1F3864' },
     { key:'pending',     label:'Pending',      icon:'⏳', color:'#d97706' },
-    { key:'approved',    label:'Successful',   icon:'✓',  color:'#16a34a' },
-    { key:'declined',    label:'Unsuccessful', icon:'✗',  color:'#dc2626' },
+    { key:'approved',    label:'Confirmed',    icon:'✓',  color:'#16a34a' },
+    { key:'declined',    label:'Unconfirmed',  icon:'✗',  color:'#dc2626' },
     { key:'incomplete',  label:'Incomplete',   icon:'⏰', color:'#7c2d12' },
     { key:'retracted',   label:'Retracted',    icon:'↩',  color:'#64748b' }
   ];
@@ -17777,7 +18203,27 @@ function renderPendingReferrals(){
   var scopedAll = (PENDING_REFERRALS || []).slice();
   if(isFD && CURRENT_USER.facilityKey){
     scopedAll = scopedAll.filter(function(r){ return r.destinationFacility === CURRENT_USER.facilityKey; });
+  } else if(typeof isMarketingMember === 'function' && isMarketingMember()){
+    // ── PHASE 151 (2026-05-30) — MARKETING MEMBER SCOPE ────────────────
+    // Per user 2026-05-30: "the patient who is, for example, a referral
+    // is for a patient who's supposed to be going to Frisco, only Frisco
+    // will see that in the pending." For marketing members the equivalent
+    // is: you see ONLY the pending referrals you created. Status flips
+    // (confirmed / unconfirmed / etc.) still belong to your view since
+    // createdBy stays stamped, so your historical successes/failures still
+    // show up in your list. Admin sees everyone, FD scoped by facility,
+    // marketing member scoped by creator. Admin-override creations land
+    // in the credited member's list because createdBy is set to that
+    // member's name (admin's identity is in createdByAccount, separate).
+    scopedAll = scopedAll.filter(function(r){
+      // Their own creations
+      if(isMine(r.createdBy)) return true;
+      // Admin-override creations attributed to them (defense for the
+      // Abraur-style admin attributions — createdBy IS them).
+      return false;
+    });
   }
+  // Admin path (no else) keeps the full list.
   // Chips + dropdowns reflect SCOPED data (not the current view) so the
   // rep always sees an accurate "(N)" count next to each chip + real-data
   // dropdown options.
@@ -17814,10 +18260,13 @@ function renderPendingReferrals(){
   }
   // Sort: newest first
   items.sort(function(a, b){ return (b.createdAt || '').localeCompare(a.createdAt || ''); });
-  // Count badge (pending only, scope already applied)
+  // Count badge (pending only, scope already applied).
+  // Phase 151 (2026-05-30): respect the marketing-member scope so the
+  // badge matches what they actually see in the list.
   var pendingCount = (PENDING_REFERRALS || []).filter(function(r){
     if(r.status !== 'pending') return false;
     if(isFD && CURRENT_USER.facilityKey) return r.destinationFacility === CURRENT_USER.facilityKey;
+    if(typeof isMarketingMember === 'function' && isMarketingMember()) return isMine(r.createdBy);
     return true;
   }).length;
   if(badge) badge.textContent = pendingCount;
@@ -17832,8 +18281,8 @@ function renderPendingReferrals(){
     var statusBg = r.status === 'pending' ? '#fffbeb' : r.status === 'approved' ? '#f0fdf4' : r.status === 'incomplete' ? '#fef2f2' : '#f8fafc';
     // Phase 112a (2026-05-29): renamed display labels per user — internal
     // status keys (approved/declined) unchanged for back-compat, only the
-    // human-visible badge shows Successful / Unsuccessful now.
-    var statusLabel = r.status === 'pending' ? '⏳ Pending' : r.status === 'approved' ? '✓ Successful' : r.status === 'declined' ? '✗ Unsuccessful' : r.status === 'incomplete' ? '⏰ Incomplete (no-show)' : '↩ Retracted';
+    // human-visible badge shows Confirmed / Unconfirmed (Phase 147 rename).
+    var statusLabel = r.status === 'pending' ? '⏳ Pending' : r.status === 'approved' ? '✓ Confirmed' : r.status === 'declined' ? '✗ Unconfirmed' : r.status === 'incomplete' ? '⏰ Incomplete (no-show)' : '↩ Retracted';
     var expDt = r.expectedAt ? new Date(r.expectedAt) : null;
     var expStr = (expDt && !isNaN(expDt.getTime())) ? expDt.toLocaleString('en-US',{weekday:'short',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) : '—';
     var creatorLbl = r.creatorRole === 'uc_plano_fd' ? ('UC Plano FD · ' + (r.createdBy || '?')) : (r.createdBy || '—');
@@ -17849,14 +18298,15 @@ function renderPendingReferrals(){
     );
     if(canApprove){
       // Phase 112a (2026-05-29): renamed Approve→Successful, Decline→Unsuccessful
+      // Phase 147 (2026-05-30): renamed again to Confirmed / Unconfirmed
       // in the button labels. Handlers (approvePendingReferral / declinePendingReferral)
       // unchanged — they still set status='approved'/'declined' internally.
       var approveLabel = isAdminViewer && !(isFD && CURRENT_USER.facilityKey === r.destinationFacility)
-        ? '✓ Mark Successful & log patient (admin override)'
-        : '✓ Mark Successful & log patient';
+        ? '✓ Confirm & log patient (admin override)'
+        : '✓ Confirm & log patient';
       actions = '<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">'
         + '<button onclick="approvePendingReferral(\'' + r.id + '\')" style="background:#16a34a;border:none;color:#fff;border-radius:6px;padding:7px 14px;font-size:11px;font-weight:700;cursor:pointer">' + approveLabel + '</button>'
-        + '<button onclick="declinePendingReferral(\'' + r.id + '\')" style="background:transparent;border:1px solid #fca5a5;color:#991b1b;border-radius:6px;padding:7px 14px;font-size:11px;font-weight:600;cursor:pointer">✗ Mark Unsuccessful</button>'
+        + '<button onclick="declinePendingReferral(\'' + r.id + '\')" style="background:transparent;border:1px solid #fca5a5;color:#991b1b;border-radius:6px;padding:7px 14px;font-size:11px;font-weight:600;cursor:pointer">✗ Mark Unconfirmed</button>'
         + '</div>';
     } else if(r.status === 'approved' && r.approvedAt){
       // Retraction window — 1 hour for the approving staff
@@ -17864,7 +18314,7 @@ function renderPendingReferrals(){
       var canRetract = (ageMs < REFERRAL_APPROVE_RETRACT_MS) && isFD && r.approvedBy === CURRENT_USER.name;
       if(canRetract){
         var minLeft = Math.max(1, Math.round((REFERRAL_APPROVE_RETRACT_MS - ageMs) / 60000));
-        actions = '<div style="margin-top:8px"><button onclick="retractApprovedReferral(\'' + r.id + '\')" style="background:transparent;border:1px solid #fca5a5;color:#991b1b;border-radius:6px;padding:5px 12px;font-size:10px;font-weight:600;cursor:pointer">↩ Retract approval (' + minLeft + ' min left)</button></div>';
+        actions = '<div style="margin-top:8px"><button onclick="retractApprovedReferral(\'' + r.id + '\')" style="background:transparent;border:1px solid #fca5a5;color:#991b1b;border-radius:6px;padding:5px 12px;font-size:10px;font-weight:600;cursor:pointer">↩ Retract confirmation (' + minLeft + ' min left)</button></div>';
       }
     }
     // Marketing creator retraction (before front desk approves)
@@ -17880,7 +18330,7 @@ function renderPendingReferrals(){
     //   • Creator (own referrals, any status except retracted)
     //   • Admin (everyone, any status except retracted)
     //   • Destination front desk (referrals to their facility, any
-    //     status — they're the ones who picked Successful/Unsuccessful
+    //     status — they're the ones who picked Confirmed/Unconfirmed
     //     and the most likely to need to fix a misclick)
     var meName    = (CURRENT_USER && CURRENT_USER.name) || '';
     var isMyRef   = !!meName && r.createdBy === meName;
@@ -17949,8 +18399,20 @@ function renderPendingReferrals(){
       var adminName = (r.approvedBy || '?').replace(/</g,'&lt;');
       var when = r.approvedAt ? new Date(r.approvedAt).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) : '';
       adminOverrideBadge = (typeof _renderAdminOverrideNote === 'function')
-        ? _renderAdminOverrideNote({ actionLabel:'Approved this referral', adminName:adminName, when:when, originalActor:'destination front desk' })
-        : '<div style="margin-top:8px;background:#fef3c7;border:1px solid #fcd34d;border-left:3px solid #f59e0b;border-radius:6px;padding:7px 10px;font-size:11px;color:#7c2d12;line-height:1.5"><b>🛡️ Override by admin</b> · Approved by <b>'+adminName+'</b> on <b>'+when+'</b> instead of the destination front desk.</div>';
+        ? _renderAdminOverrideNote({ actionLabel:'Confirmed this referral', adminName:adminName, when:when, originalActor:'destination front desk' })
+        : '<div style="margin-top:8px;background:#fef3c7;border:1px solid #fcd34d;border-left:3px solid #f59e0b;border-radius:6px;padding:7px 10px;font-size:11px;color:#7c2d12;line-height:1.5"><b>🛡️ Override by admin</b> · Confirmed by <b>'+adminName+'</b> on <b>'+when+'</b> instead of the destination front desk.</div>';
+    }
+    // ── PHASE 154 (2026-05-30) — CREATE-ON-BEHALF ADMIN BADGE ──────────
+    // Stamped by Phase 149 when admin creates a referral attributed to
+    // another member. Renders even when the referral hasn't been confirmed
+    // yet, so the audit trail starts at creation.
+    if(r.createdByAdminOverride){
+      var creAdmin = (r.createdByAdminName || '?').replace(/</g,'&lt;');
+      var creWhen = r.createdAt ? new Date(r.createdAt).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) : '';
+      var creOrig = (r.createdBy || 'a member').replace(/</g,'&lt;');
+      adminOverrideBadge += (typeof _renderAdminOverrideNote === 'function')
+        ? _renderAdminOverrideNote({ actionLabel:'Created this referral', adminName:creAdmin, when:creWhen, originalActor:creOrig })
+        : '<div style="margin-top:8px;background:#fef3c7;border:1px solid #fcd34d;border-left:3px solid #f59e0b;border-radius:6px;padding:7px 10px;font-size:11px;color:#7c2d12;line-height:1.5"><b>🛡️ Override by admin</b> · Created by <b>'+creAdmin+'</b> on <b>'+creWhen+'</b> on behalf of <b>'+creOrig+'</b>.</div>';
     }
     // Phase 19b: render audit log of follow-up actions (if any)
     var auditTrail = '';
@@ -18052,8 +18514,8 @@ function _crRenderMonthlySummary(){
       + '</div>'
       + '<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:6px;font-size:10px;color:#475569">'
       +   '<span title="Pending — not yet resolved">⏳ ' + b.pending + '</span>'
-      +   '<span title="Successful (Approved) — patient confirmed at destination">' + pctChip(b.pctOk, '#16a34a') + ' ' + b.ok + ' ok</span>'
-      +   '<span title="Unsuccessful or incomplete — patient declined or didn\'t show">' + pctChip(b.pctNo, '#dc2626') + ' ' + b.no + ' no</span>'
+      +   '<span title="Confirmed — patient arrived at destination">' + pctChip(b.pctOk, '#16a34a') + ' ' + b.ok + ' ok</span>'
+      +   '<span title="Unconfirmed or incomplete — patient declined or didn\'t show">' + pctChip(b.pctNo, '#dc2626') + ' ' + b.no + ' no</span>'
       + '</div>'
       + '<div style="margin-top:3px;font-size:9px;color:#94a3b8;font-style:italic">Ratio is over ' + b.closed + ' closed referral' + (b.closed === 1 ? '' : 's') + (b.pending > 0 ? ' (excludes ' + b.pending + ' pending)' : '') + '</div>'
       + '</div>';
@@ -18171,7 +18633,7 @@ function approvePendingReferral(id){
   var isAdminApprover = (typeof isAdmin === 'function') && isAdmin();
   var isFD = !!(CURRENT_USER && CURRENT_USER.role === 'front_desk');
   if(!isAdminApprover && !isFD){
-    if(typeof showToast === 'function') showToast('Only the destination front desk (or admin) can approve referrals.');
+    if(typeof showToast === 'function') showToast('Only the destination front desk (or admin) can confirm referrals.');
     return;
   }
   if(!isAdminApprover && isFD && CURRENT_USER.facilityKey !== ref.destinationFacility){
@@ -18228,9 +18690,9 @@ function declinePendingReferral(id){
   if(typeof showConfirm === 'function'){
     showConfirm({
       icon: '!',
-      msg: 'Decline this referral?',
-      sub: 'Mark it as declined — no patient log will be created. Use this when the patient didn\'t show up.',
-      yesLabel: 'Decline',
+      msg: 'Mark this referral Unconfirmed?',
+      sub: 'No patient log will be created. Use this when the patient didn\'t show up or the destination rejected.',
+      yesLabel: 'Mark Unconfirmed',
       danger: true,
       onConfirm: function(){ _crFinalizeDecline(ref); }
     });
@@ -18246,7 +18708,7 @@ function _crFinalizeDecline(ref){
   ref.declinedBy = (CURRENT_USER && CURRENT_USER.name) || '';
   _savePendingReferrals();
   if(typeof renderPendingReferrals === 'function') renderPendingReferrals();
-  if(typeof showToast === 'function') showToast('Referral declined.');
+  if(typeof showToast === 'function') showToast('Referral marked Unconfirmed.');
 }
 
 function retractApprovedReferral(id){
@@ -18260,7 +18722,7 @@ function retractApprovedReferral(id){
     return;
   }
   if(!isAdminUser && ref.approvedBy !== (CURRENT_USER && CURRENT_USER.name)){
-    if(typeof showToast === 'function') showToast('Only the staff who approved this can retract it.');
+    if(typeof showToast === 'function') showToast('Only the staff who confirmed this can retract it.');
     return;
   }
   if(typeof showConfirm !== 'function' || !window.confirm){
@@ -18291,7 +18753,7 @@ function _crFinalizeRetract(ref){
   _savePendingReferrals();
   if(typeof renderPendingReferrals === 'function') renderPendingReferrals();
   if(typeof renderReferralLog === 'function') renderReferralLog();
-  if(typeof showToast === 'function') showToast('Approval retracted. Referral is pending again.');
+  if(typeof showToast === 'function') showToast('Confirmation retracted. Referral is pending again.');
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -18724,6 +19186,16 @@ function _rlResetMode(){
 window._rlResetMode = _rlResetMode;
 
 function submitReferralForm(){
+  // ── PHASE 150 (2026-05-30) — DEFENSE-IN-DEPTH FD-ONLY GATE ────────────
+  // openReferralForm already blocks marketing members from opening the
+  // form, but a tampered DOM or a leftover open modal could still hit
+  // submit. Refuse the write here too.
+  if(typeof isMarketingMember === 'function' && isMarketingMember()){
+    if(typeof showToast === 'function'){
+      showToast('🔒 Marketing members can\'t log patients directly. Create a referral and let the front desk log it on arrival.');
+    }
+    return;
+  }
   // Per user 2026-05-22: handle the 'no survey' mode separately —
   // skip all form validation, persist a lightweight 'anonymous'
   // record that contributes to shift totals only.
@@ -25892,7 +26364,30 @@ function _initDayMap(){
   if(!el) return false;
   if(_DV_MAP) return true;
   try {
-    _DV_MAP = L.map(el, { zoomControl: true, scrollWheelZoom: true }).setView([33.07, -96.78], 10);
+    // Phase 159 (2026-05-30): keyboard:false disables Leaflet's default
+    // tabindex="0" on the map container. Without this, every click on the
+    // map (canvas, pins, markers) focuses the container, and the browser
+    // ran a default scrollIntoView on focus — yanking the page up to
+    // wherever the focused element sat in the document flow. That's the
+    // "click on the map → page scrolls up to the schedule" bug the rep
+    // reported even after Phase 158. We don't need keyboard nav on the
+    // map (no a11y regression: keyboard users can still tab to the
+    // controls outside the canvas).
+    _DV_MAP = L.map(el, { zoomControl: true, scrollWheelZoom: true, keyboard: false }).setView([33.07, -96.78], 10);
+    // Phase 159 defense-in-depth: even with keyboard:false, individual
+    // marker icons still default to keyboard:true and add tabindex="0".
+    // A focusin listener on the map container restores scroll position
+    // synchronously if anything inside ever pulls focus — bullet-proofs
+    // the fix against new marker types added later.
+    try {
+      el.addEventListener('focusin', function(){
+        var sx = window.scrollX || window.pageXOffset || 0;
+        var sy = window.scrollY || window.pageYOffset || 0;
+        // Re-snap on the next tick — by then the browser's focus-scroll
+        // has fired, so this puts us back where we were.
+        setTimeout(function(){ window.scrollTo(sx, sy); }, 0);
+      }, true);
+    } catch(_){}
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
       maxZoom: 19
@@ -26059,6 +26554,17 @@ function renderAllBusinessPins(){
   _BIZ_LAYER_CLINIC.clearLayers();
   _BIZ_LAYER_MVA.clearLayers();
   _BIZ_LAYER_OUTREACH.clearLayers();
+  // Phase 160 (2026-05-30): clear the pin registry along with the layers.
+  // Without this, every re-render leaks STALE Leaflet marker references
+  // in window._RP_PIN_REGISTRY. _rpGetVisualCoord then calls .getLatLng()
+  // on those stale (removed) markers and returns OLD dither positions —
+  // which is exactly what got sent to OSRM, producing the bug the user
+  // reported: the route polyline zigzags through coords that don't match
+  // where the pins visually sit on the map. Wiping the registry forces
+  // the next coord lookup to read the FRESH marker just created below.
+  try {
+    if(window._RP_PIN_REGISTRY) window._RP_PIN_REGISTRY = {};
+  } catch(_){}
   // Helper to add one pin
   function addPin(name, bizType, layer){
     var coord = (typeof getCoordForBusiness === 'function') ? getCoordForBusiness(name) : null;
@@ -30135,13 +30641,74 @@ function _rpV5StashConfirmedSnapshot(realResult, picks, totalMi, totalMin){
 }
 window._rpV5StashConfirmedSnapshot = _rpV5StashConfirmedSnapshot;
 
+// Phase 143 (2026-05-29): one-question confirm before we drop the lock.
+// Editing a confirmed route is reversible (snapshot stays, compare modal
+// fires on re-generate) but the unlock itself was one-click — a misclick
+// dropped trust in the locked state. The dialog makes the unlock
+// deliberate; on confirm we proceed exactly as before. Skip the prompt if
+// there's no snapshot (nothing to lose) so the dev path / cold open still
+// works without spam.
+function _phase143ShowUnlockConfirm(onConfirm){
+  try {
+    var modalId = 'phase143-unlock-modal';
+    var existing = document.getElementById(modalId);
+    if(existing) existing.remove();
+    var modal = document.createElement('div');
+    modal.id = modalId;
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.6);z-index:99999;display:flex;align-items:center;justify-content:center;font-family:DM Sans,sans-serif;animation:fadeIn .15s ease-out;padding:20px';
+    document.body.appendChild(modal);
+    var snap = window._RP_V5_CONFIRMED_SNAPSHOT || {};
+    var stops = (snap.picks || []).length;
+    var mi  = snap.totalMi || 0;
+    var min = snap.totalMin || 0;
+    modal.innerHTML = ''
+      + '<div style="background:#fff;border-radius:14px;padding:22px 24px;max-width:460px;width:100%;box-shadow:0 30px 70px rgba(15,23,42,.45)">'
+      +   '<div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:14px">'
+      +     '<div style="background:linear-gradient(135deg,#1F3864,#1e3a8a);color:#fff;width:42px;height:42px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">✏</div>'
+      +     '<div>'
+      +       '<div style="font-size:14px;font-weight:800;color:#1F3864">Edit this confirmed route?</div>'
+      +       '<div style="font-size:11.5px;color:var(--muted);margin-top:4px;line-height:1.5">Inputs will unlock so you can change Start, End, the corridor sizing, or which clinics are picked. Your confirmed route stays as the baseline — when you Generate again you\'ll see a side-by-side compare and can pick which one to use.</div>'
+      +     '</div>'
+      +   '</div>'
+      +   '<div style="background:#f1f5f9;border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin:6px 0 14px 0">'
+      +     '<div style="font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Current confirmed route</div>'
+      +     '<div style="font-size:13px;font-weight:800;color:#1F3864">'+mi.toFixed(1)+' mi · '+min+' min · '+stops+' stop'+(stops === 1 ? '' : 's')+'</div>'
+      +   '</div>'
+      +   '<div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">'
+      +     '<button type="button" id="phase143-cancel" style="background:#fff;color:#475569;border:1px solid var(--border);border-radius:8px;padding:9px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">Keep locked</button>'
+      +     '<button type="button" id="phase143-confirm" style="background:linear-gradient(135deg,#1F3864,#1e3a8a);color:#fff;border:none;border-radius:8px;padding:9px 22px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;box-shadow:0 2px 8px rgba(30,58,138,.35)">✏ Unlock and edit →</button>'
+      +   '</div>'
+      + '</div>';
+    function close(){ try { modal.remove(); } catch(_){} }
+    modal.querySelector('#phase143-cancel').addEventListener('click', close);
+    modal.querySelector('#phase143-confirm').addEventListener('click', function(){
+      close();
+      if(typeof onConfirm === 'function') onConfirm();
+    });
+    modal.addEventListener('click', function(e){ if(e.target === modal) close(); });
+  } catch(e){
+    console.error('[143] unlock modal failed:', e);
+    if(typeof onConfirm === 'function') onConfirm();
+  }
+}
+window._phase143ShowUnlockConfirm = _phase143ShowUnlockConfirm;
+
 function _rpV5UnlockForEdit(){
   // Drop the lock so the rep can edit inputs / picks / endpoints.
   // KEEP the snapshot — it's the baseline for the comparison modal on
   // the next Generate. Also keep the drawn polyline so the rep sees
   // what they confirmed while they edit.
-  _rpV5SetLocked(false);
-  if(typeof showToast === 'function') showToast('✏ Edit mode — change anything, then Generate again to compare with your confirmed route.');
+  function doUnlock(){
+    _rpV5SetLocked(false);
+    if(typeof showToast === 'function') showToast('✏ Edit mode — change anything, then Generate again to compare with your confirmed route.');
+  }
+  // Phase 143: confirm before we drop the lock when there's a real
+  // confirmed snapshot to risk. Cold-open / dev paths skip the prompt.
+  if(window._RP_V5_CONFIRMED_SNAPSHOT){
+    _phase143ShowUnlockConfirm(doUnlock);
+  } else {
+    doUnlock();
+  }
 }
 window._rpV5UnlockForEdit = _rpV5UnlockForEdit;
 
@@ -30305,8 +30872,41 @@ function _rpRefreshCorridorBox(){
 // Phase 38 (2026-05-28): VISUAL coord helper — prefers the pin's actual
 // rendered lat/lng (jitter applied) from the registry, so the
 // point-in-rectangle math matches what the user's eye sees on the map.
-// Falls back to getCoordForBusiness (base coord) when a pin isn't in the
-// registry yet (low-zoom city-aggregate mode, etc.).
+//
+// Phase 161 (2026-05-30): REAL BUG FIX.
+// The old fallback returned `getCoordForBusiness(name)` — the UNDITHERED
+// city centroid. That meant: any time a clinic's pin wasn't in the
+// registry (low-zoom city aggregates, clinic-filter toggled off, pre-
+// existing schedule rows, race during first render), the corridor +
+// OSRM pipeline got a city centroid coord while the pin itself drew at
+// a dithered offset position. Picks-time math used the wrong coord,
+// OSRM got the wrong coord, and the polyline correctly connected the
+// wrong points — producing the "ladder" zigzag the rep reported: a
+// route going between city centers while pins sit dispersed around them.
+//
+// The fix: when the registry doesn't have the marker, COMPUTE the same
+// deterministic dither that addPin() applies (lines 26586-26596). Result:
+// pins, picks, OSRM, polyline all agree on the same coord for a given
+// clinic name, regardless of zoom / filter / render state.
+function _phase161ComputeDitheredCoord(name, base){
+  if(!name || !base) return base || null;
+  // Skip dither for clinics with verified addresses — those land at the
+  // exact geocoded position, same as addPin's behavior.
+  if(typeof BUSINESS_GEOCODES !== 'undefined' && BUSINESS_GEOCODES[name]){
+    return { lat: base.lat, lng: base.lng };
+  }
+  var h = 0;
+  for(var i = 0; i < name.length; i++) h = ((h << 5) - h + name.charCodeAt(i)) | 0;
+  var angle = (Math.abs(h) % 360) * Math.PI / 180;
+  // Same radius envelope as addPin (line 26593): 0.003°-0.030°.
+  var radius = 0.003 + ((Math.abs(h >> 8) % 100) / 100) * 0.027;
+  return {
+    lat: base.lat + Math.cos(angle) * radius,
+    lng: base.lng + Math.sin(angle) * radius
+  };
+}
+window._phase161ComputeDitheredCoord = _phase161ComputeDitheredCoord;
+
 function _rpGetVisualCoord(name){
   try {
     var reg = window._RP_PIN_REGISTRY && window._RP_PIN_REGISTRY[name];
@@ -30315,7 +30915,13 @@ function _rpGetVisualCoord(name){
       return { lat: ll.lat, lng: ll.lng };
     }
   } catch(_){}
-  return (typeof getCoordForBusiness === 'function') ? getCoordForBusiness(name) : null;
+  // Phase 161: compute the SAME dither that addPin would have applied,
+  // instead of falling back to the undithered city centroid. This makes
+  // picks/OSRM/polyline coords match the pin's drawn position even when
+  // the marker isn't in the registry.
+  var base = (typeof getCoordForBusiness === 'function') ? getCoordForBusiness(name) : null;
+  if(!base) return null;
+  return _phase161ComputeDitheredCoord(name, base);
 }
 window._rpGetVisualCoord = _rpGetVisualCoord;
 
@@ -30563,6 +31169,9 @@ function closeRoutePlanner(opts){
     // the lock-state CSS class so the next open starts in picking mode
     // with editable inputs.
     window._RP_V5_CONFIRMED_SNAPSHOT = null;
+    // Phase 144 (2026-05-29): drop the Pick & Plan snapshot too so the
+    // next planner session doesn't trigger a stale compare modal.
+    window._PHASE144_OPT_SNAPSHOT = null;
     try {
       var rpBox = document.getElementById('route-planner-box');
       if(rpBox) rpBox.classList.remove('rp-locked');
@@ -31804,6 +32413,26 @@ function _rpV4Collect(A, B, halfWidth, opts){
 // Entry point — called by the dialog's "🔍 Find candidates" button + when
 // any of the corridor / spec / skip-visited / auto-expand inputs change.
 function runRoutePlannerV4(){
+  // Phase 146 (2026-05-29): auto-apply a pending corridor half-width if
+  // the rep typed a new value but never clicked the Apply button. The
+  // dirty Apply button used to be a silent-loss footgun — Find candidates
+  // would happily run with the OLD applied width, leaving the rep
+  // confused why the rectangle didn't grow. Sync the applied value,
+  // redraw the rectangle, hide the Apply button, and toast so the rep
+  // sees that we caught it. Width input is .rp-locked-ok-free in pre-
+  // confirm state so this only fires when truly editable.
+  try {
+    var inpEl = document.getElementById('rp-corridor');
+    var pending = parseFloat(inpEl && inpEl.value) || 0;
+    var applied = (window._RP_APPLIED_HALFWIDTH != null) ? window._RP_APPLIED_HALFWIDTH : pending;
+    if(pending > 0 && Math.abs(pending - applied) > 0.001){
+      window._RP_APPLIED_HALFWIDTH = pending;
+      window._RP_CORRIDOR_MODE = 'width';
+      try { if(typeof _rpRefreshCorridorBox === 'function') _rpRefreshCorridorBox(); } catch(_){}
+      try { if(typeof _rpRenderApplyWidthBtn === 'function') _rpRenderApplyWidthBtn(); } catch(_){}
+      if(typeof showToast === 'function') showToast('🟦 Auto-applied corridor width: ±'+pending+' mi (total '+(pending*2)+' mi) before finding candidates.');
+    }
+  } catch(_){}
   // Resolve Start + End
   var startKey = (document.getElementById('rp-start') || {}).value || '';
   var endKey   = (document.getElementById('rp-end')   || {}).value || '';
@@ -35218,9 +35847,41 @@ window._rpFinalApplyMerge = _rpFinalApplyMerge;
 // Phase 69 (2026-05-28): 'random' mode removed per user — silently redirect
 // to 'corridor' so any leftover callers (saved-route resume, deep links,
 // stale state) don't crash the planner.
+// Phase 145 (2026-05-29): if the user has a confirmed snapshot OR
+// in-progress picks, confirm before clobbering them. Mode switch used to
+// silently wipe transient state, which lost work without warning.
 function _rpSetMode(mode){
   if(mode === 'random') mode = 'corridor';
   if(mode !== 'corridor' && mode !== 'optimize') return;
+  // Already in the requested mode — no-op, nothing to lose.
+  if(typeof _RP_MODE !== 'undefined' && _RP_MODE === mode){
+    _rpSetModeInternal(mode);
+    return;
+  }
+  // Detect dirty state per side. Confirm if anything would be lost.
+  var dirty = false, dirtyReason = '';
+  try {
+    if(window._RP_V5_CONFIRMED_SNAPSHOT){
+      dirty = true; dirtyReason = 'You have a confirmed Corridor route';
+    } else if(window._PHASE144_OPT_SNAPSHOT){
+      dirty = true; dirtyReason = 'You have an optimized Pick & Plan route';
+    } else if(Object.keys(window._RP_V5_FLAT_PICKS || {}).length > 0){
+      dirty = true; dirtyReason = 'You have unsaved Corridor picks';
+    } else if(Array.isArray(window._RP_OPT_TARGETS) && window._RP_OPT_TARGETS.length > 0){
+      dirty = true; dirtyReason = 'You have unsaved Pick & Plan targets';
+    }
+  } catch(_){}
+  if(dirty){
+    _phase145ShowModeSwitchConfirm(dirtyReason, mode, function(){
+      _rpSetModeInternal(mode);
+    });
+    return;
+  }
+  _rpSetModeInternal(mode);
+}
+
+// Phase 145: extracted the original body so the confirm dialog can defer it.
+function _rpSetModeInternal(mode){
   _RP_MODE = mode;
   // Toggle button states (Phase 46: optimize mode added)
   var cBtn = document.getElementById('rp-mode-corridor');
@@ -35359,6 +36020,49 @@ function _rpSetMode(mode){
   }
 }
 window._rpSetMode = _rpSetMode;
+window._rpSetModeInternal = _rpSetModeInternal;
+
+// Phase 145 (2026-05-29): confirm before silently wiping the planner state
+// on a mode switch. Used when there's a confirmed snapshot OR unsaved picks
+// on either side. The dialog spells out exactly what'll be lost so the rep
+// can back out instead of accidentally throwing away work.
+function _phase145ShowModeSwitchConfirm(reason, targetMode, onConfirm){
+  try {
+    var modalId = 'phase145-modeswitch-modal';
+    var existing = document.getElementById(modalId);
+    if(existing) existing.remove();
+    var modal = document.createElement('div');
+    modal.id = modalId;
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.6);z-index:99999;display:flex;align-items:center;justify-content:center;font-family:DM Sans,sans-serif;animation:fadeIn .15s ease-out;padding:20px';
+    document.body.appendChild(modal);
+    var modeLabel = (targetMode === 'corridor') ? '🧭 Corridor' : '🎯 Pick & Plan';
+    modal.innerHTML = ''
+      + '<div style="background:#fff;border-radius:14px;padding:22px 24px;max-width:460px;width:100%;box-shadow:0 30px 70px rgba(15,23,42,.45)">'
+      +   '<div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:14px">'
+      +     '<div style="background:linear-gradient(135deg,#b45309,#d97706);color:#fff;width:42px;height:42px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">⚠</div>'
+      +     '<div>'
+      +       '<div style="font-size:14px;font-weight:800;color:#1F3864">Switch to '+modeLabel+'?</div>'
+      +       '<div style="font-size:11.5px;color:var(--muted);margin-top:4px;line-height:1.5">'+String(reason).replace(/</g,'&lt;')+'. Switching modes will clear all your current picks and any drawn route. This can\'t be undone.</div>'
+      +     '</div>'
+      +   '</div>'
+      +   '<div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">'
+      +     '<button type="button" id="phase145-cancel" style="background:#fff;color:#475569;border:1px solid var(--border);border-radius:8px;padding:9px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">Stay here</button>'
+      +     '<button type="button" id="phase145-confirm" style="background:linear-gradient(135deg,#b45309,#d97706);color:#fff;border:none;border-radius:8px;padding:9px 22px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;box-shadow:0 2px 8px rgba(217,119,6,.35)">Discard and switch →</button>'
+      +   '</div>'
+      + '</div>';
+    function close(){ try { modal.remove(); } catch(_){} }
+    modal.querySelector('#phase145-cancel').addEventListener('click', close);
+    modal.querySelector('#phase145-confirm').addEventListener('click', function(){
+      close();
+      if(typeof onConfirm === 'function') onConfirm();
+    });
+    modal.addEventListener('click', function(e){ if(e.target === modal) close(); });
+  } catch(e){
+    console.error('[145] mode-switch modal failed:', e);
+    if(typeof onConfirm === 'function') onConfirm();
+  }
+}
+window._phase145ShowModeSwitchConfirm = _phase145ShowModeSwitchConfirm;
 
 // ── TSP SOLVER — nearest-neighbor + 2-opt ────────────────────────────────
 // Returns an ordered array of indices into `coords` such that the total
@@ -36729,20 +37433,10 @@ function _rpOptOptimize(){
     if(typeof showToast === 'function') showToast('Could not optimize the route. Try different targets.');
     return;
   }
-  window._RP_OPT_ORDERED = ordered;
-  // Phase 50 (2026-05-28): once the route is generated, flip every target
-  // pin from 'suggested' (light blue) to 'picked' (dark blue) so the user
-  // can tell at a glance which pins are committed to the route. Matches
-  // Corridor's convention. The start pin gets the explicit 'start' state
-  // so it visually pops as the route's origin.
-  try {
-    if(typeof _rpSetPinState === 'function'){
-      ordered.forEach(function(p, i){
-        if(!p || !p.name) return;
-        _rpSetPinState(p.name, i === 0 ? 'start' : 'picked');
-      });
-    }
-  } catch(_){}
+  // Phase 144 (2026-05-29): defer _RP_OPT_ORDERED + pin-flip until INSIDE
+  // the render closure so the "Keep previous" branch of the compare modal
+  // doesn't leave the world half-mutated (new picks tagged but old route
+  // restored). The pin flip + global set are now part of applyOptimizedResult.
   // Compute haversine fallback (used if OSRM is unreachable).
   var rawMi = 0;
   for(var i = 0; i < ordered.length - 1; i++){
@@ -36769,8 +37463,6 @@ function _rpOptOptimize(){
   _phase123FetchRealRoute(coordsForOsrm).then(function(real){
     window._PHASE131_OPT_IN_FLIGHT = false;
     if(typeof _phase123ShowFetchingOverlay === 'function') _phase123ShowFetchingOverlay(false);
-    // Stash for the confirm modal — _rpOptInsertIntoDay reuses it.
-    window._RP_OPT_REAL_ROUTE = real;
     var totalMi, totalMin, srcChip;
     if(real && real.ok){
       totalMi = real.distanceMi;
@@ -36781,63 +37473,122 @@ function _rpOptOptimize(){
       totalMin = fallbackMin;
       srcChip = '<div style="background:rgba(251,191,36,.22);color:#fef3c7;font-size:9px;font-weight:700;padding:2px 8px;border-radius:10px;margin-top:6px;display:inline-block">⚠ Estimate (router unreachable)</div>';
     }
-    // Draw the real OSRM polyline OR fall back to straight-line preview.
-    if(typeof _rpClearLiveRoute === 'function') _rpClearLiveRoute();
-    if(typeof _phase123ClearRealRoute === 'function') _phase123ClearRealRoute();
-    try {
-      if(_DV_MAP && typeof L !== 'undefined'){
-        if(real && real.ok && real.geometry && typeof _phase123DrawRealRoute === 'function'){
-          _phase123DrawRealRoute(real.geometry);
-        } else {
-          var pts = ordered.map(function(p){ return [p.coord.lat, p.coord.lng]; });
-          var glow = L.polyline(pts, { color: '#ffffff', weight: 9, opacity: 0.85, interactive: false, lineCap: 'round', lineJoin: 'round' }).addTo(_DV_MAP);
-          var line = L.polyline(pts, { color: '#2563eb', weight: 5, opacity: 1, interactive: false, lineCap: 'round', lineJoin: 'round' }).addTo(_DV_MAP);
-          window._DV_LIVE_ROUTE = { glow: glow, line: line, markers: [] };
+    // Phase 144 (2026-05-29): wrap the post-OSRM render in a closure so we
+    // can run it for EITHER the new optimized route OR a restored prior
+    // snapshot (the "Keep previous" branch of the compare modal). Globals
+    // _RP_OPT_ORDERED / _RP_OPT_REAL_ROUTE + the pin-state flip + the
+    // result-panel HTML all move in here so the world stays consistent
+    // with whichever route the rep chose to keep.
+    function applyOptimizedResult(rOrdered, rReal, rTotalMi, rTotalMin, rSrcChip){
+      window._RP_OPT_ORDERED = rOrdered;
+      window._RP_OPT_REAL_ROUTE = rReal;
+      // Phase 50 (2026-05-28): flip every target pin to picked (dark blue)
+      // and the start pin to 'start' (green S) so the map matches the
+      // chosen route.
+      try {
+        if(typeof _rpSetPinState === 'function'){
+          rOrdered.forEach(function(p, i){
+            if(!p || !p.name) return;
+            _rpSetPinState(p.name, i === 0 ? 'start' : 'picked');
+          });
         }
-        // Numbered stop markers (separate from the polyline)
-        var ptsForMarkers = ordered.map(function(p){ return [p.coord.lat, p.coord.lng]; });
-        ordered.forEach(function(p, i){
-          var label = (i === 0) ? 'S' : String(i);
-          var bg = (i === 0) ? '#16a34a' : '#2563eb';
-          var m = L.marker([p.coord.lat, p.coord.lng], {
-            icon: L.divIcon({
-              className: 'rp-opt-stop',
-              html: '<div style="background:'+bg+';color:#fff;width:24px;height:24px;border-radius:50%;border:2.5px solid #fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;font-family:DM Sans,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.45)">' + label + '</div>',
-              iconSize: [24, 24], iconAnchor: [12, 12]
-            }),
-            interactive: false,
-            zIndexOffset: 9200
-          }).addTo(_DV_MAP);
-          // Track markers separately so they get cleared on close
-          if(!window._DV_LIVE_ROUTE) window._DV_LIVE_ROUTE = { markers: [] };
-          if(!window._DV_LIVE_ROUTE.markers) window._DV_LIVE_ROUTE.markers = [];
-          window._DV_LIVE_ROUTE.markers.push(m);
-        });
-        _DV_MAP.fitBounds(L.latLngBounds(ptsForMarkers).pad(0.15), { maxZoom: 13 });
+      } catch(_){}
+      // Draw the real OSRM polyline OR fall back to straight-line preview.
+      if(typeof _rpClearLiveRoute === 'function') _rpClearLiveRoute();
+      if(typeof _phase123ClearRealRoute === 'function') _phase123ClearRealRoute();
+      try {
+        if(_DV_MAP && typeof L !== 'undefined'){
+          if(rReal && rReal.ok && rReal.geometry && typeof _phase123DrawRealRoute === 'function'){
+            _phase123DrawRealRoute(rReal.geometry);
+          } else {
+            var pts = rOrdered.map(function(p){ return [p.coord.lat, p.coord.lng]; });
+            var glow = L.polyline(pts, { color: '#ffffff', weight: 9, opacity: 0.85, interactive: false, lineCap: 'round', lineJoin: 'round' }).addTo(_DV_MAP);
+            var line = L.polyline(pts, { color: '#2563eb', weight: 5, opacity: 1, interactive: false, lineCap: 'round', lineJoin: 'round' }).addTo(_DV_MAP);
+            window._DV_LIVE_ROUTE = { glow: glow, line: line, markers: [] };
+          }
+          // Numbered stop markers (separate from the polyline)
+          var ptsForMarkers = rOrdered.map(function(p){ return [p.coord.lat, p.coord.lng]; });
+          rOrdered.forEach(function(p, i){
+            var label = (i === 0) ? 'S' : String(i);
+            var bg = (i === 0) ? '#16a34a' : '#2563eb';
+            var m = L.marker([p.coord.lat, p.coord.lng], {
+              icon: L.divIcon({
+                className: 'rp-opt-stop',
+                html: '<div style="background:'+bg+';color:#fff;width:24px;height:24px;border-radius:50%;border:2.5px solid #fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;font-family:DM Sans,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.45)">' + label + '</div>',
+                iconSize: [24, 24], iconAnchor: [12, 12]
+              }),
+              interactive: false,
+              zIndexOffset: 9200
+            }).addTo(_DV_MAP);
+            if(!window._DV_LIVE_ROUTE) window._DV_LIVE_ROUTE = { markers: [] };
+            if(!window._DV_LIVE_ROUTE.markers) window._DV_LIVE_ROUTE.markers = [];
+            window._DV_LIVE_ROUTE.markers.push(m);
+          });
+          _DV_MAP.fitBounds(L.latLngBounds(ptsForMarkers).pad(0.15), { maxZoom: 13 });
+        }
+      } catch(_){}
+      // Render result panel with REAL numbers + source chip
+      var res = document.getElementById('rp-opt-result');
+      if(res){
+        res.style.display = 'block';
+        var orderHtml = rOrdered.map(function(p, i){
+          var label = (i === 0) ? '<b>S</b>' : '<b>' + i + '</b>';
+          var icon = p.bizType === 'mva' ? '⚖' : p.bizType === 'outreach' ? '🏘' : '🏥';
+          return '<div style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:11px"><span style="width:20px;text-align:center">'+label+'</span><span>'+icon+'</span><span style="flex:1;color:#0f172a">' + String(p.name).replace(/</g,'&lt;') + '</span></div>';
+        }).join('');
+        res.innerHTML = '<div style="background:linear-gradient(135deg,#1e3a8a,#2563eb);color:#fff;border-radius:10px;padding:14px 16px;margin-bottom:10px">'
+          + '<div style="font-size:13px;font-weight:800">🤖 Route optimized</div>'
+          + '<div style="display:flex;gap:16px;margin-top:6px;font-size:11px"><div><div style="opacity:.85;font-size:9px;text-transform:uppercase;letter-spacing:.05em">Total drive</div><div style="font-size:18px;font-weight:800">'+rTotalMi.toFixed(1)+' mi · '+rTotalMin+' min</div></div><div><div style="opacity:.85;font-size:9px;text-transform:uppercase;letter-spacing:.05em">Stops</div><div style="font-size:18px;font-weight:800">'+rOrdered.length+'</div></div></div>'
+          + rSrcChip
+          + '</div>'
+          + '<div style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:10px">'
+          + '<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px">Optimized order (nearest-neighbor + 2-opt)</div>'
+          + orderHtml + '</div>'
+          // Phase 144 (2026-05-29): match Corridor's locked banner — make
+          // it clear that Edit picks is a back-step that will re-compare,
+          // not a sibling action.
+          + '<div class="rp-locked-banner" style="margin:10px 0">'
+          +   '<span style="font-size:14px">🔒</span>'
+          +   '<span>Route optimized — review your stops. Click <b>✏ Edit picks</b> to change targets (a comparison will pop on re-Optimize).</span>'
+          + '</div>'
+          + '<div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap">'
+          + '<button type="button" onclick="_rpOptEditPicks()" style="background:#fff;color:#1F3864;border:1px solid var(--border);border-radius:8px;padding:9px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">✏ Edit picks</button>'
+          + '<button type="button" onclick="_rpOptInsertIntoDay()" style="background:linear-gradient(135deg,#15803d,#16a34a);color:#fff;border:none;border-radius:8px;padding:9px 22px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;box-shadow:0 2px 8px rgba(22,163,74,.35)">✓ Add to schedule →</button>'
+          + '</div>';
       }
-    } catch(_){}
-    // Render result panel with REAL numbers + source chip
-    var res = document.getElementById('rp-opt-result');
-    if(res){
-      res.style.display = 'block';
-      var orderHtml = ordered.map(function(p, i){
-        var label = (i === 0) ? '<b>S</b>' : '<b>' + i + '</b>';
-        var icon = p.bizType === 'mva' ? '⚖' : p.bizType === 'outreach' ? '🏘' : '🏥';
-        return '<div style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:11px"><span style="width:20px;text-align:center">'+label+'</span><span>'+icon+'</span><span style="flex:1;color:#0f172a">' + String(p.name).replace(/</g,'&lt;') + '</span></div>';
-      }).join('');
-      res.innerHTML = '<div style="background:linear-gradient(135deg,#1e3a8a,#2563eb);color:#fff;border-radius:10px;padding:14px 16px;margin-bottom:10px">'
-        + '<div style="font-size:13px;font-weight:800">🤖 Route optimized</div>'
-        + '<div style="display:flex;gap:16px;margin-top:6px;font-size:11px"><div><div style="opacity:.85;font-size:9px;text-transform:uppercase;letter-spacing:.05em">Total drive</div><div style="font-size:18px;font-weight:800">'+totalMi.toFixed(1)+' mi · '+totalMin+' min</div></div><div><div style="opacity:.85;font-size:9px;text-transform:uppercase;letter-spacing:.05em">Stops</div><div style="font-size:18px;font-weight:800">'+ordered.length+'</div></div></div>'
-        + srcChip
-        + '</div>'
-        + '<div style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:10px">'
-        + '<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px">Optimized order (nearest-neighbor + 2-opt)</div>'
-        + orderHtml + '</div>'
-        + '<div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap">'
-        + '<button type="button" onclick="_rpOptEditPicks()" style="background:#fff;color:#1F3864;border:1px solid var(--border);border-radius:8px;padding:9px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">✏ Edit picks</button>'
-        + '<button type="button" onclick="_rpOptInsertIntoDay()" style="background:linear-gradient(135deg,#15803d,#16a34a);color:#fff;border:none;border-radius:8px;padding:9px 22px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;box-shadow:0 2px 8px rgba(22,163,74,.35)">✓ Add to schedule →</button>'
-        + '</div>';
+      // Stash snapshot so the NEXT Optimize fires the compare modal.
+      // Deep-clone ordered so subsequent picks don't mutate it via reference.
+      window._PHASE144_OPT_SNAPSHOT = {
+        ordered: rOrdered.map(function(p){
+          return { name: p.name, bizType: p.bizType, coord: p.coord ? { lat: p.coord.lat, lng: p.coord.lng } : null, _phase117Anchor: !!p._phase117Anchor };
+        }),
+        real: rReal,
+        totalMi: rTotalMi,
+        totalMin: rTotalMin,
+        srcChip: rSrcChip,
+        confirmedAt: new Date().toISOString()
+      };
     }
+    // Phase 144: if a prior optimized snapshot exists, this is a
+    // RE-OPTIMIZE after Edit picks → show compare modal mirroring
+    // Corridor's Phase 135 pattern.
+    var prior = window._PHASE144_OPT_SNAPSHOT;
+    if(prior && typeof _phase135ShowCompareModal === 'function'){
+      _phase135ShowCompareModal({
+        newData: { totalMi: totalMi, totalMin: totalMin, picks: ordered },
+        oldData: { totalMi: prior.totalMi, totalMin: prior.totalMin, picks: prior.ordered },
+        onUseNew: function(){
+          applyOptimizedResult(ordered, real, totalMi, totalMin, srcChip);
+          if(typeof showToast === 'function') showToast('🤖 Optimized: '+ordered.length+' stops · '+totalMi.toFixed(1)+' mi · '+totalMin+' min');
+        },
+        onKeepOld: function(){
+          applyOptimizedResult(prior.ordered, prior.real, prior.totalMi, prior.totalMin, prior.srcChip);
+          if(typeof showToast === 'function') showToast('↩ Kept your previous optimized route — Add to schedule will use that one.');
+        }
+      });
+      return;
+    }
+    applyOptimizedResult(ordered, real, totalMi, totalMin, srcChip);
     if(typeof showToast === 'function') showToast('🤖 Optimized: '+ordered.length+' stops · '+totalMi.toFixed(1)+' mi · '+totalMin+' min');
   }).catch(function(err){
     // Phase 131 (2026-05-29): any throw inside the .then chain (e.g.,
@@ -36859,20 +37610,29 @@ window._rpOptOptimize = _rpOptOptimize;
 // state to the picking phase. Clears the route polyline + result panel,
 // flips ordered pins back to 'suggested' so the user can remove or
 // add more before re-running ⚡ Optimize.
+// Phase 144 (2026-05-29): wraps in a confirm dialog (mirrors Phase 143)
+// AND keeps the _PHASE144_OPT_SNAPSHOT so re-Optimize triggers the
+// compare modal. The snapshot is the baseline the rep returns to if
+// they pick "Keep previous" after editing.
 function _rpOptEditPicks(){
-  try {
-    if(typeof _rpClearLiveRoute === 'function') _rpClearLiveRoute();
-    var res = document.getElementById('rp-opt-result');
-    if(res){ res.style.display = 'none'; res.innerHTML = ''; }
-    // Flip all picked-state pins back to suggested (light blue) — but keep
-    // the start as 'start' (green S) so the user still sees their choice.
-    if(window._RP_OPT_TARGETS && typeof _rpSetPinState === 'function'){
-      window._RP_OPT_TARGETS.forEach(function(t){
-        var state = (t.name === window._RP_OPT_START_NAME) ? 'start' : 'suggested';
-        _rpSetPinState(t.name, state);
-      });
-    }
-    window._RP_OPT_ORDERED = null;
+  function doEdit(){
+    try {
+      if(typeof _rpClearLiveRoute === 'function') _rpClearLiveRoute();
+      // Phase 144: also clear the OSRM polyline so the map matches the
+      // edit state (otherwise the prior real-road polyline lingers and
+      // confuses the rep about what's been edited vs confirmed).
+      try { if(typeof _phase123ClearRealRoute === 'function') _phase123ClearRealRoute(); } catch(_){}
+      var res = document.getElementById('rp-opt-result');
+      if(res){ res.style.display = 'none'; res.innerHTML = ''; }
+      // Flip all picked-state pins back to suggested (light blue) — but keep
+      // the start as 'start' (green S) so the user still sees their choice.
+      if(window._RP_OPT_TARGETS && typeof _rpSetPinState === 'function'){
+        window._RP_OPT_TARGETS.forEach(function(t){
+          var state = (t.name === window._RP_OPT_START_NAME) ? 'start' : 'suggested';
+          _rpSetPinState(t.name, state);
+        });
+      }
+      window._RP_OPT_ORDERED = null;
     // Phase 140 (2026-05-29): re-arm pin pickups so the rep can click
     // map pins to add/remove targets after switching back to edit mode.
     // Without this, _rpOptConsumePinClick gates on _RP_OPT_AWAITING_PICK
@@ -36881,11 +37641,68 @@ function _rpOptEditPicks(){
     // map interactions separately.
     if(window._RP_OPT_SUB_MODE !== 'circle'){
       window._RP_OPT_AWAITING_PICK = true;
-    }
-    if(typeof showToast === 'function') showToast('✏ Edit mode: add, remove, or re-pick start, then ⚡ Optimize again.');
-  } catch(e){ console.error('[_rpOptEditPicks] failed:', e); }
+      }
+      if(typeof showToast === 'function') showToast('✏ Edit mode: add, remove, or re-pick start, then ⚡ Optimize again.');
+    } catch(e){ console.error('[_rpOptEditPicks] failed:', e); }
+  }
+  // Phase 144: confirm before clearing the optimized route panel when a
+  // real result is on screen. Mirrors Phase 143 (Corridor Edit-route
+  // confirm). The _PHASE144_OPT_SNAPSHOT survives the edit so Compare
+  // fires on re-Optimize.
+  if(window._PHASE144_OPT_SNAPSHOT){
+    _phase144ShowEditPicksConfirm(doEdit);
+  } else {
+    doEdit();
+  }
 }
 window._rpOptEditPicks = _rpOptEditPicks;
+
+// Phase 144 (2026-05-29): one-question confirm before clearing the
+// optimized result panel. Mirrors Phase 143's unlock confirm.
+function _phase144ShowEditPicksConfirm(onConfirm){
+  try {
+    var modalId = 'phase144-editpicks-modal';
+    var existing = document.getElementById(modalId);
+    if(existing) existing.remove();
+    var modal = document.createElement('div');
+    modal.id = modalId;
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.6);z-index:99999;display:flex;align-items:center;justify-content:center;font-family:DM Sans,sans-serif;animation:fadeIn .15s ease-out;padding:20px';
+    document.body.appendChild(modal);
+    var snap = window._PHASE144_OPT_SNAPSHOT || {};
+    var stops = (snap.ordered || []).length;
+    var mi  = snap.totalMi || 0;
+    var min = snap.totalMin || 0;
+    modal.innerHTML = ''
+      + '<div style="background:#fff;border-radius:14px;padding:22px 24px;max-width:460px;width:100%;box-shadow:0 30px 70px rgba(15,23,42,.45)">'
+      +   '<div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:14px">'
+      +     '<div style="background:linear-gradient(135deg,#1e3a8a,#2563eb);color:#fff;width:42px;height:42px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">✏</div>'
+      +     '<div>'
+      +       '<div style="font-size:14px;font-weight:800;color:#1F3864">Edit these picks?</div>'
+      +       '<div style="font-size:11.5px;color:var(--muted);margin-top:4px;line-height:1.5">The result panel will clear so you can add or remove target pins. Your optimized route stays as the baseline — when you Optimize again you\'ll see a side-by-side compare.</div>'
+      +     '</div>'
+      +   '</div>'
+      +   '<div style="background:#f1f5f9;border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin:6px 0 14px 0">'
+      +     '<div style="font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Current optimized route</div>'
+      +     '<div style="font-size:13px;font-weight:800;color:#1F3864">'+mi.toFixed(1)+' mi · '+min+' min · '+stops+' stop'+(stops === 1 ? '' : 's')+'</div>'
+      +   '</div>'
+      +   '<div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">'
+      +     '<button type="button" id="phase144-cancel" style="background:#fff;color:#475569;border:1px solid var(--border);border-radius:8px;padding:9px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">Keep route</button>'
+      +     '<button type="button" id="phase144-confirm" style="background:linear-gradient(135deg,#1e3a8a,#2563eb);color:#fff;border:none;border-radius:8px;padding:9px 22px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;box-shadow:0 2px 8px rgba(37,99,235,.35)">✏ Edit picks →</button>'
+      +   '</div>'
+      + '</div>';
+    function close(){ try { modal.remove(); } catch(_){} }
+    modal.querySelector('#phase144-cancel').addEventListener('click', close);
+    modal.querySelector('#phase144-confirm').addEventListener('click', function(){
+      close();
+      if(typeof onConfirm === 'function') onConfirm();
+    });
+    modal.addEventListener('click', function(e){ if(e.target === modal) close(); });
+  } catch(e){
+    console.error('[144] edit-picks modal failed:', e);
+    if(typeof onConfirm === 'function') onConfirm();
+  }
+}
+window._phase144ShowEditPicksConfirm = _phase144ShowEditPicksConfirm;
 
 function _rpOptInsertIntoDay(){
   var ordered = window._RP_OPT_ORDERED;
@@ -37134,6 +37951,10 @@ function _rpOptCommitOrderedToDay(ordered, di, me, removed, phase59Removed, phas
     // overwriting the one we just committed). Mirrors Phase 122b on the
     // corridor side.
     window._RP_EDITING_ROUTE_ID = null;
+    // Phase 144 (2026-05-29): drop the Pick & Plan snapshot now that
+    // it's been committed to the schedule. The next planner session
+    // starts in fresh picking mode (no stale compare modal).
+    window._PHASE144_OPT_SNAPSHOT = null;
     if(typeof closeRoutePlanner === 'function') closeRoutePlanner({ force: true });
   } catch(e){
     console.error('[_rpOptInsertIntoDay] failed:', e);
@@ -38453,12 +39274,32 @@ window._dvExpandDayMap = _dvExpandDayMap;
 // Scroll the Day Map into view smoothly. Called from the toggle + from
 // every map-option button (Plan a Route / Show on map / Open in GMaps /
 // Expand) so any click on those buttons brings the map into focus.
+//
+// Phase 158 (2026-05-30): ONLY scroll when the map is genuinely off-
+// screen. Per user 2026-05-30: clicking a map button while already
+// looking at the map made the page jerk UP to the schedule (because
+// scrollIntoView aligns the panel's TOP with the viewport top, which
+// is often above the map body). With this guard, the scroll is a no-op
+// when the map header is already in view + the map body has at least
+// 100px of pixels visible — the rep stays exactly where they clicked.
+// Returns true if it scrolled, false if it skipped.
 function _dvScrollToMap(){
   try {
     var el = document.getElementById('day-route-panel');
-    if(!el) return;
+    if(!el) return false;
+    var rect = el.getBoundingClientRect();
+    var viewportH = window.innerHeight || document.documentElement.clientHeight;
+    // "Already visible enough" = panel header is on-screen AND at least
+    // 100px of the panel body is within the viewport. Picks up edge cases
+    // like a tall map where the header is just barely off the top.
+    var headerVisible = (rect.top >= 0 && rect.top < viewportH - 60);
+    var bodyVisible   = (rect.bottom > 100 && rect.top < viewportH - 100);
+    if(headerVisible || bodyVisible){
+      return false;   // already in view — no jarring re-scroll
+    }
     el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  } catch(_){}
+    return true;
+  } catch(_){ return false; }
 }
 window._dvScrollToMap = _dvScrollToMap;
 
@@ -41726,6 +42567,8 @@ function _rpV5CommitPicksToDay(picks, di, me, removed, phase59Removed, phase59Ex
     // it's been committed to the schedule. The next planner session
     // starts in fresh picking mode.
     window._RP_V5_CONFIRMED_SNAPSHOT = null;
+    // Phase 144 (2026-05-29): same for Pick & Plan snapshot.
+    window._PHASE144_OPT_SNAPSHOT = null;
     if(typeof closeRoutePlanner === 'function') closeRoutePlanner({ force: true });
   } catch(e){
     console.error('[_rpV5InsertPicksIntoDay] failed:', e);
@@ -49761,6 +50604,17 @@ function renderHistory(){
   } else {
     visits = monthVisits;
   }
+  // Phase 156 (2026-05-30): smart text filter on top of the day/month
+  // narrow. Matches clinic name, doctor, city, status, specialty so the
+  // rep can find a visit without scrolling through pagination.
+  var searchTerm = (window._HIST_SEARCH || '').toLowerCase().trim();
+  if(searchTerm){
+    visits = visits.filter(function(v){
+      if(!v) return false;
+      var hay = ((v.clinic || '') + ' ' + (v.doctor || '') + ' ' + (v.city || '') + ' ' + (v.spec || '') + ' ' + (v.status || '') + ' ' + (v.relationship || '')).toLowerCase();
+      return hay.indexOf(searchTerm) >= 0;
+    });
+  }
   var total=visits.length;
   var totalPages=Math.max(1,Math.ceil(total/PAGE_SIZE));
   memberPage=Math.min(memberPage,totalPages);
@@ -49820,6 +50674,27 @@ function gotoPage(p){
   renderHistory();
   document.getElementById('history-wrap').scrollIntoView({behavior:'smooth',block:'start'});
 }
+
+// Phase 156 (2026-05-30): smart-search handlers for the member History
+// table. _HIST_SEARCH is read by renderHistory's filter chain. Reset
+// pagination on every keystroke so the rep always sees page 1 of the
+// narrowed result set.
+function _histOnSearchInput(){
+  var el = document.getElementById('hist-smart-search');
+  window._HIST_SEARCH = el ? el.value : '';
+  memberPage = 1;
+  if(typeof renderHistory === 'function') renderHistory();
+}
+window._histOnSearchInput = _histOnSearchInput;
+
+function _histClearSearch(){
+  window._HIST_SEARCH = '';
+  var el = document.getElementById('hist-smart-search');
+  if(el) el.value = '';
+  memberPage = 1;
+  if(typeof renderHistory === 'function') renderHistory();
+}
+window._histClearSearch = _histClearSearch;
 
 // ── TEAM TAB SUB-NAV: Team Structure | Stats ─────────────────────────────
 // Per user 2026-05-19: remember the most recently visited Team sub-tab so
@@ -60330,7 +61205,7 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
 
   <!-- ═══════════════════════════════════════════════════════════════════
        SUB-TAB 1 (DEFAULT): OUTGOING REFERRALS
-       What MEMBERS create. Goes from Pending → Successful/Unsuccessful.
+       What MEMBERS create. Goes from Pending → Confirmed/Unconfirmed.
        Front desk users see only referrals destined for their facility.
        ═══════════════════════════════════════════════════════════════ -->
   <div id="rl-pane-outgoing">
@@ -60352,8 +61227,8 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
       <select id="pr-status-filter" onchange="renderPendingReferrals()" style="display:none">
         <option value="all" selected>All statuses</option>
         <option value="pending">⏳ Pending</option>
-        <option value="approved">✓ Successful</option>
-        <option value="declined">✗ Unsuccessful</option>
+        <option value="approved">✓ Confirmed</option>
+        <option value="declined">✗ Unconfirmed</option>
         <option value="incomplete">⏰ Incomplete</option>
         <option value="retracted">↩ Retracted</option>
       </select>
@@ -60387,14 +61262,37 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
   <div id="rl-outgoing-empty" style="display:none;background:#f8fafc;border:1px dashed var(--border);border-radius:10px;padding:24px 18px;text-align:center;font-size:12px;color:var(--muted);line-height:1.6">
     📥 <b>No outgoing referrals yet.</b><br>
     Click <b>📥 Create Referral</b> above to start one.<br>
-    <span style="font-size:10px;color:#94a3b8;display:block;margin-top:6px">Once created, you'll see Pending / Successful / Unsuccessful rows + monthly counters here.</span>
+    <span style="font-size:10px;color:#94a3b8;display:block;margin-top:6px">Once created, you'll see Pending / Confirmed / Unconfirmed rows + monthly counters here.</span>
   </div>
   </div><!-- /rl-pane-outgoing -->
 
   <!-- ═══════════════════════════════════════════════════════════════════
        SUB-TAB 1: LIST VIEW (the existing referrals UI)
+       Phase 152 (2026-05-30): added day-strip nav + survey segmented
+       control above the existing filter row. Calendar shape per layout
+       research (Acuity / Google Calendar mobile pattern). Renders via
+       _rlRenderDayStrip() + _rlRenderSurveySegment() called from
+       switchReferralSubtab('list').
        ═══════════════════════════════════════════════════════════════ -->
   <div id="rl-pane-list" style="display:none">
+
+  <!-- Phase 152: sticky day-strip header — 7-day horizontal picker
+       centered on today. Per-day mini-counts show volume at a glance.
+       Position:sticky so it stays visible as the rep scrolls through
+       long days. Re-renders on every renderReferralLog() call so the
+       counts stay live. -->
+  <div id="rl-day-strip-wrap" style="position:sticky;top:0;z-index:30;background:linear-gradient(180deg,#fff 70%,rgba(255,255,255,0));padding:8px 0;margin-bottom:8px;border-bottom:1px solid var(--border)">
+    <div id="rl-day-strip"></div>
+  </div>
+
+  <!-- Phase 152: survey-mode segmented control. Surveyed (full record) vs
+       Non-surveyed (anonymous tap-in count) vs All. Per user 2026-05-30:
+       "I prefer to divide them into two list because non-survey are
+       people who we could not actually track where they come from." -->
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+    <div id="rl-survey-seg"></div>
+    <div style="font-size:10.5px;color:var(--muted);font-style:italic">Tap a row to open the patient card · pin shows full details</div>
+  </div>
 
   <!-- Summary strip — total referrals + per-facility totals + per-member panel -->
   <div id="rl-summary" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:14px"></div>
