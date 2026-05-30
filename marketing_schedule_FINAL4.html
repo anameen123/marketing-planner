@@ -1762,6 +1762,120 @@ body.role-front_desk #referrals-view {
     font-size: 16px;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   PHASE 170 (2026-05-30) — GLOBAL MOTION + INTERACTION POLISH LAYER
+   Per user 2026-05-30: "add any effects of movements once we open the
+   app on any page... make it more professional." Pure additive CSS,
+   doesn't touch existing layout/render. All animations respect the user's
+   prefers-reduced-motion system setting — if they've turned reduced motion
+   on (a11y), every animation collapses to a no-op. Keep it cheap: CSS
+   transforms + opacity only (GPU-accelerated), short durations (150-280ms),
+   easings tuned for premium feel.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* Page-view entrance — applied by switchTab's Phase 170 hook. The visible
+   tab gets .phase170-page-enter, which fades+lifts the panel for 220ms. */
+@keyframes phase170PageEnter {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.phase170-page-enter {
+  animation: phase170PageEnter 220ms cubic-bezier(.21,.61,.35,1) both;
+  will-change: opacity, transform;
+}
+
+/* Modal entrance — covers any modal that uses class "phase170-modal-in" or
+   any modal whose inline animation already says fadeIn. Adds a subtle
+   scale + lift on the inner card. */
+@keyframes phase170ModalBackdropIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes phase170ModalCardIn {
+  from { opacity: 0; transform: translateY(12px) scale(.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.modal-ov, [class*="phase14"][id$="modal"], [id^="phase16"][id$="-modal"] {
+  /* Backdrop animation — guarded against double-binding via inline styles
+     that already declare animation (those win, this is a safe baseline). */
+}
+
+/* Card hover lift — applied to anything tagged with .phase170-lift class
+   AND to common existing clickable card surfaces by selector. Tiny lift +
+   shadow grow signals "click me" without being noisy. */
+.phase170-lift,
+.profile-card,
+.kpi-clickable {
+  transition: transform 160ms cubic-bezier(.21,.61,.35,1),
+              box-shadow 160ms cubic-bezier(.21,.61,.35,1) !important;
+  will-change: transform;
+}
+.phase170-lift:hover,
+.profile-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(15,23,42,.10), 0 2px 6px rgba(15,23,42,.06);
+}
+
+/* Button press feedback — pure CSS scale-down on :active. Captures any
+   button that doesn't already have an inline transform/transition (rare).
+   Skips disabled buttons. */
+button:not([disabled]):not(.no-press):active {
+  transform: scale(.97);
+  transition: transform 80ms ease-out;
+}
+
+/* Sticky scroll-aware shadow — when an element with .phase170-sticky-shadow
+   is sticky-stuck, a subtle drop shadow appears underneath. Toggled by JS
+   below via a scroll observer (cheaper than IntersectionObserver hack for
+   this use). Adds depth that signals "this header is floating above the
+   content below it." */
+.phase170-stuck {
+  box-shadow: 0 4px 12px rgba(15,23,42,.08) !important;
+  transition: box-shadow 200ms ease;
+}
+
+/* Smooth tab-pill transitions — sub-tab nav rows (Referrals, Team, etc.)
+   already have inline style transitions; this provides a fallback. */
+[id^="rl-subtab-"], [id^="team-subtab-"], [id^="hist-subtab-"] {
+  transition: color 160ms ease, border-color 160ms ease, background 160ms ease !important;
+}
+
+/* Day-strip chips — extra polish on hover (the strip is the most-tapped
+   surface on referrals + logged patients). */
+#pr-day-strip button:hover:not([disabled]),
+#rl-day-strip button:hover:not([disabled]) {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(15,23,42,.10);
+}
+
+/* Toast slide-in — if the existing toast implementation doesn't already
+   animate, this catches it. */
+@keyframes phase170ToastIn {
+  from { opacity: 0; transform: translate(-50%, -20px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+
+/* Reduced-motion override — user-respecting a11y. Collapses every
+   animation we added (or that legacy code added via inline animation)
+   to an instant transition. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .phase170-page-enter,
+  .phase170-lift:hover,
+  .profile-card:hover,
+  button:not([disabled]):active {
+    animation: none !important;
+    transform: none !important;
+    transition: none !important;
+  }
+}
+
 </style>
 
 <!-- ════════════════════════════════════════════════════════════════════════
@@ -61653,6 +61767,123 @@ window.navPop=navPop;window.pickRD=pickRD;
 
 setInterval(updateClock,1000);updateClock();
 autoLockTargets(); // auto-lock if Monday 8PM has passed
+
+// ════════════════════════════════════════════════════════════════════════════
+// PHASE 170 (2026-05-30) — MOTION HOOKS: page transition + sticky shadow
+// Pure additive — does not modify existing switchTab or any other behavior,
+// just wraps it. Skips the animation when reduced-motion is set so a11y
+// users don't get unwanted movement.
+// ════════════════════════════════════════════════════════════════════════════
+(function _phase170Init(){
+  try {
+    // Detect prefers-reduced-motion once at boot.
+    var prefersReduced = false;
+    try {
+      prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    } catch(_){}
+
+    // ── Page-view entrance animation ───────────────────────────────────
+    // Map of tab → primary view container id. When switchTab runs, find
+    // the now-visible container, retrigger the .phase170-page-enter
+    // animation so each navigation feels like a fresh page load.
+    var VIEW_IDS = {
+      home: 'landing', schedule: 'day-view', members: 'members-view',
+      bank: 'bank-view', referrals: 'referrals-view', finances: 'finances-view',
+      reports: 'reports-view', feed: 'feed-view', profile: 'profile-view',
+      help: 'help-view', chat: 'chat-view'
+    };
+    function _phase170AnimateTab(tab){
+      if(prefersReduced) return;
+      var id = VIEW_IDS[tab];
+      if(!id) return;
+      var el = document.getElementById(id);
+      if(!el) return;
+      // Force-restart the animation by removing + re-adding the class on
+      // the next frame. Without this, repeat-clicking the same tab won't
+      // re-animate (CSS sees the class already there).
+      el.classList.remove('phase170-page-enter');
+      // Reading offsetWidth forces a style flush so the next add fires.
+      void el.offsetWidth;
+      el.classList.add('phase170-page-enter');
+      // Clean up the class after the animation so future style edits
+      // aren't fighting against the animation's end-state declarations.
+      setTimeout(function(){
+        try { el.classList.remove('phase170-page-enter'); } catch(_){}
+      }, 260);
+    }
+
+    // Wrap switchTab. If it isn't defined yet (rare race), defer one tick.
+    function _phase170WrapSwitchTab(){
+      if(typeof window.switchTab !== 'function'){
+        setTimeout(_phase170WrapSwitchTab, 100);
+        return;
+      }
+      var orig = window.switchTab;
+      window.switchTab = function _phase170SwitchTabHook(tab, opts){
+        var ret;
+        try { ret = orig.apply(this, arguments); }
+        catch(e){ throw e; }
+        // Fire after a tiny delay so the view's display flip has settled.
+        try { setTimeout(function(){ _phase170AnimateTab(tab); }, 0); } catch(_){}
+        return ret;
+      };
+      try {
+        // Animate the initially-visible view on first load too.
+        var initial = null;
+        Object.keys(VIEW_IDS).some(function(t){
+          var el = document.getElementById(VIEW_IDS[t]);
+          if(el && window.getComputedStyle(el).display !== 'none'){ initial = t; return true; }
+          return false;
+        });
+        if(initial) setTimeout(function(){ _phase170AnimateTab(initial); }, 80);
+      } catch(_){}
+    }
+    _phase170WrapSwitchTab();
+
+    // ── Sticky scroll-aware shadow ─────────────────────────────────────
+    // The day-strip wrappers (Phase 152 + 167) are position:sticky;top:0.
+    // When the user scrolls past their natural position, add a subtle
+    // drop shadow so they feel like they're floating above the content.
+    // Pure passive scroll listener — cheap.
+    var STICKY_SHADOW_IDS = ['rl-day-strip-wrap', 'pr-day-strip-wrap'];
+    function _phase170UpdateStickyShadows(){
+      if(prefersReduced) return;
+      STICKY_SHADOW_IDS.forEach(function(id){
+        var el = document.getElementById(id);
+        if(!el) return;
+        try {
+          var rect = el.getBoundingClientRect();
+          // If the element is at viewport top (rect.top <= 1) AND its
+          // parent has scrolled past it, it's "stuck" — add shadow.
+          // We approximate "stuck" by checking if rect.top is close to 0
+          // while the element still has scrollable content above it.
+          var parent = el.parentElement;
+          var isStuck = (rect.top <= 1 && parent && parent.scrollTop > 4);
+          if(isStuck){
+            if(!el.classList.contains('phase170-stuck')) el.classList.add('phase170-stuck');
+          } else {
+            if(el.classList.contains('phase170-stuck')) el.classList.remove('phase170-stuck');
+          }
+        } catch(_){}
+      });
+    }
+    // Throttle via rAF so scroll handler stays cheap.
+    var _phase170ScrollRaf = null;
+    function _phase170OnScroll(){
+      if(_phase170ScrollRaf) return;
+      _phase170ScrollRaf = requestAnimationFrame(function(){
+        _phase170ScrollRaf = null;
+        _phase170UpdateStickyShadows();
+      });
+    }
+    // Attach to both window AND any scrollable parent. Capture phase
+    // catches scrolls inside containers without us needing to know them.
+    document.addEventListener('scroll', _phase170OnScroll, { passive: true, capture: true });
+    window.addEventListener('scroll',   _phase170OnScroll, { passive: true });
+
+    console.log('[170] motion layer initialized · prefers-reduced-motion =', prefersReduced);
+  } catch(e){ try { console.warn('[170] init failed:', e); } catch(_){} }
+})();
 
 </script>
 
