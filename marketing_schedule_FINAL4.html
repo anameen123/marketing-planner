@@ -2021,13 +2021,13 @@ button:not([disabled]):not(.no-press):active {
     <button class="nav-tab active" id="tab-home" onclick="switchTab('home')">🏠 Home</button>
     <button class="nav-tab" id="tab-schedule" onclick="switchTab('schedule')">📅 Dashboard</button>
     <!-- Status moved to a sub-tab under Businesses (2026-05-15). Old links still work via switchTab('leads-page'). -->
-    <button class="nav-tab" id="tab-members" onclick="switchTab('members')">👥 Team</button>
+    <button class="nav-tab" id="tab-members" onclick="switchTab('members')">👥 Teams &amp; Locations</button>
     <button class="nav-tab" id="tab-bank" onclick="switchTab('bank')">🏢 Businesses</button>
     <!-- Patient Referrals — admin-only for now. Once IT creates the 3 front-desk accounts,
          they'll also see this. Members + readonly never see this button — they only see
          their own member/facility counters on their Team-tab profile. Visibility is set
          by JS in renderReferralNavVisibility() based on CURRENT_USER role. -->
-    <button class="nav-tab" id="tab-referrals" onclick="switchTab('referrals')">📋 Referrals</button>
+    <button class="nav-tab" id="tab-referrals" onclick="switchTab('referrals')">📋 Patients &amp; Referrals</button>
     <button class="nav-tab" id="tab-finances" onclick="switchTab('finances')">💰 Finances</button>
     <button class="nav-tab" id="tab-reports" onclick="switchTab('reports')">📋 Reports</button>
     <button class="nav-tab" id="tab-feed" onclick="switchTab('feed')">📡 Activity Feed <span id="feed-badge" style="display:none;background:#ef4444;color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:10px;margin-left:4px">0</span></button>
@@ -2282,6 +2282,29 @@ button:not([disabled]):not(.no-press):active {
 </div><!-- /landing -->
 
 <div id="members-view" style="display:none;padding:28px 20px;max-width:1100px;width:100%;margin:0 auto">
+
+  <!-- ═══════════════════════════════════════════════════════════════════════
+       PHASE 175 (2026-05-30) — OUTER WRAPPER: Team / Locations
+       Per user 2026-05-30: wrap the existing Team page in a parent tab
+       called "Teams & Locations" that toggles between the original Team
+       content (Tree + Stats) and a new Locations content (Phase 176 fills).
+       The existing Team page is UNTOUCHED — just wrapped in #tl-pane-team.
+       ═══════════════════════════════════════════════════════════════════════ -->
+  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:18px">
+    <div style="display:inline-flex;background:#fff;border:1px solid var(--border);border-radius:14px;padding:5px;gap:4px;box-shadow:0 2px 8px rgba(15,23,42,.05)">
+      <button id="tl-outer-team" type="button" onclick="_phase175SwitchOuter('team')"
+              style="padding:10px 22px;font-size:14px;font-weight:800;color:#fff;cursor:pointer;border:none;background:linear-gradient(135deg,#1F3864,#7030A0);border-radius:10px;font-family:'DM Sans',sans-serif;display:inline-flex;align-items:center;gap:8px;box-shadow:0 2px 8px rgba(112,48,160,.25);transition:all .15s">
+        <span style="font-size:18px">👥</span> Team
+      </button>
+      <button id="tl-outer-locations" type="button" onclick="_phase175SwitchOuter('locations')"
+              style="padding:10px 22px;font-size:14px;font-weight:800;color:var(--muted);cursor:pointer;border:none;background:transparent;border-radius:10px;font-family:'DM Sans',sans-serif;display:inline-flex;align-items:center;gap:8px;transition:all .15s">
+        <span style="font-size:18px">🏥</span> Locations
+      </button>
+    </div>
+  </div>
+
+  <!-- Pane 1: Team (existing content — UNCHANGED) -->
+  <div id="tl-pane-team">
 
   <!-- ── Team sub-tab nav: Team Structure | Stats ─────────────────────────
        Pill-style buttons with high contrast so the sub-tabs read clearly. -->
@@ -2663,6 +2686,24 @@ button:not([disabled]):not(.no-press):active {
       </div>
     </div>
   </div>
+
+  </div><!-- /tl-pane-team — Phase 175 wrapper close -->
+
+  <!-- Pane 2: Locations (Phase 175 stub — Phase 176 renders into here) -->
+  <div id="tl-pane-locations" style="display:none">
+    <!-- Sub-tabs for the 3 facilities -->
+    <div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:18px;flex-wrap:wrap">
+      <button id="loc-tab-frisco_er" type="button" onclick="_phase176SwitchFacility('frisco_er')"
+              style="padding:11px 22px;font-size:13px;font-weight:700;color:#1F3864;cursor:pointer;border:none;background:none;border-bottom:3px solid #1F3864;font-family:'DM Sans',sans-serif;margin-bottom:-2px;display:inline-flex;align-items:center;gap:6px">🏥 Frisco ER</button>
+      <button id="loc-tab-castle_hills_er" type="button" onclick="_phase176SwitchFacility('castle_hills_er')"
+              style="padding:11px 22px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;border:none;background:none;border-bottom:3px solid transparent;font-family:'DM Sans',sans-serif;margin-bottom:-2px;display:inline-flex;align-items:center;gap:6px">🏥 Castle Hills ER</button>
+      <button id="loc-tab-plano_uc" type="button" onclick="_phase176SwitchFacility('plano_uc')"
+              style="padding:11px 22px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;border:none;background:none;border-bottom:3px solid transparent;font-family:'DM Sans',sans-serif;margin-bottom:-2px;display:inline-flex;align-items:center;gap:6px">🏥 Urgent Care Plano</button>
+    </div>
+    <!-- Per-facility content host. Phase 176 renders into here. -->
+    <div id="loc-facility-content"></div>
+  </div>
+
 </div><!-- /members-view -->
 
 <!-- ── ADD VISIT MODAL ─────────────────────────────────────────────────────
@@ -15458,7 +15499,7 @@ function renderReferralLog(){
       + '<td style="padding:9px 12px">' + whenHtml + editedMark + '</td>'
       + '<td style="padding:9px 12px">' + patHtml + '</td>'
       + '<td style="padding:9px 12px">' + srcHtml + '</td>'
-      + '<td style="padding:9px 12px;font-size:11px;color:var(--muted);white-space:nowrap">🏥 ' + esc(facLabel) + '</td>'
+      + '<td style="padding:9px 12px;font-size:11px;color:var(--muted);white-space:nowrap" onclick="event.stopPropagation()">🏥 ' + (typeof _phase177FacilityLink === 'function' ? _phase177FacilityLink(e.destinationFacility, facLabel) : esc(facLabel)) + '</td>'
       + '<td style="padding:9px 12px;font-size:11px;color:var(--text);font-weight:600">' + esc(e.memberName) + ((Array.isArray(e.memberNames) && e.memberNames.length > 1) ? ' <span title="' + esc(e.memberNames.slice(1).join(', ')) + '" style="font-size:9px;font-weight:700;background:#eef2ff;color:#3730a3;border:1px solid #c7d2fe;border-radius:8px;padding:1px 6px;margin-left:4px">+' + (e.memberNames.length - 1) + '</span>' : '') + '</td>'
       + '<td style="padding:9px 12px;text-align:center;white-space:nowrap" onclick="event.stopPropagation()">'
       + (canEdit
@@ -15486,7 +15527,7 @@ function renderReferralLog(){
       +     '<div><div style="font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;font-size:9px;margin-bottom:3px">Age &amp; gender</div><div style="color:var(--text)">' + ((e.age != null && e.age !== '' ? e.age + ' yrs' : '—') + (e.gender ? ' · ' + esc(e.gender) : '')) + '</div></div>'
       +     '<div><div style="font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;font-size:9px;margin-bottom:3px">Payment</div><div style="color:var(--text)">' + paymentDisplay + '</div></div>'
       +     '<div><div style="font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;font-size:9px;margin-bottom:3px">Channel</div><div style="color:var(--text)">' + esc(chanLabel(e)) + '</div></div>'
-      +     '<div><div style="font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;font-size:9px;margin-bottom:3px">Destination</div><div style="color:var(--text)">🏥 ' + esc(fac ? fac.label : (e.destinationFacility || '—')) + '</div></div>'
+      +     '<div><div style="font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;font-size:9px;margin-bottom:3px">Destination</div><div style="color:var(--text)">🏥 ' + (typeof _phase177FacilityLink === 'function' ? _phase177FacilityLink(e.destinationFacility, (fac ? fac.label : (e.destinationFacility || '—'))) : esc(fac ? fac.label : (e.destinationFacility || '—'))) + '</div></div>'
       +     '<div><div style="font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;font-size:9px;margin-bottom:3px">Filled by</div><div style="color:var(--text)">' + esc(e.filledByName) + '</div></div>'
       +   '</div>'
       +   (e.chiefComplaint
@@ -15760,7 +15801,7 @@ function openReferralCard(entryId){
       // Body scroll area
       +   '<div style="padding:18px 22px;overflow-y:auto;flex:1">'
       +     row('Source', sourceLine)
-      +     row('Destination', fac ? ('🏥 ' + safe(fac.label) + (fac.city ? ' · ' + safe(fac.city) : '')) : safe(e.destinationFacility))
+      +     row('Destination', fac ? ('🏥 ' + (typeof _phase177FacilityLink === 'function' ? _phase177FacilityLink(e.destinationFacility, fac.label) : safe(fac.label)) + (fac.city ? ' · ' + safe(fac.city) : '')) : safe(e.destinationFacility))
       +     row('Chief complaint', safe(e.chiefComplaint))
       +     row('Payment', payment)
       +     row('Marketer credited', safe(members))
@@ -16593,7 +16634,7 @@ function _rlRenderCalDayDetail(iso){
       referralsHtml += '<div style="background:' + statusBg + ';border:1px solid var(--border);border-left:3px solid ' + statusColor + ';border-radius:8px;padding:8px 12px;display:flex;align-items:center;gap:12px;font-size:11px;flex-wrap:wrap">'
                     + '<div style="font-family:DM Mono,monospace;font-weight:700;color:var(--muted);min-width:64px">' + esc(expTime) + '</div>'
                     + '<div style="flex:1;min-width:0">'
-                    +   '<div style="font-weight:700;color:#0f172a">' + typeIcon + ' ' + esc(r.sourceName) + ' <span style="color:var(--muted);font-weight:400;font-size:10px">→ ' + esc(fac ? fac.short : r.destinationFacility) + '</span></div>'
+                    +   '<div style="font-weight:700;color:#0f172a">' + typeIcon + ' ' + esc(r.sourceName) + ' <span style="color:var(--muted);font-weight:400;font-size:10px">→ ' + (typeof _phase177FacilityLink === 'function' ? _phase177FacilityLink(r.destinationFacility, (fac ? fac.short : r.destinationFacility)) : esc(fac ? fac.short : r.destinationFacility)) + '</span></div>'
                     +   '<div style="font-size:10px;color:var(--muted);margin-top:2px">' + esc(creatorLbl) + (r.notes ? ' · ' + esc(r.notes) : '') + '</div>'
                     + '</div>'
                     + '<span style="background:' + statusColor + ';color:#fff;font-size:9px;font-weight:700;padding:2px 7px;border-radius:8px;white-space:nowrap">' + statusLabel + '</span>'
@@ -18635,8 +18676,9 @@ function renderPendingReferrals(){
     // gracefully because the parent <td> has max-width.
     var safeSource = String(r.sourceName || '—').replace(/</g,'&lt;');
     var safeFac    = String(facLabel || '—').replace(/</g,'&lt;');
+    var facLink = (typeof _phase177FacilityLink === 'function') ? _phase177FacilityLink(r.destinationFacility, safeFac) : safeFac;
     var srcDestHtml = '<div style="font-size:12px;font-weight:600;color:#0f172a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + safeSource + '">' + typeIcon + ' ' + safeSource + '</div>'
-                    + '<div style="font-size:10px;color:var(--muted);white-space:nowrap">→ 🏥 ' + safeFac + '</div>';
+                    + '<div style="font-size:10px;color:var(--muted);white-space:nowrap">→ 🏥 ' + facLink + '</div>';
     // Patient column — name + optional late warning chip inline
     var safePatient = r.patientName ? String(r.patientName).replace(/</g,'&lt;') : '<span style="color:var(--muted);font-style:italic">—</span>';
     var lateChip = '';
@@ -18978,7 +19020,7 @@ function _phase166OpenPendingReferralCard(refId){
       +     '<div style="flex:1;min-width:0">'
       +       '<div style="font-size:11px;opacity:.9;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Referral · ' + statusLabel + '</div>'
       +       '<div style="font-size:17px;font-weight:800;line-height:1.25">' + safe(r.sourceName || 'Unknown source') + '</div>'
-      +       '<div style="font-size:12px;opacity:.95;margin-top:3px">→ ' + safe(fac ? fac.label : r.destinationFacility) + (r.patientName ? ' · ' + safe(r.patientName) : '') + '</div>'
+      +       '<div style="font-size:12px;opacity:.95;margin-top:3px">→ ' + (typeof _phase177FacilityLink === 'function' ? _phase177FacilityLink(r.destinationFacility, (fac ? fac.label : r.destinationFacility)) : safe(fac ? fac.label : r.destinationFacility)) + (r.patientName ? ' · ' + safe(r.patientName) : '') + '</div>'
       +     '</div>'
       +     '<button type="button" onclick="document.getElementById(\'' + modalId + '\').remove()" style="background:rgba(255,255,255,.2);border:none;color:#fff;font-size:18px;font-weight:700;width:34px;height:34px;border-radius:8px;cursor:pointer;flex-shrink:0">×</button>'
       +   '</div>'
@@ -18989,7 +19031,7 @@ function _phase166OpenPendingReferralCard(refId){
       +       '<div style="font-size:14px;font-weight:800;color:#1F3864;font-family:DM Mono,monospace;margin-top:3px">' + fmtDt(r.createdAt) + '</div>'
       +     '</div>'
       +     row('Source', safe((r.sourceType === 'mva' ? '⚖ MVA · ' : '🏥 Clinic · ') + r.sourceName))
-      +     row('Destination facility', safe(fac ? (fac.label + (fac.city ? ' · ' + fac.city : '')) : r.destinationFacility))
+      +     row('Destination facility', (fac ? (typeof _phase177FacilityLink === 'function' ? _phase177FacilityLink(r.destinationFacility, fac.label) : safe(fac.label)) + (fac.city ? ' · ' + safe(fac.city) : '') : safe(r.destinationFacility)))
       +     row('Patient', safe(r.patientName || '—'))
       +     row('Patient phone', fmtPhone(r.patientPhone))
       +     row('Source clinic phone', fmtPhone(r.sourceClinicPhone))
@@ -50495,9 +50537,9 @@ var _RECENT_TABS_LS_KEY = 'wcg_recent_tabs_v1';
 var TAB_DISPLAY_INFO = {
   home:      { icon: '🏠', label: 'Home' },
   schedule:  { icon: '📅', label: 'Dashboard' },
-  members:   { icon: '👥', label: 'Team' },
+  members:   { icon: '👥', label: 'Teams & Locations' },
   bank:      { icon: '🏢', label: 'Businesses' },
-  referrals: { icon: '📋', label: 'Referrals' },
+  referrals: { icon: '📋', label: 'Patients & Referrals' },
   finances:  { icon: '💰', label: 'Finances' },
   reports:   { icon: '📋', label: 'Reports' },
   feed:      { icon: '📡', label: 'Activity' },
@@ -51503,6 +51545,374 @@ window._histClearSearch = _histClearSearch;
 // section) restores the user to where they were — Stats users should NOT
 // be sent back to Tree on every entry.
 window._teamLastSub = window._teamLastSub || 'tree';
+
+// ════════════════════════════════════════════════════════════════════════════
+// PHASE 175 (2026-05-30) — OUTER TEAMS/LOCATIONS TOGGLE
+// Per user 2026-05-30: wrap the Team page in a "Teams & Locations" parent
+// tab with 2 inner panes — Team (existing, untouched) + Locations (new).
+// _phase175SwitchOuter swaps visibility + repaints toggle pill state.
+// Defaults to 'team' on first open so the existing UX is unchanged.
+// ════════════════════════════════════════════════════════════════════════════
+window._phase175LastOuter = window._phase175LastOuter || 'team';
+function _phase175SwitchOuter(which){
+  if(which !== 'team' && which !== 'locations') which = 'team';
+  window._phase175LastOuter = which;
+  var paneTeam = document.getElementById('tl-pane-team');
+  var paneLoc  = document.getElementById('tl-pane-locations');
+  var btnTeam  = document.getElementById('tl-outer-team');
+  var btnLoc   = document.getElementById('tl-outer-locations');
+  if(paneTeam) paneTeam.style.display = (which === 'team') ? '' : 'none';
+  if(paneLoc)  paneLoc.style.display  = (which === 'locations') ? '' : 'none';
+  function setBtn(btn, on){
+    if(!btn) return;
+    btn.style.background = on ? 'linear-gradient(135deg,#1F3864,#7030A0)' : 'transparent';
+    btn.style.color      = on ? '#fff' : 'var(--muted)';
+    btn.style.boxShadow  = on ? '0 2px 8px rgba(112,48,160,.25)' : 'none';
+  }
+  setBtn(btnTeam, which === 'team');
+  setBtn(btnLoc,  which === 'locations');
+  // If switching to Locations, render the currently-selected facility
+  // (defaults to frisco_er on first open).
+  if(which === 'locations'){
+    var facKey = window._phase176LastFacility || 'frisco_er';
+    if(typeof _phase176SwitchFacility === 'function'){
+      try { _phase176SwitchFacility(facKey); } catch(e){ console.warn('[175] facility render failed:', e); }
+    }
+  }
+}
+window._phase175SwitchOuter = _phase175SwitchOuter;
+
+// ════════════════════════════════════════════════════════════════════════════
+// PHASE 176 (2026-05-30) — PER-FACILITY ANALYTICS PAGE
+// Per user 2026-05-30: each facility (Frisco ER / Castle Hills ER / UC Plano)
+// gets its own page with daily / weekly / monthly counters, calendar-style
+// day strip, bar-or-line chart for 1m / 3m / 6m / 1y windows, and a list
+// of patients logged at that facility. Reads from REFERRAL_LOG (only
+// successful referrals + direct walk-ins captured by the front desk).
+// ════════════════════════════════════════════════════════════════════════════
+window._phase176LastFacility = window._phase176LastFacility || 'frisco_er';
+window._phase176ChartWindow  = window._phase176ChartWindow  || '3m';   // 1m | 3m | 6m | 1y
+window._phase176ChartType    = window._phase176ChartType    || 'bar';  // bar | line
+
+function _phase176FacilityMeta(key){
+  // Pull from REFERRAL_FACILITIES if defined; otherwise fall back.
+  try {
+    if(typeof REFERRAL_FACILITIES !== 'undefined' && Array.isArray(REFERRAL_FACILITIES)){
+      var f = REFERRAL_FACILITIES.find(function(x){ return x.key === key; });
+      if(f) return f;
+    }
+  } catch(_){}
+  var fallback = {
+    frisco_er:       { key:'frisco_er',       label:'Frisco ER',           city:'Frisco' },
+    castle_hills_er: { key:'castle_hills_er', label:'Castle Hills ER',     city:'Castle Hills' },
+    plano_uc:        { key:'plano_uc',        label:'Urgent Care of Plano', city:'Plano' }
+  };
+  return fallback[key] || { key:key, label:key, city:'' };
+}
+
+function _phase176SwitchFacility(facKey){
+  if(facKey !== 'frisco_er' && facKey !== 'castle_hills_er' && facKey !== 'plano_uc') facKey = 'frisco_er';
+  window._phase176LastFacility = facKey;
+  // Update tab pill states
+  ['frisco_er','castle_hills_er','plano_uc'].forEach(function(k){
+    var btn = document.getElementById('loc-tab-' + k);
+    if(!btn) return;
+    var on = (k === facKey);
+    btn.style.color = on ? '#1F3864' : 'var(--muted)';
+    btn.style.fontWeight = on ? '700' : '600';
+    btn.style.borderBottomColor = on ? '#1F3864' : 'transparent';
+  });
+  _phase176RenderFacility(facKey);
+}
+window._phase176SwitchFacility = _phase176SwitchFacility;
+
+function _phase176GetEntriesForFacility(facKey){
+  try {
+    if(typeof REFERRAL_LOG === 'undefined' || !Array.isArray(REFERRAL_LOG)) return [];
+    return REFERRAL_LOG.filter(function(e){ return e && e.destinationFacility === facKey; });
+  } catch(_){ return []; }
+}
+
+function _phase176IsoDate(d){
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
+function _phase176Counters(entries){
+  var today = new Date(); today.setHours(0,0,0,0);
+  var todayIso = _phase176IsoDate(today);
+  var weekStart = new Date(today); weekStart.setDate(weekStart.getDate() - 6);
+  var monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+  var dayCount = 0, weekCount = 0, monthCount = 0, totalCount = 0;
+  entries.forEach(function(e){
+    var iso = e.entryDate || (e.ts ? String(e.ts).slice(0,10) : '');
+    if(!iso) return;
+    var d = new Date(iso + 'T12:00:00');
+    if(isNaN(d.getTime())) return;
+    totalCount++;
+    if(iso === todayIso) dayCount++;
+    if(d >= weekStart && d <= new Date(today.getTime() + 86400000 - 1)) weekCount++;
+    if(d >= monthStart) monthCount++;
+  });
+  return { day: dayCount, week: weekCount, month: monthCount, total: totalCount };
+}
+
+function _phase176RenderFacility(facKey){
+  var host = document.getElementById('loc-facility-content');
+  if(!host) return;
+  var meta = _phase176FacilityMeta(facKey);
+  var entries = _phase176GetEntriesForFacility(facKey);
+  var counters = _phase176Counters(entries);
+  var safeName = String(meta.label).replace(/</g,'&lt;');
+  var safeCity = String(meta.city || '').replace(/</g,'&lt;');
+  var html = ''
+    // Header
+    + '<div style="background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;border-radius:14px;padding:18px 22px;margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">'
+    +   '<div>'
+    +     '<div style="font-size:18px;font-weight:800">🏥 ' + safeName + '</div>'
+    +     '<div style="font-size:11px;opacity:.9;margin-top:3px">' + safeCity + ' · ' + counters.total + ' patient' + (counters.total === 1 ? '' : 's') + ' logged all-time</div>'
+    +   '</div>'
+    +   '<div style="font-size:10px;opacity:.85;text-transform:uppercase;letter-spacing:.05em">All numbers count confirmed referrals + direct logs</div>'
+    + '</div>'
+    // Counter strip
+    + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:18px">'
+    +   _phase176CounterCard('Today',     counters.day,   '#15803d', '🗓')
+    +   _phase176CounterCard('This week', counters.week,  '#1e40af', '📅')
+    +   _phase176CounterCard('This month', counters.month, '#7030A0', '📆')
+    +   _phase176CounterCard('All-time',  counters.total, '#1F3864', '∑')
+    + '</div>'
+    // Chart card
+    + '<div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:18px;box-shadow:0 1px 3px rgba(15,23,42,.04)">'
+    +   '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px">'
+    +     '<div style="font-size:13px;font-weight:700;color:var(--text)">📊 Patients logged at ' + safeName + '</div>'
+    +     '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">'
+    +       _phase176WindowChip('1m', '1 month')
+    +       _phase176WindowChip('3m', '3 months')
+    +       _phase176WindowChip('6m', '6 months')
+    +       _phase176WindowChip('1y', '1 year')
+    +       '<span style="width:1px;height:18px;background:var(--border);margin:0 4px"></span>'
+    +       _phase176TypeChip('bar', '▮▮ Bar')
+    +       _phase176TypeChip('line', '╱╲ Line')
+    +     '</div>'
+    +   '</div>'
+    +   '<svg id="phase176-chart-svg" width="100%" height="220" style="display:block;overflow:visible"></svg>'
+    + '</div>'
+    // Recent patient list
+    + '<div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px;box-shadow:0 1px 3px rgba(15,23,42,.04)">'
+    +   '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'
+    +     '<div style="font-size:13px;font-weight:700;color:var(--text)">📋 Recent patients · ' + safeName + '</div>'
+    +     '<div style="font-size:10px;color:var(--muted)">Newest first · click a row to open the patient card</div>'
+    +   '</div>'
+    +   _phase176RecentList(entries)
+    + '</div>';
+  host.innerHTML = html;
+  // Draw the chart after the DOM is settled
+  setTimeout(function(){ try { _phase176DrawChart(entries); } catch(e){ console.warn('[176] chart draw failed:', e); } }, 30);
+}
+window._phase176RenderFacility = _phase176RenderFacility;
+
+function _phase176CounterCard(label, value, color, icon){
+  return '<div style="background:#fff;border:1px solid var(--border);border-left:4px solid ' + color + ';border-radius:10px;padding:14px 16px;box-shadow:0 1px 3px rgba(15,23,42,.04)">'
+    + '<div style="display:flex;align-items:center;gap:6px;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-weight:700">' + icon + ' ' + label + '</div>'
+    + '<div style="font-size:32px;font-weight:800;color:' + color + ';font-family:DM Mono,monospace;margin-top:4px;line-height:1">' + value + '</div>'
+    + '</div>';
+}
+
+function _phase176WindowChip(key, label){
+  var active = (window._phase176ChartWindow === key);
+  var bg = active ? '#1F3864' : '#fff';
+  var fg = active ? '#fff' : 'var(--muted)';
+  var bord = active ? '#1F3864' : 'var(--border)';
+  return '<button type="button" onclick="_phase176SetWindow(\'' + key + '\')" style="background:' + bg + ';color:' + fg + ';border:1px solid ' + bord + ';border-radius:6px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">' + label + '</button>';
+}
+
+function _phase176TypeChip(key, label){
+  var active = (window._phase176ChartType === key);
+  var bg = active ? '#7030A0' : '#fff';
+  var fg = active ? '#fff' : 'var(--muted)';
+  var bord = active ? '#7030A0' : 'var(--border)';
+  return '<button type="button" onclick="_phase176SetChartType(\'' + key + '\')" style="background:' + bg + ';color:' + fg + ';border:1px solid ' + bord + ';border-radius:6px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">' + label + '</button>';
+}
+
+function _phase176SetWindow(w){
+  if(['1m','3m','6m','1y'].indexOf(w) < 0) return;
+  window._phase176ChartWindow = w;
+  _phase176RenderFacility(window._phase176LastFacility);
+}
+window._phase176SetWindow = _phase176SetWindow;
+
+function _phase176SetChartType(t){
+  if(t !== 'bar' && t !== 'line') return;
+  window._phase176ChartType = t;
+  _phase176RenderFacility(window._phase176LastFacility);
+}
+window._phase176SetChartType = _phase176SetChartType;
+
+function _phase176DrawChart(entries){
+  var svg = document.getElementById('phase176-chart-svg');
+  if(!svg) return;
+  // Bucket entries by month for the chosen window
+  var monthsCount = ({ '1m':1, '3m':3, '6m':6, '1y':12 })[window._phase176ChartWindow] || 3;
+  var now = new Date(); now.setDate(1); now.setHours(0,0,0,0);
+  var buckets = [];
+  for(var i = monthsCount - 1; i >= 0; i--){
+    var d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    buckets.push({
+      key: d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0'),
+      label: d.toLocaleDateString('en-US', { month:'short', year:'2-digit' }),
+      count: 0
+    });
+  }
+  var bucketMap = {};
+  buckets.forEach(function(b){ bucketMap[b.key] = b; });
+  entries.forEach(function(e){
+    var iso = e.entryDate || (e.ts ? String(e.ts).slice(0,10) : '');
+    if(!iso || iso.length < 7) return;
+    var k = iso.slice(0,7);
+    if(bucketMap[k]) bucketMap[k].count++;
+  });
+  var w = svg.clientWidth || svg.parentElement.clientWidth || 600;
+  var h = 220;
+  var pad = { l: 36, r: 12, t: 12, b: 28 };
+  var innerW = w - pad.l - pad.r;
+  var innerH = h - pad.t - pad.b;
+  var maxV = Math.max.apply(null, buckets.map(function(b){ return b.count; }).concat([1]));
+  // Y-axis grid lines (4 levels)
+  var grid = '';
+  for(var g = 0; g <= 4; g++){
+    var y = pad.t + innerH - (g / 4) * innerH;
+    var v = Math.round((g / 4) * maxV);
+    grid += '<line x1="' + pad.l + '" y1="' + y + '" x2="' + (w - pad.r) + '" y2="' + y + '" stroke="#e2e8f0" stroke-width="1"/>';
+    grid += '<text x="' + (pad.l - 6) + '" y="' + (y + 4) + '" text-anchor="end" font-size="10" fill="#94a3b8" font-family="DM Mono,monospace">' + v + '</text>';
+  }
+  // Bars or line
+  var content = '';
+  var stepX = innerW / buckets.length;
+  if(window._phase176ChartType === 'bar'){
+    buckets.forEach(function(b, idx){
+      var barH = (b.count / maxV) * innerH;
+      var x = pad.l + idx * stepX + stepX * 0.18;
+      var y = pad.t + innerH - barH;
+      var bw = stepX * 0.64;
+      content += '<rect x="' + x + '" y="' + y + '" width="' + bw + '" height="' + barH + '" fill="url(#phase176Grad)" rx="3"/>';
+      if(b.count > 0){
+        content += '<text x="' + (x + bw/2) + '" y="' + (y - 4) + '" text-anchor="middle" font-size="10" font-weight="700" fill="#1F3864" font-family="DM Mono,monospace">' + b.count + '</text>';
+      }
+    });
+  } else {
+    // Line
+    var pts = buckets.map(function(b, idx){
+      var x = pad.l + idx * stepX + stepX / 2;
+      var y = pad.t + innerH - (b.count / maxV) * innerH;
+      return [x, y];
+    });
+    var poly = pts.map(function(p){ return p[0] + ',' + p[1]; }).join(' ');
+    var area = poly + ' ' + pts[pts.length-1][0] + ',' + (pad.t + innerH) + ' ' + pts[0][0] + ',' + (pad.t + innerH);
+    content += '<polygon points="' + area + '" fill="url(#phase176Grad)" fill-opacity=".18"/>';
+    content += '<polyline points="' + poly + '" fill="none" stroke="#7030A0" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>';
+    pts.forEach(function(p, idx){
+      content += '<circle cx="' + p[0] + '" cy="' + p[1] + '" r="4" fill="#fff" stroke="#7030A0" stroke-width="2"/>';
+      if(buckets[idx].count > 0){
+        content += '<text x="' + p[0] + '" y="' + (p[1] - 8) + '" text-anchor="middle" font-size="10" font-weight="700" fill="#7030A0" font-family="DM Mono,monospace">' + buckets[idx].count + '</text>';
+      }
+    });
+  }
+  // X-axis labels
+  var labels = '';
+  buckets.forEach(function(b, idx){
+    var x = pad.l + idx * stepX + stepX / 2;
+    labels += '<text x="' + x + '" y="' + (h - 8) + '" text-anchor="middle" font-size="10" fill="#64748b" font-family="DM Sans,sans-serif">' + b.label + '</text>';
+  });
+  svg.innerHTML = '<defs><linearGradient id="phase176Grad" x1="0" y1="0" x2="0" y2="1">'
+    + '<stop offset="0%" stop-color="#7030A0"/>'
+    + '<stop offset="100%" stop-color="#1F3864"/>'
+    + '</linearGradient></defs>'
+    + grid + content + labels;
+}
+
+function _phase176RecentList(entries){
+  // Sort by ts/entryDate descending, take top 15
+  var sorted = entries.slice().sort(function(a, b){
+    var aT = a.ts || a.entryDate || '';
+    var bT = b.ts || b.entryDate || '';
+    return bT.localeCompare(aT);
+  });
+  var top = sorted.slice(0, 15);
+  if(top.length === 0){
+    return '<div style="padding:24px 12px;text-align:center;color:var(--muted);font-style:italic;font-size:12px">No patients logged at this facility yet.</div>';
+  }
+  function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+  var rows = top.map(function(e, i){
+    var when = e.entryDate || (e.ts ? String(e.ts).slice(0,10) : '—');
+    var time = e.entryTime || (e.ts ? new Date(e.ts).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}) : '');
+    var src = e.sourceBusiness || e.sourceChannel || '—';
+    var member = e.memberName || (e.noMarketingRep ? '🚫 None' : '—');
+    var safeId = String(e.id).replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    var bg = (i % 2 === 0) ? '#fff' : '#fafbfc';
+    return '<tr onclick="if(typeof openReferralCard === \'function\') openReferralCard(\'' + safeId + '\')" style="background:' + bg + ';border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s" onmouseover="this.style.background=\'#f1f5f9\'" onmouseout="this.style.background=\'' + bg + '\'">'
+      + '<td style="padding:8px 10px;font-family:DM Mono,monospace;font-size:11px;color:#1F3864;white-space:nowrap">' + esc(when) + '</td>'
+      + '<td style="padding:8px 10px;font-size:11px;color:var(--muted);white-space:nowrap">' + esc(time) + '</td>'
+      + '<td style="padding:8px 10px;font-size:12px;color:var(--text);max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(src).replace(/"/g,'&quot;') + '">' + esc(src) + '</td>'
+      + '<td style="padding:8px 10px;font-size:11px;color:var(--muted)">' + esc(member) + '</td>'
+      + '</tr>';
+  }).join('');
+  return '<table style="width:100%;border-collapse:collapse;font-family:DM Sans,sans-serif">'
+    + '<thead><tr style="background:#f8fafc;border-bottom:2px solid var(--border)">'
+    +   '<th style="padding:8px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em">Date</th>'
+    +   '<th style="padding:8px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em">Time</th>'
+    +   '<th style="padding:8px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em">Source</th>'
+    +   '<th style="padding:8px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em">Marketer</th>'
+    + '</tr></thead>'
+    + '<tbody>' + rows + '</tbody>'
+    + '</table>';
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// PHASE 177 (2026-05-30) — FACILITY NAME NAVIGATION (with confirm)
+// Per user 2026-05-30: any time Frisco / Castle Hills / UCP appears in a
+// list, the name should be clickable. Click → confirm dialog (because it
+// takes the rep out of the current page) → on confirm, navigate to the
+// Locations tab and select the matching facility page.
+// Use _phase177FacilityLink(facKey, displayText) to wrap any facility
+// reference in HTML. Use _phase177NavigateToFacility(facKey) as the
+// click handler — fires the confirm + navigates.
+// ════════════════════════════════════════════════════════════════════════════
+function _phase177FacilityLink(facKey, displayText){
+  if(!facKey) return String(displayText || '');
+  var safeKey = String(facKey).replace(/'/g, "\\'");
+  var safeText = String(displayText || '').replace(/</g, '&lt;');
+  return '<a href="#" onclick="event.preventDefault();event.stopPropagation();_phase177NavigateToFacility(\'' + safeKey + '\');return false;" '
+    + 'title="Open ' + safeText.replace(/"/g,'&quot;') + ' analytics page" '
+    + 'style="color:#1F3864;text-decoration:underline dotted;text-underline-offset:3px;font-weight:600;cursor:pointer">'
+    + safeText + '</a>';
+}
+window._phase177FacilityLink = _phase177FacilityLink;
+
+function _phase177NavigateToFacility(facKey){
+  if(!facKey || ['frisco_er','castle_hills_er','plano_uc'].indexOf(facKey) < 0) return;
+  var meta = (typeof _phase176FacilityMeta === 'function') ? _phase176FacilityMeta(facKey) : null;
+  var label = (meta && meta.label) || facKey;
+  var ok = window.confirm(
+    'Open the ' + label + ' analytics page?\n\n' +
+    'You will leave this page and switch to Teams & Locations → Locations → ' + label + '.\n\n' +
+    'Click OK to navigate, or Cancel to stay here.'
+  );
+  if(!ok) return;
+  try {
+    // Set the facility before switchTab so the renderer sees the right
+    // selection when the Locations pane paints.
+    window._phase176LastFacility = facKey;
+    window._phase175LastOuter = 'locations';
+    if(typeof switchTab === 'function') switchTab('members');
+    // After tab swap, force the outer toggle to Locations + render the
+    // facility. switchTab's defer-to-next-tick is OK because we set the
+    // globals first so the inner switch picks them up.
+    setTimeout(function(){
+      if(typeof _phase175SwitchOuter === 'function') _phase175SwitchOuter('locations');
+    }, 60);
+  } catch(e){ console.warn('[177] facility navigate failed:', e); }
+}
+window._phase177NavigateToFacility = _phase177NavigateToFacility;
+
 function switchTeamTab(name){
   var treeBtn = document.getElementById('team-subtab-tree');
   var statBtn = document.getElementById('team-subtab-stats');
