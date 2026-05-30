@@ -31188,6 +31188,14 @@ function closeRoutePlanner(opts){
     // Phase 144 (2026-05-29): drop the Pick & Plan snapshot too so the
     // next planner session doesn't trigger a stale compare modal.
     window._PHASE144_OPT_SNAPSHOT = null;
+    // Phase 165 (2026-05-30): clear the resume-review flag + nuke the
+    // banner so a fresh planner open doesn't inherit lock state from
+    // a previous resume session.
+    window._RP_RESUMING_LOCKED = false;
+    try {
+      var p165Banner = document.getElementById('phase165-review-banner');
+      if(p165Banner) p165Banner.remove();
+    } catch(_){}
     try {
       var rpBox = document.getElementById('route-planner-box');
       if(rpBox) rpBox.classList.remove('rp-locked');
@@ -43131,6 +43139,12 @@ function _rpResumeSavedRoute(routeId){
   // UPDATE this route instead of appending a new one. Phase 122a's
   // _rpSaveCurrentRoute wrapper reads it.
   window._RP_EDITING_ROUTE_ID = saved.routeId || null;
+  // Phase 165 (2026-05-30): mark this as a resumed-review session so the
+  // post-restore step locks the planner instead of dropping the rep into
+  // an editable state. Per user 2026-05-30: clicking the chip should NOT
+  // immediately enable edits — it should show the locked settings + an
+  // explicit Update button. The flag is read by _phase165AfterResume.
+  window._RP_RESUMING_LOCKED = true;
   if(typeof openRoutePlanner !== 'function'){ return; }
   // Open the planner first (which wipes state, then we restore on top)
   openRoutePlanner();
@@ -43143,7 +43157,11 @@ function _rpResumeSavedRoute(routeId){
       } else if(saved.mode === 'optimize'){
         _rpRestoreOptimizeState(saved);
       }
-      if(typeof showToast === 'function') showToast('📍 Resumed your ' + saved.mode + ' route from ' + (saved.savedAt ? new Date(saved.savedAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : 'earlier'));
+      // Phase 165: lock the planner + show the review banner with the
+      // Update button. Defer one more tick so the mode-specific restore
+      // (which may schedule its own setTimeout for _rpV5Start) has time
+      // to populate the candidate list before we freeze it.
+      setTimeout(function(){ _phase165AfterResume(saved); }, 250);
     } catch(e){
       console.error('[resumeSavedRoute] restore failed:', e);
       if(typeof showToast === 'function') showToast('Resume failed: ' + (e && e.message));
@@ -43151,6 +43169,112 @@ function _rpResumeSavedRoute(routeId){
   }, 150);
 }
 window._rpResumeSavedRoute = _rpResumeSavedRoute;
+
+// Phase 165 (2026-05-30): post-resume hook. Per user 2026-05-30:
+//   • Click the "Current route" chip → opens a LOCKED review (not edit)
+//   • Banner explains state + offers an explicit Update button
+//   • Update unlocks + warns that committing will OVERRIDE the old route
+//     (no traces) — Phase 101's existing override modal still fires on
+//     Generate-route + Add-to-schedule and now reuses _RP_EDITING_ROUTE_ID
+//     so the saved-route record is REPLACED (not appended).
+// The lock uses Phase 135's .rp-locked CSS class so every input + button
+// in the planner becomes non-interactive except those marked .rp-locked-ok.
+// The Update button is .rp-locked-ok so it stays clickable.
+function _phase165AfterResume(saved){
+  try {
+    if(!window._RP_RESUMING_LOCKED) return;
+    if(typeof _rpV5SetLocked === 'function') _rpV5SetLocked(true);
+    _phase165InjectReviewBanner(saved);
+    if(typeof showToast === 'function'){
+      var modeName = saved.mode === 'corridor' ? 'Corridor' : 'Pick & Plan';
+      showToast('📍 Reviewing your saved ' + modeName + ' route — fields are locked. Click Update to edit.');
+    }
+  } catch(e){ console.warn('[165] afterResume failed:', e); }
+}
+window._phase165AfterResume = _phase165AfterResume;
+
+function _phase165InjectReviewBanner(saved){
+  // Remove any prior banner first so re-opens don't stack.
+  var prior = document.getElementById('phase165-review-banner');
+  if(prior) prior.remove();
+  var box = document.getElementById('route-planner-box');
+  if(!box) return;
+  var stops = 0;
+  if(saved.mode === 'corridor') stops = (saved.flatPicks || []).length;
+  else if(saved.mode === 'optimize') stops = (saved.optTargets || []).length;
+  var modeLabel = saved.mode === 'corridor' ? '🧭 Corridor' : '🎯 Pick & Plan';
+  var savedWhen = '';
+  if(saved.savedAt){
+    try {
+      var d = new Date(saved.savedAt);
+      savedWhen = ' · saved ' + d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    } catch(_){}
+  }
+  var banner = document.createElement('div');
+  banner.id = 'phase165-review-banner';
+  banner.style.cssText = 'background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;padding:11px 14px;border-radius:10px 10px 0 0;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;font-family:DM Sans,sans-serif;box-shadow:0 2px 6px rgba(15,23,42,.2);margin:-1px -1px 0 -1px;position:sticky;top:0;z-index:50';
+  banner.innerHTML = ''
+    + '<div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0">'
+    +   '<span style="font-size:18px">🔒</span>'
+    +   '<div style="min-width:0">'
+    +     '<div style="font-size:13px;font-weight:800">Reviewing saved route — fields locked</div>'
+    +     '<div style="font-size:10.5px;opacity:.9;margin-top:1px">' + modeLabel + ' · ' + stops + ' stop' + (stops === 1 ? '' : 's') + savedWhen + ' · Click <b>Update</b> to make changes.</div>'
+    +   '</div>'
+    + '</div>'
+    + '<button type="button" class="rp-locked-ok" onclick="_phase165UnlockForUpdate()" style="background:#fff;color:#1F3864;border:none;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:800;cursor:pointer;font-family:DM Sans,sans-serif;display:inline-flex;align-items:center;gap:6px;flex-shrink:0;box-shadow:0 1px 3px rgba(0,0,0,.2)">'
+    +   '<span>✏</span><span>Update</span>'
+    + '</button>';
+  // Insert at the very top of the planner box.
+  box.insertBefore(banner, box.firstChild);
+}
+window._phase165InjectReviewBanner = _phase165InjectReviewBanner;
+
+function _phase165UnlockForUpdate(){
+  try {
+    // One-question confirm so an accidental tap doesn't drop the lock.
+    var ok = window.confirm(
+      'Unlock this saved route for editing?\n\n' +
+      'When you click Generate route + Add to schedule, the changes will ' +
+      'COMPLETELY OVERRIDE the existing route — the old picks + saved ' +
+      'state will be replaced, no traces left behind.\n\n' +
+      'Click OK to unlock and edit, or Cancel to keep reviewing.'
+    );
+    if(!ok) return;
+    window._RP_RESUMING_LOCKED = false;
+    if(typeof _rpV5SetLocked === 'function') _rpV5SetLocked(false);
+    // Swap the banner to an "edit mode" version so the rep keeps the
+    // override warning visible while they work.
+    var banner = document.getElementById('phase165-review-banner');
+    if(banner){
+      banner.style.background = 'linear-gradient(135deg,#b45309,#d97706)';
+      banner.innerHTML = ''
+        + '<div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0">'
+        +   '<span style="font-size:18px">✏</span>'
+        +   '<div style="min-width:0">'
+        +     '<div style="font-size:13px;font-weight:800">Edit mode — fields unlocked</div>'
+        +     '<div style="font-size:10.5px;opacity:.9;margin-top:1px">Generate route + Add to schedule will <b>fully override</b> the existing saved route. No traces of the old picks will remain.</div>'
+        +   '</div>'
+        + '</div>'
+        + '<button type="button" class="rp-locked-ok" onclick="if(confirm(\'Discard your edits and re-lock to review?\'))_phase165RelockReview()" style="background:rgba(255,255,255,.18);color:#fff;border:1px solid rgba(255,255,255,.45);border-radius:8px;padding:7px 14px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;flex-shrink:0">↩ Cancel edits</button>';
+    }
+    if(typeof showToast === 'function') showToast('✏ Edit mode — make your changes, then Generate route to override the saved one.');
+  } catch(e){ console.error('[165] unlock failed:', e); }
+}
+window._phase165UnlockForUpdate = _phase165UnlockForUpdate;
+
+function _phase165RelockReview(){
+  // Discard edits + re-enter review mode. We rebuild the panel by
+  // re-resuming from the saved record (same routeId).
+  try {
+    var iso = (typeof _rpGetCurrentDayIso === 'function') ? _rpGetCurrentDayIso() : null;
+    var rid = window._RP_EDITING_ROUTE_ID;
+    if(rid && iso && typeof closeRoutePlanner === 'function'){
+      closeRoutePlanner({ force: true });
+      setTimeout(function(){ _rpResumeSavedRoute(rid); }, 100);
+    }
+  } catch(e){ console.warn('[165] relock failed:', e); }
+}
+window._phase165RelockReview = _phase165RelockReview;
 
 function _rpRestoreCorridorState(saved){
   if(!saved) return;
