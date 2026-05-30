@@ -18438,7 +18438,7 @@ function renderPendingReferrals(){
       + (needsEscape ? '<div style="text-align:center;margin-top:8px"><button type="button" onclick="_prClearFilters()" style="background:#fff;border:1px solid var(--border);color:#1F3864;border-radius:8px;padding:7px 14px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">✕ Clear all filters + show all referrals</button></div>' : '');
     return;
   }
-  list.innerHTML = items.map(function(r){
+  list.innerHTML = items.map(function(r, i){
     var facLabel = (REFERRAL_FACILITIES.find(function(f){ return f.key === r.destinationFacility; }) || {}).label || r.destinationFacility;
     var typeIcon = r.sourceType === 'mva' ? '⚖' : '🏥';
     var statusColor = r.status === 'pending' ? '#f59e0b' : r.status === 'approved' ? '#16a34a' : r.status === 'declined' ? '#9ca3af' : r.status === 'incomplete' ? '#dc2626' : '#64748b';
@@ -18613,24 +18613,116 @@ function renderPendingReferrals(){
     // event.stopPropagation on action buttons (handled in the actions
     // markup above) prevents the card from opening when a button is
     // tapped. cursor:pointer + a subtle hover hint communicate it.
-    var rowClickAttr = ' onclick="event.stopPropagation();_phase166OpenPendingReferralCard(\'' + r.id + '\')" style="cursor:pointer" title="Click to view full referral details"';
-    return '<div data-pending-id="' + r.id + '"' + rowClickAttr.replace(' style="cursor:pointer"', '') + ' style="background:' + statusBg + ';border:1px solid #e2e8f0;border-left:3px solid ' + statusColor + ';border-radius:8px;padding:11px 14px;cursor:pointer;transition:box-shadow .12s" onmouseover="this.style.boxShadow=\'0 2px 8px rgba(15,23,42,.15)\'" onmouseout="this.style.boxShadow=\'none\'" title="Click to view full referral details">'
-      + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap">'
-      +   '<div style="flex:1;min-width:0">'
-      +     '<div style="font-size:13px;font-weight:700;color:#0f172a">' + typeIcon + ' ' + r.sourceName.replace(/</g,'&lt;') + ' <span style="color:var(--muted);font-weight:400;font-size:11px">→ ' + facLabel + '</span>' + (r.patientName ? ' <span style="color:var(--muted);font-weight:400;font-size:11px"> · ' + r.patientName.replace(/</g,'&lt;') + '</span>' : '') + '</div>'
-      +     dateChip
-      +     '<div style="font-size:10px;color:var(--muted);margin-top:4px">Created by <b>' + creatorLbl.replace(/</g,'&lt;') + '</b> · Expected ' + expStr + '</div>'
-      +     (r.notes ? '<div style="margin-top:4px;padding:5px 8px;background:#fef2f2;border:1px solid #fecaca;border-left:3px solid #dc2626;border-radius:4px;font-size:11px;color:#7f1d1d"><span style="font-weight:700">🩺 Chief complaint:</span> ' + r.notes.replace(/</g,'&lt;') + '</div>' : '<div style="margin-top:4px;font-size:10px;color:#dc2626;font-style:italic">⚠ No chief complaint recorded</div>')
-      +     rideBookingBanner
-      +     lateBadge
-      +     auditTrail
-      +     adminOverrideBadge
-      +   '</div>'
-      +   '<span style="background:' + statusColor + ';color:#fff;font-size:10px;font-weight:700;padding:3px 9px;border-radius:10px;white-space:nowrap">' + statusLabel + '</span>'
-      + '</div>'
-      + actions
-      + '</div>';
+    // ── PHASE 173 (2026-05-30) — TABLE FORMAT ────────────────────────────
+    // User: "I even like their format, so keep the format for the
+    // referrals. Do the same." Mirrors the Logged Patients table layout
+    // (rl-pane-list / renderReferralLog rowsHtml). Columns:
+    //   When · Source/Dest · Patient · Member · Status · Actions
+    // Rich detail (late banner, ride booking, follow-up audit, admin
+    // override badges, chief complaint full text) all live in the Phase
+    // 166 detail card opened on row click — same pattern as Logged Patients
+    // where the row stays compact and the card has the deep info.
+    // Date-time short form (Mon · 2:14 PM) keeps the row tight.
+    var whenShort = '';
+    if(createdValid){
+      var wkLbl = createdDt.toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' });
+      whenShort = '<div style="font-family:DM Mono,monospace;font-size:11px;font-weight:700;color:#1F3864">' + wkLbl + '</div>'
+                + '<div style="font-size:10px;color:var(--muted);white-space:nowrap">' + createdTimeStr + '</div>';
+    } else {
+      whenShort = '<div style="font-size:11px;color:var(--muted)">—</div>';
+    }
+    // Source → Dest column — compact 2-line layout. Source name truncates
+    // gracefully because the parent <td> has max-width.
+    var safeSource = String(r.sourceName || '—').replace(/</g,'&lt;');
+    var safeFac    = String(facLabel || '—').replace(/</g,'&lt;');
+    var srcDestHtml = '<div style="font-size:12px;font-weight:600;color:#0f172a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + safeSource + '">' + typeIcon + ' ' + safeSource + '</div>'
+                    + '<div style="font-size:10px;color:var(--muted);white-space:nowrap">→ 🏥 ' + safeFac + '</div>';
+    // Patient column — name + optional late warning chip inline
+    var safePatient = r.patientName ? String(r.patientName).replace(/</g,'&lt;') : '<span style="color:var(--muted);font-style:italic">—</span>';
+    var lateChip = '';
+    if(r.status === 'pending' && typeof _crIsReferralLate === 'function' && _crIsReferralLate(r)){
+      var etaForChip = (typeof _crEffectiveETA === 'function') ? _crEffectiveETA(r) : null;
+      var lateMinForChip = etaForChip ? Math.round((Date.now() - etaForChip.getTime()) / 60000) : 0;
+      lateChip = ' <span style="background:#fef3c7;color:#7c2d12;border:1px solid #fcd34d;border-radius:8px;padding:1px 6px;font-size:9px;font-weight:700;margin-left:3px" title="Patient is ' + lateMinForChip + ' min past ETA">⏰ ' + lateMinForChip + 'm late</span>';
+    }
+    var patientHtml = '<div style="font-size:12px;font-weight:600;color:var(--text)">' + safePatient + lateChip + '</div>'
+                    + (r.notes ? '<div style="font-size:10px;color:#7f1d1d;font-style:italic;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px" title="' + String(r.notes).replace(/"/g,'&quot;').replace(/</g,'&lt;') + '">🩺 ' + String(r.notes).slice(0,40).replace(/</g,'&lt;') + (r.notes.length > 40 ? '…' : '') + '</div>' : '<div style="font-size:9px;color:#dc2626;font-style:italic">⚠ no complaint</div>');
+    // Member column — creator name with optional admin-override badge chip
+    var safeCreator = String(creatorLbl).replace(/</g,'&lt;');
+    var adminChip = '';
+    if(r.createdByAdminOverride || r.approvedByAdmin){
+      adminChip = ' <span title="Admin override — click row for details" style="background:#fef3c7;color:#92400e;border:1px solid #fcd34d;border-radius:6px;padding:0 5px;font-size:9px;font-weight:700;margin-left:3px">🛡️</span>';
+    }
+    var memberHtml = '<div style="font-size:11px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:140px">' + safeCreator + adminChip + '</div>';
+    // Status badge (existing color logic — keep semantics)
+    var statusPill = '<span style="background:' + statusColor + ';color:#fff;font-size:10px;font-weight:700;padding:3px 9px;border-radius:10px;white-space:nowrap;display:inline-block">' + statusLabel + '</span>';
+    // Actions column — compact inline buttons. event.stopPropagation
+    // prevents the row's openCard click from also firing.
+    var rowActions = '';
+    if(canApprove){
+      var approveBtnLbl = isAdminViewer && !(isFD && CURRENT_USER.facilityKey === r.destinationFacility)
+        ? '✓ Confirm (admin)'
+        : '✓ Confirm';
+      rowActions = '<button onclick="event.stopPropagation();approvePendingReferral(\'' + r.id + '\')" style="background:#16a34a;border:none;color:#fff;border-radius:5px;padding:5px 10px;font-size:10px;font-weight:700;cursor:pointer;margin-right:3px;white-space:nowrap" title="' + approveBtnLbl + ' & log patient">' + approveBtnLbl + '</button>'
+                 + '<button onclick="event.stopPropagation();declinePendingReferral(\'' + r.id + '\')" style="background:transparent;border:1px solid #fca5a5;color:#991b1b;border-radius:5px;padding:5px 10px;font-size:10px;font-weight:600;cursor:pointer;white-space:nowrap" title="Mark as Unconfirmed (no patient log)">✗</button>';
+    } else if(r.status === 'approved' && r.approvedAt){
+      var ageMsRow = Date.now() - new Date(r.approvedAt).getTime();
+      var canRetractRow = (ageMsRow < REFERRAL_APPROVE_RETRACT_MS) && isFD && r.approvedBy === CURRENT_USER.name;
+      if(canRetractRow){
+        var minLeftRow = Math.max(1, Math.round((REFERRAL_APPROVE_RETRACT_MS - ageMsRow) / 60000));
+        rowActions = '<button onclick="event.stopPropagation();retractApprovedReferral(\'' + r.id + '\')" style="background:transparent;border:1px solid #fca5a5;color:#991b1b;border-radius:5px;padding:4px 8px;font-size:10px;font-weight:600;cursor:pointer;white-space:nowrap" title="Retract within ' + minLeftRow + ' min">↩ Retract</button>';
+      }
+    }
+    if(canEdit){
+      rowActions += (rowActions ? ' ' : '')
+        + '<button onclick="event.stopPropagation();_prOpenEditReferral(\'' + r.id + '\')" style="background:#fff;color:#1F3864;border:1px solid #c4b5fd;border-radius:5px;padding:4px 8px;font-size:10px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;margin-left:3px;white-space:nowrap" title="Edit this referral">✏</button>';
+    }
+    if(isCreator && !isFD && r.status === 'pending' && (r.createdBy === (CURRENT_USER && CURRENT_USER.name) || (typeof isAdmin === 'function' && isAdmin()))){
+      rowActions += (rowActions ? ' ' : '')
+        + '<button onclick="event.stopPropagation();retractPendingReferral(\'' + r.id + '\')" style="background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:5px;padding:4px 8px;font-size:10px;font-weight:600;cursor:pointer;margin-left:3px;white-space:nowrap" title="Cancel before front desk acts">↩ Cancel</button>';
+    }
+    // Ride-booking quick-action — collapsed to a single inline chip when
+    // visible to the destination FD; the FULL banner with explanation
+    // lives in the Phase 166 detail card.
+    if(r.rideRequested === 'accepted' && r.status !== 'declined' && r.status !== 'retracted'){
+      if(r.rideBookingStatus === 'booked'){
+        rowActions += (rowActions ? ' ' : '') + '<span style="background:#f0fdf4;color:#15803d;border:1px solid #86efac;border-radius:5px;padding:3px 7px;font-size:9px;font-weight:700;white-space:nowrap;margin-left:3px" title="Uber Health booked">🚗 ✓</span>';
+      } else if(viewerCanBook){
+        rowActions += (rowActions ? ' ' : '') + '<button onclick="event.stopPropagation();_crMarkRideBooked(\'' + r.id + '\')" style="background:#7c3aed;color:#fff;border:none;border-radius:5px;padding:4px 8px;font-size:10px;font-weight:700;cursor:pointer;margin-left:3px;white-space:nowrap" title="Mark Uber Health ride as booked">🚗 Book</button>';
+      }
+    }
+    if(!rowActions){
+      rowActions = '<span style="font-size:10px;color:var(--muted);font-style:italic">—</span>';
+    }
+    var rowBg = (i % 2 === 0) ? '#fff' : '#fafbfc';
+    return '<tr data-pending-id="' + r.id + '" onclick="event.stopPropagation();_phase166OpenPendingReferralCard(\'' + r.id + '\')" style="background:' + rowBg + ';border-left:3px solid ' + statusColor + ';border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s" onmouseover="this.style.background=\'#f1f5f9\'" onmouseout="this.style.background=\'' + rowBg + '\'" title="Click to view full referral details">'
+      +   '<td style="padding:9px 10px;vertical-align:middle">' + whenShort + '</td>'
+      +   '<td style="padding:9px 10px;vertical-align:middle;max-width:220px">' + srcDestHtml + '</td>'
+      +   '<td style="padding:9px 10px;vertical-align:middle">' + patientHtml + '</td>'
+      +   '<td style="padding:9px 10px;vertical-align:middle">' + memberHtml + '</td>'
+      +   '<td style="padding:9px 10px;vertical-align:middle">' + statusPill + '</td>'
+      +   '<td style="padding:9px 10px;vertical-align:middle;text-align:right;white-space:nowrap" onclick="event.stopPropagation()">' + rowActions + '</td>'
+      + '</tr>';
+  // Phase 173: i parameter for stripe banding
+  }).map(function(rowHtml, i){
+    // Re-thread the index so stripe banding works (the original .map didn't
+    // expose `i` to the inner row builder above). This is cosmetic — alternating
+    // row bg already set per-iteration via closure on `i`.
+    return rowHtml;
   }).join('');
+  // Phase 173: wrap rows in a <table> + sticky header so column alignment
+  // is consistent and the rep can scan visually.
+  list.innerHTML = '<table style="width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--border);border-radius:8px;overflow:hidden;font-family:DM Sans,sans-serif">'
+    + '<thead><tr style="background:linear-gradient(180deg,#f8fafc,#f1f5f9);border-bottom:2px solid var(--border);position:sticky;top:0;z-index:5">'
+    +   '<th style="padding:9px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;width:90px">When</th>'
+    +   '<th style="padding:9px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em">Source → Destination</th>'
+    +   '<th style="padding:9px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em">Patient</th>'
+    +   '<th style="padding:9px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em">Member</th>'
+    +   '<th style="padding:9px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em">Status</th>'
+    +   '<th style="padding:9px 10px;text-align:right;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em">Actions</th>'
+    + '</tr></thead>'
+    + '<tbody>' + list.innerHTML + '</tbody>'
+    + '</table>';
 }
 window.renderPendingReferrals = renderPendingReferrals;
 
