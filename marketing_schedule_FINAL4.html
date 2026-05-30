@@ -18256,6 +18256,12 @@ window._prSetStatusFilter = _prSetStatusFilter;
 function _prClearFilters(){
   var ids = ['pr-status-filter', 'pr-smart-search', 'pr-filter-member', 'pr-filter-clinic'];
   ids.forEach(function(id){ var el = document.getElementById(id); if(el){ if(id === 'pr-status-filter') el.value = 'all'; else el.value = ''; } });
+  // Phase 172: also reset the lifecycle segment + day filter so ✕ Clear
+  // truly returns to the unfiltered view (rep expectation per UX
+  // research — "Clear All" should clear everything).
+  window._PR_FILTER_LIFECYCLE = 'all';
+  window._PR_FILTER_DAY = null;
+  window._PR_DAY_STRIP_OFFSET = 0;
   if(typeof renderPendingReferrals === 'function') renderPendingReferrals();
 }
 window._prClearFilters = _prClearFilters;
@@ -18347,6 +18353,10 @@ function renderPendingReferrals(){
   // derived from the scoped list (so the badge on each day-chip matches
   // exactly what'll show in the list when the rep taps that day).
   try { if(typeof _prRenderDayStrip === 'function') _prRenderDayStrip(scopedAll); } catch(e){ console.warn('[167] day strip failed:', e); }
+  // Phase 172 (2026-05-30): paint the All/Active/Resolved segmented
+  // control with live counts. Reads the SAME scoped list so the
+  // badges match what'll show on tap.
+  try { if(typeof _prRenderLifecycleSegment === 'function') _prRenderLifecycleSegment(scopedAll); } catch(e){ console.warn('[172] lifecycle seg failed:', e); }
   // Now read filter values
   var statusSel = document.getElementById('pr-status-filter');
   var statusFilter = (statusSel && statusSel.value) || 'all';
@@ -18378,6 +18388,19 @@ function renderPendingReferrals(){
       return _prIsoDate(new Date(d.getFullYear(), d.getMonth(), d.getDate())) === dayFilter;
     });
   }
+  // Phase 172 (2026-05-30): lifecycle filter (All / Active / Resolved).
+  // Active = pending (still needs action). Resolved = closed in any way.
+  // Stacks AFTER day filter and BEFORE smart-text search so the
+  // segment-control counts reflect the day filter but search narrows the
+  // already-segmented view.
+  var lifecycleFilter = window._PR_FILTER_LIFECYCLE || 'all';
+  if(lifecycleFilter === 'active'){
+    items = items.filter(function(r){ return r.status === 'pending'; });
+  } else if(lifecycleFilter === 'resolved'){
+    items = items.filter(function(r){
+      return r.status === 'approved' || r.status === 'declined' || r.status === 'incomplete' || r.status === 'retracted';
+    });
+  }
   // Smart text search — matches anywhere in source/patient/complaint/creator
   if(search){
     items = items.filter(function(r){
@@ -18407,10 +18430,12 @@ function renderPendingReferrals(){
     // pattern so the rep doesn't think the data is missing).
     var emptyBits = [];
     if(window._PR_FILTER_DAY) emptyBits.push('on ' + window._PR_FILTER_DAY);
+    if(window._PR_FILTER_LIFECYCLE && window._PR_FILTER_LIFECYCLE !== 'all') emptyBits.push(window._PR_FILTER_LIFECYCLE);
     if(statusFilter && statusFilter !== 'all') emptyBits.push(statusFilter);
     var emptyCtx = emptyBits.length ? ' ' + emptyBits.join(' · ') : '';
+    var needsEscape = window._PR_FILTER_DAY || (window._PR_FILTER_LIFECYCLE && window._PR_FILTER_LIFECYCLE !== 'all');
     list.innerHTML = '<div style="padding:14px 16px;background:#f8fafc;border:1px dashed var(--border);border-radius:8px;text-align:center;font-size:12px;color:var(--muted);font-style:italic">No referrals' + emptyCtx + '.</div>'
-      + (window._PR_FILTER_DAY ? '<div style="text-align:center;margin-top:8px"><button type="button" onclick="_prJumpToToday()" style="background:#fff;border:1px solid var(--border);color:#1F3864;border-radius:8px;padding:7px 14px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">📅 Clear day filter + show all</button></div>' : '');
+      + (needsEscape ? '<div style="text-align:center;margin-top:8px"><button type="button" onclick="_prClearFilters()" style="background:#fff;border:1px solid var(--border);color:#1F3864;border-radius:8px;padding:7px 14px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">✕ Clear all filters + show all referrals</button></div>' : '');
     return;
   }
   list.innerHTML = items.map(function(r){
@@ -18721,6 +18746,60 @@ function _prJumpToToday(){
   if(typeof renderPendingReferrals === 'function') renderPendingReferrals();
 }
 window._prJumpToToday = _prJumpToToday;
+
+// ════════════════════════════════════════════════════════════════════════════
+// PHASE 172 (2026-05-30) — LIFECYCLE SEGMENTED CONTROL for Outgoing Referrals
+// Per user 2026-05-30: "You see how you added a sub tab for the log patients?
+// I wanted the same for the referrals." This mirrors the Phase 152 Logged
+// Patients Surveyed/Non-surveyed segmented control. Split is by referral
+// lifecycle:
+//   • All       → no filter
+//   • Active    → status === 'pending' (still needs action)
+//   • Resolved  → status in [approved, declined, incomplete, retracted]
+// Combines with day-strip, status chips, member, clinic, smart-search.
+// State is independent of other filter globals.
+// ════════════════════════════════════════════════════════════════════════════
+window._PR_FILTER_LIFECYCLE = window._PR_FILTER_LIFECYCLE || 'all';
+
+function _prRenderLifecycleSegment(scopedItems){
+  var host = document.getElementById('pr-lifecycle-seg');
+  if(!host) return;
+  var mode = window._PR_FILTER_LIFECYCLE || 'all';
+  // Live counts per bucket so the rep sees what they'd jump into.
+  var aCount = 0, actCount = 0, resCount = 0;
+  try {
+    (scopedItems || []).forEach(function(r){
+      aCount++;
+      if(r.status === 'pending') actCount++;
+      else if(r.status === 'approved' || r.status === 'declined' || r.status === 'incomplete' || r.status === 'retracted') resCount++;
+    });
+  } catch(_){}
+  var segs = [
+    { key:'all',      label:'All',      count:aCount,   color:'#1F3864' },
+    { key:'active',   label:'Active',   count:actCount, color:'#d97706' },
+    { key:'resolved', label:'Resolved', count:resCount, color:'#15803d' }
+  ];
+  host.innerHTML = '<div style="display:inline-flex;background:#f1f5f9;border:1px solid var(--border);border-radius:10px;padding:3px;gap:2px">'
+    + segs.map(function(s){
+        var active = (s.key === mode);
+        var bg = active ? '#fff' : 'transparent';
+        var fg = active ? s.color : 'var(--muted)';
+        var shadow = active ? 'box-shadow:0 1px 3px rgba(15,23,42,.12);' : '';
+        return '<button type="button" onclick="_prSetLifecycle(\'' + s.key + '\')" style="background:' + bg + ';color:' + fg + ';border:none;border-radius:8px;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;display:inline-flex;align-items:center;gap:5px;transition:all .12s;' + shadow + '">'
+          + s.label
+          + ' <span style="background:' + (active ? '#f8fafc' : '#fff') + ';color:' + fg + ';font-size:9px;font-weight:700;padding:1px 6px;border-radius:8px;font-family:DM Mono,monospace">' + s.count + '</span>'
+          + '</button>';
+      }).join('')
+    + '</div>';
+}
+window._prRenderLifecycleSegment = _prRenderLifecycleSegment;
+
+function _prSetLifecycle(mode){
+  if(mode !== 'all' && mode !== 'active' && mode !== 'resolved') return;
+  window._PR_FILTER_LIFECYCLE = mode;
+  if(typeof renderPendingReferrals === 'function') renderPendingReferrals();
+}
+window._prSetLifecycle = _prSetLifecycle;
 
 // ════════════════════════════════════════════════════════════════════════════
 // PHASE 166 (2026-05-30) — PENDING REFERRAL DETAIL CARD
@@ -61990,6 +62069,15 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
          Renders via _prRenderDayStrip(). -->
     <div id="pr-day-strip-wrap" style="position:sticky;top:0;z-index:30;background:linear-gradient(180deg,#fff 70%,rgba(255,255,255,0));padding:8px 0;margin-bottom:8px;border-bottom:1px solid var(--border)">
       <div id="pr-day-strip"></div>
+    </div>
+    <!-- Phase 172 (2026-05-30): lifecycle segmented control. Mirrors the
+         Phase 152 Logged Patients Surveyed/Non-surveyed pattern but split
+         by status lifecycle: Active = pending (still needs action) vs
+         Resolved = anything closed. Default = All. Combines with day,
+         status chips, member, clinic, smart-search filters. -->
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+      <div id="pr-lifecycle-seg"></div>
+      <div style="font-size:10.5px;color:var(--muted);font-style:italic">Tap a row to open the referral card · all filters combine</div>
     </div>
     <!-- Phase 120a (2026-05-29): status pill chips with live counts.
          Click → filters the list to that status. Active chip is purple-
