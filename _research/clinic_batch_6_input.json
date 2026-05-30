@@ -1,0 +1,402 @@
+{
+  "batchId": 6,
+  "label": "Plano-A",
+  "clinics": [
+    {
+      "n": "Dr. Vani Ramesh",
+      "c": "Plano",
+      "s": "",
+      "d": "Dr. Vani Ramesh"
+    },
+    {
+      "n": "Nest Family Medicine",
+      "c": "Plano",
+      "s": "",
+      "d": "Dr.Priti Ranjan"
+    },
+    {
+      "n": "Plano Supreme Primary Care",
+      "c": "Plano",
+      "s": "",
+      "d": "Dr.Yinghui (Carol) Liu"
+    },
+    {
+      "n": "Chong Liu, MD",
+      "c": "Plano",
+      "s": "",
+      "d": "Dr. Chong Liu"
+    },
+    {
+      "n": "Nisha Satish,MD",
+      "c": "Plano",
+      "s": "",
+      "d": "Dr. Nisha Satish"
+    },
+    {
+      "n": "Harini Meda",
+      "c": "Plano",
+      "s": "",
+      "d": "Dr. Harinineeraja Meda, MD"
+    },
+    {
+      "n": "Plano Family Medicine",
+      "c": "Plano",
+      "s": "",
+      "d": "Dr.Alice Chen"
+    },
+    {
+      "n": "Plano Primay care",
+      "c": "Plano",
+      "s": "",
+      "d": "Dr.Kalpana Thakur"
+    },
+    {
+      "n": "Dr. Vani Ramesh, MD",
+      "c": "Plano",
+      "s": "",
+      "d": "Dr. Vani Ramesh"
+    },
+    {
+      "n": "Nest Family Medicine",
+      "c": "Plano",
+      "s": "",
+      "d": "Dr Priti Ranjan"
+    },
+    {
+      "n": "Plano Supreme Primary Care",
+      "c": "Plano",
+      "s": "",
+      "d": "Yinghui Carol"
+    },
+    {
+      "n": "Dr. Hina Rizvi, MD",
+      "c": "Plano",
+      "s": "",
+      "d": "Dr Hina Rizvi"
+    },
+    {
+      "n": "Medina Primary Care",
+      "c": "Plano",
+      "s": "",
+      "d": "Dr. Mir. M Ali"
+    },
+    {
+      "n": "Centennial Primary Care",
+      "c": "Plano",
+      "s": "",
+      "d": "Dr. Nuzhat Ahmed"
+    },
+    {
+      "n": "Plano Family Medicine",
+      "c": "Plano",
+      "s": "",
+      "d": "Dr. Alice Chen"
+    },
+    {
+      "n": "Dr. John Chuang",
+      "c": "Plano",
+      "s": "",
+      "d": "Dr. John Chuang"
+    },
+    {
+      "n": "Dr. Farid F. Taie",
+      "c": "Plano",
+      "s": "",
+      "d": "Dr. Farid F. Taie"
+    },
+    {
+      "n": "Dr. Hanh Dieu T. Nguyen",
+      "c": "Plano",
+      "s": "",
+      "d": "Dr. Hanh Dieu T. Nguyen"
+    },
+    {
+      "n": "Elpis Primary Care",
+      "c": "Plano",
+      "s": "",
+      "d": "Dr. Saquib Ibrahim"
+    },
+    {
+      "n": "Shiva Medical Center",
+      "c": "Plano",
+      "s": "",
+      "d": "Vani Ramesh, M.D."
+    },
+    {
+      "n": "Omni Medical Center",
+      "c": "Plano",
+      "s": "",
+      "d": "Dr. Yang Li"
+    },
+    {
+      "n": "Plano Primary Care",
+      "c": "Plano",
+      "s": "",
+      "d": "Kalpana Thakur, M.D"
+    },
+    {
+      "n": "Dr.Sherryl Shipes",
+      "c": "Plano",
+      "s": "",
+      "d": "Dr.Sherryl Shipes"
+    },
+    {
+      "n": "Plano Supreme Primary Care",
+      "c": "Plano",
+      "s": "",
+      "d": "Yinghui (Carol) Liu, M.D"
+    },
+    {
+      "n": "Endocrine Associates of Dallas & Plano",
+      "c": "Plano",
+      "s": "Endocrinologist",
+      "d": "Camille Folkard, MD"
+    },
+    {
+      "n": "Balance Diabetes and Endrocrinology",
+      "c": "Plano",
+      "s": "Endocrinologist",
+      "d": ""
+    },
+    {
+      "n": "Dr. Qing Jia",
+      "c": "Plano",
+      "s": "Endocrinologist",
+      "d": "Dr. Qing Jia"
+    },
+    {
+      "n": "Elizabeth M Papaila",
+      "c": "Plano",
+      "s": "GS",
+      "d": "Dr Elizabeth M Papaila"
+    },
+    {
+      "n": "TEXAS CHILD NEUROLOGY, LLP",
+      "c": "Plano",
+      "s": "NEUR",
+      "d": "Robert Chudnow, MD"
+    },
+    {
+      "n": "Dr. Abdul A. Baker",
+      "c": "Plano",
+      "s": "",
+      "d": "Dr. Abdul Baker"
+    },
+    {
+      "n": "Back to Health Clinic",
+      "c": "Plano",
+      "s": "Chiropractor",
+      "d": ""
+    },
+    {
+      "n": "Comprehensive Pain Solutions of Texas: Bryan Aduddell, M.D",
+      "c": "Plano",
+      "s": "Pain Management",
+      "d": "Bryan Aduddell, M.D"
+    },
+    {
+      "n": "ReGen Pain Management: Jonathan Koning, MD",
+      "c": "Plano",
+      "s": "Pain Management",
+      "d": "Dr. Jonathan Koning"
+    },
+    {
+      "n": "The Behavior Exchange",
+      "c": "Plano",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Southwest Allergy & Asthma Center",
+      "c": "Plano",
+      "s": "",
+      "d": "John Van Wagoner, M.D"
+    },
+    {
+      "n": "Edward T. Shin,M.D",
+      "c": "Plano",
+      "s": "",
+      "d": "Edward T. Shin,M.D"
+    },
+    {
+      "n": "Vista Physical Therapy - Plano, Windcom Ct",
+      "c": "Plano",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "CityBridge Urgent Care",
+      "c": "Plano",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Dr. Isaac Z. Pugach",
+      "c": "Plano",
+      "s": "",
+      "d": "Dr. Isaac Z. Pugach"
+    },
+    {
+      "n": "Dr. Philip K. Chen",
+      "c": "Plano",
+      "s": "",
+      "d": "Dr. Philip K. Chen"
+    },
+    {
+      "n": "Family Health and Wellness of Plano",
+      "c": "Plano",
+      "s": "",
+      "d": "Dr. Russell Skinner"
+    },
+    {
+      "n": "Plano Family clinic",
+      "c": "Plano",
+      "s": "",
+      "d": "Dr Hanh Dieu Nguyen"
+    },
+    {
+      "n": "Serenity Primary Care",
+      "c": "Plano",
+      "s": "",
+      "d": "Dr. Rashidi"
+    },
+    {
+      "n": "Rajiv M Joseph MD, PhD, FAAN",
+      "c": "Plano",
+      "s": "NEUR",
+      "d": "Rajiv M Joseph MD, PhD, FAAN"
+    },
+    {
+      "n": "Dr. Geeta Rajan",
+      "c": "Plano",
+      "s": "NEUR",
+      "d": "Dr. Geeta Rajan"
+    },
+    {
+      "n": "Texas child neurology LLP",
+      "c": "Plano",
+      "s": "NEUR",
+      "d": "Robert Chudnow, MD"
+    },
+    {
+      "n": "Childrens health neurology",
+      "c": "Plano",
+      "s": "NEUR",
+      "d": ""
+    },
+    {
+      "n": "Indu Mayakrishnan M.D",
+      "c": "Plano",
+      "s": "NEUR",
+      "d": "Indu Mayakrishnan M.D"
+    },
+    {
+      "n": "Mohsin Maqbool, MD",
+      "c": "Plano",
+      "s": "NEUR",
+      "d": "Mohsin Maqbool, MD"
+    },
+    {
+      "n": "Balance Diabetes and Endocrinology",
+      "c": "Plano",
+      "s": "Endocrinologist",
+      "d": "Dr. Sindura Alloju"
+    },
+    {
+      "n": "Hope Internal Medicine Clinic",
+      "c": "Plano",
+      "s": "",
+      "d": "Ramy Elhalwagi, D.O."
+    },
+    {
+      "n": "CLINICA HISPANA PLANO TX",
+      "c": "Plano",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Achieve Physical Therapy",
+      "c": "Plano",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Care Choice Family Clinic",
+      "c": "Plano",
+      "s": "",
+      "d": "Dr. Sheeba Daniel"
+    },
+    {
+      "n": "Fem Care",
+      "c": "Plano",
+      "s": "OB/GYN",
+      "d": "DR. GEOFFREY N. JAMES"
+    },
+    {
+      "n": "Intricate Health",
+      "c": "Plano",
+      "s": "OB/GYN",
+      "d": "Charmaine Gibson MD,"
+    },
+    {
+      "n": "Inspire Health - Plano Doctors",
+      "c": "Plano",
+      "s": "",
+      "d": "Dr. Bush Benjamin"
+    },
+    {
+      "n": "Doctors of Internal Medicine",
+      "c": "Plano",
+      "s": "",
+      "d": "Suryadutt Venkat, MD"
+    },
+    {
+      "n": "My Dentist in Plano",
+      "c": "Plano",
+      "s": "",
+      "d": "Dr. Darren Dickson"
+    },
+    {
+      "n": "Advanced dental center",
+      "c": "Plano",
+      "s": "",
+      "d": "Dr. Hopkins’s"
+    },
+    {
+      "n": "Asara Physical Therapy and Balance Clinic",
+      "c": "Plano",
+      "s": "",
+      "d": "Dr.Asha J Gummadi"
+    },
+    {
+      "n": "Balance Diabetes and Endocrinology",
+      "c": "Plano",
+      "s": "",
+      "d": "Dr. Sindura Alloju"
+    },
+    {
+      "n": "Premier Wellness Internal Medicine",
+      "c": "Plano",
+      "s": "",
+      "d": "Dr. Michelle Sun"
+    },
+    {
+      "n": "Pediatric Specialists of Plano",
+      "c": "Plano",
+      "s": "",
+      "d": "Dr. Fatimah Ahmed"
+    },
+    {
+      "n": "Infectious Disease Doctors PA",
+      "c": "Plano",
+      "s": "",
+      "d": "Sofia Ansari, M.D."
+    },
+    {
+      "n": "US Legacy Clinic",
+      "c": "Plano",
+      "s": "",
+      "d": "Dr. Maftuna Kayumova"
+    }
+  ]
+}

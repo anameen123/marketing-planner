@@ -1,0 +1,342 @@
+{
+  "batchId": 2,
+  "label": "Frisco-B",
+  "clinics": [
+    {
+      "n": "Modern Podiatry",
+      "c": "Frisco",
+      "s": "",
+      "d": "Dr. Woojung Lee"
+    },
+    {
+      "n": "brush365",
+      "c": "Frisco",
+      "s": "",
+      "d": "Dr Sara Mahmood"
+    },
+    {
+      "n": "Stonebriar Medical Associates",
+      "c": "Frisco",
+      "s": "PCP",
+      "d": "Bryan Johnson, MD"
+    },
+    {
+      "n": "Johnson Family Medicine",
+      "c": "Frisco",
+      "s": "PCP",
+      "d": "Katherine Johnson, MD"
+    },
+    {
+      "n": "Narural choice peditatrics",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Healthy kids pediatrics",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Pediatrtics  associates of frisco",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Best nest pediatrics",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "ABC Pediatrics",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Stonebriar pediatrics",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "bright kids pediatrics",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "healing care pediatrics",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Children health prinary care centennial pediatrics",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Sunny Hill Min Jung",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Whole chlild texas",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Natural choice pediatrics",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Frisco Family Healthcare Clinic",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Texas health breeze Urgent care",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Frisco quick care",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "West Frisco Health and Wellness",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Alpha Health frisco primry care",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Prime Choice family clinic: urgent care",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Clinica Familiar ProHealth Studio",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Karin K bergman",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Family medicine plus",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Driven  healthcare",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Smile Breeze Dentistry",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "StrlVeMD",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Legacy internal medicine",
+      "c": "Frisco",
+      "s": "PCP",
+      "d": ""
+    },
+    {
+      "n": "Internal Medicine Associates",
+      "c": "Frisco",
+      "s": "PCP",
+      "d": ""
+    },
+    {
+      "n": "Texas Primary Care",
+      "c": "Frisco",
+      "s": "PCP",
+      "d": ""
+    },
+    {
+      "n": "Pioneer Medical Associates",
+      "c": "Frisco",
+      "s": "PCP",
+      "d": ""
+    },
+    {
+      "n": "Frisco Urgent Care and Clinics",
+      "c": "Frisco",
+      "s": "PCP",
+      "d": ""
+    },
+    {
+      "n": "Metroplex Medical Centre",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Alpha Primary Care",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Frisco Urgent Care and Clinics",
+      "c": "Frisco",
+      "s": "UC",
+      "d": "Ekweani, MD"
+    },
+    {
+      "n": "Premier  Medical",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Careone",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Pioneer Medical Associates",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Internal Medicine Associates",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Pediatrics Associates of Frisco",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Comprehensive Pain",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "NTX Medical Clinic",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Plano clinic Supreme",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Care one",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Willows Womens Health",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Internal Medicine Associates",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Alpha Primary Care",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Greenhill Family Physicians",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Primary Care",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "West Fisco Health & Wellness",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Frisco Quickcare",
+      "c": "Frisco",
+      "s": "PCP",
+      "d": "Gowani"
+    },
+    {
+      "n": "Pioneer Medical Associates",
+      "c": "Frisco",
+      "s": "PCP",
+      "d": "Dr. Pablani"
+    },
+    {
+      "n": "Care Now",
+      "c": "Frisco",
+      "s": "UC",
+      "d": ""
+    },
+    {
+      "n": "Evolve",
+      "c": "Frisco",
+      "s": "PCP",
+      "d": ""
+    },
+    {
+      "n": "Omni",
+      "c": "Frisco",
+      "s": "PCP",
+      "d": ""
+    }
+  ]
+}

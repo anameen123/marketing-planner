@@ -1,0 +1,35 @@
+{
+  "found": [
+    {"type":"clinic","name":"Christy Walker MD Gynecology","city":"Plano","address":"6130 W Parker Rd Bldg 1 Ste 204, Plano, TX 75093","matchConfidence":"high","matchReason":"Dr. Christy Walker MD gynecology Plano"},
+    {"type":"clinic","name":"monkey mouth pediatric therapy","city":"Plano","address":"255 W Lebanon Rd Ste 316, Frisco, TX 75036","matchConfidence":"low","matchReason":"Monkey Mouths primary location is Frisco (serves Plano area); no specific Plano location"},
+    {"type":"clinic","name":"Trinity Pediatrics","city":"Plano","address":"6105 Windcom Ct Ste 100, Plano, TX 75093","matchConfidence":"high","matchReason":"Trinity Pediatrics Plano"},
+    {"type":"clinic","name":"MC kids pediatrics","city":"Plano","address":"7800 Preston Rd Ste 300, Plano, TX 75024","matchConfidence":"medium","matchReason":"Best guess: MD Kids Pediatrics West Plano (source typo 'MC')"},
+    {"type":"clinic","name":"Advance med clinic of plano","city":"Plano","address":"4701 W Plano Pkwy Ste 100, Plano, TX 75093","matchConfidence":"high","matchReason":"AdvanceMed Clinic of Plano (advancemedclinic.com)"},
+    {"type":"clinic","name":"City bridge urgent care","city":"Plano","address":"910 W Parker Rd Ste 102, Plano, TX 75075","matchConfidence":"high","matchReason":"CityBridge Urgent Care Plano (duplicate)"},
+    {"type":"clinic","name":"Epiphany Dermatalogy","city":"Plano","address":"5030 Tennyson Pkwy Ste 100, Plano, TX 75024","matchConfidence":"high","matchReason":"Epiphany Dermatology Plano"},
+    {"type":"clinic","name":"Blue star imaging","city":"Plano","address":"3800 Gaylord Pkwy Ste 150, Frisco, TX 75034","matchConfidence":"low","matchReason":"Blue Star Imaging at The Star — in Frisco (not Plano); no Plano office confirmed"},
+    {"type":"clinic","name":"Thompson family and cosmetic dentistry","city":"Plano","address":"2801 W Parker Rd Ste 8, Plano, TX 75023","matchConfidence":"high","matchReason":"Thompson Family and Cosmetic Dentistry Plano"},
+    {"type":"clinic","name":"Express health systems","city":"Plano","address":"230 W Parker Rd Ste 210A, Plano, TX 75075","matchConfidence":"high","matchReason":"Express Health Systems Plano"},
+    {"type":"clinic","name":"Maple Primary care","city":"Plano","address":"3242 Preston Rd Ste 203, Plano, TX 75093","matchConfidence":"high","matchReason":"Maple Primary Care Plano; Dr. Manvinder Kainth MD confirmed"},
+    {"type":"clinic","name":"Q day walk in clinic","city":"Plano","address":"3560 E Park Blvd, Plano, TX 75074","matchConfidence":"high","matchReason":"Q Day Walk-In Clinic Plano"},
+    {"type":"clinic","name":"RNV Podiatry","city":"Plano","address":"6300 W Parker Rd Ste 425, Plano, TX 75093","matchConfidence":"high","matchReason":"RNV Podiatry Plano location"},
+    {"type":"clinic","name":"Greenhill Family Physician","city":"Plano","address":"11500 State Hwy 121 Ste 110, Frisco, TX 75035","matchConfidence":"low","matchReason":"Greenhill Family Physicians (Dr. Mike Lee) is in Frisco not Plano; source city mismatch"},
+    {"type":"clinic","name":"Daffodil Primary Care","city":"Plano","address":"4300 Punjab Way Bldg 1 Unit 160, Frisco, TX 75033","matchConfidence":"low","matchReason":"Daffodil Primary Care is in Frisco (not Plano); source city mismatch"},
+    {"type":"clinic","name":"Pediactrics R US","city":"Plano","address":"255 W Lebanon Ste 324, Frisco, TX 75036","matchConfidence":"low","matchReason":"Pediatrics R Us is in Frisco; no Plano office confirmed"},
+    {"type":"clinic","name":"Monkey Mouths Pediactric therapy","city":"Plano","address":"255 W Lebanon Rd Ste 316, Frisco, TX 75036","matchConfidence":"low","matchReason":"Same as 'monkey mouth pediatric therapy' — Frisco location"},
+    {"type":"clinic","name":"Lonestar Gastroenterology PA","city":"Plano","address":"4101 W Spring Creek Pkwy Ste 400, Plano, TX 75024","matchConfidence":"high","matchReason":"Lone Star Gastroenterology Plano; Dr. Gowri Balachandar MD confirmed"},
+    {"type":"clinic","name":"Family Medicine","city":"Plano","address":"5150 Warren Pkwy Bldg 7 Ste 705B, Frisco, TX 75034","matchConfidence":"low","matchReason":"Dr. Karin K. Bergman MD family medicine moved from Plano to Frisco in 2017"},
+    {"type":"clinic","name":"Plano Neurology","city":"Plano","address":"4601 Old Shepard Pl Ste 406, Plano, TX 75093","matchConfidence":"high","matchReason":"Plano Neurology PA; Dr. Geeta Rajan MD (duplicate)"},
+    {"type":"clinic","name":"North Texas Institute of Neurology","city":"Plano","address":"5425 W Spring Creek Pkwy Ste 275, Plano, TX 75024","matchConfidence":"high","matchReason":"North Texas Institute of Neurology and Headache Plano; Dr. Karen Bontia MD confirmed"},
+    {"type":"clinic","name":"Medical Aesthetics of North Texas","city":"Plano","address":"4716 Alliance Blvd Ste 270, Plano, TX 75093","matchConfidence":"high","matchReason":"Medical Aesthetics of North Dallas Plano; Dr. Dennis Eisenberg founder confirmed"},
+    {"type":"clinic","name":"Southern Endocrynology","city":"Plano","address":"7504 San Jacinto Pl, Plano, TX 75024","matchConfidence":"high","matchReason":"Typo for 'Southern Endocrinology' Plano; Dr. Sumana Gangi confirmed"},
+    {"type":"clinic","name":"Womans Health Specialist","city":"Plano","address":"6541 Preston Rd Ste 300, Plano, TX 75024","matchConfidence":"high","matchReason":"Dominique Copeland APRN FNP-C Plano (Plano Women's Health)"}
+  ],
+  "notFound": [
+    {"type":"clinic","name":"NcT Step","city":"Plano","reason":"Cannot identify clinic 'NcT Step' - insufficient information"},
+    {"type":"clinic","name":"plano","city":"Plano","reason":"Generic name 'plano' - cannot identify clinic"},
+    {"type":"clinic","name":"Next Gen","city":"Plano","reason":"Generic name 'Next Gen' - too ambiguous to identify (multiple practices possible)"},
+    {"type":"clinic","name":"Sandy Maccoy","city":"Plano","reason":"Cannot identify - search did not return clear practice match"},
+    {"type":"clinic","name":"Quick Urgent care","city":"Plano","reason":"No clinic named 'Quick Urgent Care' found in Plano (multiple urgent care options exist but none with this exact name)"}
+  ]
+}

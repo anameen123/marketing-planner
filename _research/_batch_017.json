@@ -1,0 +1,36 @@
+{
+  "found": [
+    {"type":"clinic","name":"Lisa R. Reznick, MD","city":"Carrollton","address":"4100 Fairway Dr Ste 120, Carrollton, TX 75010","matchConfidence":"high","matchReason":"Dr. Lisa R. Reznick MD orthopedic surgery (hand) Carrollton"},
+    {"type":"clinic","name":"MD Lisa R. Reznik","city":"Carrollton","address":"4100 Fairway Dr Ste 120, Carrollton, TX 75010","matchConfidence":"high","matchReason":"Duplicate (typo 'Reznik')"},
+    {"type":"clinic","name":"David Tietze, M.D","city":"Carrollton","address":"1735 Keller Springs Rd Ste 100, Carrollton, TX 75006","matchConfidence":"high","matchReason":"Dr. David C. Tietze MD Carrollton"},
+    {"type":"clinic","name":"Dr. Louis Montanaro","city":"Carrollton","address":"4300 N Josey Ln Ste 106, Carrollton, TX 75010","matchConfidence":"high","matchReason":"Dr. Louis Montanaro MD OB/GYN Carrollton"},
+    {"type":"clinic","name":"MD medical group","city":"Carrollton","address":"3044 Old Denton Rd Ste 138, Carrollton, TX 75007","matchConfidence":"high","matchReason":"MD Medical Group Carrollton; Dr. Neha R. Manikonda MD pediatrician confirmed"},
+    {"type":"clinic","name":"MD Kids Pediatrics","city":"Carrollton","address":"3044 Old Denton Rd Ste 138, Carrollton, TX 75007","matchConfidence":"high","matchReason":"MD Kids Pediatrics Carrollton"},
+    {"type":"clinic","name":"Highlands Medical and Wellness Primary Care","city":"Carrollton","address":"1000 E Beltline Rd Ste 112, Carrollton, TX 75006","matchConfidence":"high","matchReason":"Highlands Medical and Wellness Carrollton; Dr. Van Tran confirmed"},
+    {"type":"clinic","name":"Dr. Hardeep S. Rai","city":"Carrollton","address":"1913 Walnut Plz, Carrollton, TX 75006","matchConfidence":"high","matchReason":"Dr. Hardeep S. Rai MD internist Carrollton"},
+    {"type":"clinic","name":"WellMed at Carrollton","city":"Carrollton","address":"1601 W Hebron Pkwy Ste 100, Carrollton, TX 75010","matchConfidence":"high","matchReason":"WellMed at Carrollton (same address as USMD Carrollton Clinic)"},
+    {"type":"clinic","name":"Hebron Pediatrics","city":"Carrollton","address":"3020 E Hebron Pkwy Ste 300, Carrollton, TX 75010","matchConfidence":"high","matchReason":"Hebron Pediatrics Carrollton; Dr. Shenbagavalli Palaniswamy MD confirmed"},
+    {"type":"clinic","name":"Dr. Shenbagavalli Palaniswamy","city":"Carrollton","address":"3020 E Hebron Pkwy Ste 300, Carrollton, TX 75010","matchConfidence":"high","matchReason":"Same as 'Hebron Pediatrics' - Dr. Shenbagavalli Palaniswamy"},
+    {"type":"clinic","name":"Natalia Gutierrez MD","city":"Carrollton","address":"3020 E Hebron Pkwy Ste A100, Carrollton, TX 75010","matchConfidence":"high","matchReason":"Dr. Natalia Gutierrez MD family medicine Carrollton"},
+    {"type":"clinic","name":"Dr. Kyle K. Carter","city":"Carrollton","address":"1428 W Hebron Pkwy Ste 110, Carrollton, TX 75010","matchConfidence":"high","matchReason":"Dr. Kyle K. Carter MD Precision Family Medicine Carrollton (duplicate from earlier)"},
+    {"type":"clinic","name":"Pathway Direct  Primary care","city":"Carrollton","address":"1930 E Rosemeade Pkwy Ste 104, Carrollton, TX 75007","matchConfidence":"high","matchReason":"Pathway Direct Primary Care Carrollton; Dr. Omar Hussain MD confirmed"},
+    {"type":"clinic","name":"Dr. Hong Xiao","city":"Carrollton","address":"4100 Fairway Dr Ste 320, Carrollton, TX 75010","matchConfidence":"high","matchReason":"Dr. Hong Xiao MD Fairway Family Medicine Carrollton (duplicate)"},
+    {"type":"clinic","name":"Immanuel Family Clinic","city":"Carrollton","address":"2760 E Trinity Mill Rd Ste 115, Carrollton, TX 75006","matchConfidence":"high","matchReason":"Immanuel Family Clinic Carrollton; Jaya Matharage FNP confirmed"},
+    {"type":"clinic","name":"Family Center VitaleHEALTH","city":"Carrollton","address":"4217 Marsh Ridge Rd Ste 110, Carrollton, TX 75010","matchConfidence":"high","matchReason":"Family Center VitaleHEALTH Carrollton (vitalehealth.org)"},
+    {"type":"clinic","name":"Josey Medical Clinic","city":"Carrollton","address":"1212 N Josey Ln Ste 110, Carrollton, TX 75006","matchConfidence":"high","matchReason":"Josey Medical Clinic Carrollton; Yoosun Jeong APRN FNP-BC confirmed"},
+    {"type":"clinic","name":"Precision Family mediine","city":"Carrollton","address":"1428 W Hebron Pkwy Ste 110, Carrollton, TX 75010","matchConfidence":"high","matchReason":"Precision Family Medicine Carrollton; Dr. John W. Bailey MD confirmed"},
+    {"type":"clinic","name":"Song Dermatalogy","city":"Carrollton","address":"1428 W Hebron Pkwy Ste 120, Carrollton, TX 75010","matchConfidence":"high","matchReason":"Song Dermatology Carrollton; Dr. Mi Hye Elisa Song MD confirmed"},
+    {"type":"clinic","name":"M.D Benton Cain","city":"Carrollton","address":"1428 W Hebron Pkwy Ste 135, Carrollton, TX 75010","matchConfidence":"high","matchReason":"Dr. Benton Cain DC chiropractor (Airrosti Carrollton); note he is DC not MD"},
+    {"type":"clinic","name":"North texas periodontics and","city":"Carrollton","address":"1428 W Hebron Pkwy Ste 140, Carrollton, TX 75010","matchConfidence":"high","matchReason":"North Texas Periodontics and Implantology Carrollton; Dr. Leslie Carroll DMD confirmed"},
+    {"type":"clinic","name":"V Care","city":"Carrollton","address":"1445 MacArthur Dr Ste 122, Carrollton, TX 75007","matchConfidence":"high","matchReason":"VCare Clinic Carrollton (free walk-in)"},
+    {"type":"clinic","name":"Airrosti Carrollton","city":"Carrollton","address":"1428 W Hebron Pkwy Ste 135, Carrollton, TX 75010","matchConfidence":"high","matchReason":"Airrosti Carrollton"},
+    {"type":"clinic","name":"Peak Integrated Healthcare","city":"Carrollton","address":"2655 E Belt Line Rd, Carrollton, TX 75006","matchConfidence":"high","matchReason":"Peak Integrated Healthcare Carrollton; Dr. Matthew Hicken DC confirmed"},
+    {"type":"clinic","name":"Evolving Beautiful Mind & Body Healthcare","city":"Carrollton","address":"2150 N Josey Ln Ste 208, Carrollton, TX 75010","matchConfidence":"high","matchReason":"Evolving Beautiful Mind & Body Healthcare Carrollton; Dr. Ghazala N. Ahmed MD psychiatrist confirmed"},
+    {"type":"clinic","name":"Elevation Spine and Sports Medicine","city":"Carrollton","address":"2761 E Trinity Mills Rd Ste 100, Carrollton, TX 75006","matchConfidence":"high","matchReason":"Elevation Spine and Sports Medicine Carrollton; Dr. Konner Ackerman DC confirmed"},
+    {"type":"clinic","name":"George A.Nail MD","city":"Carrollton","address":"1813 Golden Trail Ct Ste 100, Carrollton, TX 75010","matchConfidence":"high","matchReason":"Dr. George A. Nail MD DDS oral & maxillofacial surgeon Carrollton"},
+    {"type":"clinic","name":"Castle Hills Pediatrics","city":"Carrollton","address":"1821 Golden Trl Ct, Carrollton, TX 75010","matchConfidence":"high","matchReason":"Castle Hills Pediatrics Carrollton"}
+  ],
+  "notFound": [
+    {"type":"clinic","name":"Pediatrics","city":"Carrollton","reason":"Generic name 'Pediatrics' - too ambiguous to identify specific practice"}
+  ]
+}

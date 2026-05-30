@@ -1,0 +1,336 @@
+{
+  "batchId": 3,
+  "label": "Frisco-C",
+  "clinics": [
+    {
+      "n": "Boomfield",
+      "c": "Frisco",
+      "s": "PCP",
+      "d": "Nafeesa"
+    },
+    {
+      "n": "Metroplex Medical Centre",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Pioneer Medical Associates",
+      "c": "Frisco",
+      "s": "PCP",
+      "d": "Pablani"
+    },
+    {
+      "n": "NTX Medical Clinic",
+      "c": "Frisco",
+      "s": "PCP",
+      "d": "Chintala, MD"
+    },
+    {
+      "n": "Stonebrook Medical Associates",
+      "c": "Frisco",
+      "s": "PCP",
+      "d": "Mona Chacko, MD"
+    },
+    {
+      "n": "Dr. Hong Xiao MD",
+      "c": "Frisco",
+      "s": "MD",
+      "d": "Dr. Hong Xiao MD"
+    },
+    {
+      "n": "MD Kids Pediactrics",
+      "c": "Frisco",
+      "s": "MD",
+      "d": "Hung Truong MD"
+    },
+    {
+      "n": "Care Express Clinic",
+      "c": "Frisco",
+      "s": "MD",
+      "d": "Muhammad Ali Siddiqui , MD"
+    },
+    {
+      "n": "Comprehensive OBGYN",
+      "c": "Frisco",
+      "s": "OB",
+      "d": "Gerald D. Luciani, MD"
+    },
+    {
+      "n": "Tx Health Internal Med",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Cierras Heath Primary care",
+      "c": "Frisco",
+      "s": "PCP",
+      "d": ""
+    },
+    {
+      "n": "Gray branch Pediatrics",
+      "c": "Frisco",
+      "s": "PCP",
+      "d": ""
+    },
+    {
+      "n": "Evolve",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Care one",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "NTX",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Ideal Primary Care",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Liberty",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Daffodils Mckinney",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Collin County Physicians",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Pro Med",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Frisco Quick Care",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Frisco Urgent care Clinics",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Heal 360",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Collin County Physicians",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "DHAT",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Internal Medicine Asociates",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Garduno Family Medical Clinic",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "CPC Frisco",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Advanced Primary Care",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Legacy Internal",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Kids urgent Care",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Dr Alang",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Hillcrest",
+      "c": "Frisco",
+      "s": "MD",
+      "d": ""
+    },
+    {
+      "n": "Frisco Urgent care Clinics",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Passion Health primary care",
+      "c": "Frisco",
+      "s": "MD",
+      "d": "Aruna"
+    },
+    {
+      "n": "DELC Medical care",
+      "c": "Frisco",
+      "s": "MD",
+      "d": "Lynda E. Mbah MD"
+    },
+    {
+      "n": "Frisco Family Healthcare Clinic",
+      "c": "Frisco",
+      "s": "MD",
+      "d": "Dr. Oyetokunbo Lemoru, DNP, FNP-C"
+    },
+    {
+      "n": "Stonebriar medical associates",
+      "c": "Frisco",
+      "s": "MD",
+      "d": "Bryan G. Johnson MD, P.A"
+    },
+    {
+      "n": "Premerier Independant Physicians",
+      "c": "Frisco",
+      "s": "MD",
+      "d": ""
+    },
+    {
+      "n": "Care One Medical Clinic",
+      "c": "Frisco",
+      "s": "MD",
+      "d": "Sheeba Mathai"
+    },
+    {
+      "n": "BloomMField Medical",
+      "c": "Frisco",
+      "s": "MD",
+      "d": ""
+    },
+    {
+      "n": "Internal Medicine Asociates",
+      "c": "Frisco",
+      "s": "MD",
+      "d": "Kawand"
+    },
+    {
+      "n": "Pro Med Health Primary Care",
+      "c": "Frisco",
+      "s": "MD",
+      "d": "Dr.Kavitha llayaraja"
+    },
+    {
+      "n": "Sunshine Pediatrics",
+      "c": "Frisco",
+      "s": "MD",
+      "d": ""
+    },
+    {
+      "n": "Specialty Clinics",
+      "c": "Frisco",
+      "s": "MD",
+      "d": ""
+    },
+    {
+      "n": "ProMed Health Primary Care - Frisco",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Pure Medicine",
+      "c": "Frisco",
+      "s": "MD",
+      "d": "Jordan Pastorek , MD"
+    },
+    {
+      "n": "Body Loom Wellness",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Behavioral Invations",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Frisco Hand Center",
+      "c": "Frisco",
+      "s": "MD",
+      "d": "DinanRahhal MD"
+    },
+    {
+      "n": "Anu Baweja , M.D.",
+      "c": "Frisco",
+      "s": "MD",
+      "d": "Anu Baweja M.D"
+    },
+    {
+      "n": "Sunsil Thummala",
+      "c": "Frisco",
+      "s": "MD",
+      "d": "Sunil Thummala , MD"
+    },
+    {
+      "n": "Delc Medical Center",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Frisco Center for Internal Medicine",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Dr. Vijay Katari",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    }
+  ]
+}

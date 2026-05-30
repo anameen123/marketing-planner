@@ -1,1 +1,1 @@
-{"name":"_tooling","private":true,"dependencies":{"exceljs":"^4.4.0","playwright":"^1.60.0"}}
+{"name":"_tooling","private":true,"dependencies":{"exceljs":"^4.4.0","pdfkit":"^0.18.0","playwright":"^1.60.0"}}

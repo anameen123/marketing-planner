@@ -1,0 +1,25 @@
+{
+  "found": [
+    {"type":"clinic","name":"Dr. Vani Ramesh","city":"Plano","address":"4670 McDermott Rd Ste 202, Plano, TX 75024","matchConfidence":"high","matchReason":"Dr. Vani Ramesh MD at Shiva Medical Care Center Plano"},
+    {"type":"clinic","name":"Dr. Vani Ramesh, MD","city":"Plano","address":"4670 McDermott Rd Ste 202, Plano, TX 75024","matchConfidence":"high","matchReason":"Duplicate of 'Dr. Vani Ramesh'"},
+    {"type":"clinic","name":"Shiva Medical Center","city":"Plano","address":"4670 McDermott Rd Ste 202, Plano, TX 75024","matchConfidence":"high","matchReason":"Shiva Medical Care Center Plano; Dr. Vani Ramesh confirmed"},
+    {"type":"clinic","name":"Nest Family Medicine","city":"Plano","address":"4920 McDermott Rd Ste 200, Plano, TX 75024","matchConfidence":"high","matchReason":"Nest Family Medicine Plano; Dr. Priti Ranjan confirmed"},
+    {"type":"clinic","name":"Plano Supreme Primary Care","city":"Plano","address":"4020 Hedgcoxe Rd Ste 700, Plano, TX 75024","matchConfidence":"high","matchReason":"Plano Supreme Primary Care; Dr. Yinghui (Carol) Liu confirmed"},
+    {"type":"clinic","name":"Chong Liu, MD","city":"Plano","address":"7712 San Jacinto Pl Ste 100, Plano, TX 75024","matchConfidence":"high","matchReason":"Dr. Chong Liu MD family medicine Plano"},
+    {"type":"clinic","name":"Nisha Satish,MD","city":"Plano","address":"7170 Preston Rd Ste 200, Plano, TX 75024","matchConfidence":"high","matchReason":"Dr. Nisha Satish MD Plano"},
+    {"type":"clinic","name":"Harini Meda","city":"Plano","address":"4508 Legacy Dr Ste 400, Plano, TX 75024","matchConfidence":"high","matchReason":"Dr. Harinineeraja Meda MD Plano"},
+    {"type":"clinic","name":"Plano Family Medicine","city":"Plano","address":"1220 Coit Rd Ste 105, Plano, TX 75075","matchConfidence":"high","matchReason":"Plano Family Medicine; Dr. Alice Chen DO confirmed"},
+    {"type":"clinic","name":"Plano Primay care","city":"Plano","address":"1600 Coit Rd, Plano, TX 75075","matchConfidence":"high","matchReason":"Plano Primary Care; Dr. Kalpana Thakur confirmed"},
+    {"type":"clinic","name":"Plano Primary Care","city":"Plano","address":"1600 Coit Rd, Plano, TX 75075","matchConfidence":"high","matchReason":"Duplicate of 'Plano Primay care'"},
+    {"type":"clinic","name":"Dr. Hina Rizvi, MD","city":"Plano","address":"7709 San Jacinto Pl Ste 100, Plano, TX 75024","matchConfidence":"high","matchReason":"Dr. Hina Rizvi MD wound care Plano"},
+    {"type":"clinic","name":"Medina Primary Care","city":"Plano","address":"4013 14th St Ste 401, Plano, TX 75074","matchConfidence":"high","matchReason":"Medina Primary Care Plano; Dr. Mir Ali MD confirmed"},
+    {"type":"clinic","name":"Centennial Primary Care","city":"Plano","address":"9925 Gillespie Dr Ste 3400, Plano, TX 75025","matchConfidence":"high","matchReason":"Centennial Primary Care PLLC Plano; Dr. Nuzhat Ahmed MD confirmed"},
+    {"type":"clinic","name":"Dr. John Chuang","city":"Plano","address":"1524 Independence Pkwy Ste A1, Plano, TX 75075","matchConfidence":"high","matchReason":"Dr. John Chuang MD family medicine Plano"},
+    {"type":"clinic","name":"Dr. Farid F. Taie","city":"Plano","address":"1409 Shiloh Rd Ste 150, Plano, TX 75074","matchConfidence":"high","matchReason":"Dr. Farid F. Taie DO family medicine Plano"},
+    {"type":"clinic","name":"Dr. Hanh Dieu T. Nguyen","city":"Plano","address":"6513A Chase Oaks Blvd, Plano, TX 75023","matchConfidence":"high","matchReason":"Dr. Hanh-Dieu Thi Nguyen MD family medicine Plano"},
+    {"type":"clinic","name":"Elpis Primary Care","city":"Plano","address":"4116 W Spring Creek Pkwy Ste 400, Plano, TX 75024","matchConfidence":"high","matchReason":"Elpis Healthcare Plano; Dr. Saquib Ibrahim MD confirmed"},
+    {"type":"clinic","name":"Omni Medical Center","city":"Plano","address":"4666 McDermott Rd Ste 100, Plano, TX 75024","matchConfidence":"high","matchReason":"OMNI Medical Center Plano; Dr. Yan Li MD confirmed (source 'Yang Li')"},
+    {"type":"clinic","name":"Dr.Sherryl Shipes","city":"Plano","address":"1218 W McDermott Dr, Allen, TX 75013","matchConfidence":"low","matchReason":"Dr. Sherryl Shipes DO has offices in Allen and Frisco (not Plano); no Plano office found"}
+  ],
+  "notFound": []
+}

@@ -1,0 +1,187 @@
+{
+  "_meta": {
+    "createdAt": "2026-05-18",
+    "source": "Manual web research via WebSearch",
+    "notes": "Match by firm name (case-insensitive). 'notFound' lists records where research could not confidently locate contact info. Some firms have offices outside the listed city — see 'city_note' fields.",
+    "found": 18,
+    "notFound": 2,
+    "total": 20
+  },
+  "enrichments": {
+    "Davenport Law": {
+      "attorney": "R. Dean Davenport",
+      "phone": "(469) 352-1876",
+      "address": "6860 Dallas Pkwy, Suite 200, Plano, TX 75024 (Regus Plano - Legacy Town Center)",
+      "website": "https://www.davenport-law.com/",
+      "fax": "",
+      "needsVerification": true,
+      "verifyNote": "Multiple unrelated firms named 'Davenport Law' exist; R. Dean Davenport is the best Plano-area match (estate planning). If the listed firm is a different Davenport Law (e.g. Brandon Davenport's debt firm), please correct.",
+      "researchedAt": "2026-05-18"
+    },
+    "Chandler Ross": {
+      "attorney": "Brent Chandler, John A. Ross, Jr.",
+      "phone": "940-800-2500",
+      "address": "110 N. Woodrow Ln, Ste 120, Denton, TX 76205 (Plano office also exists)",
+      "website": "https://www.chandlerrosslaw.com/",
+      "city_note": "Headquartered in Denton; has a Plano office (chandlerrosslaw.com/plano)",
+      "fax": "",
+      "researchedAt": "2026-05-18"
+    },
+    "Mignucci Law": {
+      "attorney": "Gustavo Luis Mignucci",
+      "phone": "972-370-3378",
+      "address": "5344 Alpha Road, Dallas, TX 75240",
+      "website": "https://mignuccilawfirm.com/",
+      "email": "gus@gus.lawyer",
+      "city_note": "Office in Dallas (not Carrollton) but serves Carrollton clients",
+      "fax": "",
+      "researchedAt": "2026-05-18"
+    },
+    "Carrollton Pain & Injury": {
+      "attorney": "",
+      "phone": "(972) 339-7246",
+      "address": "2501 N Josey Ln, Ste 116, Carrollton, TX 75006",
+      "website": "https://www.dfwpainandinjury.com/",
+      "fax": "",
+      "type_note": "Chiropractic / pain clinic (not a law firm) — still listed in MVA bank.",
+      "researchedAt": "2026-05-18"
+    },
+    "Burress Law PLLC": {
+      "attorney": "Jason K. Burress",
+      "phone": "214-726-0016",
+      "address": "6952 Mediterranean Dr, McKinney, TX (Frisco office: 5 Cowboys Way Ste 55)",
+      "website": "https://www.mytexasfirm.com/",
+      "fax": "",
+      "researchedAt": "2026-05-18"
+    },
+    "Law Office of Doug Goyen": {
+      "attorney": "Doug Goyen",
+      "phone": "(972) 599-4100",
+      "fax": "(972) 398-2629",
+      "address": "15851 Dallas Pkwy #605, Addison, TX 75001",
+      "website": "https://www.douggoyen.com/",
+      "city_note": "Office in Addison (not Plano) but serves Plano residents",
+      "researchedAt": "2026-05-18"
+    },
+    "Mullen & Mullen Law Firm": {
+      "attorney": "Shane Mullen, Joseph Morrison (Regis Mullen listed in original record)",
+      "phone": "(214) 529-3476",
+      "address": "2770 Main St, Ste 258, Frisco, TX 75033",
+      "website": "https://www.mullenandmullen.com/",
+      "fax": "",
+      "researchedAt": "2026-05-18"
+    },
+    "Carrollton Injury Law": {
+      "attorney": "Joel Hudson",
+      "phone": "972-433-9813",
+      "address": "4221 Medical Pkwy, Ste 300, Carrollton, TX 75010",
+      "website": "https://personalpersonalinjury.com/",
+      "fax": "",
+      "researchedAt": "2026-05-18"
+    },
+    "Underwood Law Office": {
+      "attorney": "Mark Forest Underwood",
+      "phone": "972-535-6377",
+      "phoneAlt": "866-523-0499 (toll free)",
+      "fax": "972-292-7828",
+      "address": "2530 W White Ave, Suite 200, McKinney, TX 75071",
+      "website": "https://www.underwoodlawoffice.com/",
+      "researchedAt": "2026-05-18"
+    },
+    "Snellings Law PLLC": {
+      "attorney": "D. Scott Snellings",
+      "phone": "214-387-0387",
+      "address": "5750 Genesis Ct, Suite 103, Frisco, TX 75034",
+      "website": "https://snellingsinjurylaw.com/",
+      "fax": "",
+      "researchedAt": "2026-05-18"
+    },
+    "Chalaki Law P.C.": {
+      "attorney": "Shahed Sean Chalaki",
+      "phone": "972-793-8500",
+      "phoneAlt": "844-467-8487 (24/7)",
+      "email": "contactus@chalakilaw.com",
+      "address": "3234 Commander Dr, Suite #100, Carrollton, TX 75006",
+      "website": "https://chalakilaw.com/",
+      "fax": "",
+      "researchedAt": "2026-05-18"
+    },
+    "The Edgett Law Firm P.C.": {
+      "attorney": "Scott E. Edgett",
+      "phone": "972-525-4963",
+      "phoneAlt": "972-424-0760",
+      "address": "1400 N Coit Rd, Suite 104, McKinney, TX 75071",
+      "addressAlt": "130 N Preston Road, Suite 100, Prosper, TX 75078",
+      "website": "https://edgettlawfirm.com/",
+      "fax": "",
+      "researchedAt": "2026-05-18"
+    },
+    "Steele Law Firm P.C.": {
+      "attorney": "Dina Kay Steele",
+      "phone": "(214) 333-4357",
+      "phoneAlt": "(214) 333-9393",
+      "fax": "(214) 488-8200",
+      "address": "4400 TX-121, Suite 300, Lewisville, TX 75056",
+      "website": "https://www.steelelawfirm.com/",
+      "city_note": "Office in Lewisville (not Carrollton); firm serves Carrollton clients",
+      "researchedAt": "2026-05-18"
+    },
+    "The Fell Law Firm": {
+      "attorney": "Gregory B. Fell",
+      "phone": "972-450-1418",
+      "fax": "972-664-0470",
+      "address": "6800 Weiskopf, Suite 150, McKinney, TX 75070",
+      "addressAlt": "3021 E. Renner Road, Suite 140, Richardson, TX 75082",
+      "website": "https://www.felllawfirm.com/",
+      "researchedAt": "2026-05-18"
+    },
+    "McCraw Law Group": {
+      "attorney": "Lin McCraw (John Lindsley McCraw)",
+      "phone": "(972) 945-1173",
+      "address": "5900 Valliance Plaza S Lake Forest Dr, Ste 450, McKinney, TX 75070",
+      "website": "https://mccrawlawgroup.com/",
+      "fax": "",
+      "researchedAt": "2026-05-18"
+    },
+    "Luce Law PC": {
+      "attorney": "Joseph 'Joe' Lucé",
+      "phone": "(972) 632-1300",
+      "address": "5900 S Lake Forest Dr, Ste 200, McKinney, TX 75070",
+      "website": "https://www.lucelawpc.com/",
+      "fax": "",
+      "firmName_note": "Stylized as 'Lucé Law, PC' with the accent on 'é'",
+      "researchedAt": "2026-05-18"
+    },
+    "Wormington & Bollinger": {
+      "attorney": "Maria Louise Wormington",
+      "phone": "(972) 569-3930",
+      "phoneAlt": "(888) 967-6529 (toll free)",
+      "address": "212 East Virginia Street, McKinney, TX 75069",
+      "website": "http://www.wormingtonlegal.com/",
+      "fax": "",
+      "researchedAt": "2026-05-18"
+    },
+    "Sullivan Evans Goenawein PC": {
+      "attorney": "Chase A. Evans + partners",
+      "phone": "972-665-6001",
+      "phoneAlt": "(972) 833-6843 (Chase Evans direct)",
+      "address": "7300 SH 121 SB, Suite 510, McKinney, TX 75070",
+      "website": "https://skeglaw.com/",
+      "fax": "",
+      "firmName_note": "Full name: Sullivan, Klocke, Evans & Goenawein, P.C.",
+      "researchedAt": "2026-05-18"
+    }
+  },
+  "notFound": [
+    {
+      "firm": "Herrera Law",
+      "city": "Carrollton",
+      "reason": "Multiple unrelated 'Herrera Law' firms across Texas; no clear Carrollton-based firm found via web search. Need more specifics (attorney first name?)."
+    },
+    {
+      "firm": "Zapata Law",
+      "city": "Carrollton",
+      "reason": "No 'Zapata Law' firm matching Carrollton found; results all pointed to Zapata County (South Texas). Need more specifics or alternate name."
+    }
+  ]
+}

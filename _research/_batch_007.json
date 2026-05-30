@@ -1,0 +1,26 @@
+{
+  "found": [
+    {"type":"clinic","name":"Healthcare Associates of Texas","city":"McKinney","address":"8080 State Hwy 121 Ste 300, McKinney, TX 75070","matchConfidence":"high","matchReason":"Healthcare Associates of Texas McKinney South; Dr. Karla Maltez Salvador confirmed"},
+    {"type":"clinic","name":"Mummadi Internel Medicine","city":"McKinney","address":"8951 Collin McKinney Pkwy Ste 301, McKinney, TX 75070","matchConfidence":"high","matchReason":"Mummadi Internal Medicine McKinney; Dr. Vijaya Mummadi confirmed"},
+    {"type":"clinic","name":"NTX Medical Clinic","city":"McKinney","address":"1400 N Coit Rd Ste 2502, McKinney, TX 75071","matchConfidence":"high","matchReason":"NTX Medical Clinic McKinney; Dr. Jayasree Kailasam confirmed"},
+    {"type":"clinic","name":"Total Men's Primary Care","city":"McKinney","address":"6150 Eldorado Pkwy Ste 140, McKinney, TX 75070","matchConfidence":"high","matchReason":"Total Men's Primary Care McKinney (totalmens.com)"},
+    {"type":"clinic","name":"Family Health Center on Virginia","city":"McKinney","address":"1620 W Virginia St, McKinney, TX 75069","matchConfidence":"high","matchReason":"Family Health Center on Virginia (fhcntx.org); Dr. Brock Pierce OB/GYN confirmed"},
+    {"type":"clinic","name":"Tu Clinica Hispana Familiar","city":"McKinney","address":"811 N McDonald St, McKinney, TX 75069","matchConfidence":"high","matchReason":"Tu Clinica Hispana Familiar McKinney"},
+    {"type":"clinic","name":"Progressive Health Family Medicine","city":"McKinney","address":"8901 Virginia Pkwy, McKinney, TX 75071","matchConfidence":"high","matchReason":"Progressive Health Family Medicine; Dr. Hema Haridas confirmed"},
+    {"type":"clinic","name":"Dr. Daniel James Chartrand","city":"McKinney","address":"302 S Tennessee St, McKinney, TX 75069","matchConfidence":"high","matchReason":"Dr. Daniel J. Chartrand MD family medicine McKinney"},
+    {"type":"clinic","name":"Apollo Medical Associates","city":"McKinney","address":"431 Stacy Rd, McKinney, TX 75069","matchConfidence":"medium","matchReason":"Apollo Medical Associates McKinney address found; Dr. Heather Myers association not verified in search but practice address confirmed"},
+    {"type":"clinic","name":"Adriatica Womens health","city":"McKinney","address":"6609 Virginia Pkwy, McKinney, TX 75071","matchConfidence":"high","matchReason":"Adriatica Women's Health McKinney; Dr. Tracey Banks OB/GYN confirmed"},
+    {"type":"clinic","name":"Children Choice Pediatrics","city":"McKinney","address":"6587 Virginia Pkwy, McKinney, TX 75071","matchConfidence":"high","matchReason":"Children's Choice Pediatrics McKinney; Stacie Hunsaker CPNP confirmed"},
+    {"type":"clinic","name":"Pediatrics People PLLC","city":"McKinney","address":"11955 Dallas Pkwy Ste 400, Frisco, TX 75033","matchConfidence":"low","matchReason":"Pediatric People PLLC primary office is in Frisco (not McKinney); Dr. Audra Linck confirmed. City mismatch in source."},
+    {"type":"clinic","name":"Texas Institute for Neurological Disorders","city":"McKinney","address":"2517 Virginia Pkwy Ste 102, McKinney, TX 75071","matchConfidence":"high","matchReason":"Texas Institute for Neurological Disorders McKinney; Dr. Easwar Sundaram Jr. confirmed"},
+    {"type":"clinic","name":"Lone Star Neurology","city":"McKinney","address":"5531 Virginia Pkwy Ste 100, McKinney, TX 75071","matchConfidence":"high","matchReason":"Lone Star Neurology McKinney"},
+    {"type":"clinic","name":"Silver Spine & Neurological Center","city":"McKinney","address":"7300 Eldorado Pkwy Ste 200, McKinney, TX 75070","matchConfidence":"high","matchReason":"Silver Spine & Neurological Center McKinney; Dr. M. Viktor Silver confirmed"},
+    {"type":"clinic","name":"Dr. Angela Tseng","city":"McKinney","address":"6850 TPC Dr Ste 102, McKinney, TX 75070","matchConfidence":"medium","matchReason":"Dr. Angela Tseng MD McKinney; she is a cardiologist (source 'GI' field appears incorrect)"},
+    {"type":"clinic","name":"New Hope Diabetes Care & Prevention","city":"McKinney","address":"5220 W University Dr Ste 250, McKinney, TX 75071","matchConfidence":"low","matchReason":"Dr. Sana Ullah practices at Baylor Scott & White Endocrinology McKinney; no 'New Hope Diabetes Care & Prevention' practice found. Using doctor's known office"},
+    {"type":"clinic","name":"Advanced Surgical of North Texas","city":"McKinney","address":"8080 State Hwy 121 Ste 120, McKinney, TX 75070","matchConfidence":"high","matchReason":"Advanced Surgical of North Texas McKinney; Dr. Steve Duffy founder confirmed"}
+  ],
+  "notFound": [
+    {"type":"clinic","name":"Texas Diabetes & Endocrinology","city":"McKinney","reason":"Texas Diabetes & Endocrinology (Dr. Luis Casaubon) is primarily based in Austin TX (6500 N Mopac Expy); no confirmed McKinney address found"},
+    {"type":"clinic","name":"Dr.Aris N Jacob","city":"McKinney","reason":"Dr. Aris N. Jacob endocrinologist is listed as based in Allen TX or Redlands CA; no specific McKinney address confirmed (Texas Associates of Endocrinology & Diabetes at 4521 Medical Center Dr, McKinney is possible but unverified)"}
+  ]
+}

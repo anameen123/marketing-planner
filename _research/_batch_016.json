@@ -1,0 +1,31 @@
+{
+  "found": [
+    {"type":"clinic","name":"little Lantern","city":"Carrollton","address":"4541 N Josey Ln Ste 110C, Carrollton, TX 75010","matchConfidence":"high","matchReason":"Little Lantern Clinic Carrollton; Dr. Biju Lukose MD CEO confirmed"},
+    {"type":"clinic","name":"St Marys","city":"Carrollton","address":"3730 N Josey Ln Ste 120, Carrollton, TX 75007","matchConfidence":"high","matchReason":"St Mary's Family Clinic Carrollton; Remi Thomas FNP confirmed"},
+    {"type":"clinic","name":"Thuan Huynh, MD","city":"Carrollton","address":"1809 Golden Trail Ct Ste 130, Carrollton, TX 75010","matchConfidence":"high","matchReason":"Dr. Thuan Huynh MD family medicine Carrollton"},
+    {"type":"clinic","name":"Care Plus Family Clinic","city":"Carrollton","address":"1933 E Frankford Rd Ste 100, Carrollton, TX 75007","matchConfidence":"high","matchReason":"Care Plus Family Clinic Carrollton; Dr. Muhammad Siddiqui MD confirmed"},
+    {"type":"clinic","name":"Internal Medicine Associates","city":"Carrollton","address":"4325 N Josey Ln Ste 300, Carrollton, TX 75010","matchConfidence":"high","matchReason":"Internal Medicine Associates of Carrollton; Dr. Lauren Bishop is at Plano office but practice has Carrollton location"},
+    {"type":"clinic","name":"WellMed at Hebron","city":"Carrollton","address":"1948 E Hebron Pkwy Ste 110, Carrollton, TX 75007","matchConfidence":"high","matchReason":"WellMed at Hebron Carrollton; Dr. Anis Ansari MD confirmed"},
+    {"type":"clinic","name":"Fairway Family Medicine","city":"Carrollton","address":"4100 Fairway Dr Ste 320, Carrollton, TX 75010","matchConfidence":"high","matchReason":"Fairway Family Medicine Carrollton; Dr. Hong Xiao MD confirmed"},
+    {"type":"clinic","name":"Complete Family Wellness","city":"Carrollton","address":"4125 Fairway Dr Ste 190, Carrollton, TX 75010","matchConfidence":"high","matchReason":"Complete Family Wellness Carrollton; Dr. Salima Jaffer MD confirmed"},
+    {"type":"clinic","name":"Carrollton Pediatrics","city":"Carrollton","address":"4300 N Josey Ln Ste 110, Carrollton, TX 75010","matchConfidence":"high","matchReason":"Carrollton Pediatrics; Dr. Muhammad Ali Mirza MD confirmed"},
+    {"type":"clinic","name":"Giometti Ronald MD","city":"Carrollton","address":"4325 N Josey Ln Ste 105, Carrollton, TX 75010","matchConfidence":"high","matchReason":"Dr. Ronald P. Giometti Jr. MD family medicine Carrollton"},
+    {"type":"clinic","name":"Woven health","city":"Carrollton","address":"1 Medical Pkwy Ste 149, Dallas, TX 75234","matchConfidence":"medium","matchReason":"Woven Health Clinic (Dr. Leesa Condry) listed as Dallas address; serves Carrollton area"},
+    {"type":"clinic","name":"Carrollton Family Physicians","city":"Carrollton","address":"4333 N Josey Ln Ste 302, Carrollton, TX 75010","matchConfidence":"high","matchReason":"Family Medicine Associates of Texas Carrollton; Dr. Joey L. Hamilton MD confirmed"},
+    {"type":"clinic","name":"Medical Clinic Of North Texas","city":"Carrollton","address":"1601 W Hebron Pkwy Ste 100, Carrollton, TX 75010","matchConfidence":"high","matchReason":"Medical Clinic of North Texas Carrollton; Dr. Stephen Bryce Johnston MD confirmed"},
+    {"type":"clinic","name":"USMD Carrollton Clinic","city":"Carrollton","address":"1601 W Hebron Pkwy Ste 100, Carrollton, TX 75010","matchConfidence":"high","matchReason":"USMD Carrollton Clinic; Dr. Van Lam MD confirmed"},
+    {"type":"clinic","name":"Jose Burbano De Lara, MD","city":"Carrollton","address":"3020 E Hebron Pkwy Ste 100, Carrollton, TX 75010","matchConfidence":"high","matchReason":"Dr. Jose Luis Burbano De Lara MD family medicine Carrollton"},
+    {"type":"clinic","name":"Trinity North Dallas Neurology","city":"Carrollton","address":"4325 N Josey Ln Plaza III Ste 211, Carrollton, TX 75010","matchConfidence":"high","matchReason":"Trinity North Dallas Neurology Carrollton; Dr. Elizabeth Samuel MD confirmed"},
+    {"type":"clinic","name":"Axis Diabetes & Endocrinology","city":"Carrollton","address":"4333 N Josey Ln Ste 204, Carrollton, TX 75010","matchConfidence":"high","matchReason":"Axis Diabetes & Endocrinology Carrollton; Dr. Neeraja Boddu MD confirmed"},
+    {"type":"clinic","name":"Segovia Felix MD","city":"Carrollton","address":"1810 S Josey Ln, Carrollton, TX 75006","matchConfidence":"high","matchReason":"Dr. Felix Segovia MD orthopedic surgeon Carrollton"},
+    {"type":"clinic","name":"Core Vasculaar Services","city":"Carrollton","address":"4541 N Josey Ln Ste 140, Carrollton, TX 75010","matchConfidence":"high","matchReason":"CORE Vascular Services Carrollton; Dr. Timothy C. Pringle MD founder confirmed"},
+    {"type":"clinic","name":"Ortho Texas Orthopedics and sports medicine","city":"Carrollton","address":"4780 N Josey Ln, Carrollton, TX 75010","matchConfidence":"high","matchReason":"OrthoTexas Carrollton; Dr. Christopher D. Allmon MD confirmed"},
+    {"type":"clinic","name":"Dr. Biju Lukose","city":"Carrollton","address":"4541 N Josey Ln Ste 110C, Carrollton, TX 75010","matchConfidence":"high","matchReason":"Dr. Biju Lukose Little Lantern Clinic Carrollton (duplicate)"},
+    {"type":"clinic","name":"Margaret Mike, Md","city":"Carrollton","address":"4325 N Josey Ln Ste 100, Carrollton, TX 75010","matchConfidence":"high","matchReason":"Dr. Margaret Mike MD neurologist Carrollton"},
+    {"type":"clinic","name":"Neurology & Sleep Clinic","city":"Carrollton","address":"4217 Marsh Ridge Rd Ste 120, Carrollton, TX 75010","matchConfidence":"high","matchReason":"Neurology & Sleep Clinic Carrollton; Dr. Kiran Shah MD confirmed"},
+    {"type":"clinic","name":"Adnan Nadir, MD","city":"Carrollton","address":"4221 Medical Pkwy Ste 150, Carrollton, TX 75010","matchConfidence":"high","matchReason":"Dr. Adnan Nadir MD gastroenterologist Carrollton"}
+  ],
+  "notFound": [
+    {"type":"clinic","name":"Sanders Barry Md","city":"Carrollton","reason":"Multiple Dr. Sanders exist; 'Jason Chase Sanders' is in Carrollton GA (radiation oncology), not Carrollton TX. 'Barry Sanders' practice not located."}
+  ]
+}

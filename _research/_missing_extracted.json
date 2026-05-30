@@ -1,0 +1,315 @@
+{
+  "clinics": [
+    {
+      "name": "Texas Diabetes & Endocrinology",
+      "spec": "Endocrinologist",
+      "doctor": "Dr.Luis Casaubon",
+      "city": "McKinney",
+      "member": "Duaa",
+      "curAddr": ""
+    },
+    {
+      "name": "MR. DOUGLAS CONNER",
+      "spec": "GS",
+      "doctor": "",
+      "city": "McKinney",
+      "member": "Duaa",
+      "curAddr": ""
+    },
+    {
+      "name": "Just For Kids Dentistry",
+      "spec": "",
+      "doctor": "Dr. Jeffrey Hoffman",
+      "city": "McKinney",
+      "member": "Duaa",
+      "curAddr": ""
+    },
+    {
+      "name": "Endocrinology",
+      "spec": "",
+      "doctor": "",
+      "city": "Plano",
+      "member": "Duaa",
+      "curAddr": ""
+    },
+    {
+      "name": "Pediatrics",
+      "spec": "",
+      "doctor": "",
+      "city": "Carrollton",
+      "member": "Duaa",
+      "curAddr": ""
+    },
+    {
+      "name": "Allen children clinic",
+      "spec": "",
+      "doctor": "",
+      "city": "Allen",
+      "member": "Duaa",
+      "curAddr": ""
+    },
+    {
+      "name": "ABC Pediatrics",
+      "spec": "",
+      "doctor": "",
+      "city": "Frisco",
+      "member": "Duaa",
+      "curAddr": ""
+    },
+    {
+      "name": "NcT Step",
+      "spec": "",
+      "doctor": "",
+      "city": "Plano",
+      "member": "Duaa",
+      "curAddr": ""
+    },
+    {
+      "name": "plano",
+      "spec": "",
+      "doctor": "",
+      "city": "Plano",
+      "member": "Duaa",
+      "curAddr": ""
+    },
+    {
+      "name": "Next Gen",
+      "spec": "",
+      "doctor": "",
+      "city": "Plano",
+      "member": "Duaa",
+      "curAddr": ""
+    },
+    {
+      "name": "Clinica San Miguel",
+      "spec": "",
+      "doctor": "",
+      "city": "Carrollton",
+      "member": "Sadia",
+      "curAddr": ""
+    },
+    {
+      "name": "Medical Clinic /Dan Dinh",
+      "spec": "",
+      "doctor": "",
+      "city": "Carrollton",
+      "member": "Sadia",
+      "curAddr": ""
+    },
+    {
+      "name": "Comprehensive Pain",
+      "spec": "",
+      "doctor": "",
+      "city": "Frisco",
+      "member": "Sadia",
+      "curAddr": "Frisco, TX"
+    },
+    {
+      "name": "Elite",
+      "spec": "",
+      "doctor": "",
+      "city": "Carrollton",
+      "member": "Sadia",
+      "curAddr": ""
+    },
+    {
+      "name": "Pure Health",
+      "spec": "",
+      "doctor": "",
+      "city": "McKinney",
+      "member": "Sadia",
+      "curAddr": ""
+    },
+    {
+      "name": "Sarkar",
+      "spec": "",
+      "doctor": "",
+      "city": "Carrollton",
+      "member": "Sadia",
+      "curAddr": ""
+    },
+    {
+      "name": "Omni",
+      "spec": "PCP",
+      "doctor": "",
+      "city": "Frisco",
+      "member": "Sadia",
+      "curAddr": ""
+    },
+    {
+      "name": "Care Choice",
+      "spec": "",
+      "doctor": "",
+      "city": "McKinney",
+      "member": "zuhaab and amna",
+      "curAddr": ""
+    },
+    {
+      "name": "MD Kids Pediactrics",
+      "spec": "MD",
+      "doctor": "Hung Truong MD",
+      "city": "Frisco",
+      "member": "",
+      "curAddr": ""
+    },
+    {
+      "name": "Care Express Clinic",
+      "spec": "MD",
+      "doctor": "Muhammad Ali Siddiqui , MD",
+      "city": "Frisco",
+      "member": "",
+      "curAddr": ""
+    },
+    {
+      "name": "Cierras Heath Primary care",
+      "spec": "PCP",
+      "doctor": "",
+      "city": "Frisco",
+      "member": "",
+      "curAddr": ""
+    },
+    {
+      "name": "Gray branch Pediatrics",
+      "spec": "PCP",
+      "doctor": "",
+      "city": "Frisco",
+      "member": "",
+      "curAddr": ""
+    },
+    {
+      "name": "Woman Health",
+      "spec": "",
+      "doctor": "",
+      "city": "Carrollton",
+      "member": "",
+      "curAddr": ""
+    },
+    {
+      "name": "Carrolton Primary care",
+      "spec": "PCP",
+      "doctor": "",
+      "city": "Carrollton",
+      "member": "",
+      "curAddr": ""
+    },
+    {
+      "name": "Liberty",
+      "spec": "",
+      "doctor": "",
+      "city": "Frisco",
+      "member": "Sadia",
+      "curAddr": ""
+    },
+    {
+      "name": "Advanced Primary Care",
+      "spec": "",
+      "doctor": "",
+      "city": "Frisco",
+      "member": "Sadia",
+      "curAddr": ""
+    },
+    {
+      "name": "Premerier Independant Physicians",
+      "spec": "MD",
+      "doctor": "",
+      "city": "Frisco",
+      "member": "",
+      "curAddr": ""
+    },
+    {
+      "name": "Specialty Clinics",
+      "spec": "MD",
+      "doctor": "",
+      "city": "Frisco",
+      "member": "",
+      "curAddr": ""
+    },
+    {
+      "name": "Pediactrics R US",
+      "spec": "",
+      "doctor": "",
+      "city": "Plano",
+      "member": "",
+      "curAddr": ""
+    }
+  ],
+  "mvas": [
+    {
+      "firm": "Herrera Law",
+      "attorney": "TBD",
+      "city": "Carrollton",
+      "phone": "TBD",
+      "curAddr": "TBD"
+    },
+    {
+      "firm": "Zapata Law",
+      "attorney": "TBD",
+      "city": "Carrollton",
+      "phone": "TBD",
+      "curAddr": "TBD"
+    },
+    {
+      "firm": "McMinn Law Firm",
+      "attorney": "TBD",
+      "city": "Dallas",
+      "phone": "TBD",
+      "curAddr": "TBD"
+    },
+    {
+      "firm": "The Stewart Law Firm",
+      "attorney": "Justin Stewart",
+      "city": "Dallas",
+      "phone": "TBD",
+      "curAddr": "Dallas, TX (verify)"
+    },
+    {
+      "firm": "Khan Law Firm",
+      "attorney": "TBD",
+      "city": "Plano",
+      "phone": "TBD",
+      "curAddr": "TBD — Plano, TX (verify)"
+    },
+    {
+      "firm": "The Karam Law Firm",
+      "attorney": "TBD",
+      "city": "Dallas",
+      "phone": "TBD",
+      "curAddr": "TBD — Dallas, TX (verify)"
+    },
+    {
+      "firm": "Daly & Black, P.C.",
+      "attorney": "TBD",
+      "city": "Dallas",
+      "phone": "(713) 655-1405",
+      "curAddr": "Multiple TX offices — Dallas branch (verify address)"
+    },
+    {
+      "firm": "The Adley Law Firm",
+      "attorney": "TBD",
+      "city": "Dallas",
+      "phone": "TBD",
+      "curAddr": "TBD — Dallas, TX (verify)"
+    },
+    {
+      "firm": "Estes Law Group",
+      "attorney": "TBD",
+      "city": "Dallas",
+      "phone": "TBD",
+      "curAddr": "TBD — Dallas, TX (verify)"
+    },
+    {
+      "firm": "The Lange Firm",
+      "attorney": "TBD",
+      "city": "Fort Worth",
+      "phone": "TBD",
+      "curAddr": "TBD — Fort Worth, TX (verify)"
+    },
+    {
+      "firm": "Roberts Markland LLP",
+      "attorney": "TBD",
+      "city": "Dallas",
+      "phone": "TBD",
+      "curAddr": "TBD — Dallas, TX (verify)"
+    }
+  ]
+}

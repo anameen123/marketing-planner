@@ -1,0 +1,3506 @@
+{
+  "generatedAt": "2026-05-26T19:14:16.355Z",
+  "clinics": {
+    "total": 495,
+    "withAddress": 0,
+    "missing": 495,
+    "missingList": [
+      {
+        "name": "Bloomfield",
+        "specialty": "PCP",
+        "doctor": "Cudjoe, MD",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Passion Health",
+        "specialty": "PCP",
+        "doctor": "Purushotham Arani, MD",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "ATA Healthcare and Wellness",
+        "specialty": "PCP",
+        "doctor": "Mona Alhezayen, Jolene Aden-Else",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "North Dallas Primary Care",
+        "specialty": "PCP",
+        "doctor": "Dr.Suchitra, Dr Arun Amaram",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Southern Medical Associates",
+        "specialty": "PCP",
+        "doctor": "Dr. Latha Yedlapalli, Dr. Sri Venkat Yedlapalli, Babita John",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Care Now",
+        "specialty": "UC",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "Phoenix Integrative Medical Center",
+        "specialty": "PCP",
+        "doctor": "Dr. Hoffman, MD.",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "little Lantern",
+        "specialty": "Primary",
+        "doctor": "Biju Lukose",
+        "city": "Carrollton",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "St Marys",
+        "specialty": "Primary",
+        "doctor": "Remi",
+        "city": "Carrollton",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Collin County Physicians",
+        "specialty": "Primary- UC",
+        "doctor": "Dr. Chirag Chavda",
+        "city": "McKinney",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "McKinney Family Medicine",
+        "specialty": "Primary",
+        "doctor": "Dr. Brian.C.Procter, Dr Peter A. McCullough",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Wellness medicine",
+        "specialty": "",
+        "doctor": "DR. Sunila Philips",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Cardiac Center of Texas",
+        "specialty": "PCP, CCM",
+        "doctor": "Dr. Ambreen Ashfaque, Dr Muhammad Akram Khan",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Texas Health Family and Sports Care",
+        "specialty": "PCP",
+        "doctor": "Dr.Shaun McMurtry",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Meridian Primary Care",
+        "specialty": "PCP, CCM",
+        "doctor": "Dr.Udita Apte",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "WELLMED",
+        "specialty": "PCP",
+        "doctor": "Dr.Kavitha Moolamalla",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "McKinney Ranch Medical Care & Wellness",
+        "specialty": "PCP",
+        "doctor": "Dr. Janet Lin",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Premier Independent Physicians of McKinney",
+        "specialty": "PCP",
+        "doctor": "Dr.Zahid Zafar",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Direct Orthopedic Care",
+        "specialty": "Orthopedics",
+        "doctor": "Dr.Diana Ayala PT, DPT",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Alpha Orthopedics & Sports Medicine",
+        "specialty": "Orthopedics",
+        "doctor": "Dr. John Thompson",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Texas Renal Care",
+        "specialty": "",
+        "doctor": "Dr.Mohammad N. Sadeddin",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Boring Family Medicine",
+        "specialty": "",
+        "doctor": "Dr.Taylor Richardson",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "The Heartbeat Clinic",
+        "specialty": "",
+        "doctor": "Dr. Suleman",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Sierra Health Direct Primary care",
+        "specialty": "",
+        "doctor": "Dr.Katherine Hurley,",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Craig Ranch Pediatrics",
+        "specialty": "",
+        "doctor": "Dr. Salem",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Family Health Center of Lake Forest",
+        "specialty": "",
+        "doctor": "Dr. William Dodge",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Synder Hopkins Family Medicine",
+        "specialty": "",
+        "doctor": "Dr. Ann Snyder",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Eldarado Family Medicine",
+        "specialty": "",
+        "doctor": "Dr. Haris Lin",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Thuan Huynh, MD",
+        "specialty": "",
+        "doctor": "Dr. Thuan Huynh",
+        "city": "Carrollton",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Care Plus Family Clinic",
+        "specialty": "",
+        "doctor": "Dr. Muhammad Ali Siddiqui",
+        "city": "Carrollton",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "Internal Medicine Associates",
+        "specialty": "PCP",
+        "doctor": "Lauren Bishop, MD",
+        "city": "Carrollton",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "WellMed at Hebron",
+        "specialty": "",
+        "doctor": "Dr. Anis A. Ansari",
+        "city": "Carrollton",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Fairway Family Medicine",
+        "specialty": "",
+        "doctor": "Dr.HONG XIAO",
+        "city": "Carrollton",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Complete Family Wellness",
+        "specialty": "",
+        "doctor": "Dr. Salima Jaffer",
+        "city": "Carrollton",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "Carrollton Pediatrics",
+        "specialty": "",
+        "doctor": "Dr.Muhammad Ali Mirza",
+        "city": "Carrollton",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Giometti Ronald MD",
+        "specialty": "",
+        "doctor": "Dr.Ronald P Giometti Jr",
+        "city": "Carrollton",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Woven health",
+        "specialty": "",
+        "doctor": "Dr. Leesa Condry",
+        "city": "Carrollton",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "BloomMed,LLC:stephanie Cudjoe, MD",
+        "specialty": "",
+        "doctor": "Dr Stephanie Cudjoe",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Healthcare Associates of Texas",
+        "specialty": "",
+        "doctor": "Karla Maltez Salvador, MD",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Mummadi Internel Medicine",
+        "specialty": "",
+        "doctor": "Dr. Vijaya Mummadi",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "NTX Medical Clinic",
+        "specialty": "PCP",
+        "doctor": "Jayasree Kailasam , MD",
+        "city": "McKinney",
+        "marketingRep": "zuhaab and amna"
+      },
+      {
+        "name": "Total Men's Primary Care",
+        "specialty": "",
+        "doctor": "",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Family Health Center on Virginia",
+        "specialty": "",
+        "doctor": "Dr.Brock Pierce",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Tu Clinica Hispana Familiar",
+        "specialty": "",
+        "doctor": "",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Progressive Health Family Medicine",
+        "specialty": "",
+        "doctor": "Dr.Hema Haridas",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Dr. Daniel James Chartrand",
+        "specialty": "",
+        "doctor": "Dr. Daniel J. Chartrand",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Apollo Medical Associates",
+        "specialty": "",
+        "doctor": "DR. MYERS, HEATHER",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Healing Care Pediatrics",
+        "specialty": "",
+        "doctor": "Dr Khanum",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Kid Approved Pediatrics",
+        "specialty": "",
+        "doctor": "Dr. Jonathan Chow",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Carrollton Family Physicians",
+        "specialty": "",
+        "doctor": "Dr. Joey L. Hamilton",
+        "city": "Carrollton",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Medical Clinic Of North Texas",
+        "specialty": "",
+        "doctor": "Dr.Dr. Stephen Bryce Johnston",
+        "city": "Carrollton",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "USMD Carrollton Clinic",
+        "specialty": "",
+        "doctor": "Dr.Van Lam",
+        "city": "Carrollton",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Jose Burbano De Lara, MD",
+        "specialty": "",
+        "doctor": "Dr.Jose Burbano De Lara",
+        "city": "Carrollton",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Cook Children's Pediatrics West Frisco",
+        "specialty": "",
+        "doctor": "Dr.Harry Stellman IV",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Joy & Crown Pediatric Specialists",
+        "specialty": "",
+        "doctor": "Dr.MaryEllen Cavalier",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Jacob's Ladder Developmental Pediatrics",
+        "specialty": "",
+        "doctor": "Dr. Julie Jacob",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Frisco Family Ent",
+        "specialty": "",
+        "doctor": "Dr.Patti Huang",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Dr. Megha Patel-Banker",
+        "specialty": "",
+        "doctor": "Dr. Smitha Rudraraju",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Elite Internel",
+        "specialty": "",
+        "doctor": "Dr Krishna C. Tatineni",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Heal 360",
+        "specialty": "",
+        "doctor": "Dr.Mohammed Amer Mohiuddin",
+        "city": "Frisco",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "MedPro Family Clinic",
+        "specialty": "",
+        "doctor": "Dr.Xiaohui Lu",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Dr. Vani Ramesh",
+        "specialty": "",
+        "doctor": "Dr. Vani Ramesh",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Nest Family Medicine",
+        "specialty": "",
+        "doctor": "Dr.Priti Ranjan",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Plano Supreme Primary Care",
+        "specialty": "",
+        "doctor": "Yinghui (Carol) Liu, M.D",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Chong Liu, MD",
+        "specialty": "",
+        "doctor": "Dr. Chong Liu",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Nisha Satish,MD",
+        "specialty": "",
+        "doctor": "Dr. Nisha Satish",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Harini Meda",
+        "specialty": "",
+        "doctor": "Dr. Harinineeraja Meda, MD",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Plano Family Medicine",
+        "specialty": "",
+        "doctor": "Dr. Alice Chen",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Plano Primay care",
+        "specialty": "",
+        "doctor": "Dr.Kalpana Thakur",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Adriatica Womens health",
+        "specialty": "",
+        "doctor": "Dr.Tracey A. Banks",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Children Choice Pediatrics",
+        "specialty": "",
+        "doctor": "Dr.Stacie Hunsaker",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Pediatrics People PLLC",
+        "specialty": "",
+        "doctor": "Dr. Audra Renata Linck",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Texas Institute for Neurological Disorders",
+        "specialty": "NEUR",
+        "doctor": "Dr. Easwar Sundaram Jr",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Lone Star Neurology",
+        "specialty": "Orthopedist",
+        "doctor": "J.field Scovell, lii,M.d.",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Silver Spine & Neurological Center",
+        "specialty": "NEUR",
+        "doctor": "Dr.M. Viktor Silver",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Dr. Angela Tseng",
+        "specialty": "GI",
+        "doctor": "Dr. Angela Tseng",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Texas Diabetes & Endocrinology",
+        "specialty": "Endocrinologist",
+        "doctor": "Dr.Luis Casaubon",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Dr.Aris N Jacob",
+        "specialty": "Endocrinologist",
+        "doctor": "Dr.Aris N Jacob",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "New Hope Diabetes Care & Prevention",
+        "specialty": "Endocrinologist",
+        "doctor": "Dr..Sana Ullah",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Advanced Surgical of North Texas",
+        "specialty": "GS",
+        "doctor": "Dr.Steve Duffy",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Laurie Novosad, M.D., FASCRS",
+        "specialty": "GS",
+        "doctor": "Dr.Laurie S. Novosad",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Francy Y Shu",
+        "specialty": "NEUR",
+        "doctor": "Dr. Francy Shu",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "North Texas Brain and Spine Specialists",
+        "specialty": "NEUR",
+        "doctor": "Dr.Brite John Chalunkal",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Sanders Barry Md",
+        "specialty": "GI",
+        "doctor": "Dr.Jason Chase Sanders",
+        "city": "Carrollton",
+        "marketingRep": "Duaa & Zuhab"
+      },
+      {
+        "name": "Trinity North Dallas Neurology",
+        "specialty": "GI",
+        "doctor": "Dr.Elizabeth Samuel",
+        "city": "Carrollton",
+        "marketingRep": "Duaa & Zuhab"
+      },
+      {
+        "name": "Axis Diabetes & Endocrinology",
+        "specialty": "Endocrinologist",
+        "doctor": "Dr. Neeraja Boddu",
+        "city": "Carrollton",
+        "marketingRep": "Duaa & Zuhab"
+      },
+      {
+        "name": "MR. DOUGLAS CONNER",
+        "specialty": "GS",
+        "doctor": "",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Texas Health Internal Medicine",
+        "specialty": "Endocrinologist",
+        "doctor": "Dr.Michael Young-June Lee",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Murali M. Alloju, M.D.",
+        "specialty": "Gastroenterologist",
+        "doctor": "Dr.Murali Alloju",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Dr.Stefanie Lynn Addington",
+        "specialty": "Endocrinologist",
+        "doctor": "Dr.Stefanie L. addington",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Preston Surgery Center",
+        "specialty": "GS",
+        "doctor": "DR. MOHAMMAD TARIQ",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Christopher A. Kowalski",
+        "specialty": "Orthopedics",
+        "doctor": "Dr. Justin M. Kane",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Nutritional Blessings",
+        "specialty": "Endocrinologist",
+        "doctor": "",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Spine Vue",
+        "specialty": "Spine Surgeon",
+        "doctor": "Dr.Dr. Sean M. Jones",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Preformance Ortho & Sports Medicine",
+        "specialty": "Orthopedics",
+        "doctor": "Dr. Troy Diehl",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "North Texas Endocrinology",
+        "specialty": "Endocrinologist",
+        "doctor": "Muhammad Choudhry, MD",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Segovia Felix MD",
+        "specialty": "Orthopedist",
+        "doctor": "Dr. Felix Segovia",
+        "city": "Carrollton",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Core Vasculaar Services",
+        "specialty": "GS",
+        "doctor": "Dr. Timothy C. Pringle",
+        "city": "Carrollton",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Ortho Texas Orthopedics and sports medicine",
+        "specialty": "Orthopedist",
+        "doctor": "Dr.Christopher D. Allmon",
+        "city": "Carrollton",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Dr. Biju Lukose",
+        "specialty": "GS",
+        "doctor": "Dr. Biju Lukose",
+        "city": "Carrollton",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Affinity NEUROCARE",
+        "specialty": "NEUR",
+        "doctor": "Dr.Nnamdi C. Dike",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Margaret Mike, Md",
+        "specialty": "NEUR",
+        "doctor": "Dr Margaret Mike",
+        "city": "Carrollton",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Neurology & Sleep Clinic",
+        "specialty": "NEUR",
+        "doctor": "Dr Kiran Shah",
+        "city": "Carrollton",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Adnan Nadir, MD",
+        "specialty": "GI",
+        "doctor": "Dr.Adnan Nadir",
+        "city": "Carrollton",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Lisa R. Reznick, MD",
+        "specialty": "",
+        "doctor": "Dr.Lisa R. Reznick",
+        "city": "Carrollton",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "David Tietze, M.D",
+        "specialty": "GS",
+        "doctor": "David Tietze, M.D",
+        "city": "Carrollton",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Dr. Louis Montanaro",
+        "specialty": "",
+        "doctor": "Dr. Louis Montanaro",
+        "city": "Carrollton",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "MD medical group",
+        "specialty": "",
+        "doctor": "Dr. Neha Manikonda",
+        "city": "Carrollton",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Bent Tree Family Physicians",
+        "specialty": "",
+        "doctor": "Dr. Tariq Khan",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Dr. Vani Ramesh, MD",
+        "specialty": "",
+        "doctor": "Dr. Vani Ramesh",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Dr. Hina Rizvi, MD",
+        "specialty": "",
+        "doctor": "Dr Hina Rizvi",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Medina Primary Care",
+        "specialty": "",
+        "doctor": "Dr. Mir. M Ali",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Centennial Primary Care",
+        "specialty": "",
+        "doctor": "Dr. Nuzhat Ahmed",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Dr. John Chuang",
+        "specialty": "",
+        "doctor": "Dr. John Chuang",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Dr. Farid F. Taie",
+        "specialty": "",
+        "doctor": "Dr. Farid F. Taie",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Dr. Hanh Dieu T. Nguyen",
+        "specialty": "",
+        "doctor": "Dr. Hanh Dieu T. Nguyen",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Elpis Primary Care",
+        "specialty": "",
+        "doctor": "Dr. Saquib Ibrahim",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Shiva Medical Center",
+        "specialty": "",
+        "doctor": "Vani Ramesh, M.D.",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Omni Medical Center",
+        "specialty": "",
+        "doctor": "Dr. Yang Li",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Plano Primary Care",
+        "specialty": "",
+        "doctor": "Kalpana Thakur, M.D",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Dr.Sherryl Shipes",
+        "specialty": "",
+        "doctor": "Dr.Sherryl Shipes",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Endocrine Associates of Dallas & Plano",
+        "specialty": "Endocrinologist",
+        "doctor": "Camille Folkard, MD",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Balance Diabetes and Endrocrinology",
+        "specialty": "Endocrinologist",
+        "doctor": "",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Dr. Qing Jia",
+        "specialty": "Endocrinologist",
+        "doctor": "Dr. Qing Jia",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Elizabeth M Papaila",
+        "specialty": "GS",
+        "doctor": "Dr Elizabeth M Papaila",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "TEXAS CHILD NEUROLOGY, LLP",
+        "specialty": "NEUR",
+        "doctor": "Robert Chudnow, MD",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Dr. Abdul A. Baker",
+        "specialty": "",
+        "doctor": "Dr. Abdul Baker",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Back to Health Clinic",
+        "specialty": "Chiropractor",
+        "doctor": "",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Lewis Pain & Physical Medicine",
+        "specialty": "Pain Management",
+        "doctor": "Dr. Jerry Lewis",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Spine & Joint Physicians of Frisco",
+        "specialty": "Pain Management",
+        "doctor": "S.. Justin Badiyan, MD",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "OmniSpine Pain Management",
+        "specialty": "Pain Management",
+        "doctor": "Dr Ashley A Joseph",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Pain Management of North Dallas, PA",
+        "specialty": "Pain Management",
+        "doctor": "Dr. Craig Neleson, MD",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Precision Spine Care",
+        "specialty": "Pain Management",
+        "doctor": "Charles R. Gordon, MD",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Comprehensive Pain Management",
+        "specialty": "Pain Management",
+        "doctor": "Rodolfo Herrera, MD",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Pain and spine physicans",
+        "specialty": "Pain Management",
+        "doctor": "Dr. Irfan Ali",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Dr. Sameer Ali Syed",
+        "specialty": "Pain Management",
+        "doctor": "Dr. Sameer Ali Syed",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Comprehensive Pain Solutions of Texas: Bryan Aduddell, M.D",
+        "specialty": "Pain Management",
+        "doctor": "Bryan Aduddell, M.D",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "ReGen Pain Management: Jonathan Koning, MD",
+        "specialty": "Pain Management",
+        "doctor": "Dr. Jonathan Koning",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Texas Star Pain & Spine",
+        "specialty": "Pain Management",
+        "doctor": "Gonzalo Gonzales, DO",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "North Texas Synergy Pain",
+        "specialty": "Pain Management",
+        "doctor": "Meet Dr. Spicer",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Pain Specialists of Frisco",
+        "specialty": "Pain Management",
+        "doctor": "Dr Mahesh Mohan",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Texas Spine Consultants",
+        "specialty": "Pain Management",
+        "doctor": "Robert G. Viere, M.D.",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Comprehensive OB/GYN",
+        "specialty": "Obstetrician-gynecologist",
+        "doctor": "Gerald D. Luciani, MD",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Synergy Primary Clinic",
+        "specialty": "PCP",
+        "doctor": "Dr. Saboohi Zafar , MD",
+        "city": "McKinney",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "El Shaddai Family Clinic",
+        "specialty": "",
+        "doctor": "Beena Paul, MSN , FNP-C",
+        "city": "McKinney",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "Express Family Clinic",
+        "specialty": "MD",
+        "doctor": "Dr. Parihar Pardeep",
+        "city": "McKinney",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "MD Kids Pediatrics",
+        "specialty": "",
+        "doctor": "",
+        "city": "Carrollton",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Highlands Medical and Wellness Primary Care",
+        "specialty": "",
+        "doctor": "Dr VAN TRAN",
+        "city": "Carrollton",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Dr. Hardeep S. Rai",
+        "specialty": "",
+        "doctor": "Dr. Hardeep S. Rai",
+        "city": "Carrollton",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "WellMed at Carrollton",
+        "specialty": "",
+        "doctor": "Anis A. Ansari, MD",
+        "city": "Carrollton",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Hebron Pediatrics",
+        "specialty": "",
+        "doctor": "Dr. Shen Palaniswamy,",
+        "city": "Carrollton",
+        "marketingRep": "zuhaab and amna"
+      },
+      {
+        "name": "Natalia Gutierrez MD",
+        "specialty": "MD",
+        "doctor": "Natalia Gutierrez MD",
+        "city": "Carrollton",
+        "marketingRep": "zuhaab and amna"
+      },
+      {
+        "name": "Dr. Kyle K. Carter",
+        "specialty": "",
+        "doctor": "Dr. Kyle K. Carter",
+        "city": "Carrollton",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Pathway Direct  Primary care",
+        "specialty": "PCP",
+        "doctor": "Dr. Omar Z. Hussian",
+        "city": "Carrollton",
+        "marketingRep": "zuhaab and amna"
+      },
+      {
+        "name": "Dr. Hong Xiao",
+        "specialty": "",
+        "doctor": "Dr. Hong Xiao",
+        "city": "Carrollton",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Immanuel Family Clinic",
+        "specialty": "MD",
+        "doctor": "Jaya Matharage, APRN, FNP-C",
+        "city": "Carrollton",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Family Center VitaleHEALTH",
+        "specialty": "",
+        "doctor": "jh",
+        "city": "Carrollton",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Josey Medical Clinic",
+        "specialty": "",
+        "doctor": "Dr. Yoosun Jeong",
+        "city": "Carrollton",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Precision Family mediine",
+        "specialty": "",
+        "doctor": "Dr. John Bailey",
+        "city": "Carrollton",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Song Dermatalogy",
+        "specialty": "",
+        "doctor": "Dr. Song",
+        "city": "Carrollton",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "M.D Benton Cain",
+        "specialty": "",
+        "doctor": "",
+        "city": "Carrollton",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "North texas periodontics and",
+        "specialty": "",
+        "doctor": "Dr. Leslie Carroll",
+        "city": "Carrollton",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "V Care",
+        "specialty": "",
+        "doctor": "",
+        "city": "Carrollton",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Airrosti Carrollton",
+        "specialty": "",
+        "doctor": "",
+        "city": "Carrollton",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Peak Integrated Healthcare",
+        "specialty": "",
+        "doctor": "DR. MATT HICKEN",
+        "city": "Carrollton",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Evolving Beautiful Mind & Body Healthcare",
+        "specialty": "",
+        "doctor": "Dr Ghazala N. Ahmed",
+        "city": "Carrollton",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Elevation Spine and Sports Medicine",
+        "specialty": "",
+        "doctor": "Dr. Konner Ackerman",
+        "city": "Carrollton",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Dr. Shenbagavalli Palaniswamy",
+        "specialty": "",
+        "doctor": "Dr. Shenbagavalli",
+        "city": "Carrollton",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "The Behavior Exchange",
+        "specialty": "",
+        "doctor": "",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Southwest Allergy & Asthma Center",
+        "specialty": "",
+        "doctor": "John Van Wagoner, M.D",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Edward T. Shin,M.D",
+        "specialty": "",
+        "doctor": "Edward T. Shin,M.D",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Vista Physical Therapy - Plano, Windcom Ct",
+        "specialty": "",
+        "doctor": "",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Frisco Center for Internal Medicine",
+        "specialty": "",
+        "doctor": "Neela Shah, MD",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "WillowsWomens Health",
+        "specialty": "",
+        "doctor": "Shruti Benjamin, MD",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Inspire Health",
+        "specialty": "",
+        "doctor": "Stephanie Reinhold Garza, MD",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Greenhill Family Physicians",
+        "specialty": "",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": "zuhaab and amna"
+      },
+      {
+        "name": "West Fisco Health & Wellness",
+        "specialty": "",
+        "doctor": "Andrew Minigutti, M.D.",
+        "city": "Frisco",
+        "marketingRep": "zuhaab and amna"
+      },
+      {
+        "name": "Stonebriar Pediatrics",
+        "specialty": "",
+        "doctor": "Thai V. Hoang, MD",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Frisco Obstetrics and Gynecology, PA",
+        "specialty": "",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "EVIVE HEALTH AND BEAUTY",
+        "specialty": "",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Just For Kids Dentistry",
+        "specialty": "",
+        "doctor": "Dr. Jeffrey Hoffman",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "The Well Integrative Medicine",
+        "specialty": "",
+        "doctor": "Dr. Brian C. Procter",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Pain Treatment Institute",
+        "specialty": "",
+        "doctor": "Dr. Sameer Syed",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Lice Clinics of America",
+        "specialty": "",
+        "doctor": "",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Texas family healthcare",
+        "specialty": "",
+        "doctor": "Sophia Hussain, MD",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "PebblePath Pediatric Dentistry&Orthodontics",
+        "specialty": "",
+        "doctor": "Dr. Thien Tran",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "North Dallas Urology Associates",
+        "specialty": "",
+        "doctor": "Dr. Stephen Lieman",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "McKinney Adult Medicine",
+        "specialty": "",
+        "doctor": "Dr. Michael Parisi",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "CityBridge Urgent Care",
+        "specialty": "",
+        "doctor": "",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Dr. Isaac Z. Pugach",
+        "specialty": "",
+        "doctor": "Dr. Isaac Z. Pugach",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Greenhill family physians",
+        "specialty": "",
+        "doctor": "Dr Mike",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Dr. Philip K. Chen",
+        "specialty": "",
+        "doctor": "Dr. Philip K. Chen",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Family Health and Wellness of Plano",
+        "specialty": "",
+        "doctor": "Dr. Russell Skinner",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Plano Family clinic",
+        "specialty": "",
+        "doctor": "Dr Hanh Dieu Nguyen",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Serenity Primary Care",
+        "specialty": "",
+        "doctor": "Dr. Rashidi",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Village Health Partners - Frisco Medical Village",
+        "specialty": "",
+        "doctor": "Lisa Abbott, MD",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "ProMed Health Primary Care - Frisco",
+        "specialty": "",
+        "doctor": "Dr. Kavitha Ilayaraja",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "AlphaHealth Frisco Primary Care",
+        "specialty": "",
+        "doctor": "Dr. Neethu Benny",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Connections wellness group",
+        "specialty": "",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Pediatrics R Us",
+        "specialty": "",
+        "doctor": "Taha Saif, MD",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Monkey Mouths",
+        "specialty": "",
+        "doctor": "Nikki Wensel Rustad, M.A",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Body Loom Wellness",
+        "specialty": "",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Frisco Mental Health Services",
+        "specialty": "",
+        "doctor": "Dr Furqan Rizvi",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Behavioral Innovations",
+        "specialty": "",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Modern Podiatry",
+        "specialty": "",
+        "doctor": "Dr. Woojung Lee",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Diana Health Allen",
+        "specialty": "",
+        "doctor": "",
+        "city": "Allen",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Rajiv M Joseph MD, PhD, FAAN",
+        "specialty": "NEUR",
+        "doctor": "Rajiv M Joseph MD, PhD, FAAN",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Dr. Geeta Rajan",
+        "specialty": "NEUR",
+        "doctor": "Dr. Geeta Rajan",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Childrens health neurology",
+        "specialty": "NEUR",
+        "doctor": "",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Indu Mayakrishnan M.D",
+        "specialty": "NEUR",
+        "doctor": "Indu Mayakrishnan M.D",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Mohsin Maqbool, MD",
+        "specialty": "NEUR",
+        "doctor": "Mohsin Maqbool, MD",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Balance Diabetes and Endocrinology",
+        "specialty": "Endocrinologist",
+        "doctor": "Dr. Sindura Alloju",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Hope Internal Medicine Clinic",
+        "specialty": "",
+        "doctor": "Ramy Elhalwagi, D.O.",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "CLINICA HISPANA PLANO TX",
+        "specialty": "",
+        "doctor": "",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Achieve Physical Therapy",
+        "specialty": "",
+        "doctor": "",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Care Choice Family Clinic",
+        "specialty": "",
+        "doctor": "Dr. Sheeba Daniel",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Fem Care",
+        "specialty": "OB/GYN",
+        "doctor": "DR. GEOFFREY N. JAMES",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Intricate Health",
+        "specialty": "OB/GYN",
+        "doctor": "Charmaine Gibson MD,",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Inspire Health - Plano Doctors",
+        "specialty": "",
+        "doctor": "Dr. Bush Benjamin",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Doctors of Internal Medicine",
+        "specialty": "",
+        "doctor": "Suryadutt Venkat, MD",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "My Dentist in Plano",
+        "specialty": "",
+        "doctor": "Dr. Darren Dickson",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Advanced dental center",
+        "specialty": "",
+        "doctor": "Dr. Hopkins’s",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Asara Physical Therapy and Balance Clinic",
+        "specialty": "",
+        "doctor": "Dr.Asha J Gummadi",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Premier Wellness Internal Medicine",
+        "specialty": "",
+        "doctor": "Dr. Michelle Sun",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Pediatric Specialists of Plano",
+        "specialty": "",
+        "doctor": "Dr. Fatimah Ahmed",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Infectious Disease Doctors PA",
+        "specialty": "",
+        "doctor": "Sofia Ansari, M.D.",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "US Legacy Clinic",
+        "specialty": "",
+        "doctor": "Dr. Maftuna Kayumova",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Pediatric offices at willow bend",
+        "specialty": "",
+        "doctor": "Sharon Wiener MD",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "NextCare Urgent Care",
+        "specialty": "",
+        "doctor": "Dr. Chesshir",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Southern Endocrinology",
+        "specialty": "",
+        "doctor": "",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Plano Therapy center",
+        "specialty": "",
+        "doctor": "",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Davita Dialysis",
+        "specialty": "",
+        "doctor": "",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Mind Body OPTIMIZATION",
+        "specialty": "",
+        "doctor": "",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Amy Mathew Burton, MD",
+        "specialty": "",
+        "doctor": "Amy Mathew Burton, MD",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Endocrinology",
+        "specialty": "",
+        "doctor": "",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "brush365",
+        "specialty": "",
+        "doctor": "Dr Sara Mahmood",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Pediatric Endocrinology of North Texas",
+        "specialty": "",
+        "doctor": "",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Dr. Madhuri Gudipaty",
+        "specialty": "OB/GYN",
+        "doctor": "",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Gupta Orthodontics",
+        "specialty": "ortho",
+        "doctor": "Dr. Deepak Gupta",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Spine and pain clinic of texas",
+        "specialty": "Pain managment",
+        "doctor": "Dr. Arif",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Kalpana Thakur , M.D.",
+        "specialty": "",
+        "doctor": "Kalpana Thakur , M.D.",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Action Family Care",
+        "specialty": "",
+        "doctor": "",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Mir Ali, MD / MEDINA PRIMARY CARE",
+        "specialty": "",
+        "doctor": "Mir Ali, MD",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "MD.Jenny Tseng",
+        "specialty": "Gastroenterologist",
+        "doctor": "MD.Jenny Tseng",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Texas Rheumatology care",
+        "specialty": "",
+        "doctor": "Dr. Fehmda Zahabi",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "AIX Family Care",
+        "specialty": "",
+        "doctor": "",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Pediatrics",
+        "specialty": "",
+        "doctor": "",
+        "city": "Carrollton",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "MD Lisa R. Reznik",
+        "specialty": "",
+        "doctor": "MD Lisa R. Reznik",
+        "city": "Carrollton",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "George A.Nail MD",
+        "specialty": "",
+        "doctor": "George A.Nail MD",
+        "city": "Carrollton",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Castle Hills Pediatrics",
+        "specialty": "",
+        "doctor": "",
+        "city": "Carrollton",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Dr.Dandois DDS",
+        "specialty": "",
+        "doctor": "",
+        "city": "Carrollton",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "US clinics",
+        "specialty": "",
+        "doctor": "",
+        "city": "Carrollton",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Sure Cure",
+        "specialty": "",
+        "doctor": "",
+        "city": "Carrollton",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "BODYSCRIBE",
+        "specialty": "",
+        "doctor": "",
+        "city": "Carrollton",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Urban skin care dallas",
+        "specialty": "",
+        "doctor": "",
+        "city": "Carrollton",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "North Texas Perodontics and Implantology",
+        "specialty": "",
+        "doctor": "Dr. Leslie",
+        "city": "Carrollton",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Complete Heart Care",
+        "specialty": "PA",
+        "doctor": "Faizan Iftikhar MD, FACP, FACC, P.A",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Children's Choice Pediatrics",
+        "specialty": "",
+        "doctor": "",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Exult Healthcare",
+        "specialty": "MD",
+        "doctor": "Deepika Bhargava M.D.",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Dr Visalakshi Rao Vallury",
+        "specialty": "",
+        "doctor": "Dr Visalakshi Rao Vallury",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "McKinney Endodontics",
+        "specialty": "",
+        "doctor": "Dr. Paul D. Clark’s",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Holistic Health Center of Dallas",
+        "specialty": "MD",
+        "doctor": "",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Unity Wellness group",
+        "specialty": "",
+        "doctor": "Sumit Katyal, M.D.",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "CommonGood Medical",
+        "specialty": "MD",
+        "doctor": "Theresa Olfson, MD",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Craig Ranch OB/GYN",
+        "specialty": "MD",
+        "doctor": "Heather Derrick, MD",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Padda, Manmeet - Digestive Health Associates of Texas Pa",
+        "specialty": "",
+        "doctor": "Dr. Padda",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Banks, Tracey - Tracey Banks, MD",
+        "specialty": "",
+        "doctor": "Tracey Banks, MD",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Pediatric Heathcare Associates",
+        "specialty": "",
+        "doctor": "Elizabeth BonnetMD, FAAP",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "TX Primary care plus",
+        "specialty": "",
+        "doctor": "Dr. Madhav",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "premier family medicine",
+        "specialty": "",
+        "doctor": "",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Shepherd Chiropractice and famly wellness",
+        "specialty": "",
+        "doctor": "",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Dennis family wellness center",
+        "specialty": "",
+        "doctor": "",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Fehmida Zahabi",
+        "specialty": "",
+        "doctor": "",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Stonebriar Medical Associates",
+        "specialty": "PCP",
+        "doctor": "Bryan G. Johnson MD, P.A",
+        "city": "Frisco",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "Johnson Family Medicine",
+        "specialty": "PCP",
+        "doctor": "Katherine Johnson, MD",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Dr Philips Chen",
+        "specialty": "",
+        "doctor": "",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Christy Walker MD Gynecology",
+        "specialty": "MD",
+        "doctor": "Christy Walker MD",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "monkey mouth pediatric therapy",
+        "specialty": "",
+        "doctor": "",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Eastside children's clinic",
+        "specialty": "",
+        "doctor": "",
+        "city": "Allen",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Brookwood Family Practice",
+        "specialty": "",
+        "doctor": "",
+        "city": "Allen",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Family healthcare associates",
+        "specialty": "",
+        "doctor": "",
+        "city": "Allen",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Allen Wellness",
+        "specialty": "",
+        "doctor": "",
+        "city": "Allen",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Allen children clinic",
+        "specialty": "",
+        "doctor": "",
+        "city": "Allen",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Khan Salema Salience health",
+        "specialty": "",
+        "doctor": "MD Neelma Khan",
+        "city": "Allen",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Total health primary care",
+        "specialty": "",
+        "doctor": "",
+        "city": "Allen",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "MCKINNEY RANCH FAMILY DENTAL + KIDS",
+        "specialty": "Periodontist",
+        "doctor": "Dr. Hsia",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "ORTHODONIST",
+        "specialty": "",
+        "doctor": "DR. Victor Sigoda",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Best kids care",
+        "specialty": "",
+        "doctor": "Dr. Masoud Al masi",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Graff Foot Ankle & Wound CareMckinney",
+        "specialty": "",
+        "doctor": "",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Village Green Memory Care",
+        "specialty": "MD",
+        "doctor": "Dr.Nish Sabir",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Revive Primary Care",
+        "specialty": "APRN",
+        "doctor": "Keesha Copeland APRN, AGNP-C",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Blue Diamond Physical MedicineMckinney",
+        "specialty": "",
+        "doctor": "Dr.James W. Lundin, DC, FNP-C",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Ntx medcare and weightloss",
+        "specialty": "",
+        "doctor": "",
+        "city": "Allen",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Spring valley wellness center",
+        "specialty": "",
+        "doctor": "",
+        "city": "Allen",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "American Family Care",
+        "specialty": "",
+        "doctor": "",
+        "city": "Allen",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Southern Charm Pediatrics",
+        "specialty": "",
+        "doctor": "",
+        "city": "McKinney",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Narural choice peditatrics",
+        "specialty": "",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Healthy kids pediatrics",
+        "specialty": "",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Pediatrtics  associates of frisco",
+        "specialty": "",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Best nest pediatrics",
+        "specialty": "",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "ABC Pediatrics",
+        "specialty": "",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Trinity Pediatrics",
+        "specialty": "",
+        "doctor": "",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "bright kids pediatrics",
+        "specialty": "",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Children health prinary care centennial pediatrics",
+        "specialty": "",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "MC kids pediatrics",
+        "specialty": "",
+        "doctor": "",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Sunny Hill Min Jung",
+        "specialty": "",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Whole chlild texas",
+        "specialty": "",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Allen family first choice",
+        "specialty": "",
+        "doctor": "",
+        "city": "Allen",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Family care and wellness",
+        "specialty": "",
+        "doctor": "",
+        "city": "Allen",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Salveo family clinic",
+        "specialty": "",
+        "doctor": "",
+        "city": "Allen",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Fair health wellness center",
+        "specialty": "",
+        "doctor": "",
+        "city": "Allen",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Fast doc urgent care",
+        "specialty": "",
+        "doctor": "",
+        "city": "Allen",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "East side childrens clinic",
+        "specialty": "",
+        "doctor": "",
+        "city": "Allen",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "TLC pediatric",
+        "specialty": "",
+        "doctor": "",
+        "city": "Allen",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Angel Pediatritics",
+        "specialty": "",
+        "doctor": "",
+        "city": "Allen",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Southern Charm Pediatritics",
+        "specialty": "",
+        "doctor": "",
+        "city": "Allen",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Lone star",
+        "specialty": "",
+        "doctor": "",
+        "city": "Allen",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Allen friends and family clinic",
+        "specialty": "",
+        "doctor": "",
+        "city": "Allen",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Natural choice pediatrics",
+        "specialty": "",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Frisco Family Healthcare Clinic",
+        "specialty": "MD",
+        "doctor": "Dr. Oyetokunbo Lemoru, DNP, FNP-C",
+        "city": "Frisco",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "Texas health breeze Urgent care",
+        "specialty": "",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Frisco quick care",
+        "specialty": "",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "West Frisco Health and Wellness",
+        "specialty": "",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Alpha Health frisco primry care",
+        "specialty": "",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Prime Choice family clinic: urgent care",
+        "specialty": "",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Clinica Familiar ProHealth Studio",
+        "specialty": "",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Karin K bergman",
+        "specialty": "",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Advance med clinic of plano",
+        "specialty": "",
+        "doctor": "",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "City bridge urgent care",
+        "specialty": "",
+        "doctor": "",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Legacy internal medicine",
+        "specialty": "PCP",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "NcT Step",
+        "specialty": "",
+        "doctor": "",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Epiphany Dermatalogy",
+        "specialty": "",
+        "doctor": "",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Family medicine plus",
+        "specialty": "",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "plano",
+        "specialty": "",
+        "doctor": "",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Blue star imaging",
+        "specialty": "",
+        "doctor": "",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Thompson family and cosmetic dentistry",
+        "specialty": "",
+        "doctor": "",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Express health systems",
+        "specialty": "",
+        "doctor": "",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Next Gen",
+        "specialty": "",
+        "doctor": "",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Maple Primary care",
+        "specialty": "PCP",
+        "doctor": "",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Q day walk in clinic",
+        "specialty": "",
+        "doctor": "",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Driven  healthcare",
+        "specialty": "",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "RNV Podiatry",
+        "specialty": "",
+        "doctor": "",
+        "city": "Plano",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Smile Breeze Dentistry",
+        "specialty": "",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "StrlVeMD",
+        "specialty": "",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Dr. Shenbagavalli Palaniswamy, MD",
+        "specialty": "",
+        "doctor": "",
+        "city": "Carrollton",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Carrolton spring",
+        "specialty": "",
+        "doctor": "",
+        "city": "Carrollton",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "North Tex MedCare Clinic & Urgent Care Allen",
+        "specialty": "",
+        "doctor": "",
+        "city": "Allen",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "AFC Urgent Care Allen‑Fairview",
+        "specialty": "",
+        "doctor": "",
+        "city": "Allen",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Shepherd  family medicine and wellness",
+        "specialty": "",
+        "doctor": "",
+        "city": "Allen",
+        "marketingRep": "Duaa"
+      },
+      {
+        "name": "Texas Primary Care",
+        "specialty": "PCP",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "Pioneer Medical Associates",
+        "specialty": "PCP",
+        "doctor": "Dr. Pablani",
+        "city": "Frisco",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "Frisco Urgent Care and Clinics",
+        "specialty": "PCP",
+        "doctor": "Ekweani, MD",
+        "city": "Frisco",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "Metroplex Medical Centre",
+        "specialty": "MD",
+        "doctor": "Antonine Albert MD",
+        "city": "McKinney",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "Princeton Medical Associates",
+        "specialty": "",
+        "doctor": "",
+        "city": "McKinney",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "Fuentes Guillermo DO",
+        "specialty": "",
+        "doctor": "",
+        "city": "Carrollton",
+        "marketingRep": "sadia"
+      },
+      {
+        "name": "Alpha Primary Care",
+        "specialty": "",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "Premier  Medical",
+        "specialty": "",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "Careone",
+        "specialty": "",
+        "doctor": "",
+        "city": "Carrollton",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "Pediatrics Associates of Frisco",
+        "specialty": "",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "Clinica San Miguel",
+        "specialty": "",
+        "doctor": "",
+        "city": "Carrollton",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "Valliani Farida F MD",
+        "specialty": "",
+        "doctor": "",
+        "city": "Carrollton",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "Honey Philopse",
+        "specialty": "",
+        "doctor": "",
+        "city": "Carrollton",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "Care one Plus",
+        "specialty": "",
+        "doctor": "",
+        "city": "Carrollton",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "Medical Clinic /Dan Dinh",
+        "specialty": "",
+        "doctor": "",
+        "city": "Carrollton",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "Elite Digestive",
+        "specialty": "GI",
+        "doctor": "Laxmi Deepika",
+        "city": "Carrollton",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "Comprehensive Pain",
+        "specialty": "",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "Premier Independant",
+        "specialty": "",
+        "doctor": "",
+        "city": "McKinney",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "Elite",
+        "specialty": "",
+        "doctor": "",
+        "city": "Carrollton",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "Texas Ortho",
+        "specialty": "",
+        "doctor": "",
+        "city": "Carrollton",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "Sandy Maccoy",
+        "specialty": "",
+        "doctor": "",
+        "city": "Plano",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "Pure Health",
+        "specialty": "",
+        "doctor": "",
+        "city": "McKinney",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "Plano clinic Supreme",
+        "specialty": "",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "Sarkar",
+        "specialty": "",
+        "doctor": "",
+        "city": "Carrollton",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "Dr. Parmar",
+        "specialty": "",
+        "doctor": "",
+        "city": "Carrollton",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "Dr fuentis",
+        "specialty": "",
+        "doctor": "",
+        "city": "Carrollton",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "Care one",
+        "specialty": "",
+        "doctor": "",
+        "city": "Carrollton",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "Josey",
+        "specialty": "",
+        "doctor": "",
+        "city": "Carrollton",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "Hardeep rai",
+        "specialty": "",
+        "doctor": "",
+        "city": "Carrollton",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "Willows Womens Health",
+        "specialty": "",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "Imanuel",
+        "specialty": "",
+        "doctor": "",
+        "city": "Carrollton",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "Carrollton Family Physicians (James Lee)",
+        "specialty": "",
+        "doctor": "",
+        "city": "Carrollton",
+        "marketingRep": "zuhaab and amna"
+      },
+      {
+        "name": "Texas Health Digestive specialists",
+        "specialty": "",
+        "doctor": "",
+        "city": "Carrollton",
+        "marketingRep": "zuhaab and amna"
+      },
+      {
+        "name": "Texas Digestive Disease Consultants",
+        "specialty": "",
+        "doctor": "",
+        "city": "Carrollton",
+        "marketingRep": "zuhaab and amna"
+      },
+      {
+        "name": "Primary Care",
+        "specialty": "",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": "zuhaab and amna"
+      },
+      {
+        "name": "Frisco Quickcare",
+        "specialty": "PCP",
+        "doctor": "Gowani",
+        "city": "Frisco",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "Evolve",
+        "specialty": "PCP",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "Omni",
+        "specialty": "PCP",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "Boomfield",
+        "specialty": "PCP",
+        "doctor": "Nafeesa",
+        "city": "Frisco",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "Emanuel",
+        "specialty": "",
+        "doctor": "",
+        "city": "Carrollton",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "Align primary care",
+        "specialty": "",
+        "doctor": "",
+        "city": "Carrollton",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "Orchid Wellness",
+        "specialty": "NP",
+        "doctor": "Chelsea",
+        "city": "Carrollton",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "Radiant Heart & Vascular",
+        "specialty": "Cardiologist",
+        "doctor": "",
+        "city": "Lewisville",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "Care Choice",
+        "specialty": "",
+        "doctor": "",
+        "city": "McKinney",
+        "marketingRep": "zuhaab and amna"
+      },
+      {
+        "name": "Stonebrook Medical Associates",
+        "specialty": "PCP",
+        "doctor": "Mona Chacko, MD",
+        "city": "Frisco",
+        "marketingRep": "zuhaab and amna"
+      },
+      {
+        "name": "Highland Medical and primary",
+        "specialty": "PCP",
+        "doctor": "Van Tran MD",
+        "city": "McKinney",
+        "marketingRep": "zuhaab and amna"
+      },
+      {
+        "name": "Dr. Kyle K. Carter MD",
+        "specialty": "MD",
+        "doctor": "Dr. Kyle Carter MD",
+        "city": "McKinney",
+        "marketingRep": "zuhaab and amna"
+      },
+      {
+        "name": "Dr. Hong Xiao MD",
+        "specialty": "MD",
+        "doctor": "Dr. Hong Xiao MD",
+        "city": "Frisco",
+        "marketingRep": ""
+      },
+      {
+        "name": "MD Kids Pediactrics",
+        "specialty": "MD",
+        "doctor": "Hung Truong MD",
+        "city": "Frisco",
+        "marketingRep": ""
+      },
+      {
+        "name": "Care Express Clinic",
+        "specialty": "MD",
+        "doctor": "Muhammad Ali Siddiqui , MD",
+        "city": "Frisco",
+        "marketingRep": ""
+      },
+      {
+        "name": "Nutricional Blessing",
+        "specialty": "",
+        "doctor": "",
+        "city": "McKinney",
+        "marketingRep": ""
+      },
+      {
+        "name": "Children choice red",
+        "specialty": "MD",
+        "doctor": "Neha Heider MD",
+        "city": "McKinney",
+        "marketingRep": ""
+      },
+      {
+        "name": "TX Institute of Cardiology",
+        "specialty": "MD",
+        "doctor": "Faisail Wahid MD",
+        "city": "McKinney",
+        "marketingRep": ""
+      },
+      {
+        "name": "Tx Health Internal Med",
+        "specialty": "",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": ""
+      },
+      {
+        "name": "Cierras Heath Primary care",
+        "specialty": "PCP",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": ""
+      },
+      {
+        "name": "Gray branch Pediatrics",
+        "specialty": "PCP",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": ""
+      },
+      {
+        "name": "Cynder Hopkins Family Medicine",
+        "specialty": "",
+        "doctor": "",
+        "city": "McKinney",
+        "marketingRep": ""
+      },
+      {
+        "name": "Carrolton family physicians",
+        "specialty": "",
+        "doctor": "",
+        "city": "Carrollton",
+        "marketingRep": ""
+      },
+      {
+        "name": "Carrolton pediatrics",
+        "specialty": "PCP",
+        "doctor": "",
+        "city": "Carrollton",
+        "marketingRep": ""
+      },
+      {
+        "name": "Fareway family medicine",
+        "specialty": "",
+        "doctor": "",
+        "city": "Carrollton",
+        "marketingRep": ""
+      },
+      {
+        "name": "Woman Health",
+        "specialty": "",
+        "doctor": "",
+        "city": "Carrollton",
+        "marketingRep": ""
+      },
+      {
+        "name": "Adnan Nadar MD",
+        "specialty": "",
+        "doctor": "",
+        "city": "Carrollton",
+        "marketingRep": ""
+      },
+      {
+        "name": "Lisa R. Reznik",
+        "specialty": "",
+        "doctor": "",
+        "city": "Carrollton",
+        "marketingRep": ""
+      },
+      {
+        "name": "Dr.Lewis montanaro",
+        "specialty": "",
+        "doctor": "",
+        "city": "Carrollton",
+        "marketingRep": ""
+      },
+      {
+        "name": "Trinity N. Dallas Neurology",
+        "specialty": "",
+        "doctor": "",
+        "city": "Carrollton",
+        "marketingRep": ""
+      },
+      {
+        "name": "Core Vescular services",
+        "specialty": "",
+        "doctor": "",
+        "city": "Carrollton",
+        "marketingRep": ""
+      },
+      {
+        "name": "Little lantern services",
+        "specialty": "",
+        "doctor": "",
+        "city": "Carrollton",
+        "marketingRep": ""
+      },
+      {
+        "name": "Saint Marys Family clinic",
+        "specialty": "",
+        "doctor": "",
+        "city": "Carrollton",
+        "marketingRep": ""
+      },
+      {
+        "name": "Jose Burbano De la Lara",
+        "specialty": "MD",
+        "doctor": "",
+        "city": "Carrollton",
+        "marketingRep": ""
+      },
+      {
+        "name": "Dr.Harveer S. Pamar",
+        "specialty": "MD",
+        "doctor": "",
+        "city": "Carrollton",
+        "marketingRep": ""
+      },
+      {
+        "name": "Carrolton First care Medical",
+        "specialty": "MD",
+        "doctor": "",
+        "city": "Carrollton",
+        "marketingRep": ""
+      },
+      {
+        "name": "Carrolton Primary care",
+        "specialty": "PCP",
+        "doctor": "",
+        "city": "Carrollton",
+        "marketingRep": ""
+      },
+      {
+        "name": "Essencia Family practice & Immidiate center",
+        "specialty": "PCP",
+        "doctor": "",
+        "city": "Carrollton",
+        "marketingRep": ""
+      },
+      {
+        "name": "NTX",
+        "specialty": "",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "Ideal Primary Care",
+        "specialty": "",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "Liberty",
+        "specialty": "",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "Quick Urgent care",
+        "specialty": "",
+        "doctor": "",
+        "city": "Plano",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "Daffodils Mckinney",
+        "specialty": "",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "Pro Med",
+        "specialty": "",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "Frisco Urgent care Clinics",
+        "specialty": "",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "DHAT",
+        "specialty": "",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "Internal Medicine Asociates",
+        "specialty": "MD",
+        "doctor": "Kawand",
+        "city": "Frisco",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "Garduno Family Medical Clinic",
+        "specialty": "",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "CPC Frisco",
+        "specialty": "",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "Hillcrest",
+        "specialty": "MD",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "Advanced Primary Care",
+        "specialty": "",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "Legacy Internal",
+        "specialty": "",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "Kids urgent Care",
+        "specialty": "",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "Dr Alang",
+        "specialty": "",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "Complete Family Medicine",
+        "specialty": "",
+        "doctor": "",
+        "city": "Carrollton",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "Greenhill Family Physician",
+        "specialty": "MD",
+        "doctor": "Mike M. Lee MD",
+        "city": "Plano",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "Passion Health primary care",
+        "specialty": "MD",
+        "doctor": "Aruna",
+        "city": "Frisco",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "DELC Medical care",
+        "specialty": "MD",
+        "doctor": "Lynda E. Mbah MD",
+        "city": "Frisco",
+        "marketingRep": "Sadia"
+      },
+      {
+        "name": "Premerier Independant Physicians",
+        "specialty": "MD",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": ""
+      },
+      {
+        "name": "Care One Medical Clinic",
+        "specialty": "MD",
+        "doctor": "Sheeba Mathai",
+        "city": "Frisco",
+        "marketingRep": ""
+      },
+      {
+        "name": "BloomMField Medical",
+        "specialty": "MD",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": ""
+      },
+      {
+        "name": "Pro Med Health Primary Care",
+        "specialty": "MD",
+        "doctor": "Dr.Kavitha llayaraja",
+        "city": "Frisco",
+        "marketingRep": ""
+      },
+      {
+        "name": "Sunshine Pediatrics",
+        "specialty": "MD",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": ""
+      },
+      {
+        "name": "Specialty Clinics",
+        "specialty": "MD",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": ""
+      },
+      {
+        "name": "Banks Tracey A. MD",
+        "specialty": "MD",
+        "doctor": "Senia Bendt CPC, COBGC",
+        "city": "McKinney",
+        "marketingRep": ""
+      },
+      {
+        "name": "Allen OB/GYN",
+        "specialty": "MD",
+        "doctor": "Sreedhar Tallapureddy MD",
+        "city": "McKinney",
+        "marketingRep": ""
+      },
+      {
+        "name": "North Central Womans Health",
+        "specialty": "MD",
+        "doctor": "",
+        "city": "McKinney",
+        "marketingRep": ""
+      },
+      {
+        "name": "Peak Fertility",
+        "specialty": "MD",
+        "doctor": "Amber Klimczak MD",
+        "city": "McKinney",
+        "marketingRep": ""
+      },
+      {
+        "name": "North Dallas Urology",
+        "specialty": "MD",
+        "doctor": "Alexander Martin MD",
+        "city": "McKinney",
+        "marketingRep": ""
+      },
+      {
+        "name": "Julia Minigutti PA-C",
+        "specialty": "PA",
+        "doctor": "Julia Minigutti PA -C",
+        "city": "McKinney",
+        "marketingRep": ""
+      },
+      {
+        "name": "El Shddai Family clinic",
+        "specialty": "MD",
+        "doctor": "Beena Paul FNP-C",
+        "city": "McKinney",
+        "marketingRep": ""
+      },
+      {
+        "name": "Texas Health Care Neck and back",
+        "specialty": "MD",
+        "doctor": "Dr.Douglas Lester",
+        "city": "McKinney",
+        "marketingRep": ""
+      },
+      {
+        "name": "AIRROSTI",
+        "specialty": "DC",
+        "doctor": "Dr. Keith Maraffa",
+        "city": "McKinney",
+        "marketingRep": ""
+      },
+      {
+        "name": "The Adley Craig Racnh",
+        "specialty": "APTS.",
+        "doctor": "______none",
+        "city": "McKinney",
+        "marketingRep": ""
+      },
+      {
+        "name": "Pure Medicine",
+        "specialty": "MD",
+        "doctor": "Jordan Pastorek , MD",
+        "city": "Frisco",
+        "marketingRep": ""
+      },
+      {
+        "name": "Daffodil Primary Care",
+        "specialty": "",
+        "doctor": "",
+        "city": "Plano",
+        "marketingRep": ""
+      },
+      {
+        "name": "Pediactrics R US",
+        "specialty": "",
+        "doctor": "",
+        "city": "Plano",
+        "marketingRep": ""
+      },
+      {
+        "name": "Monkey Mouths Pediactric therapy",
+        "specialty": "",
+        "doctor": "",
+        "city": "Plano",
+        "marketingRep": ""
+      },
+      {
+        "name": "Behavioral Invations",
+        "specialty": "",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": ""
+      },
+      {
+        "name": "Frisco Hand Center",
+        "specialty": "MD",
+        "doctor": "DinanRahhal MD",
+        "city": "Frisco",
+        "marketingRep": ""
+      },
+      {
+        "name": "Alpha Orthopedics and sports",
+        "specialty": "MD",
+        "doctor": "Brian Snow , MD",
+        "city": "McKinney",
+        "marketingRep": ""
+      },
+      {
+        "name": "Next Step Orthopedics",
+        "specialty": "MD",
+        "doctor": "Dominique Nickson , MD",
+        "city": "McKinney",
+        "marketingRep": ""
+      },
+      {
+        "name": "Digestive Health Associates",
+        "specialty": "MD",
+        "doctor": "Sanjay Nayyar, MD",
+        "city": "McKinney",
+        "marketingRep": ""
+      },
+      {
+        "name": "GRAFF Foot-Ankle Wound Care",
+        "specialty": "DPM",
+        "doctor": "Evan Kyprios DPM, AACFAS, CWSP",
+        "city": "McKinney",
+        "marketingRep": ""
+      },
+      {
+        "name": "Texas Allergy MD",
+        "specialty": "MD",
+        "doctor": "Nana Mireku MD , FACAAI , FAAAAI",
+        "city": "McKinney",
+        "marketingRep": ""
+      },
+      {
+        "name": "Unity Wellness Clinic and Rehab",
+        "specialty": "MD",
+        "doctor": "",
+        "city": "McKinney",
+        "marketingRep": ""
+      },
+      {
+        "name": "Blue Diamond Physical Medicine",
+        "specialty": "MD",
+        "doctor": "Dr.James W. Lundin, DC, FNP-C",
+        "city": "McKinney",
+        "marketingRep": ""
+      },
+      {
+        "name": "Visalakshi Rao Vallury",
+        "specialty": "MD",
+        "doctor": "",
+        "city": "McKinney",
+        "marketingRep": ""
+      },
+      {
+        "name": "Texas Health Digestive Specialist",
+        "specialty": "MD",
+        "doctor": "Syed Hasan , MD",
+        "city": "Carrollton",
+        "marketingRep": ""
+      },
+      {
+        "name": "Elite Digestive Specialists",
+        "specialty": "MD",
+        "doctor": "L.Deepika Koya, MD",
+        "city": "Lewisville",
+        "marketingRep": ""
+      },
+      {
+        "name": "Lonestar Gastroenterology PA",
+        "specialty": "MD",
+        "doctor": "Gowri Balachandar, M.D",
+        "city": "Plano",
+        "marketingRep": ""
+      },
+      {
+        "name": "Summit Primary Care and Internal Medicine",
+        "specialty": "MD",
+        "doctor": "Arunpriya Vadivelu MD",
+        "city": "Lewisville",
+        "marketingRep": ""
+      },
+      {
+        "name": "Synapse Psychotherapy , LLC",
+        "specialty": "LCSW",
+        "doctor": "Joseph Dustin Cobb, LCSW",
+        "city": "McKinney",
+        "marketingRep": ""
+      },
+      {
+        "name": "Cesar Reyes MD",
+        "specialty": "MD",
+        "doctor": "Cesar Reyes , MD",
+        "city": "McKinney",
+        "marketingRep": ""
+      },
+      {
+        "name": "Mckinney Footcare",
+        "specialty": "DPM",
+        "doctor": "Nehla Modha , DPM , AACFAS",
+        "city": "McKinney",
+        "marketingRep": ""
+      },
+      {
+        "name": "DHAT Mckinney",
+        "specialty": "MD",
+        "doctor": "Ravi S. Chittajallu, MD",
+        "city": "McKinney",
+        "marketingRep": ""
+      },
+      {
+        "name": "Brian Joe , MD Neurology",
+        "specialty": "MD",
+        "doctor": "Brian Joe, MD",
+        "city": "McKinney",
+        "marketingRep": ""
+      },
+      {
+        "name": "Ashna Adams D.O",
+        "specialty": "D.O",
+        "doctor": "Asha Adams , D.O",
+        "city": "McKinney",
+        "marketingRep": ""
+      },
+      {
+        "name": "Anu Baweja , M.D.",
+        "specialty": "MD",
+        "doctor": "Anu Baweja M.D",
+        "city": "Frisco",
+        "marketingRep": ""
+      },
+      {
+        "name": "Sunsil Thummala",
+        "specialty": "MD",
+        "doctor": "Sunil Thummala , MD",
+        "city": "Frisco",
+        "marketingRep": ""
+      },
+      {
+        "name": "Family Medicine",
+        "specialty": "MD",
+        "doctor": "Karin K. Bergman",
+        "city": "Plano",
+        "marketingRep": ""
+      },
+      {
+        "name": "Plano Neurology",
+        "specialty": "MD",
+        "doctor": "Geeta Rajan, M.D",
+        "city": "Plano",
+        "marketingRep": ""
+      },
+      {
+        "name": "North Texas Institute of Neurology",
+        "specialty": "MD",
+        "doctor": "Karen Bontia , MD",
+        "city": "Plano",
+        "marketingRep": ""
+      },
+      {
+        "name": "Medical Aesthetics of North Texas",
+        "specialty": "MD",
+        "doctor": "Dennis Eisenburg Gynecology",
+        "city": "Plano",
+        "marketingRep": ""
+      },
+      {
+        "name": "Southern Endocrynology",
+        "specialty": "MD",
+        "doctor": "Sumana Gangi, M, FACE",
+        "city": "Plano",
+        "marketingRep": ""
+      },
+      {
+        "name": "Womans Health Specialist",
+        "specialty": "FNP-C",
+        "doctor": "Dominique Copeland , APRN, FNP-C",
+        "city": "Plano",
+        "marketingRep": ""
+      },
+      {
+        "name": "Neurology and sleep clinic",
+        "specialty": "MD",
+        "doctor": "Alpa Shah, MD",
+        "city": "Carrollton",
+        "marketingRep": ""
+      },
+      {
+        "name": "Advance Nerve andHealth Neuro",
+        "specialty": "MD",
+        "doctor": "",
+        "city": "Carrollton",
+        "marketingRep": ""
+      },
+      {
+        "name": "Delc Medical Center",
+        "specialty": "",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": ""
+      },
+      {
+        "name": "Med Pro Family Clinic",
+        "specialty": "",
+        "doctor": "",
+        "city": "Carrollton",
+        "marketingRep": ""
+      },
+      {
+        "name": "Dr. Vijay Katari",
+        "specialty": "",
+        "doctor": "",
+        "city": "Frisco",
+        "marketingRep": ""
+      }
+    ]
+  },
+  "mva": {
+    "total": 50,
+    "withAddress": 47,
+    "missing": 3,
+    "missingList": [
+      {
+        "firm": "Herrera Law",
+        "attorney": "TBD",
+        "city": "Carrollton",
+        "phone": "TBD",
+        "website": "",
+        "id": "mva4"
+      },
+      {
+        "firm": "Zapata Law",
+        "attorney": "TBD",
+        "city": "Carrollton",
+        "phone": "TBD",
+        "website": "",
+        "id": "mva5"
+      },
+      {
+        "firm": "McMinn Law Firm",
+        "attorney": "TBD",
+        "city": "Dallas",
+        "phone": "TBD",
+        "website": "TBD",
+        "id": "mva36"
+      }
+    ]
+  }
+}

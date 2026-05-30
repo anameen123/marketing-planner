@@ -1,0 +1,26 @@
+{
+  "found": [],
+  "notFound": [
+    {
+      "type": "mva",
+      "firm": "Herrera Law",
+      "city": "Carrollton",
+      "id": "mva4",
+      "reason": "The only well-known 'Herrera Law Firm' is in San Antonio (1800 W Commerce St, San Antonio, TX 78207). No Carrollton office found."
+    },
+    {
+      "type": "mva",
+      "firm": "Zapata Law",
+      "city": "Carrollton",
+      "id": "mva5",
+      "reason": "Multiple TX attorneys named Zapata exist (Raymon Zapata at Zapata & Kale LLP; Deborah Andrea Zapata listed as Carrollton TX in bar but with Nashville address); no firm called 'Zapata Law' with a Carrollton office confirmed."
+    },
+    {
+      "type": "mva",
+      "firm": "McMinn Law Firm",
+      "city": "Dallas",
+      "id": "mva36",
+      "reason": "McMinn Personal Injury Lawyers has offices only in Austin TX (502 W 14th St, Austin TX 78701) and Salt Lake City UT. No Dallas office."
+    }
+  ]
+}

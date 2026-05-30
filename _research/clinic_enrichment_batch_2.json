@@ -1,0 +1,405 @@
+{
+  "_meta": {
+    "batchId": 2,
+    "label": "Frisco-B",
+    "createdAt": "2026-05-18",
+    "found": 47,
+    "notFound": 3,
+    "total": 56
+  },
+  "enrichments": {
+    "Modern Podiatry": {
+      "phone": "972-645-7654",
+      "fax": "",
+      "website": "https://www.modpodiatry.com",
+      "physician": "Woojung Lee, DPM",
+      "address": "255 Lebanon Rd Ste 202, Frisco, TX 75036",
+      "researchedAt": "2026-05-18"
+    },
+    "brush365": {
+      "phone": "469-250-2020",
+      "fax": "",
+      "website": "https://brush365dental.com",
+      "physician": "Sara Mahmood, DDS, MS",
+      "address": "14725 Lebanon Rd #200, Frisco, TX 75035",
+      "researchedAt": "2026-05-18"
+    },
+    "Stonebriar Medical Associates": {
+      "phone": "469-633-9300",
+      "fax": "",
+      "website": "https://www.stonebriarmedical.com",
+      "physician": "Bryan G. Johnson, MD",
+      "address": "6842 Main St Suite 203, Frisco, TX 75033",
+      "researchedAt": "2026-05-18"
+    },
+    "Johnson Family Medicine": {
+      "phone": "469-656-4602",
+      "fax": "",
+      "website": "https://johnsonfamilymedical.com",
+      "physician": "Katherine Johnson, NP",
+      "address": "12530 Lebanon Rd Ste 202, Frisco, TX 75035",
+      "researchedAt": "2026-05-18"
+    },
+    "Narural choice peditatrics": {
+      "phone": "972-324-3480",
+      "fax": "877-637-1611",
+      "website": "https://www.naturalchoicepediatrics.com",
+      "physician": "Christie Potter",
+      "address": "3535 Victory Group Way Suite 305, Frisco, TX 75034",
+      "researchedAt": "2026-05-18"
+    },
+    "Healthy kids pediatrics": {
+      "phone": "972-294-0808",
+      "fax": "972-294-0809",
+      "website": "https://www.healthykidspediatrics.com",
+      "physician": "Deborah Z. Bain, MD",
+      "address": "5680 Frisco Square Blvd Ste 2300, Frisco, TX 75034",
+      "researchedAt": "2026-05-18"
+    },
+    "Pediatrtics  associates of frisco": {
+      "phone": "972-324-3366",
+      "fax": "972-324-3360",
+      "website": "https://www.pediatricsfrisco.com",
+      "physician": "",
+      "address": "9191 Kyser Way Suite 500, Frisco, TX 75033",
+      "researchedAt": "2026-05-18"
+    },
+    "Best nest pediatrics": {
+      "phone": "972-668-6705",
+      "fax": "972-668-7308",
+      "website": "https://www.bestnestpediatrics.com",
+      "physician": "",
+      "address": "4040 Legacy Dr #201, Frisco, TX 75034",
+      "researchedAt": "2026-05-18"
+    },
+    "Stonebriar pediatrics": {
+      "phone": "972-668-7110",
+      "fax": "",
+      "website": "https://stonebriarpediatrics.com",
+      "physician": "",
+      "address": "2840 Legacy Drive Suite 210, Frisco, TX 75034",
+      "researchedAt": "2026-05-18"
+    },
+    "bright kids pediatrics": {
+      "phone": "",
+      "fax": "",
+      "website": "https://brightkidspeds.com",
+      "physician": "Afsheen Abid, MD",
+      "address": "1400 N Coit Rd Ste 2101, McKinney, TX",
+      "researchedAt": "2026-05-18"
+    },
+    "healing care pediatrics": {
+      "phone": "972-200-7862",
+      "fax": "972-200-7949",
+      "website": "https://healingcarepedstx.com",
+      "physician": "Khanum Saleha, MD",
+      "address": "12530 Lebanon Road Suite 203, Frisco, TX 75035",
+      "researchedAt": "2026-05-18"
+    },
+    "Children health prinary care centennial pediatrics": {
+      "phone": "214-389-8801",
+      "fax": "",
+      "website": "https://centennialpediatrics.net",
+      "physician": "",
+      "address": "5560 Independence Parkway, Frisco, TX 75035",
+      "researchedAt": "2026-05-18"
+    },
+    "Sunny Hill Min Jung": {
+      "phone": "469-530-9860",
+      "fax": "",
+      "website": "https://www.sunnyhillpediatrics.com",
+      "physician": "Min Jung, MD",
+      "address": "4500 Hillcrest Rd #140, Frisco, TX 75035",
+      "researchedAt": "2026-05-18"
+    },
+    "Whole chlild texas": {
+      "phone": "214-736-1954",
+      "fax": "972-268-9424",
+      "website": "https://www.wholechildtexas.com",
+      "physician": "Alina Olteanu, MD, PhD",
+      "address": "3550 Parkwood Blvd Ste B100, Frisco, TX 75034",
+      "researchedAt": "2026-05-18"
+    },
+    "Natural choice pediatrics": {
+      "phone": "972-324-3480",
+      "fax": "877-637-1611",
+      "website": "https://www.naturalchoicepediatrics.com",
+      "physician": "Christie Potter",
+      "address": "3535 Victory Group Way Suite 305, Frisco, TX 75034",
+      "researchedAt": "2026-05-18"
+    },
+    "Frisco Family Healthcare Clinic": {
+      "phone": "214-872-1232",
+      "fax": "",
+      "website": "https://www.friscofamilyhealthcare.com",
+      "physician": "Oyetokunbo Lemoru, APRN FNP-C",
+      "address": "9555 Lebanon Rd #1003, Frisco, TX 75035",
+      "researchedAt": "2026-05-18"
+    },
+    "Texas health breeze Urgent care": {
+      "phone": "469-495-9118",
+      "fax": "",
+      "website": "https://breezeurgentcare.texashealth.org",
+      "physician": "",
+      "address": "2855 Preston Rd, Frisco, TX 75034",
+      "researchedAt": "2026-05-18"
+    },
+    "Frisco quick care": {
+      "phone": "469-972-7860",
+      "fax": "",
+      "website": "https://quickcareclinics.org",
+      "physician": "",
+      "address": "8845 Gary Burns Dr Ste 180, Frisco, TX 75034",
+      "researchedAt": "2026-05-18"
+    },
+    "West Frisco Health and Wellness": {
+      "phone": "972-464-2510",
+      "fax": "",
+      "website": "https://westfrisco.com",
+      "physician": "Lisa Morkos",
+      "address": "4280 Main St Ste 200, Frisco, TX 75033",
+      "researchedAt": "2026-05-18"
+    },
+    "Alpha Health frisco primry care": {
+      "phone": "469-405-0500",
+      "fax": "",
+      "website": "https://www.ahealthmd.com",
+      "physician": "",
+      "address": "255 W Lebanon Rd Ste 116, Frisco, TX 75036",
+      "researchedAt": "2026-05-18"
+    },
+    "Prime Choice family clinic: urgent care": {
+      "phone": "214-550-0911",
+      "fax": "",
+      "website": "https://www.primechoiceuc.com",
+      "physician": "Sharad Swami",
+      "address": "12828 Eldorado Pkwy Ste 170, Frisco, TX 75035",
+      "researchedAt": "2026-05-18"
+    },
+    "Clinica Familiar ProHealth Studio": {
+      "phone": "469-473-4120",
+      "fax": "",
+      "website": "https://prohealthstudio.com",
+      "physician": "",
+      "address": "4645 Wyndham Lane Ste 230, Frisco, TX 75033",
+      "researchedAt": "2026-05-18"
+    },
+    "Karin K bergman": {
+      "phone": "214-494-6200",
+      "fax": "",
+      "website": "http://www.karinbergman.com",
+      "physician": "Karin K. Bergman, MD",
+      "address": "5150 Warren Pkwy Bldg 7 Ste 705B, Frisco, TX 75034",
+      "researchedAt": "2026-05-18"
+    },
+    "Family medicine plus": {
+      "phone": "214-396-9191",
+      "fax": "",
+      "website": "https://familymedicineplus.com",
+      "physician": "",
+      "address": "11330 Legacy Dr, Frisco, TX 75033",
+      "researchedAt": "2026-05-18"
+    },
+    "Driven  healthcare": {
+      "phone": "469-902-9205",
+      "fax": "",
+      "website": "https://drivenhealthcare.com",
+      "physician": "",
+      "address": "2772 Stonebrook Parkway Suite 100, Frisco, TX 75034",
+      "researchedAt": "2026-05-18"
+    },
+    "Smile Breeze Dentistry": {
+      "phone": "972-464-1124",
+      "fax": "",
+      "website": "https://www.smilebreezedentistry.com",
+      "physician": "",
+      "address": "5285 Independence Parkway Suite 200, Frisco, TX 75035",
+      "researchedAt": "2026-05-18"
+    },
+    "StrlVeMD": {
+      "phone": "469-656-4999",
+      "fax": "",
+      "website": "https://www.strivemdwellness.com",
+      "physician": "",
+      "address": "7044 Lebanon Road Suite 102, Frisco, TX 75034",
+      "researchedAt": "2026-05-18"
+    },
+    "Legacy internal medicine": {
+      "phone": "469-731-4200",
+      "fax": "",
+      "website": "https://www.legacyintmed.com",
+      "physician": "Urooj Mansoor, MD",
+      "address": "11330 Legacy Dr #204, Frisco, TX 75033",
+      "researchedAt": "2026-05-18"
+    },
+    "Internal Medicine Associates": {
+      "phone": "469-898-8869",
+      "fax": "",
+      "website": "https://westfriscointernist.com",
+      "physician": "",
+      "address": "255 Lebanon Rd #208, Frisco, TX 75036",
+      "researchedAt": "2026-05-18"
+    },
+    "Texas Primary Care": {
+      "phone": "972-643-8727",
+      "fax": "",
+      "website": "https://www.txprimary.com",
+      "physician": "",
+      "address": "9191 Kyser Way Ste 205, Frisco, TX 75033",
+      "researchedAt": "2026-05-18"
+    },
+    "Pioneer Medical Associates": {
+      "phone": "469-888-4890",
+      "fax": "",
+      "website": "https://pioneer.clinic",
+      "physician": "Lata Pablani, MD",
+      "address": "14111 King Rd Suite 320, Frisco, TX 75036",
+      "researchedAt": "2026-05-18"
+    },
+    "Frisco Urgent Care and Clinics": {
+      "phone": "972-668-3990",
+      "fax": "972-668-3991",
+      "website": "https://www.friscoucc.com",
+      "physician": "Obiora M. Ekweani, MD",
+      "address": "3220 Parkwood Blvd, Frisco, TX 75034",
+      "researchedAt": "2026-05-18"
+    },
+    "Metroplex Medical Centre": {
+      "phone": "469-238-0205",
+      "fax": "",
+      "website": "https://metroplexmedicalcentres.com",
+      "physician": "Ralph Cox",
+      "address": "10050 Legacy Dr Ste 400, Frisco, TX 75034",
+      "researchedAt": "2026-05-18"
+    },
+    "Alpha Primary Care": {
+      "phone": "972-591-1900",
+      "fax": "",
+      "website": "https://www.ahealthmd.com",
+      "physician": "",
+      "address": "9191 Kyser Way, Frisco, TX 75033",
+      "researchedAt": "2026-05-18"
+    },
+    "Premier  Medical": {
+      "phone": "214-436-8000",
+      "fax": "",
+      "website": "https://premierhsllc.com",
+      "physician": "",
+      "address": "2601 Network Blvd Suite 500, Frisco, TX 75034",
+      "researchedAt": "2026-05-18"
+    },
+    "Careone": {
+      "phone": "214-387-1888",
+      "fax": "",
+      "website": "https://careonemedicalclinic.com",
+      "physician": "",
+      "address": "400 Stonebrook Parkway Suite 201, Frisco, TX 75036",
+      "researchedAt": "2026-05-18"
+    },
+    "Pediatrics Associates of Frisco": {
+      "phone": "972-324-3366",
+      "fax": "972-324-3360",
+      "website": "https://www.pediatricsfrisco.com",
+      "physician": "Sree, MD",
+      "address": "9191 Kyser Way Suite 500, Frisco, TX 75033",
+      "researchedAt": "2026-05-18"
+    },
+    "Comprehensive Pain": {
+      "phone": "469-559-5880",
+      "fax": "",
+      "website": "https://ntxsynergypain.com",
+      "physician": "",
+      "address": "Frisco, TX",
+      "researchedAt": "2026-05-18"
+    },
+    "NTX Medical Clinic": {
+      "phone": "972-295-9000",
+      "fax": "972-634-0350",
+      "website": "https://www.ntxmedical.com",
+      "physician": "",
+      "address": "5520 Independence Pkwy Ste 201, Frisco, TX 75035",
+      "researchedAt": "2026-05-18"
+    },
+    "Care one": {
+      "phone": "214-387-1888",
+      "fax": "",
+      "website": "https://careonemedicalclinic.com",
+      "physician": "",
+      "address": "400 Stonebrook Parkway Suite 201, Frisco, TX 75036",
+      "researchedAt": "2026-05-18"
+    },
+    "Willows Womens Health": {
+      "phone": "469-476-5623",
+      "fax": "",
+      "website": "https://www.wwhfrisco.com",
+      "physician": "",
+      "address": "2840 Legacy Dr Ste 400, Frisco, TX 75034",
+      "researchedAt": "2026-05-18"
+    },
+    "Greenhill Family Physicians": {
+      "phone": "214-872-2688",
+      "fax": "",
+      "website": "",
+      "physician": "Mike Lee, MD",
+      "address": "5575 Warren Pkwy Ste 106, Frisco, TX 75034",
+      "researchedAt": "2026-05-18"
+    },
+    "Primary Care": {
+      "phone": "972-731-7717",
+      "fax": "972-731-7733",
+      "website": "https://friscoprimarycare.com",
+      "physician": "",
+      "address": "4525 Ohio Dr #100, Frisco, TX 75035",
+      "researchedAt": "2026-05-18"
+    },
+    "West Fisco Health & Wellness": {
+      "phone": "972-464-2510",
+      "fax": "",
+      "website": "https://westfrisco.com",
+      "physician": "Lisa Morkos",
+      "address": "4280 Main St Ste 200, Frisco, TX 75033",
+      "researchedAt": "2026-05-18"
+    },
+    "Frisco Quickcare": {
+      "phone": "469-972-7860",
+      "fax": "",
+      "website": "https://quickcareclinics.org",
+      "physician": "Gowani",
+      "address": "8845 Gary Burns Dr Ste 180, Frisco, TX 75034",
+      "researchedAt": "2026-05-18"
+    },
+    "Care Now": {
+      "phone": "972-335-0030",
+      "fax": "",
+      "website": "https://www.carenow.com",
+      "physician": "",
+      "address": "301 Main St, Frisco, TX 75034",
+      "researchedAt": "2026-05-18"
+    },
+    "Evolve": {
+      "phone": "972-782-2588",
+      "fax": "",
+      "website": "https://evolvehealthtx.com",
+      "physician": "Rakhi Sarkar, MD",
+      "address": "5899 Preston Rd Ste 1104, Frisco, TX 75034",
+      "researchedAt": "2026-05-18"
+    }
+  },
+  "notFound": [
+    {
+      "n": "ABC Pediatrics",
+      "c": "Frisco",
+      "reason": "No clear Frisco-located ABC Pediatrics found; nearest is in McKinney"
+    },
+    {
+      "n": "Plano clinic Supreme",
+      "c": "Frisco",
+      "reason": "Plano Supreme Primary Care is located in Plano (4020 Hedgcoxe Rd), not Frisco"
+    },
+    {
+      "n": "Omni",
+      "c": "Frisco",
+      "reason": "Omni Medical Center is in Plano; only Omnispine Pain (specialty) is in Frisco - ambiguous"
+    }
+  ]
+}

@@ -1,0 +1,4102 @@
+{
+  "generatedAt": "2026-05-26T19:42:43.971Z",
+  "stoppedAt": null,
+  "notes": "Seeded from prior enrichment files. Phase 2 web research appended below.",
+  "found": [
+    {
+      "type": "clinic",
+      "name": "Care Now",
+      "city": "Frisco",
+      "specialty": "UC",
+      "doctor": "",
+      "marketingRep": "Sadia",
+      "address": "301 Main St, Frisco, TX 75034",
+      "matchConfidence": "high",
+      "matchReason": "Prior enrichment (clinic_enrichment_batch_2) — name match, address in Frisco",
+      "source": "clinic_enrichment_batch_2.json"
+    },
+    {
+      "type": "clinic",
+      "name": "Healing Care Pediatrics",
+      "city": "Frisco",
+      "specialty": "",
+      "doctor": "Dr Khanum",
+      "marketingRep": "Duaa",
+      "address": "12530 Lebanon Road Suite 203, Frisco, TX 75035",
+      "matchConfidence": "high",
+      "matchReason": "Prior enrichment (clinic_enrichment_batch_2) — name match, address in Frisco",
+      "source": "clinic_enrichment_batch_2.json"
+    },
+    {
+      "type": "clinic",
+      "name": "Greenhill Family Physicians",
+      "city": "Frisco",
+      "specialty": "",
+      "doctor": "",
+      "marketingRep": "zuhaab and amna",
+      "address": "5575 Warren Pkwy Ste 106, Frisco, TX 75034",
+      "matchConfidence": "high",
+      "matchReason": "Prior enrichment (clinic_enrichment_batch_2) — name match, address in Frisco",
+      "source": "clinic_enrichment_batch_2.json"
+    },
+    {
+      "type": "clinic",
+      "name": "West Fisco Health & Wellness",
+      "city": "Frisco",
+      "specialty": "",
+      "doctor": "Andrew Minigutti, M.D.",
+      "marketingRep": "zuhaab and amna",
+      "address": "4280 Main St Ste 200, Frisco, TX 75033",
+      "matchConfidence": "high",
+      "matchReason": "Prior enrichment (clinic_enrichment_batch_2) — name match, address in Frisco",
+      "source": "clinic_enrichment_batch_2.json"
+    },
+    {
+      "type": "clinic",
+      "name": "Stonebriar Pediatrics",
+      "city": "Frisco",
+      "specialty": "",
+      "doctor": "Thai V. Hoang, MD",
+      "marketingRep": "Duaa",
+      "address": "2840 Legacy Drive Suite 210, Frisco, TX 75034",
+      "matchConfidence": "high",
+      "matchReason": "Prior enrichment (clinic_enrichment_batch_2) — name match, address in Frisco",
+      "source": "clinic_enrichment_batch_2.json"
+    },
+    {
+      "type": "clinic",
+      "name": "Modern Podiatry",
+      "city": "Frisco",
+      "specialty": "",
+      "doctor": "Dr. Woojung Lee",
+      "marketingRep": "Duaa",
+      "address": "255 Lebanon Rd Ste 202, Frisco, TX 75036",
+      "matchConfidence": "high",
+      "matchReason": "Prior enrichment (clinic_enrichment_batch_2) — name match, address in Frisco",
+      "source": "clinic_enrichment_batch_2.json"
+    },
+    {
+      "type": "clinic",
+      "name": "brush365",
+      "city": "Frisco",
+      "specialty": "",
+      "doctor": "Dr Sara Mahmood",
+      "marketingRep": "Duaa",
+      "address": "14725 Lebanon Rd #200, Frisco, TX 75035",
+      "matchConfidence": "high",
+      "matchReason": "Prior enrichment (clinic_enrichment_batch_2) — name match, address in Frisco",
+      "source": "clinic_enrichment_batch_2.json"
+    },
+    {
+      "type": "clinic",
+      "name": "Stonebriar Medical Associates",
+      "city": "Frisco",
+      "specialty": "PCP",
+      "doctor": "Bryan G. Johnson MD, P.A",
+      "marketingRep": "Sadia",
+      "address": "6842 Main St Suite 203, Frisco, TX 75033",
+      "matchConfidence": "high",
+      "matchReason": "Prior enrichment (clinic_enrichment_batch_2) — name match, address in Frisco",
+      "source": "clinic_enrichment_batch_2.json"
+    },
+    {
+      "type": "clinic",
+      "name": "Johnson Family Medicine",
+      "city": "Frisco",
+      "specialty": "PCP",
+      "doctor": "Katherine Johnson, MD",
+      "marketingRep": "Duaa",
+      "address": "12530 Lebanon Rd Ste 202, Frisco, TX 75035",
+      "matchConfidence": "high",
+      "matchReason": "Prior enrichment (clinic_enrichment_batch_2) — name match, address in Frisco",
+      "source": "clinic_enrichment_batch_2.json"
+    },
+    {
+      "type": "clinic",
+      "name": "Narural choice peditatrics",
+      "city": "Frisco",
+      "specialty": "",
+      "doctor": "",
+      "marketingRep": "Duaa",
+      "address": "3535 Victory Group Way Suite 305, Frisco, TX 75034",
+      "matchConfidence": "high",
+      "matchReason": "Prior enrichment (clinic_enrichment_batch_2) — name match, address in Frisco",
+      "source": "clinic_enrichment_batch_2.json"
+    },
+    {
+      "type": "clinic",
+      "name": "Healthy kids pediatrics",
+      "city": "Frisco",
+      "specialty": "",
+      "doctor": "",
+      "marketingRep": "Duaa",
+      "address": "5680 Frisco Square Blvd Ste 2300, Frisco, TX 75034",
+      "matchConfidence": "high",
+      "matchReason": "Prior enrichment (clinic_enrichment_batch_2) — name match, address in Frisco",
+      "source": "clinic_enrichment_batch_2.json"
+    },
+    {
+      "type": "clinic",
+      "name": "Pediatrtics  associates of frisco",
+      "city": "Frisco",
+      "specialty": "",
+      "doctor": "",
+      "marketingRep": "Duaa",
+      "address": "9191 Kyser Way Suite 500, Frisco, TX 75033",
+      "matchConfidence": "high",
+      "matchReason": "Prior enrichment (clinic_enrichment_batch_2) — name match, address in Frisco",
+      "source": "clinic_enrichment_batch_2.json"
+    },
+    {
+      "type": "clinic",
+      "name": "Best nest pediatrics",
+      "city": "Frisco",
+      "specialty": "",
+      "doctor": "",
+      "marketingRep": "Duaa",
+      "address": "4040 Legacy Dr #201, Frisco, TX 75034",
+      "matchConfidence": "high",
+      "matchReason": "Prior enrichment (clinic_enrichment_batch_2) — name match, address in Frisco",
+      "source": "clinic_enrichment_batch_2.json"
+    },
+    {
+      "type": "clinic",
+      "name": "Children health prinary care centennial pediatrics",
+      "city": "Frisco",
+      "specialty": "",
+      "doctor": "",
+      "marketingRep": "Duaa",
+      "address": "5560 Independence Parkway, Frisco, TX 75035",
+      "matchConfidence": "high",
+      "matchReason": "Prior enrichment (clinic_enrichment_batch_2) — name match, address in Frisco",
+      "source": "clinic_enrichment_batch_2.json"
+    },
+    {
+      "type": "clinic",
+      "name": "Sunny Hill Min Jung",
+      "city": "Frisco",
+      "specialty": "",
+      "doctor": "",
+      "marketingRep": "Duaa",
+      "address": "4500 Hillcrest Rd #140, Frisco, TX 75035",
+      "matchConfidence": "high",
+      "matchReason": "Prior enrichment (clinic_enrichment_batch_2) — name match, address in Frisco",
+      "source": "clinic_enrichment_batch_2.json"
+    },
+    {
+      "type": "clinic",
+      "name": "Whole chlild texas",
+      "city": "Frisco",
+      "specialty": "",
+      "doctor": "",
+      "marketingRep": "Duaa",
+      "address": "3550 Parkwood Blvd Ste B100, Frisco, TX 75034",
+      "matchConfidence": "high",
+      "matchReason": "Prior enrichment (clinic_enrichment_batch_2) — name match, address in Frisco",
+      "source": "clinic_enrichment_batch_2.json"
+    },
+    {
+      "type": "clinic",
+      "name": "Natural choice pediatrics",
+      "city": "Frisco",
+      "specialty": "",
+      "doctor": "",
+      "marketingRep": "Duaa",
+      "address": "3535 Victory Group Way Suite 305, Frisco, TX 75034",
+      "matchConfidence": "high",
+      "matchReason": "Prior enrichment (clinic_enrichment_batch_2) — name match, address in Frisco",
+      "source": "clinic_enrichment_batch_2.json"
+    },
+    {
+      "type": "clinic",
+      "name": "Frisco Family Healthcare Clinic",
+      "city": "Frisco",
+      "specialty": "MD",
+      "doctor": "Dr. Oyetokunbo Lemoru, DNP, FNP-C",
+      "marketingRep": "Sadia",
+      "address": "9555 Lebanon Rd #1003, Frisco, TX 75035",
+      "matchConfidence": "high",
+      "matchReason": "Prior enrichment (clinic_enrichment_batch_2) — name match, address in Frisco",
+      "source": "clinic_enrichment_batch_2.json"
+    },
+    {
+      "type": "clinic",
+      "name": "Texas health breeze Urgent care",
+      "city": "Frisco",
+      "specialty": "",
+      "doctor": "",
+      "marketingRep": "Duaa",
+      "address": "2855 Preston Rd, Frisco, TX 75034",
+      "matchConfidence": "high",
+      "matchReason": "Prior enrichment (clinic_enrichment_batch_2) — name match, address in Frisco",
+      "source": "clinic_enrichment_batch_2.json"
+    },
+    {
+      "type": "clinic",
+      "name": "Frisco quick care",
+      "city": "Frisco",
+      "specialty": "",
+      "doctor": "",
+      "marketingRep": "Sadia",
+      "address": "8845 Gary Burns Dr Ste 180, Frisco, TX 75034",
+      "matchConfidence": "high",
+      "matchReason": "Prior enrichment (clinic_enrichment_batch_2) — name match, address in Frisco",
+      "source": "clinic_enrichment_batch_2.json"
+    },
+    {
+      "type": "clinic",
+      "name": "West Frisco Health and Wellness",
+      "city": "Frisco",
+      "specialty": "",
+      "doctor": "",
+      "marketingRep": "Duaa",
+      "address": "4280 Main St Ste 200, Frisco, TX 75033",
+      "matchConfidence": "high",
+      "matchReason": "Prior enrichment (clinic_enrichment_batch_2) — name match, address in Frisco",
+      "source": "clinic_enrichment_batch_2.json"
+    },
+    {
+      "type": "clinic",
+      "name": "Alpha Health frisco primry care",
+      "city": "Frisco",
+      "specialty": "",
+      "doctor": "",
+      "marketingRep": "Duaa",
+      "address": "255 W Lebanon Rd Ste 116, Frisco, TX 75036",
+      "matchConfidence": "high",
+      "matchReason": "Prior enrichment (clinic_enrichment_batch_2) — name match, address in Frisco",
+      "source": "clinic_enrichment_batch_2.json"
+    },
+    {
+      "type": "clinic",
+      "name": "Prime Choice family clinic: urgent care",
+      "city": "Frisco",
+      "specialty": "",
+      "doctor": "",
+      "marketingRep": "Duaa",
+      "address": "12828 Eldorado Pkwy Ste 170, Frisco, TX 75035",
+      "matchConfidence": "high",
+      "matchReason": "Prior enrichment (clinic_enrichment_batch_2) — name match, address in Frisco",
+      "source": "clinic_enrichment_batch_2.json"
+    },
+    {
+      "type": "clinic",
+      "name": "Clinica Familiar ProHealth Studio",
+      "city": "Frisco",
+      "specialty": "",
+      "doctor": "",
+      "marketingRep": "Duaa",
+      "address": "4645 Wyndham Lane Ste 230, Frisco, TX 75033",
+      "matchConfidence": "high",
+      "matchReason": "Prior enrichment (clinic_enrichment_batch_2) — name match, address in Frisco",
+      "source": "clinic_enrichment_batch_2.json"
+    },
+    {
+      "type": "clinic",
+      "name": "Karin K bergman",
+      "city": "Frisco",
+      "specialty": "",
+      "doctor": "",
+      "marketingRep": "Duaa",
+      "address": "5150 Warren Pkwy Bldg 7 Ste 705B, Frisco, TX 75034",
+      "matchConfidence": "high",
+      "matchReason": "Prior enrichment (clinic_enrichment_batch_2) — name match, address in Frisco",
+      "source": "clinic_enrichment_batch_2.json"
+    },
+    {
+      "type": "clinic",
+      "name": "Legacy internal medicine",
+      "city": "Frisco",
+      "specialty": "PCP",
+      "doctor": "",
+      "marketingRep": "Sadia",
+      "address": "11330 Legacy Dr #204, Frisco, TX 75033",
+      "matchConfidence": "high",
+      "matchReason": "Prior enrichment (clinic_enrichment_batch_2) — name match, address in Frisco",
+      "source": "clinic_enrichment_batch_2.json"
+    },
+    {
+      "type": "clinic",
+      "name": "Family medicine plus",
+      "city": "Frisco",
+      "specialty": "",
+      "doctor": "",
+      "marketingRep": "Duaa",
+      "address": "11330 Legacy Dr, Frisco, TX 75033",
+      "matchConfidence": "high",
+      "matchReason": "Prior enrichment (clinic_enrichment_batch_2) — name match, address in Frisco",
+      "source": "clinic_enrichment_batch_2.json"
+    },
+    {
+      "type": "clinic",
+      "name": "Driven  healthcare",
+      "city": "Frisco",
+      "specialty": "",
+      "doctor": "",
+      "marketingRep": "Duaa",
+      "address": "2772 Stonebrook Parkway Suite 100, Frisco, TX 75034",
+      "matchConfidence": "high",
+      "matchReason": "Prior enrichment (clinic_enrichment_batch_2) — name match, address in Frisco",
+      "source": "clinic_enrichment_batch_2.json"
+    },
+    {
+      "type": "clinic",
+      "name": "Smile Breeze Dentistry",
+      "city": "Frisco",
+      "specialty": "",
+      "doctor": "",
+      "marketingRep": "Duaa",
+      "address": "5285 Independence Parkway Suite 200, Frisco, TX 75035",
+      "matchConfidence": "high",
+      "matchReason": "Prior enrichment (clinic_enrichment_batch_2) — name match, address in Frisco",
+      "source": "clinic_enrichment_batch_2.json"
+    },
+    {
+      "type": "clinic",
+      "name": "StrlVeMD",
+      "city": "Frisco",
+      "specialty": "",
+      "doctor": "",
+      "marketingRep": "Duaa",
+      "address": "7044 Lebanon Road Suite 102, Frisco, TX 75034",
+      "matchConfidence": "high",
+      "matchReason": "Prior enrichment (clinic_enrichment_batch_2) — name match, address in Frisco",
+      "source": "clinic_enrichment_batch_2.json"
+    },
+    {
+      "type": "clinic",
+      "name": "Texas Primary Care",
+      "city": "Frisco",
+      "specialty": "PCP",
+      "doctor": "",
+      "marketingRep": "Sadia",
+      "address": "9191 Kyser Way Ste 205, Frisco, TX 75033",
+      "matchConfidence": "high",
+      "matchReason": "Prior enrichment (clinic_enrichment_batch_2) — name match, address in Frisco",
+      "source": "clinic_enrichment_batch_2.json"
+    },
+    {
+      "type": "clinic",
+      "name": "Pioneer Medical Associates",
+      "city": "Frisco",
+      "specialty": "PCP",
+      "doctor": "Dr. Pablani",
+      "marketingRep": "Sadia",
+      "address": "14111 King Rd Suite 320, Frisco, TX 75036",
+      "matchConfidence": "high",
+      "matchReason": "Prior enrichment (clinic_enrichment_batch_2) — name match, address in Frisco",
+      "source": "clinic_enrichment_batch_2.json"
+    },
+    {
+      "type": "clinic",
+      "name": "Frisco Urgent Care and Clinics",
+      "city": "Frisco",
+      "specialty": "PCP",
+      "doctor": "Ekweani, MD",
+      "marketingRep": "Sadia",
+      "address": "3220 Parkwood Blvd, Frisco, TX 75034",
+      "matchConfidence": "high",
+      "matchReason": "Prior enrichment (clinic_enrichment_batch_2) — name match, address in Frisco",
+      "source": "clinic_enrichment_batch_2.json"
+    },
+    {
+      "type": "clinic",
+      "name": "Alpha Primary Care",
+      "city": "Frisco",
+      "specialty": "",
+      "doctor": "",
+      "marketingRep": "Sadia",
+      "address": "9191 Kyser Way, Frisco, TX 75033",
+      "matchConfidence": "high",
+      "matchReason": "Prior enrichment (clinic_enrichment_batch_2) — name match, address in Frisco",
+      "source": "clinic_enrichment_batch_2.json"
+    },
+    {
+      "type": "clinic",
+      "name": "Premier  Medical",
+      "city": "Frisco",
+      "specialty": "",
+      "doctor": "",
+      "marketingRep": "Sadia",
+      "address": "2601 Network Blvd Suite 500, Frisco, TX 75034",
+      "matchConfidence": "high",
+      "matchReason": "Prior enrichment (clinic_enrichment_batch_2) — name match, address in Frisco",
+      "source": "clinic_enrichment_batch_2.json"
+    },
+    {
+      "type": "clinic",
+      "name": "Pediatrics Associates of Frisco",
+      "city": "Frisco",
+      "specialty": "",
+      "doctor": "",
+      "marketingRep": "Sadia",
+      "address": "9191 Kyser Way Suite 500, Frisco, TX 75033",
+      "matchConfidence": "high",
+      "matchReason": "Prior enrichment (clinic_enrichment_batch_2) — name match, address in Frisco",
+      "source": "clinic_enrichment_batch_2.json"
+    },
+    {
+      "type": "clinic",
+      "name": "Comprehensive Pain",
+      "city": "Frisco",
+      "specialty": "",
+      "doctor": "",
+      "marketingRep": "Sadia",
+      "address": "Frisco, TX",
+      "matchConfidence": "high",
+      "matchReason": "Prior enrichment (clinic_enrichment_batch_2) — name match, address in Frisco",
+      "source": "clinic_enrichment_batch_2.json"
+    },
+    {
+      "type": "clinic",
+      "name": "Willows Womens Health",
+      "city": "Frisco",
+      "specialty": "",
+      "doctor": "",
+      "marketingRep": "Sadia",
+      "address": "2840 Legacy Dr Ste 400, Frisco, TX 75034",
+      "matchConfidence": "high",
+      "matchReason": "Prior enrichment (clinic_enrichment_batch_2) — name match, address in Frisco",
+      "source": "clinic_enrichment_batch_2.json"
+    },
+    {
+      "type": "clinic",
+      "name": "Primary Care",
+      "city": "Frisco",
+      "specialty": "",
+      "doctor": "",
+      "marketingRep": "zuhaab and amna",
+      "address": "4525 Ohio Dr #100, Frisco, TX 75035",
+      "matchConfidence": "high",
+      "matchReason": "Prior enrichment (clinic_enrichment_batch_2) — name match, address in Frisco",
+      "source": "clinic_enrichment_batch_2.json"
+    },
+    {
+      "type": "clinic",
+      "name": "Frisco Quickcare",
+      "city": "Frisco",
+      "specialty": "PCP",
+      "doctor": "Gowani",
+      "marketingRep": "Sadia",
+      "address": "8845 Gary Burns Dr Ste 180, Frisco, TX 75034",
+      "matchConfidence": "high",
+      "matchReason": "Prior enrichment (clinic_enrichment_batch_2) — name match, address in Frisco",
+      "source": "clinic_enrichment_batch_2.json"
+    },
+    {
+      "type": "clinic",
+      "name": "Evolve",
+      "city": "Frisco",
+      "specialty": "PCP",
+      "doctor": "",
+      "marketingRep": "Sadia",
+      "address": "5899 Preston Rd Ste 1104, Frisco, TX 75034",
+      "matchConfidence": "high",
+      "matchReason": "Prior enrichment (clinic_enrichment_batch_2) — name match, address in Frisco",
+      "source": "clinic_enrichment_batch_2.json"
+    },
+    {
+      "type": "clinic",
+      "name": "Bloomfield",
+      "city": "Frisco",
+      "address": "8000 Preston Rd Ste 401, Frisco, TX 75034",
+      "matchConfidence": "high",
+      "matchReason": "Bloomfield Medical Clinic in Frisco; Dr. Stephanie Cudjoe MD listed as PCP"
+    },
+    {
+      "type": "clinic",
+      "name": "Passion Health",
+      "city": "Frisco",
+      "address": "8195 Custer Rd Ste 110, Frisco, TX 75035",
+      "matchConfidence": "high",
+      "matchReason": "Passion Health Primary Care Frisco; Dr. Shyamala Arani Purushotham listed"
+    },
+    {
+      "type": "clinic",
+      "name": "ATA Healthcare and Wellness",
+      "city": "Frisco",
+      "address": "8501 Wade Blvd Ste 1160, Frisco, TX 75034",
+      "matchConfidence": "high",
+      "matchReason": "ATA Healthcare and Wellness Frisco TX; owner Dr. Alhezayen (name matches)"
+    },
+    {
+      "type": "clinic",
+      "name": "North Dallas Primary Care",
+      "city": "Frisco",
+      "address": "8795 Preston Trace Blvd Ste 100, Frisco, TX 75033",
+      "matchConfidence": "high",
+      "matchReason": "North Dallas Primary Care Doctors Frisco; physicians Suchitra Kamineni MD and Arun Amaram MD both match"
+    },
+    {
+      "type": "clinic",
+      "name": "Southern Medical Associates",
+      "city": "Frisco",
+      "address": "9300 John Hickman Pkwy, Frisco, TX 75035",
+      "matchConfidence": "high",
+      "matchReason": "Southern Medical Associates Frisco; Dr. Latha Yedlapalli confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Phoenix Integrative Medical Center",
+      "city": "Frisco",
+      "address": "6380 Preston Rd, Frisco, TX 75035",
+      "matchConfidence": "high",
+      "matchReason": "Phoenix Integrative Medical Center Frisco; Dr. Bryan Hoffman DO confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Kid Approved Pediatrics",
+      "city": "Frisco",
+      "address": "11875 Coit Rd Suite 100, Frisco, TX",
+      "matchConfidence": "high",
+      "matchReason": "Kid Approved Pediatrics Frisco; Dr. Jonathan Chow listed"
+    },
+    {
+      "type": "clinic",
+      "name": "Cook Children's Pediatrics West Frisco",
+      "city": "Frisco",
+      "address": "255 W Lebanon Rd Ste 104, Frisco, TX 75036",
+      "matchConfidence": "high",
+      "matchReason": "Cook Children's Pediatrics West Frisco; Dr. Harry Stellman IV confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Joy & Crown Pediatric Specialists",
+      "city": "Frisco",
+      "address": "7002 Lebanon Rd Ste 103, Frisco, TX 75034",
+      "matchConfidence": "high",
+      "matchReason": "Joy & Crown Pediatric Specialists; Dr. Mary (MaryEllen) Cavalier confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Jacob's Ladder Developmental Pediatrics",
+      "city": "Frisco",
+      "address": "8501 Wade Blvd Ste 330, Frisco, TX 75034",
+      "matchConfidence": "high",
+      "matchReason": "Jacob's Ladder Developmental Pediatrics Frisco; Dr. Julie Jacob confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Frisco Family Ent",
+      "city": "Frisco",
+      "address": "5520 Independence Pkwy Ste 202, Frisco, TX 75035",
+      "matchConfidence": "high",
+      "matchReason": "Frisco Family ENT; Dr. Patti Huang MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Dr. Megha Patel-Banker",
+      "city": "Frisco",
+      "address": "8501 Wade Blvd, Frisco, TX 75035",
+      "matchConfidence": "medium",
+      "matchReason": "Dr. Smitha Rudraraju (listed in source doctor field) is at 8501 Wade Blvd, Frisco TX; she is a rheumatologist with practice in both Allen and Frisco. Frisco location used."
+    },
+    {
+      "type": "clinic",
+      "name": "Elite Internel",
+      "city": "Frisco",
+      "address": "14660 State Hwy 121 Bldg B Ste 200, Frisco, TX 75035",
+      "matchConfidence": "high",
+      "matchReason": "Elite Internal Medicine Frisco; Dr. Krishna Tatineni MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Heal 360",
+      "city": "Frisco",
+      "address": "9229 Lebanon Rd, Frisco, TX 75035",
+      "matchConfidence": "high",
+      "matchReason": "Heal 360 Primary Care Frisco; Dr. Mohammed Amer Mohiuddin founder confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "MedPro Family Clinic",
+      "city": "Frisco",
+      "address": "4525 Ohio Dr Ste 300, Frisco, TX 75035",
+      "matchConfidence": "high",
+      "matchReason": "MedPro Family Clinic Frisco; Dr. Xiaohui Lu MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Murali M. Alloju, M.D.",
+      "city": "Frisco",
+      "address": "11330 Legacy Dr Ste 205, Frisco, TX 75033",
+      "matchConfidence": "high",
+      "matchReason": "Digestive Health Associates of Texas - Frisco; Dr. Murali Alloju MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Dr.Stefanie Lynn Addington",
+      "city": "Frisco",
+      "address": "8350 Dallas Pkwy Ste 300, Frisco, TX 75034",
+      "matchConfidence": "medium",
+      "matchReason": "Dr. Stefanie L. Addington endocrinologist Frisco; note: practice transitioned to telemedicine in Aug 2024 but office address listed"
+    },
+    {
+      "type": "clinic",
+      "name": "Preston Surgery Center",
+      "city": "Frisco",
+      "address": "7589 Preston Rd Ste 100, Frisco, TX 75034",
+      "matchConfidence": "high",
+      "matchReason": "Preston Surgery Center Frisco; Dr. Mohammad Tariq founder confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Christopher A. Kowalski",
+      "city": "Frisco",
+      "address": "5575 Warren Pkwy, Frisco, TX 75034",
+      "matchConfidence": "high",
+      "matchReason": "Orthopedic Institute of North Texas (OINT) Frisco; Dr. Justin Kane (listed) and Dr. Christopher Kowalski both practice here"
+    },
+    {
+      "type": "clinic",
+      "name": "Spine Vue",
+      "city": "Frisco",
+      "address": "3800 Gaylord Pkwy Ste 820, Frisco, TX 75034",
+      "matchConfidence": "high",
+      "matchReason": "Spine Vue Frisco location; Dr. Sean M. Jones-Quaidoo (source says 'Sean M. Jones') confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Preformance Ortho & Sports Medicine",
+      "city": "Frisco",
+      "address": "14660 State Hwy 121 Ste 100, Frisco, TX 75035",
+      "matchConfidence": "high",
+      "matchReason": "Performance Orthopaedics & Sports Medicine (PerformanceOSM); Dr. Troy Diehl DO confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "North Texas Endocrinology",
+      "city": "Frisco",
+      "address": "14725 Lebanon Rd Ste 100, Frisco, TX 75035",
+      "matchConfidence": "medium",
+      "matchReason": "North Texas Endocrinology & Diabetes Center PA in Frisco; Dr. Muhammad Choudhry endocrinologist; he may primarily practice elsewhere but practice is correct"
+    },
+    {
+      "type": "clinic",
+      "name": "Affinity NEUROCARE",
+      "city": "Frisco",
+      "address": "8350 Dallas Pkwy Ste 300, Frisco, TX 75034",
+      "matchConfidence": "high",
+      "matchReason": "Affinity Neurocare Frisco location; Dr. Nnamdi C. Dike DO founder confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Bent Tree Family Physicians",
+      "city": "Frisco",
+      "address": "3550 Parkwood Blvd Ste 600, Frisco, TX 75034",
+      "matchConfidence": "high",
+      "matchReason": "Bent Tree Family Physicians Frisco; Dr. Tariq Khan confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Lewis Pain & Physical Medicine",
+      "city": "Frisco",
+      "address": "11500 State Hwy 121, Frisco, TX 75035",
+      "matchConfidence": "high",
+      "matchReason": "Lewis Pain & Physical Medicine Frisco; Dr. Jerry Lewis founder confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Spine & Joint Physicians of Frisco",
+      "city": "Frisco",
+      "address": "11500 Hwy 121 Ste 1010, Frisco, TX 75035",
+      "matchConfidence": "high",
+      "matchReason": "Spine & Joint Physicians of Frisco; Dr. S. Justin Badiyan MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "OmniSpine Pain Management",
+      "city": "Frisco",
+      "address": "8380 Warren Pkwy Ste 100, Frisco, TX 75034",
+      "matchConfidence": "high",
+      "matchReason": "OmniSpine Pain Management Frisco; Dr. Ashley A. Joseph MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Pain Management of North Dallas, PA",
+      "city": "Frisco",
+      "address": "3550 Parkwood Blvd, Frisco, TX 75034",
+      "matchConfidence": "medium",
+      "matchReason": "Dr. Craig Neleson practices at North Texas Precision Pain Care PA at 3550 Parkwood Blvd Frisco; clinic name 'Pain Management of North Dallas' is a different practice but doctor name match supports this Parkwood address"
+    },
+    {
+      "type": "clinic",
+      "name": "Precision Spine Care",
+      "city": "Frisco",
+      "address": "2737 S Broadway Ave, Tyler, TX 75701",
+      "matchConfidence": "low",
+      "matchReason": "Precision Spine Care is actually in Tyler TX (Dr. Charles Gordon founder); no Frisco office found. City mismatch — flagging for review."
+    },
+    {
+      "type": "clinic",
+      "name": "Comprehensive Pain Management",
+      "city": "Frisco",
+      "address": "7589 Preston Rd Ste 500, Frisco, TX 75035",
+      "matchConfidence": "medium",
+      "matchReason": "Comprehensive Pain Management Center Frisco at 7589 Preston Rd Ste 500; note doctor 'Rodolfo Herrera' is at a different practice (Comprehensive Pain Institute) — the Frisco clinic at this address is Dr. Mohammad Tariq's"
+    },
+    {
+      "type": "clinic",
+      "name": "Pain and spine physicans",
+      "city": "Frisco",
+      "address": "13080 Dallas Pkwy Bldg 300 Ste 310, Frisco, TX 75034",
+      "matchConfidence": "high",
+      "matchReason": "Pain & Spine Physicians Frisco; Dr. Irfan Ali listed in their team"
+    },
+    {
+      "type": "clinic",
+      "name": "Dr. Sameer Ali Syed",
+      "city": "Frisco",
+      "address": "9456 State Highway 121 Ste 100, Frisco, TX 75035",
+      "matchConfidence": "high",
+      "matchReason": "Pain Treatment Institute Frisco; Dr. Sameer A. Syed confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "North Texas Synergy Pain",
+      "city": "Frisco",
+      "address": "5375 Coit Rd Ste 100, Frisco, TX 75035",
+      "matchConfidence": "high",
+      "matchReason": "North Texas Synergy Pain & Rehab Frisco; Dr. Robert J. Spicer MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Pain Specialists of Frisco",
+      "city": "Frisco",
+      "address": "13052 Dallas Pkwy Ste 220A, Frisco, TX 75033",
+      "matchConfidence": "high",
+      "matchReason": "Pain Specialists of Frisco; Dr. Mahesh Mohan confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Texas Spine Consultants",
+      "city": "Frisco",
+      "address": "5757 Warren Pkwy POB II Ste 180, Frisco, TX 75034",
+      "matchConfidence": "high",
+      "matchReason": "Texas Spine Consultants Frisco; Dr. Robert Viere confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Frisco Center for Internal Medicine",
+      "city": "Frisco",
+      "address": "12500 Lebanon Rd Ste 103, Frisco, TX 75035",
+      "matchConfidence": "high",
+      "matchReason": "Frisco Center for Internal Medicine; Dr. Neela Shah MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "WillowsWomens Health",
+      "city": "Frisco",
+      "address": "2840 Legacy Dr Ste 400, Frisco, TX 75034",
+      "matchConfidence": "high",
+      "matchReason": "Same practice as 'Willows Womens Health' already enriched; address from prior enrichment file"
+    },
+    {
+      "type": "clinic",
+      "name": "Inspire Health",
+      "city": "Frisco",
+      "address": "255 Lebanon Rd Ste 132, Frisco, TX 75036",
+      "matchConfidence": "high",
+      "matchReason": "Inspire Health Frisco Waterstone; Dr. Stephanie Reinhold Garza confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Frisco Obstetrics and Gynecology, PA",
+      "city": "Frisco",
+      "address": "4401 Coit Rd Ste 205 Pavillion I, Frisco, TX 75035",
+      "matchConfidence": "high",
+      "matchReason": "Frisco Obstetrics and Gynecology PA — friscoobgyn.com"
+    },
+    {
+      "type": "clinic",
+      "name": "EVIVE HEALTH AND BEAUTY",
+      "city": "Frisco",
+      "address": "11500 State Hwy 121 Ste 320, Frisco, TX 75035",
+      "matchConfidence": "medium",
+      "matchReason": "Likely typo for 'Revive Health and Beauty' in Frisco (revivehealthandbeauty.com); no clinic called 'EVIVE' found in Frisco — best match"
+    },
+    {
+      "type": "clinic",
+      "name": "Greenhill family physians",
+      "city": "Frisco",
+      "address": "5575 Warren Pkwy Ste 106, Frisco, TX 75034",
+      "matchConfidence": "high",
+      "matchReason": "Greenhill Family Physicians (already known from prior enrichment as 'Greenhill Family Physicians'); Dr. Mike Lee MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Village Health Partners - Frisco Medical Village",
+      "city": "Frisco",
+      "address": "9990 Dallas Pkwy Ste 200, Frisco, TX 75033",
+      "matchConfidence": "high",
+      "matchReason": "Village Health Partners Frisco Medical Village; Catalyst Physician Group location"
+    },
+    {
+      "type": "clinic",
+      "name": "ProMed Health Primary Care - Frisco",
+      "city": "Frisco",
+      "address": "11691 Independence Pkwy Unit 110, Frisco, TX 75035",
+      "matchConfidence": "high",
+      "matchReason": "ProMed Health Primary Care Frisco; Dr. Kavitha Ilayaraja confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "AlphaHealth Frisco Primary Care",
+      "city": "Frisco",
+      "address": "255 W Lebanon Rd Ste 116, Frisco, TX 75036",
+      "matchConfidence": "high",
+      "matchReason": "AlphaHealth Frisco Primary Care (ahealthmd.com); Dr. Neethu Benny lead physician confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Connections wellness group",
+      "city": "Frisco",
+      "address": "255 Lebanon Rd Ste 124, Frisco, TX 75036",
+      "matchConfidence": "high",
+      "matchReason": "Connections Wellness Group Frisco mental health"
+    },
+    {
+      "type": "clinic",
+      "name": "Pediatrics R Us",
+      "city": "Frisco",
+      "address": "255 W Lebanon Ste 324, Frisco, TX 75036",
+      "matchConfidence": "high",
+      "matchReason": "Pediatrics R Us Frisco (txpedsrus.com); Dr. Taha Saif MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Monkey Mouths",
+      "city": "Frisco",
+      "address": "255 W Lebanon Rd Ste 316, Frisco, TX 75036",
+      "matchConfidence": "high",
+      "matchReason": "Monkey Mouths Frisco speech therapy office"
+    },
+    {
+      "type": "clinic",
+      "name": "Body Loom Wellness",
+      "city": "Frisco",
+      "address": "255 W Lebanon Rd Ste 106, Frisco, TX 75036",
+      "matchConfidence": "high",
+      "matchReason": "Bodyloom Wellness MedSpa Frisco (bodyloom.com)"
+    },
+    {
+      "type": "clinic",
+      "name": "Frisco Mental Health Services",
+      "city": "Frisco",
+      "address": "255 Lebanon Rd Ste 224, Frisco, TX 75036",
+      "matchConfidence": "high",
+      "matchReason": "Frisco Mental Health Services (myfriscocare.com); Dr. Furqan Rizvi psychiatrist confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Behavioral Innovations",
+      "city": "Frisco",
+      "address": "8795 Preston Trace Blvd, Frisco, TX 75033",
+      "matchConfidence": "medium",
+      "matchReason": "Behavioral Innovations East Frisco location (ABA therapy)"
+    },
+    {
+      "type": "clinic",
+      "name": "Stonebrook Medical Associates",
+      "city": "Frisco",
+      "address": "8200 Stonebrook Pkwy Ste 100, Frisco, TX 75034",
+      "matchConfidence": "high",
+      "matchReason": "Stonebrook Family Medicine Frisco; Dr. Mona Chacko confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Tx Health Internal Med",
+      "city": "Frisco",
+      "address": "13024 Dallas Pkwy Ste 110, Frisco, TX 75034",
+      "matchConfidence": "high",
+      "matchReason": "Texas Health Internal Medicine Frisco (one of two locations); both at Dallas Pkwy"
+    },
+    {
+      "type": "clinic",
+      "name": "Gray branch Pediatrics",
+      "city": "Frisco",
+      "address": "9191 Kyser Way Suite 500, Frisco, TX 75033",
+      "matchConfidence": "low",
+      "matchReason": "No 'Gray Branch Pediatrics' found in Frisco — possible typo. Mapped to 'Pediatric Associates of Frisco' as best Frisco pediatrics match; needs manual verification"
+    },
+    {
+      "type": "clinic",
+      "name": "NTX",
+      "city": "Frisco",
+      "address": "5520 Independence Pkwy Ste 201, Frisco, TX 75035",
+      "matchConfidence": "medium",
+      "matchReason": "NTX Medical Clinic Frisco (already in prior enrichment as 'NTX Medical Clinic')"
+    },
+    {
+      "type": "clinic",
+      "name": "Ideal Primary Care",
+      "city": "Frisco",
+      "address": "5550 Warren Pkwy Ste 120, Frisco, TX 75034",
+      "matchConfidence": "high",
+      "matchReason": "Ideal MD Primary Care Frisco (idealmdpcp.com)"
+    },
+    {
+      "type": "clinic",
+      "name": "Daffodils Mckinney",
+      "city": "Frisco",
+      "address": "8720 Silverado Trail Ste 3C, McKinney, TX 75070",
+      "matchConfidence": "medium",
+      "matchReason": "Daffodil Primary Care & Cardio-Renal Clinic McKinney (the name suggests it's actually in McKinney despite Frisco source listing)"
+    },
+    {
+      "type": "clinic",
+      "name": "Pro Med",
+      "city": "Frisco",
+      "address": "11691 Independence Pkwy Unit 110, Frisco, TX 75035",
+      "matchConfidence": "high",
+      "matchReason": "ProMed Health Primary Care Frisco — same as 'ProMed Health Primary Care - Frisco'"
+    },
+    {
+      "type": "clinic",
+      "name": "Frisco Urgent care Clinics",
+      "city": "Frisco",
+      "address": "3220 Parkwood Blvd, Frisco, TX 75034",
+      "matchConfidence": "high",
+      "matchReason": "Frisco Urgent Care & Clinics (friscoucc.com); already in prior enrichment as 'Frisco Urgent Care and Clinics'"
+    },
+    {
+      "type": "clinic",
+      "name": "DHAT",
+      "city": "Frisco",
+      "address": "4401 Coit Rd Ste 201, Frisco, TX 75035",
+      "matchConfidence": "high",
+      "matchReason": "Digestive Health Associates of Texas (DHAT) Frisco - Coit Rd location"
+    },
+    {
+      "type": "clinic",
+      "name": "Internal Medicine Asociates",
+      "city": "Frisco",
+      "address": "255 W Lebanon Rd Ste 208, Frisco, TX 75036",
+      "matchConfidence": "high",
+      "matchReason": "Internal Medicine Associates of West Frisco; Dr. Sima Kavand (source typo 'Kawand') confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Garduno Family Medical Clinic",
+      "city": "Frisco",
+      "address": "9925 Gillespie Dr Ste 1300, Plano, TX 75025",
+      "matchConfidence": "low",
+      "matchReason": "Garduño Family Medicine primary office in Plano (Dr. Abel Garduño); no Frisco-specific address confirmed. Listed for reference."
+    },
+    {
+      "type": "clinic",
+      "name": "CPC Frisco",
+      "city": "Frisco",
+      "address": "9990 Dallas Pkwy Ste 200, Frisco, TX 75033",
+      "matchConfidence": "low",
+      "matchReason": "Best guess: Catalyst Physician Group Frisco Medical Village Pediatrics. 'CPC' not unambiguously identified."
+    },
+    {
+      "type": "clinic",
+      "name": "Hillcrest",
+      "city": "Frisco",
+      "address": "4500 Hillcrest Rd Ste 180, Frisco, TX 75035",
+      "matchConfidence": "medium",
+      "matchReason": "Hillcrest Family Medicine Frisco at 4500 Hillcrest Rd; only Frisco clinic with 'Hillcrest' in the name"
+    },
+    {
+      "type": "clinic",
+      "name": "Legacy Internal",
+      "city": "Frisco",
+      "address": "11330 Legacy Dr Ste 204, Frisco, TX 75033",
+      "matchConfidence": "high",
+      "matchReason": "Legacy Internal Medicine Frisco — already in prior enrichment"
+    },
+    {
+      "type": "clinic",
+      "name": "Kids urgent Care",
+      "city": "Frisco",
+      "address": "11550 Legacy Dr Ste 420, Frisco, TX 75034",
+      "matchConfidence": "high",
+      "matchReason": "Urgent Care for Kids Frisco — urgentcarekids.com Frisco location"
+    },
+    {
+      "type": "clinic",
+      "name": "Dr Alang",
+      "city": "Frisco",
+      "address": "3880 Parkwood Blvd Ste 304, Frisco, TX 75034",
+      "matchConfidence": "high",
+      "matchReason": "Dr. Jaspreet S. Alang MD internist Frisco (Frisco Internal Medicine)"
+    },
+    {
+      "type": "clinic",
+      "name": "Passion Health primary care",
+      "city": "Frisco",
+      "address": "8195 Custer Rd Ste 110, Frisco, TX 75035",
+      "matchConfidence": "high",
+      "matchReason": "Same as 'Passion Health' — Frisco location; 'Aruna' likely refers to Dr. Shyamala Arani Purushotham"
+    },
+    {
+      "type": "clinic",
+      "name": "DELC Medical care",
+      "city": "Frisco",
+      "address": "5285 Independence Pkwy Ste 400, Frisco, TX 75035",
+      "matchConfidence": "high",
+      "matchReason": "DELC Medical Center Frisco; Dr. Lynda E. Mbah MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Care One Medical Clinic",
+      "city": "Frisco",
+      "address": "400 Stonebrook Pkwy Unit 200, Frisco, TX 75036",
+      "matchConfidence": "high",
+      "matchReason": "Careone Medical Clinic Frisco; Sheeba Mathai FNP-BC founder confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "BloomMField Medical",
+      "city": "Frisco",
+      "address": "8000 Preston Rd Ste 401, Frisco, TX 75034",
+      "matchConfidence": "medium",
+      "matchReason": "Typo for 'Bloomfield Medical' — same as Bloomfield clinic"
+    },
+    {
+      "type": "clinic",
+      "name": "Pro Med Health Primary Care",
+      "city": "Frisco",
+      "address": "11691 Independence Pkwy Unit 110, Frisco, TX 75035",
+      "matchConfidence": "high",
+      "matchReason": "ProMed Health Primary Care Frisco; Dr. Kavitha Ilayaraja confirmed (source typo 'llayaraja')"
+    },
+    {
+      "type": "clinic",
+      "name": "Sunshine Pediatrics",
+      "city": "Frisco",
+      "address": "11547 Independence Pkwy Ste 500, Frisco, TX 75035",
+      "matchConfidence": "high",
+      "matchReason": "Sunshine Pediatrics Frisco (sunshinepediatricstx.com)"
+    },
+    {
+      "type": "clinic",
+      "name": "Specialty Clinics",
+      "city": "Frisco",
+      "address": "12600 Rolater Rd, Frisco, TX 75035",
+      "matchConfidence": "low",
+      "matchReason": "Specialty Care Clinics Frisco (closest name match); ambiguous"
+    },
+    {
+      "type": "clinic",
+      "name": "Pure Medicine",
+      "city": "Frisco",
+      "address": "4645 Avon Ln Ste 200, Frisco, TX 75033",
+      "matchConfidence": "high",
+      "matchReason": "Pure Medicine Frisco (puremedtexas.com); Dr. Jordan Pastorek MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Behavioral Invations",
+      "city": "Frisco",
+      "address": "8795 Preston Trace Blvd, Frisco, TX 75033",
+      "matchConfidence": "medium",
+      "matchReason": "Typo for 'Behavioral Innovations' — East Frisco ABA location"
+    },
+    {
+      "type": "clinic",
+      "name": "Frisco Hand Center",
+      "city": "Frisco",
+      "address": "3880 Parkwood Blvd Ste 501, Frisco, TX 75034",
+      "matchConfidence": "high",
+      "matchReason": "Frisco Hand Center (friscohandcenter.com); Dr. Dina N. Rahhal MD confirmed (source spelling 'DinanRahhal')"
+    },
+    {
+      "type": "clinic",
+      "name": "Anu Baweja , M.D.",
+      "city": "Frisco",
+      "address": "4433 Punjab Way Ste 201, Frisco, TX 75034",
+      "matchConfidence": "high",
+      "matchReason": "Dr. Anu Baweja neurologist Frisco — Texas Institute for Neurological Disorders"
+    },
+    {
+      "type": "clinic",
+      "name": "Sunsil Thummala",
+      "city": "Frisco",
+      "address": "9191 Kyser Way Ste 202, Frisco, TX 75033",
+      "matchConfidence": "high",
+      "matchReason": "Dr. Sunil Thummala MD neurologist Frisco (source typo 'Sunsil'); US Neuro Specialists PLLC"
+    },
+    {
+      "type": "clinic",
+      "name": "Delc Medical Center",
+      "city": "Frisco",
+      "address": "5285 Independence Pkwy Ste 400, Frisco, TX 75035",
+      "matchConfidence": "high",
+      "matchReason": "Same as 'DELC Medical care' — DELC Medical Center Frisco"
+    },
+    {
+      "type": "clinic",
+      "name": "Dr. Vijay Katari",
+      "city": "Frisco",
+      "address": "8680 Main St #1W, Frisco, TX 75033",
+      "matchConfidence": "high",
+      "matchReason": "Dr. Vijay Katari MD internist Frisco (drkatari.com)"
+    },
+    {
+      "type": "clinic",
+      "name": "Diana Health Allen",
+      "city": "Allen",
+      "address": "1120 Raintree Cir Ste 280, Allen, TX 75013",
+      "matchConfidence": "high",
+      "matchReason": "Diana Health Allen TX (heydianahealth.com)"
+    },
+    {
+      "type": "clinic",
+      "name": "Eastside children's clinic",
+      "city": "Allen",
+      "address": "311 N Allen Dr, Allen, TX 75013",
+      "matchConfidence": "high",
+      "matchReason": "Eastside Children's Clinic Allen TX (eastsidechildrens.com)"
+    },
+    {
+      "type": "clinic",
+      "name": "East side childrens clinic",
+      "city": "Allen",
+      "address": "311 N Allen Dr, Allen, TX 75013",
+      "matchConfidence": "high",
+      "matchReason": "Duplicate of 'Eastside children's clinic'"
+    },
+    {
+      "type": "clinic",
+      "name": "Brookwood Family Practice",
+      "city": "Allen",
+      "address": "865 Junction Dr, Allen, TX 75013",
+      "matchConfidence": "high",
+      "matchReason": "Brookwood Family Practice (brookwoodfp.com)"
+    },
+    {
+      "type": "clinic",
+      "name": "Family healthcare associates",
+      "city": "Allen",
+      "address": "1105 Central Expy N Ste 2120, Allen, TX 75013",
+      "matchConfidence": "high",
+      "matchReason": "Family HealthCare Associates Allen (Catalyst Physician Group)"
+    },
+    {
+      "type": "clinic",
+      "name": "Allen Wellness",
+      "city": "Allen",
+      "address": "997 Raintree Cir Ste 130, Allen, TX 75013",
+      "matchConfidence": "high",
+      "matchReason": "Allen Wellness clinic Allen TX"
+    },
+    {
+      "type": "clinic",
+      "name": "Khan Salema Salience health",
+      "city": "Allen",
+      "address": "1050 Central Expy S Ste 1200, Allen, TX 75013",
+      "matchConfidence": "high",
+      "matchReason": "Salience Health Allen; Dr. Neelma Khan confirmed (source typo 'Salema/Neelma')"
+    },
+    {
+      "type": "clinic",
+      "name": "Total health primary care",
+      "city": "Allen",
+      "address": "906 W McDermott Dr Ste A-124, Allen, TX 75013",
+      "matchConfidence": "high",
+      "matchReason": "Total Health Primary Care - Allen Twin Creeks (totalhealth.co)"
+    },
+    {
+      "type": "clinic",
+      "name": "Ntx medcare and weightloss",
+      "city": "Allen",
+      "address": "1505 W McDermott Dr Ste 200, Allen, TX 75013",
+      "matchConfidence": "high",
+      "matchReason": "NTX Medcare and Weight Loss Allen (ntxmedcare.com Twin Creeks)"
+    },
+    {
+      "type": "clinic",
+      "name": "Spring valley wellness center",
+      "city": "Allen",
+      "address": "1504 N Greenville Ave Ste 120, Allen, TX 75002",
+      "matchConfidence": "high",
+      "matchReason": "Spring Valley Wellness Center of Allen"
+    },
+    {
+      "type": "clinic",
+      "name": "American Family Care",
+      "city": "Allen",
+      "address": "596 E Stacy Rd Ste 1110, Allen, TX 75002",
+      "matchConfidence": "high",
+      "matchReason": "AFC Urgent Care Allen-Fairview (American Family Care)"
+    },
+    {
+      "type": "clinic",
+      "name": "AFC Urgent Care Allen‑Fairview",
+      "city": "Allen",
+      "address": "596 E Stacy Rd Ste 1110, Allen, TX 75002",
+      "matchConfidence": "high",
+      "matchReason": "AFC Urgent Care Allen-Fairview (same as 'American Family Care')"
+    },
+    {
+      "type": "clinic",
+      "name": "Allen family first choice",
+      "city": "Allen",
+      "address": "977 Raintree Cir Ste 110, Allen, TX 75013",
+      "matchConfidence": "high",
+      "matchReason": "Allen Family First Clinic (allenfamilyfirst.com)"
+    },
+    {
+      "type": "clinic",
+      "name": "Family care and wellness",
+      "city": "Allen",
+      "address": "915 W Exchange Pkwy Ste 210, Allen, TX 75013",
+      "matchConfidence": "high",
+      "matchReason": "Family Care & Wellness Allen (familycareandwellness.com)"
+    },
+    {
+      "type": "clinic",
+      "name": "Salveo family clinic",
+      "city": "Allen",
+      "address": "614 S Watters Rd Ste 101, Allen, TX 75013",
+      "matchConfidence": "high",
+      "matchReason": "Salveo Family Clinic (salveoclinic.org)"
+    },
+    {
+      "type": "clinic",
+      "name": "Fair health wellness center",
+      "city": "Allen",
+      "address": "60 E McDermott Dr Ste A, Allen, TX 75002",
+      "matchConfidence": "high",
+      "matchReason": "Fair Health Wellness Center (fhwc-care.com)"
+    },
+    {
+      "type": "clinic",
+      "name": "Fast doc urgent care",
+      "city": "Allen",
+      "address": "325 Central Expy S, Allen, TX 75013",
+      "matchConfidence": "high",
+      "matchReason": "FastDoc Urgent Care Allen (fastdocucc.com)"
+    },
+    {
+      "type": "clinic",
+      "name": "TLC pediatric",
+      "city": "Allen",
+      "address": "1105 N Central Expy Ste 250 MOB 1, Allen, TX 75013",
+      "matchConfidence": "high",
+      "matchReason": "TLC Pediatrics PA Allen (tlcpedi.com)"
+    },
+    {
+      "type": "clinic",
+      "name": "Angel Pediatritics",
+      "city": "Allen",
+      "address": "717 S Greenville Ave Ste 104, Allen, TX 75002",
+      "matchConfidence": "high",
+      "matchReason": "Angel Pediatrics PA Allen (angelpeds.com)"
+    },
+    {
+      "type": "clinic",
+      "name": "Southern Charm Pediatritics",
+      "city": "Allen",
+      "address": "105 N Alma Suite 300, Allen, TX 75013",
+      "matchConfidence": "high",
+      "matchReason": "Southern Charm Pediatrics Allen (southerncharmpediatrics.com)"
+    },
+    {
+      "type": "clinic",
+      "name": "Allen friends and family clinic",
+      "city": "Allen",
+      "address": "1511 W McDermott Dr Bldg 2 Ste 240, Allen, TX 75013",
+      "matchConfidence": "high",
+      "matchReason": "Allen Friends & Family Clinic"
+    },
+    {
+      "type": "clinic",
+      "name": "North Tex MedCare Clinic & Urgent Care Allen",
+      "city": "Allen",
+      "address": "1505 W McDermott Dr Ste 200, Allen, TX 75013",
+      "matchConfidence": "high",
+      "matchReason": "North Tex MedCare Clinic and Urgent Care Allen Twin Creeks"
+    },
+    {
+      "type": "clinic",
+      "name": "Shepherd  family medicine and wellness",
+      "city": "Allen",
+      "address": "515 W Main St, Allen, TX 75013",
+      "matchConfidence": "high",
+      "matchReason": "Shepherd Family Medicine & Wellness Allen (shepherdfamilymedicine.com)"
+    },
+    {
+      "type": "clinic",
+      "name": "Radiant Heart & Vascular",
+      "city": "Lewisville",
+      "address": "500 N Valley Pkwy Ste 100, Lewisville, TX 75067",
+      "matchConfidence": "high",
+      "matchReason": "Radiant Heart & Vascular Care Lewisville; Dr. Siva Sontineni confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Elite Digestive Specialists",
+      "city": "Lewisville",
+      "address": "118 Lynn Ave Ste 500, Lewisville, TX 75057",
+      "matchConfidence": "high",
+      "matchReason": "Elite Digestive Specialists Lewisville; Dr. Laxmi Deepika Koya MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Summit Primary Care and Internal Medicine",
+      "city": "Lewisville",
+      "address": "118 Lynn Ave Ste 502, Lewisville, TX 75057",
+      "matchConfidence": "high",
+      "matchReason": "Summit Primary Care and Internal Medicine Lewisville; Dr. Arunpriya Vadivelu MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Collin County Physicians",
+      "city": "McKinney",
+      "address": "5860 Collin McKinney Pkwy Ste 602, McKinney, TX 75070",
+      "matchConfidence": "high",
+      "matchReason": "Collin County Physicians; Dr. Chirag Chavda confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "McKinney Family Medicine",
+      "city": "McKinney",
+      "address": "7692 Eldorado Pkwy, McKinney, TX 75070",
+      "matchConfidence": "high",
+      "matchReason": "McKinney Family Medicine (mckinneyfamilymed.com); Dr. Brian C. Procter MD owner; Dr. Peter McCullough collaborator"
+    },
+    {
+      "type": "clinic",
+      "name": "Wellness medicine",
+      "city": "McKinney",
+      "address": "3120 Hudson Crossing Ste B2, McKinney, TX 75070",
+      "matchConfidence": "high",
+      "matchReason": "Wellness Medicine McKinney; Dr. Sunila Philips MD FAAFP confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Cardiac Center of Texas",
+      "city": "McKinney",
+      "address": "4201 Medical Center Dr Ste 380, McKinney, TX 75069",
+      "matchConfidence": "high",
+      "matchReason": "Cardiac Center of Texas; Dr. Muhammad Akram Khan MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Texas Health Family and Sports Care",
+      "city": "McKinney",
+      "address": "6210 Virginia Pkwy, McKinney, TX 75071",
+      "matchConfidence": "high",
+      "matchReason": "Texas Health Family & Sports Care McKinney; Dr. Shaun McMurtry confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Meridian Primary Care",
+      "city": "McKinney",
+      "address": "280 Adriatic Pkwy, McKinney, TX 75070",
+      "matchConfidence": "high",
+      "matchReason": "Meridian Primary Care (mymeridianprimarycare.com); Dr. Udita Apte confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "WELLMED",
+      "city": "McKinney",
+      "address": "8080 State Hwy 121 Ste 300, McKinney, TX 75070",
+      "matchConfidence": "high",
+      "matchReason": "WellMed at McKinney South; Dr. Kavitha Moolamalla (note: no longer practicing as of May 2025)"
+    },
+    {
+      "type": "clinic",
+      "name": "McKinney Ranch Medical Care & Wellness",
+      "city": "McKinney",
+      "address": "3950 S Ridge Rd Ste 100, McKinney, TX 75070",
+      "matchConfidence": "high",
+      "matchReason": "McKinney Ranch Medical Care & Wellness; Dr. Janet Lin confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Premier Independent Physicians of McKinney",
+      "city": "McKinney",
+      "address": "1820 N Lake Forest Dr Ste 300, McKinney, TX 75071",
+      "matchConfidence": "high",
+      "matchReason": "Premier Independent Physicians of McKinney; Dr. Zahid Zafar confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Direct Orthopedic Care",
+      "city": "McKinney",
+      "address": "4600 Eldorado Pkwy Ste 600, McKinney, TX 75070",
+      "matchConfidence": "high",
+      "matchReason": "Direct Orthopedic Care McKinney (directorthocare.com)"
+    },
+    {
+      "type": "clinic",
+      "name": "Alpha Orthopedics & Sports Medicine",
+      "city": "McKinney",
+      "address": "6850 TPC Dr Ste 116, McKinney, TX 75070",
+      "matchConfidence": "high",
+      "matchReason": "Alpha Orthopedics & Sports Medicine McKinney; Dr. Jon Thompson confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Texas Renal Care",
+      "city": "McKinney",
+      "address": "7300 W Eldorado Pkwy Ste 125, McKinney, TX 75070",
+      "matchConfidence": "high",
+      "matchReason": "Texas Advanced Renal Health (formerly Texas Renal Care); Dr. Mohammad Nawaf Sadeddin nephrologist confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Boring Family Medicine",
+      "city": "McKinney",
+      "address": "1441 Redbud Blvd Ste 111, McKinney, TX 75069",
+      "matchConfidence": "high",
+      "matchReason": "Boring Family Medicine McKinney; Dr. Billy R. Boring MD"
+    },
+    {
+      "type": "clinic",
+      "name": "The Heartbeat Clinic",
+      "city": "McKinney",
+      "address": "4541 Medical Center Dr Ste 800, McKinney, TX 75069",
+      "matchConfidence": "high",
+      "matchReason": "The Heartbeat Clinic McKinney; Dr. Amer Suleman cardiologist confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Sierra Health Direct Primary care",
+      "city": "McKinney",
+      "address": "1400 N Coit Rd Ste 302, McKinney, TX 75071",
+      "matchConfidence": "high",
+      "matchReason": "Sierra Health DPC McKinney; Dr. Katherine Hurley confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Craig Ranch Pediatrics",
+      "city": "McKinney",
+      "address": "6850 TPC Dr Ste 100, McKinney, TX 75070",
+      "matchConfidence": "high",
+      "matchReason": "Craig Ranch Pediatrics McKinney"
+    },
+    {
+      "type": "clinic",
+      "name": "Family Health Center of Lake Forest",
+      "city": "McKinney",
+      "address": "4987 W University Dr Ste 150, McKinney, TX 75071",
+      "matchConfidence": "high",
+      "matchReason": "Family Health Center of Lake Forest; Dr. William Dodge MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Synder Hopkins Family Medicine",
+      "city": "McKinney",
+      "address": "4561 Medical Center Dr, McKinney, TX 75069",
+      "matchConfidence": "high",
+      "matchReason": "Snyder-Hopkins Family Medicine Center (source typo 'Synder'); Dr. Ann Snyder MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Eldarado Family Medicine",
+      "city": "McKinney",
+      "address": "7701 Eldorado Pkwy Ste 300, McKinney, TX 75070",
+      "matchConfidence": "high",
+      "matchReason": "Eldorado Family Medicine McKinney (source typo 'Eldarado'); Dr. Harris Lin confirmed (source typo 'Haris')"
+    },
+    {
+      "type": "clinic",
+      "name": "BloomMed,LLC:stephanie Cudjoe, MD",
+      "city": "McKinney",
+      "address": "8951 Collin McKinney Pkwy Ste 502, McKinney, TX 75070",
+      "matchConfidence": "high",
+      "matchReason": "BloomMed LLC McKinney; Dr. Stephanie Cudjoe MD confirmed (same physician as Frisco Bloomfield clinic — same provider with McKinney location)"
+    },
+    {
+      "type": "clinic",
+      "name": "Healthcare Associates of Texas",
+      "city": "McKinney",
+      "address": "8080 State Hwy 121 Ste 300, McKinney, TX 75070",
+      "matchConfidence": "high",
+      "matchReason": "Healthcare Associates of Texas McKinney South; Dr. Karla Maltez Salvador confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Mummadi Internel Medicine",
+      "city": "McKinney",
+      "address": "8951 Collin McKinney Pkwy Ste 301, McKinney, TX 75070",
+      "matchConfidence": "high",
+      "matchReason": "Mummadi Internal Medicine McKinney; Dr. Vijaya Mummadi confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "NTX Medical Clinic",
+      "city": "McKinney",
+      "address": "1400 N Coit Rd Ste 2502, McKinney, TX 75071",
+      "matchConfidence": "high",
+      "matchReason": "NTX Medical Clinic McKinney; Dr. Jayasree Kailasam confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Total Men's Primary Care",
+      "city": "McKinney",
+      "address": "6150 Eldorado Pkwy Ste 140, McKinney, TX 75070",
+      "matchConfidence": "high",
+      "matchReason": "Total Men's Primary Care McKinney (totalmens.com)"
+    },
+    {
+      "type": "clinic",
+      "name": "Family Health Center on Virginia",
+      "city": "McKinney",
+      "address": "1620 W Virginia St, McKinney, TX 75069",
+      "matchConfidence": "high",
+      "matchReason": "Family Health Center on Virginia (fhcntx.org); Dr. Brock Pierce OB/GYN confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Tu Clinica Hispana Familiar",
+      "city": "McKinney",
+      "address": "811 N McDonald St, McKinney, TX 75069",
+      "matchConfidence": "high",
+      "matchReason": "Tu Clinica Hispana Familiar McKinney"
+    },
+    {
+      "type": "clinic",
+      "name": "Progressive Health Family Medicine",
+      "city": "McKinney",
+      "address": "8901 Virginia Pkwy, McKinney, TX 75071",
+      "matchConfidence": "high",
+      "matchReason": "Progressive Health Family Medicine; Dr. Hema Haridas confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Dr. Daniel James Chartrand",
+      "city": "McKinney",
+      "address": "302 S Tennessee St, McKinney, TX 75069",
+      "matchConfidence": "high",
+      "matchReason": "Dr. Daniel J. Chartrand MD family medicine McKinney"
+    },
+    {
+      "type": "clinic",
+      "name": "Apollo Medical Associates",
+      "city": "McKinney",
+      "address": "431 Stacy Rd, McKinney, TX 75069",
+      "matchConfidence": "medium",
+      "matchReason": "Apollo Medical Associates McKinney address found; Dr. Heather Myers association not verified in search but practice address confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Adriatica Womens health",
+      "city": "McKinney",
+      "address": "6609 Virginia Pkwy, McKinney, TX 75071",
+      "matchConfidence": "high",
+      "matchReason": "Adriatica Women's Health McKinney; Dr. Tracey Banks OB/GYN confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Children Choice Pediatrics",
+      "city": "McKinney",
+      "address": "6587 Virginia Pkwy, McKinney, TX 75071",
+      "matchConfidence": "high",
+      "matchReason": "Children's Choice Pediatrics McKinney; Stacie Hunsaker CPNP confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Pediatrics People PLLC",
+      "city": "McKinney",
+      "address": "11955 Dallas Pkwy Ste 400, Frisco, TX 75033",
+      "matchConfidence": "low",
+      "matchReason": "Pediatric People PLLC primary office is in Frisco (not McKinney); Dr. Audra Linck confirmed. City mismatch in source."
+    },
+    {
+      "type": "clinic",
+      "name": "Texas Institute for Neurological Disorders",
+      "city": "McKinney",
+      "address": "2517 Virginia Pkwy Ste 102, McKinney, TX 75071",
+      "matchConfidence": "high",
+      "matchReason": "Texas Institute for Neurological Disorders McKinney; Dr. Easwar Sundaram Jr. confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Lone Star Neurology",
+      "city": "McKinney",
+      "address": "5531 Virginia Pkwy Ste 100, McKinney, TX 75071",
+      "matchConfidence": "high",
+      "matchReason": "Lone Star Neurology McKinney"
+    },
+    {
+      "type": "clinic",
+      "name": "Silver Spine & Neurological Center",
+      "city": "McKinney",
+      "address": "7300 Eldorado Pkwy Ste 200, McKinney, TX 75070",
+      "matchConfidence": "high",
+      "matchReason": "Silver Spine & Neurological Center McKinney; Dr. M. Viktor Silver confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Dr. Angela Tseng",
+      "city": "McKinney",
+      "address": "6850 TPC Dr Ste 102, McKinney, TX 75070",
+      "matchConfidence": "medium",
+      "matchReason": "Dr. Angela Tseng MD McKinney; she is a cardiologist (source 'GI' field appears incorrect)"
+    },
+    {
+      "type": "clinic",
+      "name": "New Hope Diabetes Care & Prevention",
+      "city": "McKinney",
+      "address": "5220 W University Dr Ste 250, McKinney, TX 75071",
+      "matchConfidence": "low",
+      "matchReason": "Dr. Sana Ullah practices at Baylor Scott & White Endocrinology McKinney; no 'New Hope Diabetes Care & Prevention' practice found. Using doctor's known office"
+    },
+    {
+      "type": "clinic",
+      "name": "Advanced Surgical of North Texas",
+      "city": "McKinney",
+      "address": "8080 State Hwy 121 Ste 120, McKinney, TX 75070",
+      "matchConfidence": "high",
+      "matchReason": "Advanced Surgical of North Texas McKinney; Dr. Steve Duffy founder confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Laurie Novosad, M.D., FASCRS",
+      "city": "McKinney",
+      "address": "5236 W University Dr Ste 4300, McKinney, TX 75071",
+      "matchConfidence": "high",
+      "matchReason": "Dr. Laurie S. Novosad MD colorectal surgeon McKinney (Texas Colon & Rectal Surgeons)"
+    },
+    {
+      "type": "clinic",
+      "name": "Francy Y Shu",
+      "city": "McKinney",
+      "address": "5236 W University Dr Ste 3700, McKinney, TX 75071",
+      "matchConfidence": "high",
+      "matchReason": "Dr. Francy Y. Shu MD neurologist McKinney (Baylor Scott & White Neurology)"
+    },
+    {
+      "type": "clinic",
+      "name": "North Texas Brain and Spine Specialists",
+      "city": "McKinney",
+      "address": "8000 Eldorado Pkwy Bldg E Ste A, McKinney, TX 75070",
+      "matchConfidence": "high",
+      "matchReason": "North Texas Brain & Spine Specialists McKinney (ntbss.com); Dr. Brite Chalunkal listed at related Texas Spine Physicians"
+    },
+    {
+      "type": "clinic",
+      "name": "Texas Health Internal Medicine",
+      "city": "McKinney",
+      "address": "5881 Virginia Pkwy Ste 300, McKinney, TX 75071",
+      "matchConfidence": "high",
+      "matchReason": "Texas Health Internal Medicine McKinney location"
+    },
+    {
+      "type": "clinic",
+      "name": "Nutritional Blessings",
+      "city": "McKinney",
+      "address": "503 N Kentucky St, McKinney, TX 75069",
+      "matchConfidence": "high",
+      "matchReason": "Nutritional Blessings McKinney"
+    },
+    {
+      "type": "clinic",
+      "name": "Texas Star Pain & Spine",
+      "city": "McKinney",
+      "address": "3000 Communications Pkwy Ste 200, Plano, TX 75093",
+      "matchConfidence": "low",
+      "matchReason": "Texas Star Pain & Spine (Dr. Gonzalo Gonzales DO) has Plano/Carrollton/Frisco locations; no McKinney address confirmed. Using Plano office"
+    },
+    {
+      "type": "clinic",
+      "name": "Comprehensive OB/GYN",
+      "city": "McKinney",
+      "address": "1700 N Lake Forest Dr, McKinney, TX 75071",
+      "matchConfidence": "high",
+      "matchReason": "Comprehensive OB/GYN McKinney; Dr. Gerald D. Luciani MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Synergy Primary Clinic",
+      "city": "McKinney",
+      "address": "2107 Eldorado Pkwy Ste 106, McKinney, TX 75070",
+      "matchConfidence": "high",
+      "matchReason": "Synergy Primary Clinic; Dr. Saboohi Zafar MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "El Shaddai Family Clinic",
+      "city": "McKinney",
+      "address": "1740 W Virginia St Ste 400, McKinney, TX 75069",
+      "matchConfidence": "high",
+      "matchReason": "El Shaddai Family Clinic McKinney (elshaddaifamilyclinic.com)"
+    },
+    {
+      "type": "clinic",
+      "name": "Express Family Clinic",
+      "city": "McKinney",
+      "address": "940 Ridgeview Dr Ste 150, Allen, TX 75013",
+      "matchConfidence": "low",
+      "matchReason": "Express Family Clinic with Dr. Pardeep Parihar is in Allen TX (expressphysician.com); no McKinney location found"
+    },
+    {
+      "type": "clinic",
+      "name": "The Well Integrative Medicine",
+      "city": "McKinney",
+      "address": "7692 Eldorado Pkwy, McKinney, TX 75070",
+      "matchConfidence": "high",
+      "matchReason": "The Well Integrative Medicine McKinney (wellintmed.com); Dr. Brian C. Procter (same address as McKinney Family Medicine — sister practice)"
+    },
+    {
+      "type": "clinic",
+      "name": "Pain Treatment Institute",
+      "city": "McKinney",
+      "address": "7668 Eldorado Pkwy Ste 100, McKinney, TX 75070",
+      "matchConfidence": "high",
+      "matchReason": "Pain Treatment Institute McKinney; Dr. Sameer Syed MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Lice Clinics of America",
+      "city": "McKinney",
+      "address": "3120 Hudson Crossing Ste A2, McKinney, TX 75070",
+      "matchConfidence": "high",
+      "matchReason": "Lice Clinics of America McKinney"
+    },
+    {
+      "type": "clinic",
+      "name": "Texas family healthcare",
+      "city": "McKinney",
+      "address": "140 S Custer Rd Ste 100, McKinney, TX 75070",
+      "matchConfidence": "high",
+      "matchReason": "Texas Health Family Care McKinney; Dr. Sophia Hussain MD family medicine confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "PebblePath Pediatric Dentistry&Orthodontics",
+      "city": "McKinney",
+      "address": "6633 Eldorado Pkwy Ste 100, McKinney, TX 75070",
+      "matchConfidence": "high",
+      "matchReason": "PebblePath Pediatric Dentistry McKinney (pebblepathdds.com)"
+    },
+    {
+      "type": "clinic",
+      "name": "North Dallas Urology Associates",
+      "city": "McKinney",
+      "address": "4501 Medical Center Dr Ste 100, McKinney, TX 75069",
+      "matchConfidence": "high",
+      "matchReason": "North Dallas Urology Associates McKinney; Dr. Stephen Lieman confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "McKinney Adult Medicine",
+      "city": "McKinney",
+      "address": "4501 Medical Center Dr Ste 200, McKinney, TX 75069",
+      "matchConfidence": "high",
+      "matchReason": "McKinney Adult Medicine; Dr. Michael Parisi DO founder confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Complete Heart Care",
+      "city": "McKinney",
+      "address": "2517 Virginia Pkwy Ste 101, McKinney, TX 75071",
+      "matchConfidence": "high",
+      "matchReason": "Complete Heart Care PA McKinney; Dr. Faizan Iftikhar MD cardiologist confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Just For Kids Dentistry",
+      "city": "McKinney",
+      "address": "601 Main St Ste 220, Keller, TX 76248",
+      "matchConfidence": "low",
+      "matchReason": "Dr. Jeffrey Hoffman DDS Just For Kids Dentistry is in Keller TX (not McKinney); 'Just for Kids' pediatric dentist McKinney is a separate practice — included as best match"
+    },
+    {
+      "type": "clinic",
+      "name": "Children's Choice Pediatrics",
+      "city": "McKinney",
+      "address": "6587 Virginia Pkwy, McKinney, TX 75071",
+      "matchConfidence": "high",
+      "matchReason": "Children's Choice Pediatrics McKinney (same as 'Children Choice Pediatrics' already found)"
+    },
+    {
+      "type": "clinic",
+      "name": "Exult Healthcare",
+      "city": "McKinney",
+      "address": "4801 Medical Center Dr, McKinney, TX 75069",
+      "matchConfidence": "high",
+      "matchReason": "Exult Healthcare McKinney; Dr. Deepika Bhargava MD psychiatrist confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Dr Visalakshi Rao Vallury",
+      "city": "McKinney",
+      "address": "5971 Virginia Pkwy Ste 100, McKinney, TX 75071",
+      "matchConfidence": "high",
+      "matchReason": "Dr. Visalakshi Rao Vallury MD family medicine McKinney"
+    },
+    {
+      "type": "clinic",
+      "name": "McKinney Endodontics",
+      "city": "McKinney",
+      "address": "5913 Virginia Pkwy Ste 400, McKinney, TX 75071",
+      "matchConfidence": "high",
+      "matchReason": "McKinney Endodontics; Dr. Paul D. Clark DDS confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Holistic Health Center of Dallas",
+      "city": "McKinney",
+      "address": "1701 W Eldorado Pkwy Ste 202, McKinney, TX 75069",
+      "matchConfidence": "high",
+      "matchReason": "Holistic Health Center of Dallas McKinney location"
+    },
+    {
+      "type": "clinic",
+      "name": "Unity Wellness group",
+      "city": "McKinney",
+      "address": "1701 Eldorado Pkwy Ste 202, McKinney, TX 75069",
+      "matchConfidence": "high",
+      "matchReason": "Unity Wellness Group McKinney; Dr. Sumit Katyal MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "CommonGood Medical",
+      "city": "McKinney",
+      "address": "103 E Lamar St, McKinney, TX 75069",
+      "matchConfidence": "high",
+      "matchReason": "CommonGood Medical (formerly Hope Clinic of McKinney); Dr. Theresa Olfson MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Craig Ranch OB/GYN",
+      "city": "McKinney",
+      "address": "7900 Henneman Way Ste 100, McKinney, TX 75070",
+      "matchConfidence": "high",
+      "matchReason": "Craig Ranch OB/GYN McKinney; Dr. Heather Derrick MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Padda, Manmeet - Digestive Health Associates of Texas Pa",
+      "city": "McKinney",
+      "address": "4521 Medical Center Dr Ste 500, McKinney, TX 75069",
+      "matchConfidence": "high",
+      "matchReason": "Dr. Manmeet Padda DHAT McKinney gastroenterologist confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Banks, Tracey - Tracey Banks, MD",
+      "city": "McKinney",
+      "address": "6609 Virginia Pkwy, McKinney, TX 75071",
+      "matchConfidence": "high",
+      "matchReason": "Dr. Tracey Banks MD OB/GYN McKinney (Adriatica Women's Health) - duplicate of 'Adriatica Womens health'"
+    },
+    {
+      "type": "clinic",
+      "name": "Pediatric Heathcare Associates",
+      "city": "McKinney",
+      "address": "3701 Eldorado Pkwy Ste A, McKinney, TX 75070",
+      "matchConfidence": "high",
+      "matchReason": "Pediatric Healthcare Associates McKinney (phamckinney.com); Dr. Elizabeth Bonnet MD FAAP confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "MCKINNEY RANCH FAMILY DENTAL + KIDS",
+      "city": "McKinney",
+      "address": "3950 S Ridge Rd Ste 500, McKinney, TX 75070",
+      "matchConfidence": "medium",
+      "matchReason": "McKinney Ranch Family Dental address found; 'Dr. Hsia' specifically not confirmed but practice address verified"
+    },
+    {
+      "type": "clinic",
+      "name": "ORTHODONIST",
+      "city": "McKinney",
+      "address": "7700 Eldorado Pkwy Ste 200, McKinney, TX 75070",
+      "matchConfidence": "high",
+      "matchReason": "Sigoda Orthodontics; Dr. Victor Sigoda DDS orthodontist McKinney confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Best kids care",
+      "city": "McKinney",
+      "address": "4200 S Lake Forest Dr Ste 100, McKinney, TX 75070",
+      "matchConfidence": "high",
+      "matchReason": "Best Kids Care McKinney; Dr. Masoud Almasi MD pediatrician confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Graff Foot Ankle & Wound CareMckinney",
+      "city": "McKinney",
+      "address": "1400 N Coit Rd Ste 503, McKinney, TX 75071",
+      "matchConfidence": "high",
+      "matchReason": "Graff Foot, Ankle and Wound Care McKinney"
+    },
+    {
+      "type": "clinic",
+      "name": "Village Green Memory Care",
+      "city": "McKinney",
+      "address": "3149 Medical Center Dr, McKinney, TX 75069",
+      "matchConfidence": "high",
+      "matchReason": "Village Green Memory Care McKinney; Nish Sabir Director of Operations confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Revive Primary Care",
+      "city": "McKinney",
+      "address": "4987 W University Dr Ste 150, McKinney, TX 75071",
+      "matchConfidence": "high",
+      "matchReason": "Revive Primary Care & Med Spa McKinney; Keesha Copeland APRN AGNP-C confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Blue Diamond Physical MedicineMckinney",
+      "city": "McKinney",
+      "address": "270 Redbud Blvd Ste 100, McKinney, TX 75069",
+      "matchConfidence": "high",
+      "matchReason": "Blue Diamond Physical Medicine McKinney; Dr. James W. Lundin DC FNP-C confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Southern Charm Pediatrics",
+      "city": "McKinney",
+      "address": "1400 N Coit Rd Ste 302, McKinney, TX 75071",
+      "matchConfidence": "high",
+      "matchReason": "Southern Charm Pediatrics McKinney temporary location"
+    },
+    {
+      "type": "clinic",
+      "name": "Metroplex Medical Centre",
+      "city": "McKinney",
+      "address": "5971 Virginia Pkwy Ste 100, McKinney, TX 75071",
+      "matchConfidence": "high",
+      "matchReason": "Metroplex Medical Centre McKinney; Dr. Antoine Albert MD (source typo 'Antonine')"
+    },
+    {
+      "type": "clinic",
+      "name": "Princeton Medical Associates",
+      "city": "McKinney",
+      "address": "4201 Medical Center Dr Ste 240, McKinney, TX 75069",
+      "matchConfidence": "high",
+      "matchReason": "Princeton Medical Associates McKinney (princetonmedicalassociates.com)"
+    },
+    {
+      "type": "clinic",
+      "name": "Premier Independant",
+      "city": "McKinney",
+      "address": "1820 N Lake Forest Dr Ste 300, McKinney, TX 75071",
+      "matchConfidence": "high",
+      "matchReason": "Premier Independent Physicians McKinney (same as 'Premier Independent Physicians of McKinney')"
+    },
+    {
+      "type": "clinic",
+      "name": "Care Choice",
+      "city": "McKinney",
+      "address": "1400 N Coit Rd, McKinney, TX 75071",
+      "matchConfidence": "low",
+      "matchReason": "Best guess: Choice Family Medicine Clinic of Texas in McKinney; 'Care Choice' name not exact match"
+    },
+    {
+      "type": "clinic",
+      "name": "Highland Medical and primary",
+      "city": "McKinney",
+      "address": "1000 E Beltline Rd Ste 112, Carrollton, TX 75006",
+      "matchConfidence": "low",
+      "matchReason": "Highlands Medical and Wellness (Dr. Van Tran) is in Carrollton not McKinney; using Carrollton address as best match"
+    },
+    {
+      "type": "clinic",
+      "name": "Dr. Kyle K. Carter MD",
+      "city": "McKinney",
+      "address": "1428 W Hebron Pkwy Ste 110, Carrollton, TX 75010",
+      "matchConfidence": "low",
+      "matchReason": "Dr. Kyle Carter MD primary office is in Carrollton (Precision Family Medicine); no specific McKinney office found"
+    },
+    {
+      "type": "clinic",
+      "name": "Nutricional Blessing",
+      "city": "McKinney",
+      "address": "503 N Kentucky St, McKinney, TX 75069",
+      "matchConfidence": "medium",
+      "matchReason": "Likely typo for 'Nutritional Blessings' McKinney"
+    },
+    {
+      "type": "clinic",
+      "name": "Children choice red",
+      "city": "McKinney",
+      "address": "6587 Virginia Pkwy, McKinney, TX 75071",
+      "matchConfidence": "medium",
+      "matchReason": "Children's Choice Pediatrics McKinney; Neha Haider CPNP confirmed (note source typo 'Heider'; 'red' suffix unclear)"
+    },
+    {
+      "type": "clinic",
+      "name": "TX Institute of Cardiology",
+      "city": "McKinney",
+      "address": "5313 W University Dr, McKinney, TX 75071",
+      "matchConfidence": "high",
+      "matchReason": "Texas Institute of Cardiology PA McKinney; Dr. Faisal Wahid MD (source typo 'Faisail')"
+    },
+    {
+      "type": "clinic",
+      "name": "Cynder Hopkins Family Medicine",
+      "city": "McKinney",
+      "address": "4561 Medical Center Dr, McKinney, TX 75069",
+      "matchConfidence": "high",
+      "matchReason": "Typo for 'Snyder-Hopkins Family Medicine' McKinney"
+    },
+    {
+      "type": "clinic",
+      "name": "Banks Tracey A. MD",
+      "city": "McKinney",
+      "address": "6609 Virginia Pkwy, McKinney, TX 75071",
+      "matchConfidence": "high",
+      "matchReason": "Dr. Tracey A. Banks MD OB/GYN (Adriatica Women's Health) — duplicate"
+    },
+    {
+      "type": "clinic",
+      "name": "Allen OB/GYN",
+      "city": "McKinney",
+      "address": "931 SH 121 Ste 2350, Allen, TX 75013",
+      "matchConfidence": "low",
+      "matchReason": "Allen OB/GYN (Dr. Sreedhar Tallapureddy) primary office is in Allen TX; serves McKinney patients but no McKinney office confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "North Central Womans Health",
+      "city": "McKinney",
+      "address": "4541 Medical Center Dr, McKinney, TX 75069",
+      "matchConfidence": "high",
+      "matchReason": "North Central Women's Health Partners McKinney"
+    },
+    {
+      "type": "clinic",
+      "name": "North Dallas Urology",
+      "city": "McKinney",
+      "address": "4501 Medical Center Dr Ste 100, McKinney, TX 75069",
+      "matchConfidence": "high",
+      "matchReason": "North Dallas Urology Associates McKinney; Dr. Alexander Martin MD confirmed (same address as 'North Dallas Urology Associates')"
+    },
+    {
+      "type": "clinic",
+      "name": "Julia Minigutti PA-C",
+      "city": "McKinney",
+      "address": "8000 Eldorado Pkwy Ste A, McKinney, TX 75070",
+      "matchConfidence": "high",
+      "matchReason": "Julia Minigutti PA-C McKinney"
+    },
+    {
+      "type": "clinic",
+      "name": "El Shddai Family clinic",
+      "city": "McKinney",
+      "address": "1740 W Virginia St Ste 400, McKinney, TX 75069",
+      "matchConfidence": "high",
+      "matchReason": "Typo for El Shaddai Family Clinic McKinney"
+    },
+    {
+      "type": "clinic",
+      "name": "Texas Health Care Neck and back",
+      "city": "McKinney",
+      "address": "1720 N Central Expy Ste 200, McKinney, TX 75070",
+      "matchConfidence": "high",
+      "matchReason": "Texas Healthcare Neck & Back Clinics McKinney; Dr. Douglas Lester DC CEO confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "AIRROSTI",
+      "city": "McKinney",
+      "address": "2720 Virginia Pkwy Ste 200, McKinney, TX 75071",
+      "matchConfidence": "high",
+      "matchReason": "Airrosti McKinney; Dr. Keith Maraffa DC confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "The Adley Craig Racnh",
+      "city": "McKinney",
+      "address": "8951 McCutchins Dr, McKinney, TX 75070",
+      "matchConfidence": "high",
+      "matchReason": "The Adley Craig Ranch Apartments (not a clinic — apartment complex)"
+    },
+    {
+      "type": "clinic",
+      "name": "Alpha Orthopedics and sports",
+      "city": "McKinney",
+      "address": "6850 TPC Dr Ste 116, McKinney, TX 75070",
+      "matchConfidence": "high",
+      "matchReason": "Alpha Orthopedics & Sports Medicine McKinney; Dr. Brian Snow MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Next Step Orthopedics",
+      "city": "McKinney",
+      "address": "8865 Synergy Dr Ste 101, McKinney, TX 75070",
+      "matchConfidence": "high",
+      "matchReason": "Next Step Orthopedics McKinney; Dr. Dominique Nickson MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Digestive Health Associates",
+      "city": "McKinney",
+      "address": "4521 Medical Center Dr Ste 500, McKinney, TX 75069",
+      "matchConfidence": "high",
+      "matchReason": "DHAT McKinney; Dr. Sanjay Nayyar MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "GRAFF Foot-Ankle Wound Care",
+      "city": "McKinney",
+      "address": "1400 N Coit Rd Ste 503, McKinney, TX 75071",
+      "matchConfidence": "high",
+      "matchReason": "Graff Foot Ankle and Wound Care McKinney (duplicate); Dr. Evan Kyprios DPM"
+    },
+    {
+      "type": "clinic",
+      "name": "Texas Allergy MD",
+      "city": "McKinney",
+      "address": "1400 N Coit Rd Ste 405, McKinney, TX 75071",
+      "matchConfidence": "high",
+      "matchReason": "TexasAllergyMD McKinney; Dr. Nana Mireku MD allergist confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Unity Wellness Clinic and Rehab",
+      "city": "McKinney",
+      "address": "1701 Eldorado Pkwy Ste 202, McKinney, TX 75069",
+      "matchConfidence": "high",
+      "matchReason": "Same as 'Unity Wellness Group' McKinney"
+    },
+    {
+      "type": "clinic",
+      "name": "Blue Diamond Physical Medicine",
+      "city": "McKinney",
+      "address": "270 Redbud Blvd Ste 100, McKinney, TX 75069",
+      "matchConfidence": "high",
+      "matchReason": "Blue Diamond Physical Medicine McKinney (duplicate)"
+    },
+    {
+      "type": "clinic",
+      "name": "Visalakshi Rao Vallury",
+      "city": "McKinney",
+      "address": "5971 Virginia Pkwy Ste 100, McKinney, TX 75071",
+      "matchConfidence": "high",
+      "matchReason": "Dr. Visalakshi Rao Vallury MD McKinney (duplicate)"
+    },
+    {
+      "type": "clinic",
+      "name": "Synapse Psychotherapy , LLC",
+      "city": "McKinney",
+      "address": "McKinney, TX 75069",
+      "matchConfidence": "low",
+      "matchReason": "Joseph Dustin Cobb LCSW Synapse Psychotherapy McKinney; specific street address not publicly listed - ZIP only"
+    },
+    {
+      "type": "clinic",
+      "name": "Cesar Reyes MD",
+      "city": "McKinney",
+      "address": "1700 N Lake Forest Dr, McKinney, TX 75071",
+      "matchConfidence": "high",
+      "matchReason": "Dr. Cesar A. Reyes MD OB/GYN (Comprehensive OB/GYN) McKinney"
+    },
+    {
+      "type": "clinic",
+      "name": "Mckinney Footcare",
+      "city": "McKinney",
+      "address": "5337 W University Dr Ste 100, McKinney, TX 75071",
+      "matchConfidence": "high",
+      "matchReason": "McKinney Foot Care; Dr. Nehal Modha DPM (source typo 'Nehla')"
+    },
+    {
+      "type": "clinic",
+      "name": "DHAT Mckinney",
+      "city": "McKinney",
+      "address": "5337 W University Dr Ste 200 Bldg G, McKinney, TX 75071",
+      "matchConfidence": "high",
+      "matchReason": "DHAT McKinney; Dr. Ravi S. Chittajallu MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Brian Joe , MD Neurology",
+      "city": "McKinney",
+      "address": "2709 Virginia Pkwy Ste 200, McKinney, TX 75071",
+      "matchConfidence": "high",
+      "matchReason": "Dr. Brian L. Joe MD neurologist McKinney"
+    },
+    {
+      "type": "clinic",
+      "name": "Ashna Adams D.O",
+      "city": "McKinney",
+      "address": "4521 Medical Center Dr Ste 500, McKinney, TX 75069",
+      "matchConfidence": "high",
+      "matchReason": "Dr. Asha Adams DO (source typo 'Ashna') gastroenterologist DHAT McKinney"
+    },
+    {
+      "type": "clinic",
+      "name": "Dr. Vani Ramesh",
+      "city": "Plano",
+      "address": "4670 McDermott Rd Ste 202, Plano, TX 75024",
+      "matchConfidence": "high",
+      "matchReason": "Dr. Vani Ramesh MD at Shiva Medical Care Center Plano"
+    },
+    {
+      "type": "clinic",
+      "name": "Dr. Vani Ramesh, MD",
+      "city": "Plano",
+      "address": "4670 McDermott Rd Ste 202, Plano, TX 75024",
+      "matchConfidence": "high",
+      "matchReason": "Duplicate of 'Dr. Vani Ramesh'"
+    },
+    {
+      "type": "clinic",
+      "name": "Shiva Medical Center",
+      "city": "Plano",
+      "address": "4670 McDermott Rd Ste 202, Plano, TX 75024",
+      "matchConfidence": "high",
+      "matchReason": "Shiva Medical Care Center Plano; Dr. Vani Ramesh confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Nest Family Medicine",
+      "city": "Plano",
+      "address": "4920 McDermott Rd Ste 200, Plano, TX 75024",
+      "matchConfidence": "high",
+      "matchReason": "Nest Family Medicine Plano; Dr. Priti Ranjan confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Plano Supreme Primary Care",
+      "city": "Plano",
+      "address": "4020 Hedgcoxe Rd Ste 700, Plano, TX 75024",
+      "matchConfidence": "high",
+      "matchReason": "Plano Supreme Primary Care; Dr. Yinghui (Carol) Liu confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Chong Liu, MD",
+      "city": "Plano",
+      "address": "7712 San Jacinto Pl Ste 100, Plano, TX 75024",
+      "matchConfidence": "high",
+      "matchReason": "Dr. Chong Liu MD family medicine Plano"
+    },
+    {
+      "type": "clinic",
+      "name": "Nisha Satish,MD",
+      "city": "Plano",
+      "address": "7170 Preston Rd Ste 200, Plano, TX 75024",
+      "matchConfidence": "high",
+      "matchReason": "Dr. Nisha Satish MD Plano"
+    },
+    {
+      "type": "clinic",
+      "name": "Harini Meda",
+      "city": "Plano",
+      "address": "4508 Legacy Dr Ste 400, Plano, TX 75024",
+      "matchConfidence": "high",
+      "matchReason": "Dr. Harinineeraja Meda MD Plano"
+    },
+    {
+      "type": "clinic",
+      "name": "Plano Family Medicine",
+      "city": "Plano",
+      "address": "1220 Coit Rd Ste 105, Plano, TX 75075",
+      "matchConfidence": "high",
+      "matchReason": "Plano Family Medicine; Dr. Alice Chen DO confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Plano Primay care",
+      "city": "Plano",
+      "address": "1600 Coit Rd, Plano, TX 75075",
+      "matchConfidence": "high",
+      "matchReason": "Plano Primary Care; Dr. Kalpana Thakur confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Plano Primary Care",
+      "city": "Plano",
+      "address": "1600 Coit Rd, Plano, TX 75075",
+      "matchConfidence": "high",
+      "matchReason": "Duplicate of 'Plano Primay care'"
+    },
+    {
+      "type": "clinic",
+      "name": "Dr. Hina Rizvi, MD",
+      "city": "Plano",
+      "address": "7709 San Jacinto Pl Ste 100, Plano, TX 75024",
+      "matchConfidence": "high",
+      "matchReason": "Dr. Hina Rizvi MD wound care Plano"
+    },
+    {
+      "type": "clinic",
+      "name": "Medina Primary Care",
+      "city": "Plano",
+      "address": "4013 14th St Ste 401, Plano, TX 75074",
+      "matchConfidence": "high",
+      "matchReason": "Medina Primary Care Plano; Dr. Mir Ali MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Centennial Primary Care",
+      "city": "Plano",
+      "address": "9925 Gillespie Dr Ste 3400, Plano, TX 75025",
+      "matchConfidence": "high",
+      "matchReason": "Centennial Primary Care PLLC Plano; Dr. Nuzhat Ahmed MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Dr. John Chuang",
+      "city": "Plano",
+      "address": "1524 Independence Pkwy Ste A1, Plano, TX 75075",
+      "matchConfidence": "high",
+      "matchReason": "Dr. John Chuang MD family medicine Plano"
+    },
+    {
+      "type": "clinic",
+      "name": "Dr. Farid F. Taie",
+      "city": "Plano",
+      "address": "1409 Shiloh Rd Ste 150, Plano, TX 75074",
+      "matchConfidence": "high",
+      "matchReason": "Dr. Farid F. Taie DO family medicine Plano"
+    },
+    {
+      "type": "clinic",
+      "name": "Dr. Hanh Dieu T. Nguyen",
+      "city": "Plano",
+      "address": "6513A Chase Oaks Blvd, Plano, TX 75023",
+      "matchConfidence": "high",
+      "matchReason": "Dr. Hanh-Dieu Thi Nguyen MD family medicine Plano"
+    },
+    {
+      "type": "clinic",
+      "name": "Elpis Primary Care",
+      "city": "Plano",
+      "address": "4116 W Spring Creek Pkwy Ste 400, Plano, TX 75024",
+      "matchConfidence": "high",
+      "matchReason": "Elpis Healthcare Plano; Dr. Saquib Ibrahim MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Omni Medical Center",
+      "city": "Plano",
+      "address": "4666 McDermott Rd Ste 100, Plano, TX 75024",
+      "matchConfidence": "high",
+      "matchReason": "OMNI Medical Center Plano; Dr. Yan Li MD confirmed (source 'Yang Li')"
+    },
+    {
+      "type": "clinic",
+      "name": "Dr.Sherryl Shipes",
+      "city": "Plano",
+      "address": "1218 W McDermott Dr, Allen, TX 75013",
+      "matchConfidence": "low",
+      "matchReason": "Dr. Sherryl Shipes DO has offices in Allen and Frisco (not Plano); no Plano office found"
+    },
+    {
+      "type": "clinic",
+      "name": "Endocrine Associates of Dallas & Plano",
+      "city": "Plano",
+      "address": "10260 N Central Expy Ste 100N, Dallas, TX 75231",
+      "matchConfidence": "medium",
+      "matchReason": "Dr. Camille Folkard at Endocrine Associates of Dallas; Dallas office listed (Plano office exists but Dallas is the primary address shown)"
+    },
+    {
+      "type": "clinic",
+      "name": "Balance Diabetes and Endrocrinology",
+      "city": "Plano",
+      "address": "6533 Preston Rd Ste 100, Plano, TX 75024",
+      "matchConfidence": "high",
+      "matchReason": "Balance Diabetes and Endocrinology Plano"
+    },
+    {
+      "type": "clinic",
+      "name": "Dr. Qing Jia",
+      "city": "Plano",
+      "address": "7705 San Jacinto Pl Ste 100, Plano, TX 75024",
+      "matchConfidence": "high",
+      "matchReason": "Dr. Qing Jia MD endocrinologist Plano (Southern Endocrinology and Diabetes Associates)"
+    },
+    {
+      "type": "clinic",
+      "name": "Elizabeth M Papaila",
+      "city": "Plano",
+      "address": "4708 Alliance Blvd Ste 270, Plano, TX 75093",
+      "matchConfidence": "high",
+      "matchReason": "Dr. Elizabeth M. Papaila MD general surgeon Plano"
+    },
+    {
+      "type": "clinic",
+      "name": "TEXAS CHILD NEUROLOGY, LLP",
+      "city": "Plano",
+      "address": "4032 McDermott Rd Ste 100, Plano, TX 75024",
+      "matchConfidence": "high",
+      "matchReason": "Texas Child Neurology Plano; Dr. Robert Chudnow MD (retired)"
+    },
+    {
+      "type": "clinic",
+      "name": "Dr. Abdul A. Baker",
+      "city": "Plano",
+      "address": "555 Republic Dr Ste 100, Plano, TX 75074",
+      "matchConfidence": "high",
+      "matchReason": "Dr. Abdul Baker neurosurgeon Plano"
+    },
+    {
+      "type": "clinic",
+      "name": "Comprehensive Pain Solutions of Texas: Bryan Aduddell, M.D",
+      "city": "Plano",
+      "address": "1300 Medical Ave Ste 102, Plano, TX 75075",
+      "matchConfidence": "high",
+      "matchReason": "Comprehensive Pain Solutions of Texas Plano; Dr. Bryan Aduddell MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "ReGen Pain Management: Jonathan Koning, MD",
+      "city": "Plano",
+      "address": "6020 W Parker Rd Ste 300, Plano, TX 75093",
+      "matchConfidence": "high",
+      "matchReason": "ReGen Pain Management Plano; Dr. Jonathan Koning MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "The Behavior Exchange",
+      "city": "Plano",
+      "address": "6105 Windcom Ct Ste 400, Plano, TX 75093",
+      "matchConfidence": "high",
+      "matchReason": "The Behavior Exchange Plano (ABA therapy)"
+    },
+    {
+      "type": "clinic",
+      "name": "Southwest Allergy & Asthma Center",
+      "city": "Plano",
+      "address": "6100 Windcom Ct, Plano, TX 75093",
+      "matchConfidence": "high",
+      "matchReason": "Southwest Allergy & Asthma Center Plano; Dr. John Van Wagoner MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Edward T. Shin,M.D",
+      "city": "Plano",
+      "address": "5804 Communications Pkwy Ste 100, Plano, TX 75093",
+      "matchConfidence": "high",
+      "matchReason": "Dr. Edward T. Shin MD pain management Plano"
+    },
+    {
+      "type": "clinic",
+      "name": "Vista Physical Therapy - Plano, Windcom Ct",
+      "city": "Plano",
+      "address": "6105 Windcom Ct Ste 300, Plano, TX 75093",
+      "matchConfidence": "high",
+      "matchReason": "Vista Physical Therapy Plano Windcom Ct location"
+    },
+    {
+      "type": "clinic",
+      "name": "CityBridge Urgent Care",
+      "city": "Plano",
+      "address": "910 W Parker Rd Ste 102, Plano, TX 75075",
+      "matchConfidence": "high",
+      "matchReason": "CityBridge Urgent Care Plano"
+    },
+    {
+      "type": "clinic",
+      "name": "Dr. Isaac Z. Pugach",
+      "city": "Plano",
+      "address": "660 N Central Expy Ste 640, Plano, TX 75074",
+      "matchConfidence": "high",
+      "matchReason": "Dr. Isaac Z. Pugach MD Pure Spring Medical Plano"
+    },
+    {
+      "type": "clinic",
+      "name": "Dr. Philip K. Chen",
+      "city": "Plano",
+      "address": "5904 Chapel Hill Blvd Ste 102, Plano, TX 75075",
+      "matchConfidence": "high",
+      "matchReason": "Dr. Philip K. Chen MD family medicine Plano"
+    },
+    {
+      "type": "clinic",
+      "name": "Family Health and Wellness of Plano",
+      "city": "Plano",
+      "address": "5148 Village Creek Dr Ste 300, Plano, TX 75093",
+      "matchConfidence": "high",
+      "matchReason": "Family Health & Wellness of Plano; Dr. Russell B. Skinner MD founder confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Plano Family clinic",
+      "city": "Plano",
+      "address": "6513A Chase Oaks Blvd, Plano, TX 75023",
+      "matchConfidence": "high",
+      "matchReason": "Plano Family Clinic; Dr. Hanh-Dieu Nguyen confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Serenity Primary Care",
+      "city": "Plano",
+      "address": "1208 Village Creek Dr Ste 104, Plano, TX 75093",
+      "matchConfidence": "high",
+      "matchReason": "Serenity Primary Care Plano; Dr. Parvane Rashidi-Birgani MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Rajiv M Joseph MD, PhD, FAAN",
+      "city": "Plano",
+      "address": "7920 Preston Rd Ste 100, Plano, TX 75024",
+      "matchConfidence": "high",
+      "matchReason": "Dr. Rajiv M. Joseph MD neurologist Plano"
+    },
+    {
+      "type": "clinic",
+      "name": "Back to Health Clinic",
+      "city": "Plano",
+      "address": "2301 Ohio Dr Ste 245, Plano, TX 75093",
+      "matchConfidence": "medium",
+      "matchReason": "Back to Health Clinic chiropractor Plano (Dr. Marjaneh Ghassemitari DC)"
+    },
+    {
+      "type": "clinic",
+      "name": "Dr. Geeta Rajan",
+      "city": "Plano",
+      "address": "4601 Old Shepard Pl Ste 406, Plano, TX 75093",
+      "matchConfidence": "high",
+      "matchReason": "Dr. Geeta Rajan MD neurologist (Plano Neurology PA)"
+    },
+    {
+      "type": "clinic",
+      "name": "Childrens health neurology",
+      "city": "Plano",
+      "address": "7609 Preston Rd Ste P1100, Plano, TX 75024",
+      "matchConfidence": "high",
+      "matchReason": "Children's Health Neurology Plano"
+    },
+    {
+      "type": "clinic",
+      "name": "Indu Mayakrishnan M.D",
+      "city": "Plano",
+      "address": "7920 Preston Rd Ste 100, Plano, TX 75024",
+      "matchConfidence": "high",
+      "matchReason": "Dr. Indu Mayakrishnan MD neurologist (Texas Institute for Neurological Disorders Plano)"
+    },
+    {
+      "type": "clinic",
+      "name": "Mohsin Maqbool, MD",
+      "city": "Plano",
+      "address": "4032 McDermott Rd Ste 100, Plano, TX 75024",
+      "matchConfidence": "high",
+      "matchReason": "Dr. Mohsin Maqbool MD pediatric neurology (Texas Child Neurology Plano)"
+    },
+    {
+      "type": "clinic",
+      "name": "Balance Diabetes and Endocrinology",
+      "city": "Plano",
+      "address": "6533 Preston Rd Ste 100, Plano, TX 75024",
+      "matchConfidence": "high",
+      "matchReason": "Balance Diabetes and Endocrinology Plano; Dr. Sindura Alloju MD confirmed (duplicate)"
+    },
+    {
+      "type": "clinic",
+      "name": "Hope Internal Medicine Clinic",
+      "city": "Plano",
+      "address": "525 Shiloh Rd Ste 4100, Plano, TX 75074",
+      "matchConfidence": "high",
+      "matchReason": "Hope Internal Medicine Clinic Plano; Dr. Ramy Elhalwagi DO confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "CLINICA HISPANA PLANO TX",
+      "city": "Plano",
+      "address": "1116 Dobie Dr Ste 101, Plano, TX 75074",
+      "matchConfidence": "medium",
+      "matchReason": "Clinica Hispana Plano TX (multiple locations; using primary)"
+    },
+    {
+      "type": "clinic",
+      "name": "Achieve Physical Therapy",
+      "city": "Plano",
+      "address": "2200 Los Rios Blvd Ste 132, Plano, TX 75074",
+      "matchConfidence": "high",
+      "matchReason": "Achieve Physical Therapy Plano (now Therapy Partners of North Texas)"
+    },
+    {
+      "type": "clinic",
+      "name": "Care Choice Family Clinic",
+      "city": "Plano",
+      "address": "525 Shiloh Rd Ste 2300, Plano, TX 75074",
+      "matchConfidence": "high",
+      "matchReason": "Care Choice Family Clinic Plano; Sheeba Daniel FNP-C confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Fem Care",
+      "city": "Plano",
+      "address": "525 Shiloh Rd Ste 2200, Plano, TX 75074",
+      "matchConfidence": "medium",
+      "matchReason": "FemCare OB-GYN Plano (some sources show practice is Miami-based but address listed for Plano)"
+    },
+    {
+      "type": "clinic",
+      "name": "Intricate Health",
+      "city": "Plano",
+      "address": "525 Shiloh Rd Ste 2100, Plano, TX 75074",
+      "matchConfidence": "high",
+      "matchReason": "Intricate Health Plano; Dr. Charmaine Gibson MD OB/GYN confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Inspire Health - Plano Doctors",
+      "city": "Plano",
+      "address": "5026 Tennyson Pkwy, Plano, TX 75024",
+      "matchConfidence": "high",
+      "matchReason": "Inspire Health Plano; Dr. Bush Benjamin MD internist confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Doctors of Internal Medicine",
+      "city": "Plano",
+      "address": "5941 Dallas Pkwy, Plano, TX 75093",
+      "matchConfidence": "high",
+      "matchReason": "Doctors of Internal Medicine Plano; Dr. Suryadutt Venkat MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "My Dentist in Plano",
+      "city": "Plano",
+      "address": "6545 Preston Rd Ste 100, Plano, TX 75024",
+      "matchConfidence": "high",
+      "matchReason": "My Dentist in Plano; Dr. Darren Dickson DDS confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Advanced dental center",
+      "city": "Plano",
+      "address": "6541 Preston Rd Ste 100, Plano, TX 75024",
+      "matchConfidence": "high",
+      "matchReason": "Advanced Dental Center Plano; Dr. Christine Hopkins DDS confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Asara Physical Therapy and Balance Clinic",
+      "city": "Plano",
+      "address": "6537 Preston Rd Ste B, Plano, TX 75024",
+      "matchConfidence": "high",
+      "matchReason": "Asara Physical Therapy and Balance Clinic Plano; Asha Gummadi PT confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Premier Wellness Internal Medicine",
+      "city": "Plano",
+      "address": "3900 W 15th St Ste 404, Plano, TX 75075",
+      "matchConfidence": "high",
+      "matchReason": "Premier Wellness Internal Medicine Plano; Dr. Michelle Sun MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Pediatric Specialists of Plano",
+      "city": "Plano",
+      "address": "3405 Midway Rd Ste 650, Plano, TX 75093",
+      "matchConfidence": "high",
+      "matchReason": "Pediatric Specialists of Plano (psopkids.com); Dr. Fatimah Ahmed MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Infectious Disease Doctors PA",
+      "city": "Plano",
+      "address": "6537 Preston Rd, Plano, TX 75024",
+      "matchConfidence": "high",
+      "matchReason": "Infectious Disease Doctors PA Plano; Dr. Sofia Ansari MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "US Legacy Clinic",
+      "city": "Plano",
+      "address": "280 Legacy Dr Ste 106, Plano, TX 75023",
+      "matchConfidence": "high",
+      "matchReason": "US Legacy Clinic; Dr. Maftuna Kayumova MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Pediatric offices at willow bend",
+      "city": "Plano",
+      "address": "6529 W Plano Pkwy Ste D, Plano, TX 75093",
+      "matchConfidence": "high",
+      "matchReason": "Pediatric Offices at Willow Bend; Dr. Sharon Wiener MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "NextCare Urgent Care",
+      "city": "Plano",
+      "address": "3304 Alma Dr, Plano, TX 75023",
+      "matchConfidence": "medium",
+      "matchReason": "NextCare Urgent Care Plano (Alma Drive location); two Plano locations exist"
+    },
+    {
+      "type": "clinic",
+      "name": "Southern Endocrinology",
+      "city": "Plano",
+      "address": "7504 San Jacinto Pl, Plano, TX 75024",
+      "matchConfidence": "high",
+      "matchReason": "Southern Endocrinology & Diabetes Associates Plano"
+    },
+    {
+      "type": "clinic",
+      "name": "Plano Therapy center",
+      "city": "Plano",
+      "address": "4825 Alliance Blvd Ste 150, Plano, TX 75093",
+      "matchConfidence": "low",
+      "matchReason": "Best guess: LifeStance Health Plano (no specific 'Plano Therapy Center' practice found by exact name)"
+    },
+    {
+      "type": "clinic",
+      "name": "Davita Dialysis",
+      "city": "Plano",
+      "address": "4112 W Spring Creek Pkwy, Plano, TX 75024",
+      "matchConfidence": "medium",
+      "matchReason": "DaVita Renal Center of Plano (multiple Plano locations; using primary)"
+    },
+    {
+      "type": "clinic",
+      "name": "Mind Body OPTIMIZATION",
+      "city": "Plano",
+      "address": "5038 Tennyson Pkwy Ste 100B, Plano, TX 75024",
+      "matchConfidence": "high",
+      "matchReason": "Mind Body Optimization Plano"
+    },
+    {
+      "type": "clinic",
+      "name": "Amy Mathew Burton, MD",
+      "city": "Plano",
+      "address": "6124 W Parker Rd Ste 330, Plano, TX 75093",
+      "matchConfidence": "high",
+      "matchReason": "Dr. Amy Mathew Burton MD pediatric endocrinologist (Pediatric Endocrinology of North Texas)"
+    },
+    {
+      "type": "clinic",
+      "name": "Endocrinology",
+      "city": "Plano",
+      "address": "7504 San Jacinto Pl, Plano, TX 75024",
+      "matchConfidence": "low",
+      "matchReason": "Generic name 'Endocrinology' — best match is Southern Endocrinology Plano"
+    },
+    {
+      "type": "clinic",
+      "name": "Pediatric Endocrinology of North Texas",
+      "city": "Plano",
+      "address": "6124 W Parker Rd MOB 3 Ste 330, Plano, TX 75093",
+      "matchConfidence": "high",
+      "matchReason": "Pediatric Endocrinology of North Texas Plano"
+    },
+    {
+      "type": "clinic",
+      "name": "Dr. Madhuri Gudipaty",
+      "city": "Plano",
+      "address": "5953 Dallas Pkwy Ste 200A, Plano, TX 75093",
+      "matchConfidence": "high",
+      "matchReason": "Dr. Madhuri Gudipaty MD OB/GYN Plano"
+    },
+    {
+      "type": "clinic",
+      "name": "Gupta Orthodontics",
+      "city": "Plano",
+      "address": "5961 Dallas Pkwy Ste 601, Plano, TX 75093",
+      "matchConfidence": "high",
+      "matchReason": "Gupta Orthodontics Plano; Dr. Deepak Gupta DMD MS confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Spine and pain clinic of texas",
+      "city": "Plano",
+      "address": "6300 Stonewood Dr Ste 206, Plano, TX 75024",
+      "matchConfidence": "high",
+      "matchReason": "Spine and Pain Clinic of Texas Plano; Dr. Muhammad Arif MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Kalpana Thakur , M.D.",
+      "city": "Plano",
+      "address": "1600 Coit Rd, Plano, TX 75075",
+      "matchConfidence": "high",
+      "matchReason": "Dr. Kalpana Thakur MD Plano Primary Care (duplicate)"
+    },
+    {
+      "type": "clinic",
+      "name": "Action Family Care",
+      "city": "Plano",
+      "address": "4601 Old Shepard Pl Ste 401A, Plano, TX 75093",
+      "matchConfidence": "high",
+      "matchReason": "Action Family Care Plano (afcarehealth.net)"
+    },
+    {
+      "type": "clinic",
+      "name": "Mir Ali, MD / MEDINA PRIMARY CARE",
+      "city": "Plano",
+      "address": "4013 14th St Ste 401, Plano, TX 75074",
+      "matchConfidence": "high",
+      "matchReason": "Dr. Mir Ali MD Medina Primary Care Plano (duplicate)"
+    },
+    {
+      "type": "clinic",
+      "name": "MD.Jenny Tseng",
+      "city": "Plano",
+      "address": "6300 Stonewood Dr Ste 410, Plano, TX 75024",
+      "matchConfidence": "high",
+      "matchReason": "Dr. Jenny Tseng MD gastroenterologist Plano"
+    },
+    {
+      "type": "clinic",
+      "name": "Texas Rheumatology care",
+      "city": "Plano",
+      "address": "6300 Stonewood Dr Ste 412, Plano, TX 75024",
+      "matchConfidence": "high",
+      "matchReason": "Texas Rheumatology Care Plano; Dr. Fehmida Zahabi MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Fehmida Zahabi",
+      "city": "Plano",
+      "address": "6300 Stonewood Dr Ste 412, Plano, TX 75024",
+      "matchConfidence": "high",
+      "matchReason": "Duplicate of 'Texas Rheumatology care'"
+    },
+    {
+      "type": "clinic",
+      "name": "TX Primary care plus",
+      "city": "Plano",
+      "address": "5040 Tennyson Pkwy, Plano, TX 75024",
+      "matchConfidence": "high",
+      "matchReason": "TX Primary Care Plus Plano; Dr. Venkatesh Madhav MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "premier family medicine",
+      "city": "Plano",
+      "address": "6800 Alma Dr, Plano, TX 75023",
+      "matchConfidence": "high",
+      "matchReason": "Premier Family Medical PA Plano"
+    },
+    {
+      "type": "clinic",
+      "name": "Shepherd Chiropractice and famly wellness",
+      "city": "Plano",
+      "address": "5800 Legacy Dr, Plano, TX 75024",
+      "matchConfidence": "high",
+      "matchReason": "Shepherd Chiropractic Family Wellness Center Plano"
+    },
+    {
+      "type": "clinic",
+      "name": "Dennis family wellness center",
+      "city": "Plano",
+      "address": "930 W Parker Rd Ste 505, Plano, TX 75075",
+      "matchConfidence": "high",
+      "matchReason": "Dennis Family Wellness Center Plano chiropractic"
+    },
+    {
+      "type": "clinic",
+      "name": "Dr Philips Chen",
+      "city": "Plano",
+      "address": "5904 Chapel Hill Blvd Ste 102, Plano, TX 75075",
+      "matchConfidence": "high",
+      "matchReason": "Dr. Philip Chen MD Plano (typo 'Philips' — duplicate of 'Dr. Philip K. Chen')"
+    },
+    {
+      "type": "clinic",
+      "name": "Christy Walker MD Gynecology",
+      "city": "Plano",
+      "address": "6130 W Parker Rd Bldg 1 Ste 204, Plano, TX 75093",
+      "matchConfidence": "high",
+      "matchReason": "Dr. Christy Walker MD gynecology Plano"
+    },
+    {
+      "type": "clinic",
+      "name": "monkey mouth pediatric therapy",
+      "city": "Plano",
+      "address": "255 W Lebanon Rd Ste 316, Frisco, TX 75036",
+      "matchConfidence": "low",
+      "matchReason": "Monkey Mouths primary location is Frisco (serves Plano area); no specific Plano location"
+    },
+    {
+      "type": "clinic",
+      "name": "Trinity Pediatrics",
+      "city": "Plano",
+      "address": "6105 Windcom Ct Ste 100, Plano, TX 75093",
+      "matchConfidence": "high",
+      "matchReason": "Trinity Pediatrics Plano"
+    },
+    {
+      "type": "clinic",
+      "name": "MC kids pediatrics",
+      "city": "Plano",
+      "address": "7800 Preston Rd Ste 300, Plano, TX 75024",
+      "matchConfidence": "medium",
+      "matchReason": "Best guess: MD Kids Pediatrics West Plano (source typo 'MC')"
+    },
+    {
+      "type": "clinic",
+      "name": "Advance med clinic of plano",
+      "city": "Plano",
+      "address": "4701 W Plano Pkwy Ste 100, Plano, TX 75093",
+      "matchConfidence": "high",
+      "matchReason": "AdvanceMed Clinic of Plano (advancemedclinic.com)"
+    },
+    {
+      "type": "clinic",
+      "name": "City bridge urgent care",
+      "city": "Plano",
+      "address": "910 W Parker Rd Ste 102, Plano, TX 75075",
+      "matchConfidence": "high",
+      "matchReason": "CityBridge Urgent Care Plano (duplicate)"
+    },
+    {
+      "type": "clinic",
+      "name": "Epiphany Dermatalogy",
+      "city": "Plano",
+      "address": "5030 Tennyson Pkwy Ste 100, Plano, TX 75024",
+      "matchConfidence": "high",
+      "matchReason": "Epiphany Dermatology Plano"
+    },
+    {
+      "type": "clinic",
+      "name": "Blue star imaging",
+      "city": "Plano",
+      "address": "3800 Gaylord Pkwy Ste 150, Frisco, TX 75034",
+      "matchConfidence": "low",
+      "matchReason": "Blue Star Imaging at The Star — in Frisco (not Plano); no Plano office confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Thompson family and cosmetic dentistry",
+      "city": "Plano",
+      "address": "2801 W Parker Rd Ste 8, Plano, TX 75023",
+      "matchConfidence": "high",
+      "matchReason": "Thompson Family and Cosmetic Dentistry Plano"
+    },
+    {
+      "type": "clinic",
+      "name": "Express health systems",
+      "city": "Plano",
+      "address": "230 W Parker Rd Ste 210A, Plano, TX 75075",
+      "matchConfidence": "high",
+      "matchReason": "Express Health Systems Plano"
+    },
+    {
+      "type": "clinic",
+      "name": "Maple Primary care",
+      "city": "Plano",
+      "address": "3242 Preston Rd Ste 203, Plano, TX 75093",
+      "matchConfidence": "high",
+      "matchReason": "Maple Primary Care Plano; Dr. Manvinder Kainth MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Q day walk in clinic",
+      "city": "Plano",
+      "address": "3560 E Park Blvd, Plano, TX 75074",
+      "matchConfidence": "high",
+      "matchReason": "Q Day Walk-In Clinic Plano"
+    },
+    {
+      "type": "clinic",
+      "name": "RNV Podiatry",
+      "city": "Plano",
+      "address": "6300 W Parker Rd Ste 425, Plano, TX 75093",
+      "matchConfidence": "high",
+      "matchReason": "RNV Podiatry Plano location"
+    },
+    {
+      "type": "clinic",
+      "name": "Greenhill Family Physician",
+      "city": "Plano",
+      "address": "11500 State Hwy 121 Ste 110, Frisco, TX 75035",
+      "matchConfidence": "low",
+      "matchReason": "Greenhill Family Physicians (Dr. Mike Lee) is in Frisco not Plano; source city mismatch"
+    },
+    {
+      "type": "clinic",
+      "name": "Daffodil Primary Care",
+      "city": "Plano",
+      "address": "4300 Punjab Way Bldg 1 Unit 160, Frisco, TX 75033",
+      "matchConfidence": "low",
+      "matchReason": "Daffodil Primary Care is in Frisco (not Plano); source city mismatch"
+    },
+    {
+      "type": "clinic",
+      "name": "Pediactrics R US",
+      "city": "Plano",
+      "address": "255 W Lebanon Ste 324, Frisco, TX 75036",
+      "matchConfidence": "low",
+      "matchReason": "Pediatrics R Us is in Frisco; no Plano office confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Monkey Mouths Pediactric therapy",
+      "city": "Plano",
+      "address": "255 W Lebanon Rd Ste 316, Frisco, TX 75036",
+      "matchConfidence": "low",
+      "matchReason": "Same as 'monkey mouth pediatric therapy' — Frisco location"
+    },
+    {
+      "type": "clinic",
+      "name": "Lonestar Gastroenterology PA",
+      "city": "Plano",
+      "address": "4101 W Spring Creek Pkwy Ste 400, Plano, TX 75024",
+      "matchConfidence": "high",
+      "matchReason": "Lone Star Gastroenterology Plano; Dr. Gowri Balachandar MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Family Medicine",
+      "city": "Plano",
+      "address": "5150 Warren Pkwy Bldg 7 Ste 705B, Frisco, TX 75034",
+      "matchConfidence": "low",
+      "matchReason": "Dr. Karin K. Bergman MD family medicine moved from Plano to Frisco in 2017"
+    },
+    {
+      "type": "clinic",
+      "name": "Plano Neurology",
+      "city": "Plano",
+      "address": "4601 Old Shepard Pl Ste 406, Plano, TX 75093",
+      "matchConfidence": "high",
+      "matchReason": "Plano Neurology PA; Dr. Geeta Rajan MD (duplicate)"
+    },
+    {
+      "type": "clinic",
+      "name": "North Texas Institute of Neurology",
+      "city": "Plano",
+      "address": "5425 W Spring Creek Pkwy Ste 275, Plano, TX 75024",
+      "matchConfidence": "high",
+      "matchReason": "North Texas Institute of Neurology and Headache Plano; Dr. Karen Bontia MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Medical Aesthetics of North Texas",
+      "city": "Plano",
+      "address": "4716 Alliance Blvd Ste 270, Plano, TX 75093",
+      "matchConfidence": "high",
+      "matchReason": "Medical Aesthetics of North Dallas Plano; Dr. Dennis Eisenberg founder confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Southern Endocrynology",
+      "city": "Plano",
+      "address": "7504 San Jacinto Pl, Plano, TX 75024",
+      "matchConfidence": "high",
+      "matchReason": "Typo for 'Southern Endocrinology' Plano; Dr. Sumana Gangi confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Womans Health Specialist",
+      "city": "Plano",
+      "address": "6541 Preston Rd Ste 300, Plano, TX 75024",
+      "matchConfidence": "high",
+      "matchReason": "Dominique Copeland APRN FNP-C Plano (Plano Women's Health)"
+    },
+    {
+      "type": "clinic",
+      "name": "little Lantern",
+      "city": "Carrollton",
+      "address": "4541 N Josey Ln Ste 110C, Carrollton, TX 75010",
+      "matchConfidence": "high",
+      "matchReason": "Little Lantern Clinic Carrollton; Dr. Biju Lukose MD CEO confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "St Marys",
+      "city": "Carrollton",
+      "address": "3730 N Josey Ln Ste 120, Carrollton, TX 75007",
+      "matchConfidence": "high",
+      "matchReason": "St Mary's Family Clinic Carrollton; Remi Thomas FNP confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Thuan Huynh, MD",
+      "city": "Carrollton",
+      "address": "1809 Golden Trail Ct Ste 130, Carrollton, TX 75010",
+      "matchConfidence": "high",
+      "matchReason": "Dr. Thuan Huynh MD family medicine Carrollton"
+    },
+    {
+      "type": "clinic",
+      "name": "Care Plus Family Clinic",
+      "city": "Carrollton",
+      "address": "1933 E Frankford Rd Ste 100, Carrollton, TX 75007",
+      "matchConfidence": "high",
+      "matchReason": "Care Plus Family Clinic Carrollton; Dr. Muhammad Siddiqui MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Internal Medicine Associates",
+      "city": "Carrollton",
+      "address": "4325 N Josey Ln Ste 300, Carrollton, TX 75010",
+      "matchConfidence": "high",
+      "matchReason": "Internal Medicine Associates of Carrollton; Dr. Lauren Bishop is at Plano office but practice has Carrollton location"
+    },
+    {
+      "type": "clinic",
+      "name": "WellMed at Hebron",
+      "city": "Carrollton",
+      "address": "1948 E Hebron Pkwy Ste 110, Carrollton, TX 75007",
+      "matchConfidence": "high",
+      "matchReason": "WellMed at Hebron Carrollton; Dr. Anis Ansari MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Fairway Family Medicine",
+      "city": "Carrollton",
+      "address": "4100 Fairway Dr Ste 320, Carrollton, TX 75010",
+      "matchConfidence": "high",
+      "matchReason": "Fairway Family Medicine Carrollton; Dr. Hong Xiao MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Complete Family Wellness",
+      "city": "Carrollton",
+      "address": "4125 Fairway Dr Ste 190, Carrollton, TX 75010",
+      "matchConfidence": "high",
+      "matchReason": "Complete Family Wellness Carrollton; Dr. Salima Jaffer MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Carrollton Pediatrics",
+      "city": "Carrollton",
+      "address": "4300 N Josey Ln Ste 110, Carrollton, TX 75010",
+      "matchConfidence": "high",
+      "matchReason": "Carrollton Pediatrics; Dr. Muhammad Ali Mirza MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Giometti Ronald MD",
+      "city": "Carrollton",
+      "address": "4325 N Josey Ln Ste 105, Carrollton, TX 75010",
+      "matchConfidence": "high",
+      "matchReason": "Dr. Ronald P. Giometti Jr. MD family medicine Carrollton"
+    },
+    {
+      "type": "clinic",
+      "name": "Woven health",
+      "city": "Carrollton",
+      "address": "1 Medical Pkwy Ste 149, Dallas, TX 75234",
+      "matchConfidence": "medium",
+      "matchReason": "Woven Health Clinic (Dr. Leesa Condry) listed as Dallas address; serves Carrollton area"
+    },
+    {
+      "type": "clinic",
+      "name": "Carrollton Family Physicians",
+      "city": "Carrollton",
+      "address": "4333 N Josey Ln Ste 302, Carrollton, TX 75010",
+      "matchConfidence": "high",
+      "matchReason": "Family Medicine Associates of Texas Carrollton; Dr. Joey L. Hamilton MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Medical Clinic Of North Texas",
+      "city": "Carrollton",
+      "address": "1601 W Hebron Pkwy Ste 100, Carrollton, TX 75010",
+      "matchConfidence": "high",
+      "matchReason": "Medical Clinic of North Texas Carrollton; Dr. Stephen Bryce Johnston MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "USMD Carrollton Clinic",
+      "city": "Carrollton",
+      "address": "1601 W Hebron Pkwy Ste 100, Carrollton, TX 75010",
+      "matchConfidence": "high",
+      "matchReason": "USMD Carrollton Clinic; Dr. Van Lam MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Jose Burbano De Lara, MD",
+      "city": "Carrollton",
+      "address": "3020 E Hebron Pkwy Ste 100, Carrollton, TX 75010",
+      "matchConfidence": "high",
+      "matchReason": "Dr. Jose Luis Burbano De Lara MD family medicine Carrollton"
+    },
+    {
+      "type": "clinic",
+      "name": "Trinity North Dallas Neurology",
+      "city": "Carrollton",
+      "address": "4325 N Josey Ln Plaza III Ste 211, Carrollton, TX 75010",
+      "matchConfidence": "high",
+      "matchReason": "Trinity North Dallas Neurology Carrollton; Dr. Elizabeth Samuel MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Axis Diabetes & Endocrinology",
+      "city": "Carrollton",
+      "address": "4333 N Josey Ln Ste 204, Carrollton, TX 75010",
+      "matchConfidence": "high",
+      "matchReason": "Axis Diabetes & Endocrinology Carrollton; Dr. Neeraja Boddu MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Segovia Felix MD",
+      "city": "Carrollton",
+      "address": "1810 S Josey Ln, Carrollton, TX 75006",
+      "matchConfidence": "high",
+      "matchReason": "Dr. Felix Segovia MD orthopedic surgeon Carrollton"
+    },
+    {
+      "type": "clinic",
+      "name": "Core Vasculaar Services",
+      "city": "Carrollton",
+      "address": "4541 N Josey Ln Ste 140, Carrollton, TX 75010",
+      "matchConfidence": "high",
+      "matchReason": "CORE Vascular Services Carrollton; Dr. Timothy C. Pringle MD founder confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Ortho Texas Orthopedics and sports medicine",
+      "city": "Carrollton",
+      "address": "4780 N Josey Ln, Carrollton, TX 75010",
+      "matchConfidence": "high",
+      "matchReason": "OrthoTexas Carrollton; Dr. Christopher D. Allmon MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Dr. Biju Lukose",
+      "city": "Carrollton",
+      "address": "4541 N Josey Ln Ste 110C, Carrollton, TX 75010",
+      "matchConfidence": "high",
+      "matchReason": "Dr. Biju Lukose Little Lantern Clinic Carrollton (duplicate)"
+    },
+    {
+      "type": "clinic",
+      "name": "Margaret Mike, Md",
+      "city": "Carrollton",
+      "address": "4325 N Josey Ln Ste 100, Carrollton, TX 75010",
+      "matchConfidence": "high",
+      "matchReason": "Dr. Margaret Mike MD neurologist Carrollton"
+    },
+    {
+      "type": "clinic",
+      "name": "Neurology & Sleep Clinic",
+      "city": "Carrollton",
+      "address": "4217 Marsh Ridge Rd Ste 120, Carrollton, TX 75010",
+      "matchConfidence": "high",
+      "matchReason": "Neurology & Sleep Clinic Carrollton; Dr. Kiran Shah MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Adnan Nadir, MD",
+      "city": "Carrollton",
+      "address": "4221 Medical Pkwy Ste 150, Carrollton, TX 75010",
+      "matchConfidence": "high",
+      "matchReason": "Dr. Adnan Nadir MD gastroenterologist Carrollton"
+    },
+    {
+      "type": "clinic",
+      "name": "Lisa R. Reznick, MD",
+      "city": "Carrollton",
+      "address": "4100 Fairway Dr Ste 120, Carrollton, TX 75010",
+      "matchConfidence": "high",
+      "matchReason": "Dr. Lisa R. Reznick MD orthopedic surgery (hand) Carrollton"
+    },
+    {
+      "type": "clinic",
+      "name": "MD Lisa R. Reznik",
+      "city": "Carrollton",
+      "address": "4100 Fairway Dr Ste 120, Carrollton, TX 75010",
+      "matchConfidence": "high",
+      "matchReason": "Duplicate (typo 'Reznik')"
+    },
+    {
+      "type": "clinic",
+      "name": "David Tietze, M.D",
+      "city": "Carrollton",
+      "address": "1735 Keller Springs Rd Ste 100, Carrollton, TX 75006",
+      "matchConfidence": "high",
+      "matchReason": "Dr. David C. Tietze MD Carrollton"
+    },
+    {
+      "type": "clinic",
+      "name": "Dr. Louis Montanaro",
+      "city": "Carrollton",
+      "address": "4300 N Josey Ln Ste 106, Carrollton, TX 75010",
+      "matchConfidence": "high",
+      "matchReason": "Dr. Louis Montanaro MD OB/GYN Carrollton"
+    },
+    {
+      "type": "clinic",
+      "name": "MD medical group",
+      "city": "Carrollton",
+      "address": "3044 Old Denton Rd Ste 138, Carrollton, TX 75007",
+      "matchConfidence": "high",
+      "matchReason": "MD Medical Group Carrollton; Dr. Neha R. Manikonda MD pediatrician confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "MD Kids Pediatrics",
+      "city": "Carrollton",
+      "address": "3044 Old Denton Rd Ste 138, Carrollton, TX 75007",
+      "matchConfidence": "high",
+      "matchReason": "MD Kids Pediatrics Carrollton"
+    },
+    {
+      "type": "clinic",
+      "name": "Highlands Medical and Wellness Primary Care",
+      "city": "Carrollton",
+      "address": "1000 E Beltline Rd Ste 112, Carrollton, TX 75006",
+      "matchConfidence": "high",
+      "matchReason": "Highlands Medical and Wellness Carrollton; Dr. Van Tran confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Dr. Hardeep S. Rai",
+      "city": "Carrollton",
+      "address": "1913 Walnut Plz, Carrollton, TX 75006",
+      "matchConfidence": "high",
+      "matchReason": "Dr. Hardeep S. Rai MD internist Carrollton"
+    },
+    {
+      "type": "clinic",
+      "name": "WellMed at Carrollton",
+      "city": "Carrollton",
+      "address": "1601 W Hebron Pkwy Ste 100, Carrollton, TX 75010",
+      "matchConfidence": "high",
+      "matchReason": "WellMed at Carrollton (same address as USMD Carrollton Clinic)"
+    },
+    {
+      "type": "clinic",
+      "name": "Hebron Pediatrics",
+      "city": "Carrollton",
+      "address": "3020 E Hebron Pkwy Ste 300, Carrollton, TX 75010",
+      "matchConfidence": "high",
+      "matchReason": "Hebron Pediatrics Carrollton; Dr. Shenbagavalli Palaniswamy MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Dr. Shenbagavalli Palaniswamy",
+      "city": "Carrollton",
+      "address": "3020 E Hebron Pkwy Ste 300, Carrollton, TX 75010",
+      "matchConfidence": "high",
+      "matchReason": "Same as 'Hebron Pediatrics' - Dr. Shenbagavalli Palaniswamy"
+    },
+    {
+      "type": "clinic",
+      "name": "Natalia Gutierrez MD",
+      "city": "Carrollton",
+      "address": "3020 E Hebron Pkwy Ste A100, Carrollton, TX 75010",
+      "matchConfidence": "high",
+      "matchReason": "Dr. Natalia Gutierrez MD family medicine Carrollton"
+    },
+    {
+      "type": "clinic",
+      "name": "Dr. Kyle K. Carter",
+      "city": "Carrollton",
+      "address": "1428 W Hebron Pkwy Ste 110, Carrollton, TX 75010",
+      "matchConfidence": "high",
+      "matchReason": "Dr. Kyle K. Carter MD Precision Family Medicine Carrollton (duplicate from earlier)"
+    },
+    {
+      "type": "clinic",
+      "name": "Pathway Direct  Primary care",
+      "city": "Carrollton",
+      "address": "1930 E Rosemeade Pkwy Ste 104, Carrollton, TX 75007",
+      "matchConfidence": "high",
+      "matchReason": "Pathway Direct Primary Care Carrollton; Dr. Omar Hussain MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Dr. Hong Xiao",
+      "city": "Carrollton",
+      "address": "4100 Fairway Dr Ste 320, Carrollton, TX 75010",
+      "matchConfidence": "high",
+      "matchReason": "Dr. Hong Xiao MD Fairway Family Medicine Carrollton (duplicate)"
+    },
+    {
+      "type": "clinic",
+      "name": "Immanuel Family Clinic",
+      "city": "Carrollton",
+      "address": "2760 E Trinity Mill Rd Ste 115, Carrollton, TX 75006",
+      "matchConfidence": "high",
+      "matchReason": "Immanuel Family Clinic Carrollton; Jaya Matharage FNP confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Family Center VitaleHEALTH",
+      "city": "Carrollton",
+      "address": "4217 Marsh Ridge Rd Ste 110, Carrollton, TX 75010",
+      "matchConfidence": "high",
+      "matchReason": "Family Center VitaleHEALTH Carrollton (vitalehealth.org)"
+    },
+    {
+      "type": "clinic",
+      "name": "Josey Medical Clinic",
+      "city": "Carrollton",
+      "address": "1212 N Josey Ln Ste 110, Carrollton, TX 75006",
+      "matchConfidence": "high",
+      "matchReason": "Josey Medical Clinic Carrollton; Yoosun Jeong APRN FNP-BC confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Precision Family mediine",
+      "city": "Carrollton",
+      "address": "1428 W Hebron Pkwy Ste 110, Carrollton, TX 75010",
+      "matchConfidence": "high",
+      "matchReason": "Precision Family Medicine Carrollton; Dr. John W. Bailey MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Song Dermatalogy",
+      "city": "Carrollton",
+      "address": "1428 W Hebron Pkwy Ste 120, Carrollton, TX 75010",
+      "matchConfidence": "high",
+      "matchReason": "Song Dermatology Carrollton; Dr. Mi Hye Elisa Song MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "M.D Benton Cain",
+      "city": "Carrollton",
+      "address": "1428 W Hebron Pkwy Ste 135, Carrollton, TX 75010",
+      "matchConfidence": "high",
+      "matchReason": "Dr. Benton Cain DC chiropractor (Airrosti Carrollton); note he is DC not MD"
+    },
+    {
+      "type": "clinic",
+      "name": "North texas periodontics and",
+      "city": "Carrollton",
+      "address": "1428 W Hebron Pkwy Ste 140, Carrollton, TX 75010",
+      "matchConfidence": "high",
+      "matchReason": "North Texas Periodontics and Implantology Carrollton; Dr. Leslie Carroll DMD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "V Care",
+      "city": "Carrollton",
+      "address": "1445 MacArthur Dr Ste 122, Carrollton, TX 75007",
+      "matchConfidence": "high",
+      "matchReason": "VCare Clinic Carrollton (free walk-in)"
+    },
+    {
+      "type": "clinic",
+      "name": "Airrosti Carrollton",
+      "city": "Carrollton",
+      "address": "1428 W Hebron Pkwy Ste 135, Carrollton, TX 75010",
+      "matchConfidence": "high",
+      "matchReason": "Airrosti Carrollton"
+    },
+    {
+      "type": "clinic",
+      "name": "Peak Integrated Healthcare",
+      "city": "Carrollton",
+      "address": "2655 E Belt Line Rd, Carrollton, TX 75006",
+      "matchConfidence": "high",
+      "matchReason": "Peak Integrated Healthcare Carrollton; Dr. Matthew Hicken DC confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Evolving Beautiful Mind & Body Healthcare",
+      "city": "Carrollton",
+      "address": "2150 N Josey Ln Ste 208, Carrollton, TX 75010",
+      "matchConfidence": "high",
+      "matchReason": "Evolving Beautiful Mind & Body Healthcare Carrollton; Dr. Ghazala N. Ahmed MD psychiatrist confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Elevation Spine and Sports Medicine",
+      "city": "Carrollton",
+      "address": "2761 E Trinity Mills Rd Ste 100, Carrollton, TX 75006",
+      "matchConfidence": "high",
+      "matchReason": "Elevation Spine and Sports Medicine Carrollton; Dr. Konner Ackerman DC confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "George A.Nail MD",
+      "city": "Carrollton",
+      "address": "1813 Golden Trail Ct Ste 100, Carrollton, TX 75010",
+      "matchConfidence": "high",
+      "matchReason": "Dr. George A. Nail MD DDS oral & maxillofacial surgeon Carrollton"
+    },
+    {
+      "type": "clinic",
+      "name": "Castle Hills Pediatrics",
+      "city": "Carrollton",
+      "address": "1821 Golden Trl Ct, Carrollton, TX 75010",
+      "matchConfidence": "high",
+      "matchReason": "Castle Hills Pediatrics Carrollton"
+    },
+    {
+      "type": "clinic",
+      "name": "Dr.Dandois DDS",
+      "city": "Carrollton",
+      "address": "1821 Golden Trail Ct Ste 220, Carrollton, TX 75010",
+      "matchConfidence": "high",
+      "matchReason": "Dr. Marc Dandois DDS Carrollton"
+    },
+    {
+      "type": "clinic",
+      "name": "US clinics",
+      "city": "Carrollton",
+      "address": "4541 N Josey Ln Ste 110, Carrollton, TX 75010",
+      "matchConfidence": "high",
+      "matchReason": "US Clinics Carrollton (us.clinic)"
+    },
+    {
+      "type": "clinic",
+      "name": "Sure Cure",
+      "city": "Carrollton",
+      "address": "4541 N Josey Ln Ste 130, Carrollton, TX 75010",
+      "matchConfidence": "high",
+      "matchReason": "Sure Cure Physical Therapy & Wellness Carrollton"
+    },
+    {
+      "type": "clinic",
+      "name": "BODYSCRIBE",
+      "city": "Carrollton",
+      "address": "4217 Marsh Ridge Rd Ste 100, Carrollton, TX 75010",
+      "matchConfidence": "high",
+      "matchReason": "BodyScribe Wellness Center Carrollton"
+    },
+    {
+      "type": "clinic",
+      "name": "Urban skin care dallas",
+      "city": "Carrollton",
+      "address": "4217 Marsh Ridge Rd Ste 100, Carrollton, TX 75010",
+      "matchConfidence": "high",
+      "matchReason": "Urban Skin Care Dallas (inside Body Scribe Carrollton)"
+    },
+    {
+      "type": "clinic",
+      "name": "North Texas Perodontics and Implantology",
+      "city": "Carrollton",
+      "address": "1428 W Hebron Pkwy Ste 140, Carrollton, TX 75010",
+      "matchConfidence": "high",
+      "matchReason": "Duplicate of 'North texas periodontics and' - same practice"
+    },
+    {
+      "type": "clinic",
+      "name": "Dr. Shenbagavalli Palaniswamy, MD",
+      "city": "Carrollton",
+      "address": "3020 E Hebron Pkwy Ste 300, Carrollton, TX 75010",
+      "matchConfidence": "high",
+      "matchReason": "Hebron Pediatrics duplicate"
+    },
+    {
+      "type": "clinic",
+      "name": "Fuentes Guillermo DO",
+      "city": "Carrollton",
+      "address": "1205 N Josey Ln, Carrollton, TX 75006",
+      "matchConfidence": "high",
+      "matchReason": "Dr. Guillermo Fuentes DO family medicine Carrollton"
+    },
+    {
+      "type": "clinic",
+      "name": "Dr fuentis",
+      "city": "Carrollton",
+      "address": "1205 N Josey Ln, Carrollton, TX 75006",
+      "matchConfidence": "high",
+      "matchReason": "Same as 'Fuentes Guillermo DO' (typo)"
+    },
+    {
+      "type": "clinic",
+      "name": "Careone",
+      "city": "Carrollton",
+      "address": "3648 Old Denton Rd Ste 110, Carrollton, TX 75007",
+      "matchConfidence": "high",
+      "matchReason": "Careone Medical Clinic Carrollton location"
+    },
+    {
+      "type": "clinic",
+      "name": "Care one",
+      "city": "Carrollton",
+      "address": "3648 Old Denton Rd Ste 110, Carrollton, TX 75007",
+      "matchConfidence": "high",
+      "matchReason": "Duplicate of 'Careone'"
+    },
+    {
+      "type": "clinic",
+      "name": "Care one Plus",
+      "city": "Carrollton",
+      "address": "3648 Old Denton Rd Ste 110, Carrollton, TX 75007",
+      "matchConfidence": "medium",
+      "matchReason": "Likely Careone Medical Clinic Carrollton"
+    },
+    {
+      "type": "clinic",
+      "name": "Valliani Farida F MD",
+      "city": "Carrollton",
+      "address": "3740 N Josey Ln, Carrollton, TX 75007",
+      "matchConfidence": "high",
+      "matchReason": "Dr. Farida Valliani MD internist Carrollton"
+    },
+    {
+      "type": "clinic",
+      "name": "Honey Philopse",
+      "city": "Carrollton",
+      "address": "1933 E Frankford Rd Ste 100, Carrollton, TX 75007",
+      "matchConfidence": "high",
+      "matchReason": "Honey Philipose APRN FNP-C Care Plus Family Clinic Carrollton"
+    },
+    {
+      "type": "clinic",
+      "name": "Elite Digestive",
+      "city": "Carrollton",
+      "address": "118 Lynn Ave Ste 500, Lewisville, TX 75057",
+      "matchConfidence": "low",
+      "matchReason": "Elite Digestive Specialists (Dr. Deepika Koya) is in Lewisville, not Carrollton; source city mismatch"
+    },
+    {
+      "type": "clinic",
+      "name": "Elite",
+      "city": "Carrollton",
+      "address": "118 Lynn Ave Ste 500, Lewisville, TX 75057",
+      "matchConfidence": "low",
+      "matchReason": "Best guess: Elite Digestive Specialists Lewisville (no 'Elite' clinic in Carrollton confirmed)"
+    },
+    {
+      "type": "clinic",
+      "name": "Texas Ortho",
+      "city": "Carrollton",
+      "address": "4780 N Josey Ln, Carrollton, TX 75010",
+      "matchConfidence": "medium",
+      "matchReason": "Best guess: OrthoTexas Carrollton"
+    },
+    {
+      "type": "clinic",
+      "name": "Sarkar",
+      "city": "Carrollton",
+      "address": "4682 McDermott Rd Ste 100, Plano, TX 75024",
+      "matchConfidence": "low",
+      "matchReason": "Dr. Rakhi Sarkar MD has Plano/Frisco offices; no Carrollton office confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Dr. Parmar",
+      "city": "Carrollton",
+      "address": "1212 N Josey Ln Ste 110, Carrollton, TX 75006",
+      "matchConfidence": "high",
+      "matchReason": "Dr. Harveer S. Parmar MD Carrollton"
+    },
+    {
+      "type": "clinic",
+      "name": "Dr.Harveer S. Pamar",
+      "city": "Carrollton",
+      "address": "1212 N Josey Ln Ste 110, Carrollton, TX 75006",
+      "matchConfidence": "high",
+      "matchReason": "Same as 'Dr. Parmar'"
+    },
+    {
+      "type": "clinic",
+      "name": "Josey",
+      "city": "Carrollton",
+      "address": "1212 N Josey Ln Ste 110, Carrollton, TX 75006",
+      "matchConfidence": "medium",
+      "matchReason": "Likely 'Josey Medical Clinic' duplicate"
+    },
+    {
+      "type": "clinic",
+      "name": "Hardeep rai",
+      "city": "Carrollton",
+      "address": "1913 Walnut Plz, Carrollton, TX 75006",
+      "matchConfidence": "high",
+      "matchReason": "Duplicate of 'Dr. Hardeep S. Rai'"
+    },
+    {
+      "type": "clinic",
+      "name": "Imanuel",
+      "city": "Carrollton",
+      "address": "2760 E Trinity Mill Rd Ste 115, Carrollton, TX 75006",
+      "matchConfidence": "high",
+      "matchReason": "Duplicate of 'Immanuel Family Clinic' (typo)"
+    },
+    {
+      "type": "clinic",
+      "name": "Emanuel",
+      "city": "Carrollton",
+      "address": "2760 E Trinity Mill Rd Ste 115, Carrollton, TX 75006",
+      "matchConfidence": "medium",
+      "matchReason": "Likely typo for 'Immanuel Family Clinic'"
+    },
+    {
+      "type": "clinic",
+      "name": "Carrollton Family Physicians (James Lee)",
+      "city": "Carrollton",
+      "address": "1809 Golden Trail Ct Ste 220, Carrollton, TX 75010",
+      "matchConfidence": "high",
+      "matchReason": "Dr. James Lee MD internal medicine Carrollton"
+    },
+    {
+      "type": "clinic",
+      "name": "Texas Health Digestive specialists",
+      "city": "Carrollton",
+      "address": "4221 Medical Pkwy Ste 150, Carrollton, TX 75010",
+      "matchConfidence": "high",
+      "matchReason": "Texas Health Digestive Specialists Carrollton"
+    },
+    {
+      "type": "clinic",
+      "name": "Texas Health Digestive Specialist",
+      "city": "Carrollton",
+      "address": "4221 Medical Pkwy Ste 150, Carrollton, TX 75010",
+      "matchConfidence": "high",
+      "matchReason": "Same; Dr. Syed Hasan MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Texas Digestive Disease Consultants",
+      "city": "Carrollton",
+      "address": "4221 Medical Pkwy Ste 150, Carrollton, TX 75010",
+      "matchConfidence": "medium",
+      "matchReason": "Best match: Texas Health Digestive Specialists Carrollton (similar name)"
+    },
+    {
+      "type": "clinic",
+      "name": "Align primary care",
+      "city": "Carrollton",
+      "address": "2775 E Trinity Mills Rd, Carrollton, TX 75006",
+      "matchConfidence": "high",
+      "matchReason": "Align Primary Care Carrollton"
+    },
+    {
+      "type": "clinic",
+      "name": "Orchid Wellness",
+      "city": "Carrollton",
+      "address": "3620 N Josey Ln Ste 117, Carrollton, TX 75007",
+      "matchConfidence": "high",
+      "matchReason": "Orchid Wellness PLLC Carrollton"
+    },
+    {
+      "type": "clinic",
+      "name": "Carrolton family physicians",
+      "city": "Carrollton",
+      "address": "4333 N Josey Ln Ste 302, Carrollton, TX 75010",
+      "matchConfidence": "high",
+      "matchReason": "Family Medicine Associates of Texas Carrollton (duplicate)"
+    },
+    {
+      "type": "clinic",
+      "name": "Carrolton pediatrics",
+      "city": "Carrollton",
+      "address": "4300 N Josey Ln Ste 110, Carrollton, TX 75010",
+      "matchConfidence": "high",
+      "matchReason": "Carrollton Pediatrics duplicate"
+    },
+    {
+      "type": "clinic",
+      "name": "Fareway family medicine",
+      "city": "Carrollton",
+      "address": "4100 Fairway Dr Ste 320, Carrollton, TX 75010",
+      "matchConfidence": "high",
+      "matchReason": "Fairway Family Medicine Carrollton (typo)"
+    },
+    {
+      "type": "clinic",
+      "name": "Woman Health",
+      "city": "Carrollton",
+      "address": "4333 N Josey Ln Ste 200, Carrollton, TX 75010",
+      "matchConfidence": "low",
+      "matchReason": "Best guess: Women's Premier OB/GYN Carrollton — generic name 'Woman Health' too ambiguous"
+    },
+    {
+      "type": "clinic",
+      "name": "Adnan Nadar MD",
+      "city": "Carrollton",
+      "address": "4221 Medical Pkwy Ste 150, Carrollton, TX 75010",
+      "matchConfidence": "high",
+      "matchReason": "Duplicate of 'Adnan Nadir, MD' (typo)"
+    },
+    {
+      "type": "clinic",
+      "name": "Lisa R. Reznik",
+      "city": "Carrollton",
+      "address": "4100 Fairway Dr Ste 120, Carrollton, TX 75010",
+      "matchConfidence": "high",
+      "matchReason": "Duplicate of 'Lisa R. Reznick MD'"
+    },
+    {
+      "type": "clinic",
+      "name": "Dr.Lewis montanaro",
+      "city": "Carrollton",
+      "address": "4300 N Josey Ln Ste 106, Carrollton, TX 75010",
+      "matchConfidence": "high",
+      "matchReason": "Duplicate of 'Dr. Louis Montanaro' (typo 'Lewis')"
+    },
+    {
+      "type": "clinic",
+      "name": "Trinity N. Dallas Neurology",
+      "city": "Carrollton",
+      "address": "4325 N Josey Ln Plaza III Ste 211, Carrollton, TX 75010",
+      "matchConfidence": "high",
+      "matchReason": "Duplicate of 'Trinity North Dallas Neurology'"
+    },
+    {
+      "type": "clinic",
+      "name": "Core Vescular services",
+      "city": "Carrollton",
+      "address": "4541 N Josey Ln Ste 140, Carrollton, TX 75010",
+      "matchConfidence": "high",
+      "matchReason": "Duplicate of 'Core Vasculaar Services' (typo)"
+    },
+    {
+      "type": "clinic",
+      "name": "Little lantern services",
+      "city": "Carrollton",
+      "address": "4541 N Josey Ln Ste 110C, Carrollton, TX 75010",
+      "matchConfidence": "high",
+      "matchReason": "Duplicate of 'little Lantern'"
+    },
+    {
+      "type": "clinic",
+      "name": "Saint Marys Family clinic",
+      "city": "Carrollton",
+      "address": "3730 N Josey Ln Ste 120, Carrollton, TX 75007",
+      "matchConfidence": "high",
+      "matchReason": "Duplicate of 'St Marys'"
+    },
+    {
+      "type": "clinic",
+      "name": "Jose Burbano De la Lara",
+      "city": "Carrollton",
+      "address": "3020 E Hebron Pkwy Ste 100, Carrollton, TX 75010",
+      "matchConfidence": "high",
+      "matchReason": "Duplicate of 'Jose Burbano De Lara, MD' (typo)"
+    },
+    {
+      "type": "clinic",
+      "name": "Carrolton First care Medical",
+      "city": "Carrollton",
+      "address": "2625 Old Denton Rd Ste 415, Carrollton, TX 75007",
+      "matchConfidence": "high",
+      "matchReason": "Carrollton First Care Medical Center"
+    },
+    {
+      "type": "clinic",
+      "name": "Carrolton Primary care",
+      "city": "Carrollton",
+      "address": "3020 E Hebron Pkwy Ste A100, Carrollton, TX 75010",
+      "matchConfidence": "low",
+      "matchReason": "Generic name — best guess Texas Health Family Care Carrollton"
+    },
+    {
+      "type": "clinic",
+      "name": "Essencia Family practice & Immidiate center",
+      "city": "Carrollton",
+      "address": "1509 W Hebron Pkwy Ste 140, Carrollton, TX 75010",
+      "matchConfidence": "high",
+      "matchReason": "Essencia Family Practice and Immediate Care Clinic Carrollton"
+    },
+    {
+      "type": "clinic",
+      "name": "Complete Family Medicine",
+      "city": "Carrollton",
+      "address": "4125 Fairway Dr Ste 190, Carrollton, TX 75010",
+      "matchConfidence": "high",
+      "matchReason": "Likely Complete Family Wellness Carrollton"
+    },
+    {
+      "type": "clinic",
+      "name": "Neurology and sleep clinic",
+      "city": "Carrollton",
+      "address": "4217 Marsh Ridge Rd Ste 120, Carrollton, TX 75010",
+      "matchConfidence": "high",
+      "matchReason": "Duplicate of 'Neurology & Sleep Clinic'; Dr. Alpa Shah MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Advance Nerve andHealth Neuro",
+      "city": "Carrollton",
+      "address": "1735 Keller Springs Rd Ste 101, Carrollton, TX 75006",
+      "matchConfidence": "high",
+      "matchReason": "Advanced Nerve and Health Center DFW Carrollton"
+    },
+    {
+      "type": "clinic",
+      "name": "Med Pro Family Clinic",
+      "city": "Carrollton",
+      "address": "4525 Ohio Dr Ste 300, Frisco, TX 75035",
+      "matchConfidence": "low",
+      "matchReason": "MedPro Family Clinic is in Frisco (not Carrollton); source city mismatch"
+    }
+  ],
+  "notFound": [
+    {
+      "type": "mva",
+      "firm": "Herrera Law",
+      "city": "Carrollton",
+      "id": "mva4",
+      "reason": "The only well-known 'Herrera Law Firm' is in San Antonio (1800 W Commerce St, San Antonio, TX 78207). No Carrollton office found."
+    },
+    {
+      "type": "mva",
+      "firm": "Zapata Law",
+      "city": "Carrollton",
+      "id": "mva5",
+      "reason": "Multiple TX attorneys named Zapata exist (Raymon Zapata at Zapata & Kale LLP; Deborah Andrea Zapata listed as Carrollton TX in bar but with Nashville address); no firm called 'Zapata Law' with a Carrollton office confirmed."
+    },
+    {
+      "type": "mva",
+      "firm": "McMinn Law Firm",
+      "city": "Dallas",
+      "id": "mva36",
+      "reason": "McMinn Personal Injury Lawyers has offices only in Austin TX (502 W 14th St, Austin TX 78701) and Salt Lake City UT. No Dallas office."
+    },
+    {
+      "type": "clinic",
+      "name": "ABC Pediatrics",
+      "city": "Frisco",
+      "reason": "Prior enrichment confirmed no ABC Pediatrics found in Frisco (nearest in McKinney)"
+    },
+    {
+      "type": "clinic",
+      "name": "bright kids pediatrics",
+      "city": "Frisco",
+      "reason": "Bright Kids Peds is in McKinney (1400 N Coit Rd) per prior enrichment, not Frisco; source data city mismatch"
+    },
+    {
+      "type": "clinic",
+      "name": "Plano clinic Supreme",
+      "city": "Frisco",
+      "reason": "Plano Supreme Primary Care is in Plano (4020 Hedgcoxe Rd), not Frisco — per prior enrichment"
+    },
+    {
+      "type": "clinic",
+      "name": "Omni",
+      "city": "Frisco",
+      "reason": "Ambiguous — Omni Medical Center is in Plano; only Omnispine Pain (specialty) is in Frisco. Per prior enrichment, could not disambiguate"
+    },
+    {
+      "type": "clinic",
+      "name": "Boomfield",
+      "city": "Frisco",
+      "reason": "Possible typo for 'Bloomfield' but doctor 'Nafeesa' does not match Bloomfield's Dr. Cudjoe. Insufficient info to disambiguate"
+    },
+    {
+      "type": "clinic",
+      "name": "Dr. Hong Xiao MD",
+      "city": "Frisco",
+      "reason": "Dr. Hong Xiao practices at Fairway Family Medicine in Carrollton (4100 Fairway Dr Ste 320), not Frisco. City mismatch."
+    },
+    {
+      "type": "clinic",
+      "name": "MD Kids Pediactrics",
+      "city": "Frisco",
+      "reason": "Dr. Hung Truong listed at MD Kids Pediatrics Dallas (2750 W Northwest Hwy Ste 170, Dallas) — no Frisco location of MD Kids Pediatrics confirmed in search"
+    },
+    {
+      "type": "clinic",
+      "name": "Care Express Clinic",
+      "city": "Frisco",
+      "reason": "Dr. Muhammad Ali Siddiqui's Care Express Clinic is in Dallas (1143 S Buckner Blvd), not Frisco"
+    },
+    {
+      "type": "clinic",
+      "name": "Cierras Heath Primary care",
+      "city": "Frisco",
+      "reason": "No clinic named 'Cierras Health' or 'Cierra Health' Primary Care found in Frisco TX"
+    },
+    {
+      "type": "clinic",
+      "name": "Liberty",
+      "city": "Frisco",
+      "reason": "No clinic named 'Liberty' Medical/Primary Care found in Frisco TX (only matches are in Liberty TX)"
+    },
+    {
+      "type": "clinic",
+      "name": "Advanced Primary Care",
+      "city": "Frisco",
+      "reason": "No specific clinic named 'Advanced Primary Care' found in Frisco TX"
+    },
+    {
+      "type": "clinic",
+      "name": "Premerier Independant Physicians",
+      "city": "Frisco",
+      "reason": "Premier Independent Physicians (piptx.com) has locations in McKinney/Aubrey/Dallas but no Frisco office confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Allen children clinic",
+      "city": "Allen",
+      "reason": "No clinic with exact name 'Allen Children Clinic' found in Allen TX (multiple pediatric options exist but none with this exact name)"
+    },
+    {
+      "type": "clinic",
+      "name": "Lone star",
+      "city": "Allen",
+      "reason": "Ambiguous - 'Lone Star Neurology' and 'Lone Star Kids Care' both have Allen offices, but the source name 'Lone star' alone cannot be disambiguated"
+    },
+    {
+      "type": "clinic",
+      "name": "Texas Diabetes & Endocrinology",
+      "city": "McKinney",
+      "reason": "Texas Diabetes & Endocrinology (Dr. Luis Casaubon) is primarily based in Austin TX (6500 N Mopac Expy); no confirmed McKinney address found"
+    },
+    {
+      "type": "clinic",
+      "name": "Dr.Aris N Jacob",
+      "city": "McKinney",
+      "reason": "Dr. Aris N. Jacob endocrinologist is listed as based in Allen TX or Redlands CA; no specific McKinney address confirmed (Texas Associates of Endocrinology & Diabetes at 4521 Medical Center Dr, McKinney is possible but unverified)"
+    },
+    {
+      "type": "clinic",
+      "name": "MR. DOUGLAS CONNER",
+      "city": "McKinney",
+      "reason": "Multiple Dr. Douglas Conner exist (Orthopedic in Richardson, Family Med, Radiologist in Beaumont); no specific McKinney surgeon address confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Pure Health",
+      "city": "McKinney",
+      "reason": "No specific 'Pure Health' primary care location found in McKinney TX (Pure Health Texas is in Plano)"
+    },
+    {
+      "type": "clinic",
+      "name": "Peak Fertility",
+      "city": "McKinney",
+      "reason": "Peak Fertility (Dr. Amber Klimczak) is based in Plano/Dallas; no specific McKinney address confirmed despite Dr. Klimczak's connection to Dallas IVF/McKinney"
+    },
+    {
+      "type": "clinic",
+      "name": "AIX Family Care",
+      "city": "Plano",
+      "reason": "AIX Wellness & Family Care Plano TX 75093 — full street address not publicly listed"
+    },
+    {
+      "type": "clinic",
+      "name": "NcT Step",
+      "city": "Plano",
+      "reason": "Cannot identify clinic 'NcT Step' - insufficient information"
+    },
+    {
+      "type": "clinic",
+      "name": "plano",
+      "city": "Plano",
+      "reason": "Generic name 'plano' - cannot identify clinic"
+    },
+    {
+      "type": "clinic",
+      "name": "Next Gen",
+      "city": "Plano",
+      "reason": "Generic name 'Next Gen' - too ambiguous to identify (multiple practices possible)"
+    },
+    {
+      "type": "clinic",
+      "name": "Sandy Maccoy",
+      "city": "Plano",
+      "reason": "Cannot identify - search did not return clear practice match"
+    },
+    {
+      "type": "clinic",
+      "name": "Quick Urgent care",
+      "city": "Plano",
+      "reason": "No clinic named 'Quick Urgent Care' found in Plano (multiple urgent care options exist but none with this exact name)"
+    },
+    {
+      "type": "clinic",
+      "name": "Sanders Barry Md",
+      "city": "Carrollton",
+      "reason": "Multiple Dr. Sanders exist; 'Jason Chase Sanders' is in Carrollton GA (radiation oncology), not Carrollton TX. 'Barry Sanders' practice not located."
+    },
+    {
+      "type": "clinic",
+      "name": "Pediatrics",
+      "city": "Carrollton",
+      "reason": "Generic name 'Pediatrics' - too ambiguous to identify specific practice"
+    },
+    {
+      "type": "clinic",
+      "name": "Carrolton spring",
+      "city": "Carrollton",
+      "reason": "Cannot identify clinic - 'Carrollton Spring' is not a known medical practice name"
+    },
+    {
+      "type": "clinic",
+      "name": "Clinica San Miguel",
+      "city": "Carrollton",
+      "reason": "Clinica San Miguel has Carrollton location mentioned but specific street address not publicly listed"
+    },
+    {
+      "type": "clinic",
+      "name": "Medical Clinic /Dan Dinh",
+      "city": "Carrollton",
+      "reason": "No 'Dan Dinh' MD found in Carrollton TX; Dr. Dana Dinh is in Arlington TX"
+    }
+  ],
+  "completedAt": "2026-05-26T19:47:52.536Z",
+  "appliedToSource": {
+    "clinicsApplied": 434,
+    "mvaApplied": 0,
+    "sourceFile": "marketing_schedule_FINAL4.html",
+    "backupFile": "marketing_schedule_FINAL4.html.before-address-enrichment.bak",
+    "note": "Only high+medium confidence entries applied. Low-confidence (often city mismatch) entries were skipped."
+  }
+}

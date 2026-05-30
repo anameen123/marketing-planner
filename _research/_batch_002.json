@@ -1,0 +1,165 @@
+{
+  "found": [
+    {
+      "type": "clinic",
+      "name": "Preformance Ortho & Sports Medicine",
+      "city": "Frisco",
+      "address": "14660 State Hwy 121 Ste 100, Frisco, TX 75035",
+      "matchConfidence": "high",
+      "matchReason": "Performance Orthopaedics & Sports Medicine (PerformanceOSM); Dr. Troy Diehl DO confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "North Texas Endocrinology",
+      "city": "Frisco",
+      "address": "14725 Lebanon Rd Ste 100, Frisco, TX 75035",
+      "matchConfidence": "medium",
+      "matchReason": "North Texas Endocrinology & Diabetes Center PA in Frisco; Dr. Muhammad Choudhry endocrinologist; he may primarily practice elsewhere but practice is correct"
+    },
+    {
+      "type": "clinic",
+      "name": "Affinity NEUROCARE",
+      "city": "Frisco",
+      "address": "8350 Dallas Pkwy Ste 300, Frisco, TX 75034",
+      "matchConfidence": "high",
+      "matchReason": "Affinity Neurocare Frisco location; Dr. Nnamdi C. Dike DO founder confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Bent Tree Family Physicians",
+      "city": "Frisco",
+      "address": "3550 Parkwood Blvd Ste 600, Frisco, TX 75034",
+      "matchConfidence": "high",
+      "matchReason": "Bent Tree Family Physicians Frisco; Dr. Tariq Khan confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Lewis Pain & Physical Medicine",
+      "city": "Frisco",
+      "address": "11500 State Hwy 121, Frisco, TX 75035",
+      "matchConfidence": "high",
+      "matchReason": "Lewis Pain & Physical Medicine Frisco; Dr. Jerry Lewis founder confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Spine & Joint Physicians of Frisco",
+      "city": "Frisco",
+      "address": "11500 Hwy 121 Ste 1010, Frisco, TX 75035",
+      "matchConfidence": "high",
+      "matchReason": "Spine & Joint Physicians of Frisco; Dr. S. Justin Badiyan MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "OmniSpine Pain Management",
+      "city": "Frisco",
+      "address": "8380 Warren Pkwy Ste 100, Frisco, TX 75034",
+      "matchConfidence": "high",
+      "matchReason": "OmniSpine Pain Management Frisco; Dr. Ashley A. Joseph MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Pain Management of North Dallas, PA",
+      "city": "Frisco",
+      "address": "3550 Parkwood Blvd, Frisco, TX 75034",
+      "matchConfidence": "medium",
+      "matchReason": "Dr. Craig Neleson practices at North Texas Precision Pain Care PA at 3550 Parkwood Blvd Frisco; clinic name 'Pain Management of North Dallas' is a different practice but doctor name match supports this Parkwood address"
+    },
+    {
+      "type": "clinic",
+      "name": "Precision Spine Care",
+      "city": "Frisco",
+      "address": "2737 S Broadway Ave, Tyler, TX 75701",
+      "matchConfidence": "low",
+      "matchReason": "Precision Spine Care is actually in Tyler TX (Dr. Charles Gordon founder); no Frisco office found. City mismatch — flagging for review."
+    },
+    {
+      "type": "clinic",
+      "name": "Comprehensive Pain Management",
+      "city": "Frisco",
+      "address": "7589 Preston Rd Ste 500, Frisco, TX 75035",
+      "matchConfidence": "medium",
+      "matchReason": "Comprehensive Pain Management Center Frisco at 7589 Preston Rd Ste 500; note doctor 'Rodolfo Herrera' is at a different practice (Comprehensive Pain Institute) — the Frisco clinic at this address is Dr. Mohammad Tariq's"
+    },
+    {
+      "type": "clinic",
+      "name": "Pain and spine physicans",
+      "city": "Frisco",
+      "address": "13080 Dallas Pkwy Bldg 300 Ste 310, Frisco, TX 75034",
+      "matchConfidence": "high",
+      "matchReason": "Pain & Spine Physicians Frisco; Dr. Irfan Ali listed in their team"
+    },
+    {
+      "type": "clinic",
+      "name": "Dr. Sameer Ali Syed",
+      "city": "Frisco",
+      "address": "9456 State Highway 121 Ste 100, Frisco, TX 75035",
+      "matchConfidence": "high",
+      "matchReason": "Pain Treatment Institute Frisco; Dr. Sameer A. Syed confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "North Texas Synergy Pain",
+      "city": "Frisco",
+      "address": "5375 Coit Rd Ste 100, Frisco, TX 75035",
+      "matchConfidence": "high",
+      "matchReason": "North Texas Synergy Pain & Rehab Frisco; Dr. Robert J. Spicer MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Pain Specialists of Frisco",
+      "city": "Frisco",
+      "address": "13052 Dallas Pkwy Ste 220A, Frisco, TX 75033",
+      "matchConfidence": "high",
+      "matchReason": "Pain Specialists of Frisco; Dr. Mahesh Mohan confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Texas Spine Consultants",
+      "city": "Frisco",
+      "address": "5757 Warren Pkwy POB II Ste 180, Frisco, TX 75034",
+      "matchConfidence": "high",
+      "matchReason": "Texas Spine Consultants Frisco; Dr. Robert Viere confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Frisco Center for Internal Medicine",
+      "city": "Frisco",
+      "address": "12500 Lebanon Rd Ste 103, Frisco, TX 75035",
+      "matchConfidence": "high",
+      "matchReason": "Frisco Center for Internal Medicine; Dr. Neela Shah MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "WillowsWomens Health",
+      "city": "Frisco",
+      "address": "2840 Legacy Dr Ste 400, Frisco, TX 75034",
+      "matchConfidence": "high",
+      "matchReason": "Same practice as 'Willows Womens Health' already enriched; address from prior enrichment file"
+    },
+    {
+      "type": "clinic",
+      "name": "Inspire Health",
+      "city": "Frisco",
+      "address": "255 Lebanon Rd Ste 132, Frisco, TX 75036",
+      "matchConfidence": "high",
+      "matchReason": "Inspire Health Frisco Waterstone; Dr. Stephanie Reinhold Garza confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Frisco Obstetrics and Gynecology, PA",
+      "city": "Frisco",
+      "address": "4401 Coit Rd Ste 205 Pavillion I, Frisco, TX 75035",
+      "matchConfidence": "high",
+      "matchReason": "Frisco Obstetrics and Gynecology PA — friscoobgyn.com"
+    },
+    {
+      "type": "clinic",
+      "name": "EVIVE HEALTH AND BEAUTY",
+      "city": "Frisco",
+      "address": "11500 State Hwy 121 Ste 320, Frisco, TX 75035",
+      "matchConfidence": "medium",
+      "matchReason": "Likely typo for 'Revive Health and Beauty' in Frisco (revivehealthandbeauty.com); no clinic called 'EVIVE' found in Frisco — best match"
+    }
+  ],
+  "notFound": []
+}

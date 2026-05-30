@@ -1,0 +1,31 @@
+{
+  "found": [
+    {"type":"clinic","name":"US Legacy Clinic","city":"Plano","address":"280 Legacy Dr Ste 106, Plano, TX 75023","matchConfidence":"high","matchReason":"US Legacy Clinic; Dr. Maftuna Kayumova MD confirmed"},
+    {"type":"clinic","name":"Pediatric offices at willow bend","city":"Plano","address":"6529 W Plano Pkwy Ste D, Plano, TX 75093","matchConfidence":"high","matchReason":"Pediatric Offices at Willow Bend; Dr. Sharon Wiener MD confirmed"},
+    {"type":"clinic","name":"NextCare Urgent Care","city":"Plano","address":"3304 Alma Dr, Plano, TX 75023","matchConfidence":"medium","matchReason":"NextCare Urgent Care Plano (Alma Drive location); two Plano locations exist"},
+    {"type":"clinic","name":"Southern Endocrinology","city":"Plano","address":"7504 San Jacinto Pl, Plano, TX 75024","matchConfidence":"high","matchReason":"Southern Endocrinology & Diabetes Associates Plano"},
+    {"type":"clinic","name":"Plano Therapy center","city":"Plano","address":"4825 Alliance Blvd Ste 150, Plano, TX 75093","matchConfidence":"low","matchReason":"Best guess: LifeStance Health Plano (no specific 'Plano Therapy Center' practice found by exact name)"},
+    {"type":"clinic","name":"Davita Dialysis","city":"Plano","address":"4112 W Spring Creek Pkwy, Plano, TX 75024","matchConfidence":"medium","matchReason":"DaVita Renal Center of Plano (multiple Plano locations; using primary)"},
+    {"type":"clinic","name":"Mind Body OPTIMIZATION","city":"Plano","address":"5038 Tennyson Pkwy Ste 100B, Plano, TX 75024","matchConfidence":"high","matchReason":"Mind Body Optimization Plano"},
+    {"type":"clinic","name":"Amy Mathew Burton, MD","city":"Plano","address":"6124 W Parker Rd Ste 330, Plano, TX 75093","matchConfidence":"high","matchReason":"Dr. Amy Mathew Burton MD pediatric endocrinologist (Pediatric Endocrinology of North Texas)"},
+    {"type":"clinic","name":"Endocrinology","city":"Plano","address":"7504 San Jacinto Pl, Plano, TX 75024","matchConfidence":"low","matchReason":"Generic name 'Endocrinology' — best match is Southern Endocrinology Plano"},
+    {"type":"clinic","name":"Pediatric Endocrinology of North Texas","city":"Plano","address":"6124 W Parker Rd MOB 3 Ste 330, Plano, TX 75093","matchConfidence":"high","matchReason":"Pediatric Endocrinology of North Texas Plano"},
+    {"type":"clinic","name":"Dr. Madhuri Gudipaty","city":"Plano","address":"5953 Dallas Pkwy Ste 200A, Plano, TX 75093","matchConfidence":"high","matchReason":"Dr. Madhuri Gudipaty MD OB/GYN Plano"},
+    {"type":"clinic","name":"Gupta Orthodontics","city":"Plano","address":"5961 Dallas Pkwy Ste 601, Plano, TX 75093","matchConfidence":"high","matchReason":"Gupta Orthodontics Plano; Dr. Deepak Gupta DMD MS confirmed"},
+    {"type":"clinic","name":"Spine and pain clinic of texas","city":"Plano","address":"6300 Stonewood Dr Ste 206, Plano, TX 75024","matchConfidence":"high","matchReason":"Spine and Pain Clinic of Texas Plano; Dr. Muhammad Arif MD confirmed"},
+    {"type":"clinic","name":"Kalpana Thakur , M.D.","city":"Plano","address":"1600 Coit Rd, Plano, TX 75075","matchConfidence":"high","matchReason":"Dr. Kalpana Thakur MD Plano Primary Care (duplicate)"},
+    {"type":"clinic","name":"Action Family Care","city":"Plano","address":"4601 Old Shepard Pl Ste 401A, Plano, TX 75093","matchConfidence":"high","matchReason":"Action Family Care Plano (afcarehealth.net)"},
+    {"type":"clinic","name":"Mir Ali, MD / MEDINA PRIMARY CARE","city":"Plano","address":"4013 14th St Ste 401, Plano, TX 75074","matchConfidence":"high","matchReason":"Dr. Mir Ali MD Medina Primary Care Plano (duplicate)"},
+    {"type":"clinic","name":"MD.Jenny Tseng","city":"Plano","address":"6300 Stonewood Dr Ste 410, Plano, TX 75024","matchConfidence":"high","matchReason":"Dr. Jenny Tseng MD gastroenterologist Plano"},
+    {"type":"clinic","name":"Texas Rheumatology care","city":"Plano","address":"6300 Stonewood Dr Ste 412, Plano, TX 75024","matchConfidence":"high","matchReason":"Texas Rheumatology Care Plano; Dr. Fehmida Zahabi MD confirmed"},
+    {"type":"clinic","name":"Fehmida Zahabi","city":"Plano","address":"6300 Stonewood Dr Ste 412, Plano, TX 75024","matchConfidence":"high","matchReason":"Duplicate of 'Texas Rheumatology care'"},
+    {"type":"clinic","name":"TX Primary care plus","city":"Plano","address":"5040 Tennyson Pkwy, Plano, TX 75024","matchConfidence":"high","matchReason":"TX Primary Care Plus Plano; Dr. Venkatesh Madhav MD confirmed"},
+    {"type":"clinic","name":"premier family medicine","city":"Plano","address":"6800 Alma Dr, Plano, TX 75023","matchConfidence":"high","matchReason":"Premier Family Medical PA Plano"},
+    {"type":"clinic","name":"Shepherd Chiropractice and famly wellness","city":"Plano","address":"5800 Legacy Dr, Plano, TX 75024","matchConfidence":"high","matchReason":"Shepherd Chiropractic Family Wellness Center Plano"},
+    {"type":"clinic","name":"Dennis family wellness center","city":"Plano","address":"930 W Parker Rd Ste 505, Plano, TX 75075","matchConfidence":"high","matchReason":"Dennis Family Wellness Center Plano chiropractic"},
+    {"type":"clinic","name":"Dr Philips Chen","city":"Plano","address":"5904 Chapel Hill Blvd Ste 102, Plano, TX 75075","matchConfidence":"high","matchReason":"Dr. Philip Chen MD Plano (typo 'Philips' — duplicate of 'Dr. Philip K. Chen')"}
+  ],
+  "notFound": [
+    {"type":"clinic","name":"AIX Family Care","city":"Plano","reason":"AIX Wellness & Family Care Plano TX 75093 — full street address not publicly listed"}
+  ]
+}

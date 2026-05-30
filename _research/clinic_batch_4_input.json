@@ -1,0 +1,426 @@
+{
+  "batchId": 4,
+  "label": "McKinney-A",
+  "clinics": [
+    {
+      "n": "Collin County Physicians",
+      "c": "McKinney",
+      "s": "Primary- UC",
+      "d": "Dr. Chirag Chavda"
+    },
+    {
+      "n": "McKinney Family Medicine",
+      "c": "McKinney",
+      "s": "Primary",
+      "d": "Dr. Brian.C.Procter, Dr Peter A. McCullough"
+    },
+    {
+      "n": "Wellness medicine",
+      "c": "McKinney",
+      "s": "",
+      "d": "DR. Sunila Philips"
+    },
+    {
+      "n": "Cardiac Center of Texas",
+      "c": "McKinney",
+      "s": "PCP, CCM",
+      "d": "Dr. Ambreen Ashfaque, Dr Muhammad Akram Khan"
+    },
+    {
+      "n": "Texas Health Family and Sports Care",
+      "c": "McKinney",
+      "s": "PCP",
+      "d": "Dr.Shaun McMurtry"
+    },
+    {
+      "n": "Meridian Primary Care",
+      "c": "McKinney",
+      "s": "PCP, CCM",
+      "d": "Dr.Udita Apte"
+    },
+    {
+      "n": "WELLMED",
+      "c": "McKinney",
+      "s": "PCP",
+      "d": "Dr.Kavitha Moolamalla"
+    },
+    {
+      "n": "McKinney Ranch Medical Care & Wellness",
+      "c": "McKinney",
+      "s": "PCP",
+      "d": "Dr. Janet Lin"
+    },
+    {
+      "n": "Premier Independent Physicians of McKinney",
+      "c": "McKinney",
+      "s": "PCP",
+      "d": "Dr.Zahid Zafar"
+    },
+    {
+      "n": "Direct Orthopedic Care",
+      "c": "McKinney",
+      "s": "Orthopedics",
+      "d": "Dr.Diana Ayala PT, DPT"
+    },
+    {
+      "n": "Alpha Orthopedics & Sports Medicine",
+      "c": "McKinney",
+      "s": "Orthopedics",
+      "d": "Dr. John Thompson"
+    },
+    {
+      "n": "Texas Renal Care",
+      "c": "McKinney",
+      "s": "",
+      "d": "Dr.Mohammad N. Sadeddin"
+    },
+    {
+      "n": "Boring Family Medicine",
+      "c": "McKinney",
+      "s": "",
+      "d": "Dr.Taylor Richardson"
+    },
+    {
+      "n": "The Heartbeat Clinic",
+      "c": "McKinney",
+      "s": "",
+      "d": "Dr. Suleman"
+    },
+    {
+      "n": "Sierra Health Direct Primary care",
+      "c": "McKinney",
+      "s": "",
+      "d": "Dr.Katherine Hurley,"
+    },
+    {
+      "n": "Craig Ranch Pediatrics",
+      "c": "McKinney",
+      "s": "",
+      "d": "Dr. Salem"
+    },
+    {
+      "n": "Family Health Center of Lake Forest",
+      "c": "McKinney",
+      "s": "",
+      "d": "Dr. William Dodge"
+    },
+    {
+      "n": "Synder Hopkins Family Medicine",
+      "c": "McKinney",
+      "s": "",
+      "d": "Dr. Ann Snyder"
+    },
+    {
+      "n": "Eldarado Family Medicine",
+      "c": "McKinney",
+      "s": "",
+      "d": "Dr. Haris Lin"
+    },
+    {
+      "n": "BloomMed,LLC:stephanie Cudjoe, MD",
+      "c": "McKinney",
+      "s": "",
+      "d": "Dr Stephanie Cudjoe"
+    },
+    {
+      "n": "Healthcare Associates of Texas",
+      "c": "McKinney",
+      "s": "",
+      "d": "Karla Maltez Salvador, MD"
+    },
+    {
+      "n": "Meridian Primary care",
+      "c": "McKinney",
+      "s": "",
+      "d": "Dr Udita Apte"
+    },
+    {
+      "n": "Mummadi Internel Medicine",
+      "c": "McKinney",
+      "s": "",
+      "d": "Dr. Vijaya Mummadi"
+    },
+    {
+      "n": "NTX Medical Clinic",
+      "c": "McKinney",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Total Men's Primary Care",
+      "c": "McKinney",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Family Health Center on Virginia",
+      "c": "McKinney",
+      "s": "",
+      "d": "Dr.Brock Pierce"
+    },
+    {
+      "n": "Tu Clinica Hispana Familiar",
+      "c": "McKinney",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Progressive Health Family Medicine",
+      "c": "McKinney",
+      "s": "",
+      "d": "Dr.Hema Haridas"
+    },
+    {
+      "n": "Dr. Daniel James Chartrand",
+      "c": "McKinney",
+      "s": "",
+      "d": "Dr. Daniel J. Chartrand"
+    },
+    {
+      "n": "Apollo Medical Associates",
+      "c": "McKinney",
+      "s": "",
+      "d": "DR. MYERS, HEATHER"
+    },
+    {
+      "n": "Adriatica Womens health",
+      "c": "McKinney",
+      "s": "",
+      "d": "Dr.Tracey A. Banks"
+    },
+    {
+      "n": "Children Choice Pediatrics",
+      "c": "McKinney",
+      "s": "",
+      "d": "Dr.Stacie Hunsaker"
+    },
+    {
+      "n": "Pediatrics People PLLC",
+      "c": "McKinney",
+      "s": "",
+      "d": "Dr. Audra Renata Linck"
+    },
+    {
+      "n": "Texas Institute for Neurological Disorders",
+      "c": "McKinney",
+      "s": "NEUR",
+      "d": "Dr. Easwar Sundaram Jr"
+    },
+    {
+      "n": "Lone Star Neurology",
+      "c": "McKinney",
+      "s": "NEUR",
+      "d": "Dr.Maushmi Sheth"
+    },
+    {
+      "n": "Silver Spine & Neurological Center",
+      "c": "McKinney",
+      "s": "NEUR",
+      "d": "Dr.M. Viktor Silver"
+    },
+    {
+      "n": "Dr. Angela Tseng",
+      "c": "McKinney",
+      "s": "GI",
+      "d": "Dr. Angela Tseng"
+    },
+    {
+      "n": "Texas Diabetes & Endocrinology",
+      "c": "McKinney",
+      "s": "Endocrinologist",
+      "d": "Dr.Luis Casaubon"
+    },
+    {
+      "n": "Dr.Aris N Jacob",
+      "c": "McKinney",
+      "s": "Endocrinologist",
+      "d": "Dr.Aris N Jacob"
+    },
+    {
+      "n": "New Hope Diabetes Care & Prevention",
+      "c": "McKinney",
+      "s": "Endocrinologist",
+      "d": "Dr..Sana Ullah"
+    },
+    {
+      "n": "Advanced Surgical of North Texas",
+      "c": "McKinney",
+      "s": "GS",
+      "d": "Dr.Steve Duffy"
+    },
+    {
+      "n": "Laurie Novosad, M.D., FASCRS",
+      "c": "McKinney",
+      "s": "GS",
+      "d": "Dr.Laurie S. Novosad"
+    },
+    {
+      "n": "Francy Y Shu",
+      "c": "McKinney",
+      "s": "NEUR",
+      "d": "Dr. Francy Shu"
+    },
+    {
+      "n": "North Texas Brain and Spine Specialists",
+      "c": "McKinney",
+      "s": "NEUR",
+      "d": "Dr.Brite John Chalunkal"
+    },
+    {
+      "n": "MR. DOUGLAS CONNER",
+      "c": "McKinney",
+      "s": "GS",
+      "d": ""
+    },
+    {
+      "n": "Texas Health Internal Medicine",
+      "c": "McKinney",
+      "s": "Endocrinologist",
+      "d": "Dr. Scott Elliot Neumann"
+    },
+    {
+      "n": "Texas Health Internal Medicine",
+      "c": "McKinney",
+      "s": "Endocrinologist",
+      "d": "Dr.Michael Young-June Lee"
+    },
+    {
+      "n": "Nutritional Blessings",
+      "c": "McKinney",
+      "s": "Endocrinologist",
+      "d": ""
+    },
+    {
+      "n": "Texas Star Pain & Spine",
+      "c": "McKinney",
+      "s": "Pain Management",
+      "d": "Gonzalo Gonzales, DO"
+    },
+    {
+      "n": "Comprehensive OB/GYN",
+      "c": "McKinney",
+      "s": "Obstetrician-gynecologist",
+      "d": "Gerald D Luciani, MD"
+    },
+    {
+      "n": "Synergy Primary Clinic",
+      "c": "McKinney",
+      "s": "",
+      "d": "Met Dr. Zafar"
+    },
+    {
+      "n": "El Shaddai Family Clinic",
+      "c": "McKinney",
+      "s": "",
+      "d": "Beena Paul MSN,"
+    },
+    {
+      "n": "Express Family Clinic",
+      "c": "McKinney",
+      "s": "",
+      "d": "Dr. Parihar"
+    },
+    {
+      "n": "Just For Kids Dentistry",
+      "c": "McKinney",
+      "s": "",
+      "d": "Dr. Jeffrey Hoffman"
+    },
+    {
+      "n": "The Well Integrative Medicine",
+      "c": "McKinney",
+      "s": "",
+      "d": "Dr. Brian C. Procter"
+    },
+    {
+      "n": "Pain Treatment Institute",
+      "c": "McKinney",
+      "s": "",
+      "d": "Dr. Sameer Syed"
+    },
+    {
+      "n": "Lice Clinics of America",
+      "c": "McKinney",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Texas family healthcare",
+      "c": "McKinney",
+      "s": "",
+      "d": "Sophia Hussain, MD"
+    },
+    {
+      "n": "PebblePath Pediatric Dentistry&Orthodontics",
+      "c": "McKinney",
+      "s": "",
+      "d": "Dr. Thien Tran"
+    },
+    {
+      "n": "North Dallas Urology Associates",
+      "c": "McKinney",
+      "s": "",
+      "d": "Dr. Stephen Lieman"
+    },
+    {
+      "n": "McKinney Adult Medicine",
+      "c": "McKinney",
+      "s": "",
+      "d": "Dr. Michael Parisi"
+    },
+    {
+      "n": "Complete Heart Care",
+      "c": "McKinney",
+      "s": "",
+      "d": "Faizan Iftikhar MD, FACP, FACC, P.A"
+    },
+    {
+      "n": "Texas Institute for Neurological Disorders",
+      "c": "McKinney",
+      "s": "",
+      "d": "Easwar Sundaram JR. MD"
+    },
+    {
+      "n": "Children's Choice Pediatrics",
+      "c": "McKinney",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Exult Healthcare",
+      "c": "McKinney",
+      "s": "",
+      "d": "Deepika Bhargava M.D."
+    },
+    {
+      "n": "Dr Visalakshi Rao Vallury",
+      "c": "McKinney",
+      "s": "",
+      "d": "Dr Visalakshi Rao Vallury"
+    },
+    {
+      "n": "McKinney Endodontics",
+      "c": "McKinney",
+      "s": "",
+      "d": "Dr. Paul D. Clark’s"
+    },
+    {
+      "n": "Holistic Health Center of Dallas",
+      "c": "McKinney",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Unity Wellness group",
+      "c": "McKinney",
+      "s": "",
+      "d": "Sumit Katyal, M.D."
+    },
+    {
+      "n": "CommonGood Medical",
+      "c": "McKinney",
+      "s": "",
+      "d": "Theresa Olfson, MD"
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "found": [
+    {"type":"clinic","name":"Endocrine Associates of Dallas & Plano","city":"Plano","address":"10260 N Central Expy Ste 100N, Dallas, TX 75231","matchConfidence":"medium","matchReason":"Dr. Camille Folkard at Endocrine Associates of Dallas; Dallas office listed (Plano office exists but Dallas is the primary address shown)"},
+    {"type":"clinic","name":"Balance Diabetes and Endrocrinology","city":"Plano","address":"6533 Preston Rd Ste 100, Plano, TX 75024","matchConfidence":"high","matchReason":"Balance Diabetes and Endocrinology Plano"},
+    {"type":"clinic","name":"Dr. Qing Jia","city":"Plano","address":"7705 San Jacinto Pl Ste 100, Plano, TX 75024","matchConfidence":"high","matchReason":"Dr. Qing Jia MD endocrinologist Plano (Southern Endocrinology and Diabetes Associates)"},
+    {"type":"clinic","name":"Elizabeth M Papaila","city":"Plano","address":"4708 Alliance Blvd Ste 270, Plano, TX 75093","matchConfidence":"high","matchReason":"Dr. Elizabeth M. Papaila MD general surgeon Plano"},
+    {"type":"clinic","name":"TEXAS CHILD NEUROLOGY, LLP","city":"Plano","address":"4032 McDermott Rd Ste 100, Plano, TX 75024","matchConfidence":"high","matchReason":"Texas Child Neurology Plano; Dr. Robert Chudnow MD (retired)"},
+    {"type":"clinic","name":"Dr. Abdul A. Baker","city":"Plano","address":"555 Republic Dr Ste 100, Plano, TX 75074","matchConfidence":"high","matchReason":"Dr. Abdul Baker neurosurgeon Plano"},
+    {"type":"clinic","name":"Comprehensive Pain Solutions of Texas: Bryan Aduddell, M.D","city":"Plano","address":"1300 Medical Ave Ste 102, Plano, TX 75075","matchConfidence":"high","matchReason":"Comprehensive Pain Solutions of Texas Plano; Dr. Bryan Aduddell MD confirmed"},
+    {"type":"clinic","name":"ReGen Pain Management: Jonathan Koning, MD","city":"Plano","address":"6020 W Parker Rd Ste 300, Plano, TX 75093","matchConfidence":"high","matchReason":"ReGen Pain Management Plano; Dr. Jonathan Koning MD confirmed"},
+    {"type":"clinic","name":"The Behavior Exchange","city":"Plano","address":"6105 Windcom Ct Ste 400, Plano, TX 75093","matchConfidence":"high","matchReason":"The Behavior Exchange Plano (ABA therapy)"},
+    {"type":"clinic","name":"Southwest Allergy & Asthma Center","city":"Plano","address":"6100 Windcom Ct, Plano, TX 75093","matchConfidence":"high","matchReason":"Southwest Allergy & Asthma Center Plano; Dr. John Van Wagoner MD confirmed"},
+    {"type":"clinic","name":"Edward T. Shin,M.D","city":"Plano","address":"5804 Communications Pkwy Ste 100, Plano, TX 75093","matchConfidence":"high","matchReason":"Dr. Edward T. Shin MD pain management Plano"},
+    {"type":"clinic","name":"Vista Physical Therapy - Plano, Windcom Ct","city":"Plano","address":"6105 Windcom Ct Ste 300, Plano, TX 75093","matchConfidence":"high","matchReason":"Vista Physical Therapy Plano Windcom Ct location"},
+    {"type":"clinic","name":"CityBridge Urgent Care","city":"Plano","address":"910 W Parker Rd Ste 102, Plano, TX 75075","matchConfidence":"high","matchReason":"CityBridge Urgent Care Plano"},
+    {"type":"clinic","name":"Dr. Isaac Z. Pugach","city":"Plano","address":"660 N Central Expy Ste 640, Plano, TX 75074","matchConfidence":"high","matchReason":"Dr. Isaac Z. Pugach MD Pure Spring Medical Plano"},
+    {"type":"clinic","name":"Dr. Philip K. Chen","city":"Plano","address":"5904 Chapel Hill Blvd Ste 102, Plano, TX 75075","matchConfidence":"high","matchReason":"Dr. Philip K. Chen MD family medicine Plano"},
+    {"type":"clinic","name":"Family Health and Wellness of Plano","city":"Plano","address":"5148 Village Creek Dr Ste 300, Plano, TX 75093","matchConfidence":"high","matchReason":"Family Health & Wellness of Plano; Dr. Russell B. Skinner MD founder confirmed"},
+    {"type":"clinic","name":"Plano Family clinic","city":"Plano","address":"6513A Chase Oaks Blvd, Plano, TX 75023","matchConfidence":"high","matchReason":"Plano Family Clinic; Dr. Hanh-Dieu Nguyen confirmed"},
+    {"type":"clinic","name":"Serenity Primary Care","city":"Plano","address":"1208 Village Creek Dr Ste 104, Plano, TX 75093","matchConfidence":"high","matchReason":"Serenity Primary Care Plano; Dr. Parvane Rashidi-Birgani MD confirmed"},
+    {"type":"clinic","name":"Rajiv M Joseph MD, PhD, FAAN","city":"Plano","address":"7920 Preston Rd Ste 100, Plano, TX 75024","matchConfidence":"high","matchReason":"Dr. Rajiv M. Joseph MD neurologist Plano"}
+  ],
+  "notFound": []
+}

@@ -1,0 +1,25 @@
+{
+  "found": [
+    {"type":"clinic","name":"Collin County Physicians","city":"McKinney","address":"5860 Collin McKinney Pkwy Ste 602, McKinney, TX 75070","matchConfidence":"high","matchReason":"Collin County Physicians; Dr. Chirag Chavda confirmed"},
+    {"type":"clinic","name":"McKinney Family Medicine","city":"McKinney","address":"7692 Eldorado Pkwy, McKinney, TX 75070","matchConfidence":"high","matchReason":"McKinney Family Medicine (mckinneyfamilymed.com); Dr. Brian C. Procter MD owner; Dr. Peter McCullough collaborator"},
+    {"type":"clinic","name":"Wellness medicine","city":"McKinney","address":"3120 Hudson Crossing Ste B2, McKinney, TX 75070","matchConfidence":"high","matchReason":"Wellness Medicine McKinney; Dr. Sunila Philips MD FAAFP confirmed"},
+    {"type":"clinic","name":"Cardiac Center of Texas","city":"McKinney","address":"4201 Medical Center Dr Ste 380, McKinney, TX 75069","matchConfidence":"high","matchReason":"Cardiac Center of Texas; Dr. Muhammad Akram Khan MD confirmed"},
+    {"type":"clinic","name":"Texas Health Family and Sports Care","city":"McKinney","address":"6210 Virginia Pkwy, McKinney, TX 75071","matchConfidence":"high","matchReason":"Texas Health Family & Sports Care McKinney; Dr. Shaun McMurtry confirmed"},
+    {"type":"clinic","name":"Meridian Primary Care","city":"McKinney","address":"280 Adriatic Pkwy, McKinney, TX 75070","matchConfidence":"high","matchReason":"Meridian Primary Care (mymeridianprimarycare.com); Dr. Udita Apte confirmed"},
+    {"type":"clinic","name":"WELLMED","city":"McKinney","address":"8080 State Hwy 121 Ste 300, McKinney, TX 75070","matchConfidence":"high","matchReason":"WellMed at McKinney South; Dr. Kavitha Moolamalla (note: no longer practicing as of May 2025)"},
+    {"type":"clinic","name":"McKinney Ranch Medical Care & Wellness","city":"McKinney","address":"3950 S Ridge Rd Ste 100, McKinney, TX 75070","matchConfidence":"high","matchReason":"McKinney Ranch Medical Care & Wellness; Dr. Janet Lin confirmed"},
+    {"type":"clinic","name":"Premier Independent Physicians of McKinney","city":"McKinney","address":"1820 N Lake Forest Dr Ste 300, McKinney, TX 75071","matchConfidence":"high","matchReason":"Premier Independent Physicians of McKinney; Dr. Zahid Zafar confirmed"},
+    {"type":"clinic","name":"Direct Orthopedic Care","city":"McKinney","address":"4600 Eldorado Pkwy Ste 600, McKinney, TX 75070","matchConfidence":"high","matchReason":"Direct Orthopedic Care McKinney (directorthocare.com)"},
+    {"type":"clinic","name":"Alpha Orthopedics & Sports Medicine","city":"McKinney","address":"6850 TPC Dr Ste 116, McKinney, TX 75070","matchConfidence":"high","matchReason":"Alpha Orthopedics & Sports Medicine McKinney; Dr. Jon Thompson confirmed"},
+    {"type":"clinic","name":"Texas Renal Care","city":"McKinney","address":"7300 W Eldorado Pkwy Ste 125, McKinney, TX 75070","matchConfidence":"high","matchReason":"Texas Advanced Renal Health (formerly Texas Renal Care); Dr. Mohammad Nawaf Sadeddin nephrologist confirmed"},
+    {"type":"clinic","name":"Boring Family Medicine","city":"McKinney","address":"1441 Redbud Blvd Ste 111, McKinney, TX 75069","matchConfidence":"high","matchReason":"Boring Family Medicine McKinney; Dr. Billy R. Boring MD"},
+    {"type":"clinic","name":"The Heartbeat Clinic","city":"McKinney","address":"4541 Medical Center Dr Ste 800, McKinney, TX 75069","matchConfidence":"high","matchReason":"The Heartbeat Clinic McKinney; Dr. Amer Suleman cardiologist confirmed"},
+    {"type":"clinic","name":"Sierra Health Direct Primary care","city":"McKinney","address":"1400 N Coit Rd Ste 302, McKinney, TX 75071","matchConfidence":"high","matchReason":"Sierra Health DPC McKinney; Dr. Katherine Hurley confirmed"},
+    {"type":"clinic","name":"Craig Ranch Pediatrics","city":"McKinney","address":"6850 TPC Dr Ste 100, McKinney, TX 75070","matchConfidence":"high","matchReason":"Craig Ranch Pediatrics McKinney"},
+    {"type":"clinic","name":"Family Health Center of Lake Forest","city":"McKinney","address":"4987 W University Dr Ste 150, McKinney, TX 75071","matchConfidence":"high","matchReason":"Family Health Center of Lake Forest; Dr. William Dodge MD confirmed"},
+    {"type":"clinic","name":"Synder Hopkins Family Medicine","city":"McKinney","address":"4561 Medical Center Dr, McKinney, TX 75069","matchConfidence":"high","matchReason":"Snyder-Hopkins Family Medicine Center (source typo 'Synder'); Dr. Ann Snyder MD confirmed"},
+    {"type":"clinic","name":"Eldarado Family Medicine","city":"McKinney","address":"7701 Eldorado Pkwy Ste 300, McKinney, TX 75070","matchConfidence":"high","matchReason":"Eldorado Family Medicine McKinney (source typo 'Eldarado'); Dr. Harris Lin confirmed (source typo 'Haris')"},
+    {"type":"clinic","name":"BloomMed,LLC:stephanie Cudjoe, MD","city":"McKinney","address":"8951 Collin McKinney Pkwy Ste 502, McKinney, TX 75070","matchConfidence":"high","matchReason":"BloomMed LLC McKinney; Dr. Stephanie Cudjoe MD confirmed (same physician as Frisco Bloomfield clinic — same provider with McKinney location)"}
+  ],
+  "notFound": []
+}

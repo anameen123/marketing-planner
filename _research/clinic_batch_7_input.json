@@ -1,0 +1,396 @@
+{
+  "batchId": 7,
+  "label": "Plano-B",
+  "clinics": [
+    {
+      "n": "Pediatric offices at willow bend",
+      "c": "Plano",
+      "s": "",
+      "d": "Sharon Wiener MD"
+    },
+    {
+      "n": "NextCare Urgent Care",
+      "c": "Plano",
+      "s": "",
+      "d": "Dr. Chesshir"
+    },
+    {
+      "n": "Southern Endocrinology",
+      "c": "Plano",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Plano Therapy center",
+      "c": "Plano",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Davita Dialysis",
+      "c": "Plano",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Mind Body OPTIMIZATION",
+      "c": "Plano",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Amy Mathew Burton, MD",
+      "c": "Plano",
+      "s": "",
+      "d": "Amy Mathew Burton, MD"
+    },
+    {
+      "n": "North Texas Endocrinology",
+      "c": "Plano",
+      "s": "",
+      "d": "Muhammad Choudhry, MD"
+    },
+    {
+      "n": "Endocrinology",
+      "c": "Plano",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Pediatric Endocrinology of North Texas",
+      "c": "Plano",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Dr. Madhuri Gudipaty",
+      "c": "Plano",
+      "s": "OB/GYN",
+      "d": ""
+    },
+    {
+      "n": "Gupta Orthodontics",
+      "c": "Plano",
+      "s": "ortho",
+      "d": "Dr. Deepak Gupta"
+    },
+    {
+      "n": "Spine and pain clinic of texas",
+      "c": "Plano",
+      "s": "Pain managment",
+      "d": "Dr. Arif"
+    },
+    {
+      "n": "Kalpana Thakur , M.D.",
+      "c": "Plano",
+      "s": "",
+      "d": "Kalpana Thakur , M.D."
+    },
+    {
+      "n": "Action Family Care",
+      "c": "Plano",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Mir Ali, MD / MEDINA PRIMARY CARE",
+      "c": "Plano",
+      "s": "",
+      "d": "Mir Ali, MD"
+    },
+    {
+      "n": "MD.Jenny Tseng",
+      "c": "Plano",
+      "s": "Gastroenterologist",
+      "d": "MD.Jenny Tseng"
+    },
+    {
+      "n": "Texas Rheumatology care",
+      "c": "Plano",
+      "s": "",
+      "d": "Dr. Fehmda Zahabi"
+    },
+    {
+      "n": "AIX Family Care",
+      "c": "Plano",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "TX Primary care plus",
+      "c": "Plano",
+      "s": "",
+      "d": "Dr. Madhav"
+    },
+    {
+      "n": "Connections wellness group",
+      "c": "Plano",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "premier family medicine",
+      "c": "Plano",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Shepherd Chiropractice and famly wellness",
+      "c": "Plano",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Dennis family wellness center",
+      "c": "Plano",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Fehmida Zahabi",
+      "c": "Plano",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Dr. Philip K Chen",
+      "c": "Plano",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "AIX Family care",
+      "c": "Plano",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Dr Philips Chen",
+      "c": "Plano",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Christy Walker MD Gynecology",
+      "c": "Plano",
+      "s": "MD",
+      "d": "Christy Walker MD"
+    },
+    {
+      "n": "monkey mouth pediatric therapy",
+      "c": "Plano",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Trinity Pediatrics",
+      "c": "Plano",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "MC kids pediatrics",
+      "c": "Plano",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Us Legacy Clinic",
+      "c": "Plano",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Tx Primary care plus",
+      "c": "Plano",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Advance med clinic of plano",
+      "c": "Plano",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Family health and wellness of plano",
+      "c": "Plano",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Action family care",
+      "c": "Plano",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "City bridge urgent care",
+      "c": "Plano",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Legacy internal medicine",
+      "c": "Plano",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "NcT Step",
+      "c": "Plano",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Epiphany Dermatalogy",
+      "c": "Plano",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "plano",
+      "c": "Plano",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Blue star imaging",
+      "c": "Plano",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Thompson family and cosmetic dentistry",
+      "c": "Plano",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Express health systems",
+      "c": "Plano",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Next Gen",
+      "c": "Plano",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Maple Primary care",
+      "c": "Plano",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Q day walk in clinic",
+      "c": "Plano",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "RNV Podiatry",
+      "c": "Plano",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Sandy Maccoy",
+      "c": "Plano",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Quick Urgent care",
+      "c": "Plano",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Hillcrest",
+      "c": "Plano",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Greenhill Family Physician",
+      "c": "Plano",
+      "s": "MD",
+      "d": "Mike M. Lee MD"
+    },
+    {
+      "n": "AlphaHealth Frisco Primary Care",
+      "c": "Plano",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Daffodil Primary Care",
+      "c": "Plano",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Connections Wellness Group",
+      "c": "Plano",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Pediactrics R US",
+      "c": "Plano",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Monkey Mouths Pediactric therapy",
+      "c": "Plano",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Lonestar Gastroenterology PA",
+      "c": "Plano",
+      "s": "MD",
+      "d": "Gowri Balachandar, M.D"
+    },
+    {
+      "n": "Family Medicine",
+      "c": "Plano",
+      "s": "MD",
+      "d": "Karin K. Bergman"
+    },
+    {
+      "n": "Plano Neurology",
+      "c": "Plano",
+      "s": "MD",
+      "d": "Geeta Rajan, M.D"
+    },
+    {
+      "n": "North Texas Institute of Neurology",
+      "c": "Plano",
+      "s": "MD",
+      "d": "Karen Bontia , MD"
+    },
+    {
+      "n": "Medical Aesthetics of North Texas",
+      "c": "Plano",
+      "s": "MD",
+      "d": "Dennis Eisenburg Gynecology"
+    },
+    {
+      "n": "Southern Endocrynology",
+      "c": "Plano",
+      "s": "MD",
+      "d": "Sumana Gangi, M, FACE"
+    },
+    {
+      "n": "Womans Health Specialist",
+      "c": "Plano",
+      "s": "FNP-C",
+      "d": "Dominique Copeland , APRN, FNP-C"
+    }
+  ]
+}

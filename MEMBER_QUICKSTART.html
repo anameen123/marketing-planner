@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Marketing Planner — Member Quickstart</title>
+<style>
+  @page {
+    size: Letter;
+    margin: 0.6in 0.55in 0.7in 0.55in;
+    @bottom-center {
+      content: "Marketing Planner — Quick Start for Team Members  •  Page " counter(page) " of " counter(pages);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-size: 8.5pt;
+      color: #64748b;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+    font-size: 10.5pt;
+    line-height: 1.45;
+    color: #1e293b;
+    margin: 0;
+    padding: 0;
+  }
+  h1, h2, h3 { color: #1F3864; margin: 0; font-weight: 700; }
+  h1 { font-size: 24pt; line-height: 1.1; }
+  h2 {
+    font-size: 14.5pt;
+    margin: 14px 0 8px;
+    padding-bottom: 4px;
+    border-bottom: 2px solid #7030A0;
+    color: #1F3864;
+  }
+  h3 { font-size: 11.5pt; margin: 10px 0 4px; color: #7030A0; }
+  p { margin: 4px 0 8px; }
+  ol, ul { margin: 4px 0 8px; padding-left: 22px; }
+  li { margin: 2px 0; }
+
+  .cover {
+    background: linear-gradient(135deg, #1F3864 0%, #7030A0 100%);
+    color: #fff;
+    padding: 18px 22px;
+    border-radius: 10px;
+    margin-bottom: 14px;
+  }
+  .cover h1 { color: #fff; }
+  .cover .sub { font-size: 11pt; opacity: 0.92; margin-top: 4px; }
+  .cover .meta {
+    font-size: 9pt;
+    margin-top: 10px;
+    opacity: 0.9;
+    border-top: 1px solid rgba(255,255,255,0.3);
+    padding-top: 6px;
+  }
+
+  .row { display: flex; gap: 14px; align-items: flex-start; margin: 6px 0 10px; page-break-inside: avoid; }
+  .row .text { flex: 1.4; }
+  .row .img  { flex: 1; text-align: center; }
+  .row.flip .text { flex: 1.4; order: 2; }
+  .row.flip .img  { flex: 1; order: 1; }
+  .row img {
+    max-width: 100%;
+    max-height: 3.4in;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.07);
+  }
+  .caption {
+    font-size: 8.5pt;
+    color: #64748b;
+    margin-top: 3px;
+    font-style: italic;
+  }
+
+  .url {
+    background: #f1f5f9;
+    border-left: 3px solid #7030A0;
+    padding: 6px 10px;
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 9.5pt;
+    word-break: break-all;
+    border-radius: 4px;
+    margin: 6px 0;
+  }
+
+  .tip {
+    background: #fef3c7;
+    border-left: 3px solid #f59e0b;
+    padding: 6px 10px;
+    font-size: 9.5pt;
+    border-radius: 4px;
+    margin: 6px 0;
+  }
+  .tip b { color: #92400e; }
+
+  .warn {
+    background: #fee2e2;
+    border-left: 3px solid #dc2626;
+    padding: 6px 10px;
+    font-size: 9.5pt;
+    border-radius: 4px;
+    margin: 6px 0;
+  }
+  .warn b { color: #991b1b; }
+
+  table.tabs {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 9.5pt;
+    margin: 6px 0;
+  }
+  table.tabs th, table.tabs td {
+    border: 1px solid #e2e8f0;
+    padding: 5px 8px;
+    text-align: left;
+    vertical-align: top;
+  }
+  table.tabs th {
+    background: #f1f5f9;
+    color: #1F3864;
+    font-weight: 700;
+  }
+  table.tabs td:first-child { font-weight: 700; color: #7030A0; width: 22%; }
+
+  .pagebreak { page-break-before: always; }
+  .nobreak  { page-break-inside: avoid; }
+
+  .footer-tagline {
+    margin-top: 10px;
+    font-size: 9pt;
+    color: #475569;
+    text-align: center;
+    font-style: italic;
+  }
+  kbd {
+    background: #f1f5f9;
+    border: 1px solid #cbd5e1;
+    border-radius: 3px;
+    padding: 1px 5px;
+    font-family: 'Consolas', monospace;
+    font-size: 9pt;
+  }
+  .step-num {
+    display: inline-block;
+    width: 22px; height: 22px;
+    background: #7030A0;
+    color: #fff;
+    border-radius: 50%;
+    text-align: center;
+    line-height: 22px;
+    font-weight: 700;
+    margin-right: 6px;
+    font-size: 11pt;
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- COVER + SIGN IN                                                     -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<div class="cover">
+  <h1>Marketing Planner</h1>
+  <div class="sub">Quick Start Guide for Team Members</div>
+  <div class="meta">
+    For: Duaa, Ms Sadia, Dr Ahsan, &amp; team &nbsp;•&nbsp; 5 minutes to read &nbsp;•&nbsp; iPhone friendly
+  </div>
+</div>
+
+<h2>1. Open the app</h2>
+<div class="row">
+  <div class="text">
+    On your iPhone or laptop, open Safari or Edge and go to:
+    <div class="url">https://anameen123.github.io/marketing-planner/marketing_schedule_FINAL4.html</div>
+    <p><b>Pro tip — add it to your iPhone home screen:</b></p>
+    <ol>
+      <li>Open the link in <b>Safari</b> (not Chrome)</li>
+      <li>Tap the <b>Share</b> button (square with up-arrow at the bottom)</li>
+      <li>Scroll down and tap <b>"Add to Home Screen"</b></li>
+      <li>Tap <b>Add</b></li>
+    </ol>
+    Now you have a one-tap app icon — opens full-screen with no browser bar.
+    <div class="tip"><b>Bookmark on laptop:</b> press <kbd>Ctrl</kbd>+<kbd>D</kbd> after the page loads.</div>
+  </div>
+  <div class="img">
+    <img src="screenshots/01_login_screen.png" alt="Login screen">
+    <div class="caption">The sign-in screen</div>
+  </div>
+</div>
+
+<h2>2. Sign in</h2>
+<div class="row flip">
+  <div class="img">
+    <img src="screenshots/02_login_filled.png" alt="Login filled in">
+    <div class="caption">Enter your work email + Outlook password</div>
+  </div>
+  <div class="text">
+    <p>You have <b>two ways</b> to sign in. Pick whichever is faster for you:</p>
+    <ol>
+      <li><b>Sign in with Microsoft</b> button at the top — opens the standard Microsoft pop-up where you enter your work email and password.</li>
+      <li><b>Email + Password</b> fields below — type your email and Outlook password directly. Microsoft will verify them on their secure page.</li>
+    </ol>
+    <p><b>Use the same email + password you use for Outlook:</b></p>
+    <ul>
+      <li>Duaa, Dr Ahsan, Ahmed → your <code>@wcgtx.com</code> email</li>
+      <li>Ms Sadia → your <code>@frisco-er.com</code> email</li>
+    </ul>
+    <div class="warn"><b>Approve the phone prompt</b> if you have Microsoft Authenticator — 2-factor login is required by company policy.</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- HOME + TABS                                                          -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<div class="pagebreak"></div>
+
+<h2>3. After signing in — the Home screen</h2>
+<div class="row">
+  <div class="text">
+    You land on the <b>Home</b> tab. You'll see:
+    <ul>
+      <li>Your <b>name &amp; circle avatar</b> in the top header</li>
+      <li>A <b>"Good afternoon/morning"</b> welcome card with today's date</li>
+      <li>Any <b>announcements</b> from the admin (red banner)</li>
+      <li>Bottom navigation with all the main tabs</li>
+      <li><b>Sign out</b> button next to your name when you're done</li>
+    </ul>
+    <div class="tip"><b>Live sync:</b> everything you do here syncs automatically to the whole team within 5 seconds. No "save" button needed.</div>
+  </div>
+  <div class="img">
+    <img src="screenshots/03_home.png" alt="Home tab on iPhone">
+    <div class="caption">Your home screen (Duaa shown)</div>
+  </div>
+</div>
+
+<h2>4. The main tabs</h2>
+<table class="tabs">
+  <tr><th>Tab</th><th>What you do here</th></tr>
+  <tr><td>Home</td><td>Today's snapshot + announcements + welcome</td></tr>
+  <tr><td>Dashboard</td><td>The <b>planning calendar</b> — click any day to see/add visits</td></tr>
+  <tr><td>Status</td><td>List of clinics you've built relationships with (your CRM)</td></tr>
+  <tr><td>Businesses</td><td>The bank of clinics, MVA attorneys, and outreach orgs</td></tr>
+  <tr><td>Finances</td><td>Your spending log + budget remaining + tier info</td></tr>
+  <tr><td>Team</td><td>Team chart + your personal stats</td></tr>
+</table>
+<div class="tip"><b>Member view:</b> you can <b>see</b> everything the team does, but you can <b>edit only your own visits</b>. The pencil icon (✏) appears next to things you can change.</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- SCHEDULE / MARK COMPLETE                                            -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<div class="pagebreak"></div>
+
+<h2>5. Schedule a visit</h2>
+<div class="row">
+  <div class="text">
+    <p><span class="step-num">1</span>Tap the <b>Dashboard</b> tab at the bottom.</p>
+    <p><span class="step-num">2</span>You see a calendar. Days with planned visits show a small number badge and a colored dot.</p>
+    <p><span class="step-num">3</span>Tap the <b>day</b> you want to schedule. The day opens showing 6 visit slots.</p>
+    <p><span class="step-num">4</span>In any empty row, type the clinic name (autocomplete will suggest from the bank), or tap <b>"+ Add Visit"</b> for a new one.</p>
+    <p><span class="step-num">5</span>Your name auto-fills as the marketer. You're scheduled.</p>
+    <div class="tip"><b>To add a visit for a clinic that doesn't exist yet:</b> add it to the <b>Businesses</b> tab first, then come back to the Dashboard to schedule.</div>
+  </div>
+  <div class="img">
+    <img src="screenshots/04_dashboard_calendar.png" alt="Dashboard calendar view">
+    <div class="caption">Calendar — dots &amp; numbers show planned visits</div>
+  </div>
+</div>
+
+<h2>6. Mark a visit complete &amp; log spending</h2>
+<div class="row flip">
+  <div class="img">
+    <img src="screenshots/05_day_visits_popup.png" alt="Day with visit slots">
+    <div class="caption">The day view — your visits in a list</div>
+  </div>
+  <div class="text">
+    After your visit, come back and update the row:
+    <ol>
+      <li>Open the day on the Dashboard (tap the day cell)</li>
+      <li>Tap the <b>pencil ✏</b> next to your visit</li>
+      <li>Set status: <b>Completed</b> / <b>Postponed</b> / <b>Canceled</b></li>
+      <li>If you spent money (lunch, gift, cupcakes…), tap <b>Log Spending</b> → enter amount + what for</li>
+      <li>If you established a relationship, set the <b>Lead level</b>: L1 (Contact) → L2 (Receptionist) → L3 (Office Manager) → L4 (Owner / Decision-maker)</li>
+    </ol>
+    <div class="tip"><b>Spending limits:</b> the app shows your per-visit cap and remaining quarterly budget. Stay within them — no admin approval needed.</div>
+    <div class="warn"><b>Important:</b> mark visits <b>the same day</b> if you can. The team uses your real-time updates to plan their week.</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- BUSINESSES + SIGN OUT                                                -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<div class="pagebreak"></div>
+
+<h2>7. Browse clinics, MVA, &amp; outreach</h2>
+<div class="row">
+  <div class="text">
+    The <b>Businesses</b> tab is your <b>bank of targets</b> — every clinic, attorney firm, and community org we know about.
+    <ul>
+      <li>Three sub-tabs: <b>Clinics</b>, <b>MVA Attorneys</b>, <b>Community Outreach</b></li>
+      <li>Use the search box to find one by clinic or doctor name</li>
+      <li>Filter by <b>Lead Status</b>, <b>Area</b> (city), or <b>Specialty</b> (PCP, Pediatrics…)</li>
+      <li>Each card shows: doctor name, specialty, lead status, tier (Bronze / Silver / Gold / Platinum), and referrals this period</li>
+      <li>Tap <b>"+ Set Lead"</b> on a card to update your relationship level inline</li>
+    </ul>
+    <p>Need to add a brand-new clinic? Tap the purple <b>"+ Add Clinic"</b> button at the top of the list.</p>
+    <div class="tip"><b>Tier badges:</b> Bronze / Silver / Gold / Platinum show how many referrals a clinic has sent us this period. Higher tier = bigger spending cap when you visit.</div>
+  </div>
+  <div class="img">
+    <img src="screenshots/06_businesses_bank.png" alt="Businesses tab — clinic list">
+    <div class="caption">595 clinics, searchable &amp; filterable</div>
+  </div>
+</div>
+
+<h2>8. Sign out when you're done</h2>
+<p>Tap <b>"Sign out"</b> at the top-right of any page. You're signed out immediately — no waiting, no extra pop-up.</p>
+<div class="tip"><b>On a shared device?</b> Always sign out before handing it back. On your personal phone, you can stay signed in — the app remembers you for next time.</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- TROUBLESHOOTING                                                      -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+
+<h2>If something goes wrong</h2>
+<table class="tabs">
+  <tr><th>What you see</th><th>What to do</th></tr>
+  <tr><td>"You're not authorized"</td><td>Your email isn't on the team list yet — tell Mahmoud to add you.</td></tr>
+  <tr><td>"This app needs admin approval"</td><td>IT hasn't granted consent in our tenant — tell Mahmoud, he'll handle it.</td></tr>
+  <tr><td>Spinning / won't load</td><td>Check your internet. Pull-to-refresh on iPhone, or press <kbd>Ctrl</kbd>+<kbd>R</kbd> on laptop.</td></tr>
+  <tr><td>Sync badge shows red</td><td>Tap it once — the app will try to reconnect. If that doesn't help, refresh the page.</td></tr>
+  <tr><td>Wrong display name</td><td>Ask Mahmoud — admins can rename you via the Team tab.</td></tr>
+  <tr><td>Lost / forgot password</td><td>Same password as Outlook. Reset via Microsoft if needed: <code>passwordreset.microsoftonline.com</code></td></tr>
+</table>
+
+<h2>Questions? Ask Mahmoud.</h2>
+<p>This app is brand-new — your feedback shapes how it evolves. Anything that feels slow, confusing, or missing — tell Mahmoud during the meeting or text him anytime.</p>
+
+<div class="footer-tagline">
+  Every visit is a step closer to the next referral. &nbsp;•&nbsp; Wellness &amp; Care Group of Texas, Inc.
+</div>
+
+</body>
+</html>

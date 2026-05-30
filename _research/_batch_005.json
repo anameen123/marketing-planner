@@ -1,0 +1,34 @@
+{
+  "found": [
+    {"type":"clinic","name":"Diana Health Allen","city":"Allen","address":"1120 Raintree Cir Ste 280, Allen, TX 75013","matchConfidence":"high","matchReason":"Diana Health Allen TX (heydianahealth.com)"},
+    {"type":"clinic","name":"Eastside children's clinic","city":"Allen","address":"311 N Allen Dr, Allen, TX 75013","matchConfidence":"high","matchReason":"Eastside Children's Clinic Allen TX (eastsidechildrens.com)"},
+    {"type":"clinic","name":"East side childrens clinic","city":"Allen","address":"311 N Allen Dr, Allen, TX 75013","matchConfidence":"high","matchReason":"Duplicate of 'Eastside children's clinic'"},
+    {"type":"clinic","name":"Brookwood Family Practice","city":"Allen","address":"865 Junction Dr, Allen, TX 75013","matchConfidence":"high","matchReason":"Brookwood Family Practice (brookwoodfp.com)"},
+    {"type":"clinic","name":"Family healthcare associates","city":"Allen","address":"1105 Central Expy N Ste 2120, Allen, TX 75013","matchConfidence":"high","matchReason":"Family HealthCare Associates Allen (Catalyst Physician Group)"},
+    {"type":"clinic","name":"Allen Wellness","city":"Allen","address":"997 Raintree Cir Ste 130, Allen, TX 75013","matchConfidence":"high","matchReason":"Allen Wellness clinic Allen TX"},
+    {"type":"clinic","name":"Khan Salema Salience health","city":"Allen","address":"1050 Central Expy S Ste 1200, Allen, TX 75013","matchConfidence":"high","matchReason":"Salience Health Allen; Dr. Neelma Khan confirmed (source typo 'Salema/Neelma')"},
+    {"type":"clinic","name":"Total health primary care","city":"Allen","address":"906 W McDermott Dr Ste A-124, Allen, TX 75013","matchConfidence":"high","matchReason":"Total Health Primary Care - Allen Twin Creeks (totalhealth.co)"},
+    {"type":"clinic","name":"Ntx medcare and weightloss","city":"Allen","address":"1505 W McDermott Dr Ste 200, Allen, TX 75013","matchConfidence":"high","matchReason":"NTX Medcare and Weight Loss Allen (ntxmedcare.com Twin Creeks)"},
+    {"type":"clinic","name":"Spring valley wellness center","city":"Allen","address":"1504 N Greenville Ave Ste 120, Allen, TX 75002","matchConfidence":"high","matchReason":"Spring Valley Wellness Center of Allen"},
+    {"type":"clinic","name":"American Family Care","city":"Allen","address":"596 E Stacy Rd Ste 1110, Allen, TX 75002","matchConfidence":"high","matchReason":"AFC Urgent Care Allen-Fairview (American Family Care)"},
+    {"type":"clinic","name":"AFC Urgent Care Allen‑Fairview","city":"Allen","address":"596 E Stacy Rd Ste 1110, Allen, TX 75002","matchConfidence":"high","matchReason":"AFC Urgent Care Allen-Fairview (same as 'American Family Care')"},
+    {"type":"clinic","name":"Allen family first choice","city":"Allen","address":"977 Raintree Cir Ste 110, Allen, TX 75013","matchConfidence":"high","matchReason":"Allen Family First Clinic (allenfamilyfirst.com)"},
+    {"type":"clinic","name":"Family care and wellness","city":"Allen","address":"915 W Exchange Pkwy Ste 210, Allen, TX 75013","matchConfidence":"high","matchReason":"Family Care & Wellness Allen (familycareandwellness.com)"},
+    {"type":"clinic","name":"Salveo family clinic","city":"Allen","address":"614 S Watters Rd Ste 101, Allen, TX 75013","matchConfidence":"high","matchReason":"Salveo Family Clinic (salveoclinic.org)"},
+    {"type":"clinic","name":"Fair health wellness center","city":"Allen","address":"60 E McDermott Dr Ste A, Allen, TX 75002","matchConfidence":"high","matchReason":"Fair Health Wellness Center (fhwc-care.com)"},
+    {"type":"clinic","name":"Fast doc urgent care","city":"Allen","address":"325 Central Expy S, Allen, TX 75013","matchConfidence":"high","matchReason":"FastDoc Urgent Care Allen (fastdocucc.com)"},
+    {"type":"clinic","name":"TLC pediatric","city":"Allen","address":"1105 N Central Expy Ste 250 MOB 1, Allen, TX 75013","matchConfidence":"high","matchReason":"TLC Pediatrics PA Allen (tlcpedi.com)"},
+    {"type":"clinic","name":"Angel Pediatritics","city":"Allen","address":"717 S Greenville Ave Ste 104, Allen, TX 75002","matchConfidence":"high","matchReason":"Angel Pediatrics PA Allen (angelpeds.com)"},
+    {"type":"clinic","name":"Southern Charm Pediatritics","city":"Allen","address":"105 N Alma Suite 300, Allen, TX 75013","matchConfidence":"high","matchReason":"Southern Charm Pediatrics Allen (southerncharmpediatrics.com)"},
+    {"type":"clinic","name":"Allen friends and family clinic","city":"Allen","address":"1511 W McDermott Dr Bldg 2 Ste 240, Allen, TX 75013","matchConfidence":"high","matchReason":"Allen Friends & Family Clinic"},
+    {"type":"clinic","name":"North Tex MedCare Clinic & Urgent Care Allen","city":"Allen","address":"1505 W McDermott Dr Ste 200, Allen, TX 75013","matchConfidence":"high","matchReason":"North Tex MedCare Clinic and Urgent Care Allen Twin Creeks"},
+    {"type":"clinic","name":"Shepherd  family medicine and wellness","city":"Allen","address":"515 W Main St, Allen, TX 75013","matchConfidence":"high","matchReason":"Shepherd Family Medicine & Wellness Allen (shepherdfamilymedicine.com)"},
+    {"type":"clinic","name":"Radiant Heart & Vascular","city":"Lewisville","address":"500 N Valley Pkwy Ste 100, Lewisville, TX 75067","matchConfidence":"high","matchReason":"Radiant Heart & Vascular Care Lewisville; Dr. Siva Sontineni confirmed"},
+    {"type":"clinic","name":"Elite Digestive Specialists","city":"Lewisville","address":"118 Lynn Ave Ste 500, Lewisville, TX 75057","matchConfidence":"high","matchReason":"Elite Digestive Specialists Lewisville; Dr. Laxmi Deepika Koya MD confirmed"},
+    {"type":"clinic","name":"Summit Primary Care and Internal Medicine","city":"Lewisville","address":"118 Lynn Ave Ste 502, Lewisville, TX 75057","matchConfidence":"high","matchReason":"Summit Primary Care and Internal Medicine Lewisville; Dr. Arunpriya Vadivelu MD confirmed"}
+  ],
+  "notFound": [
+    {"type":"clinic","name":"Allen children clinic","city":"Allen","reason":"No clinic with exact name 'Allen Children Clinic' found in Allen TX (multiple pediatric options exist but none with this exact name)"},
+    {"type":"clinic","name":"Lone star","city":"Allen","reason":"Ambiguous - 'Lone Star Neurology' and 'Lone Star Kids Care' both have Allen offices, but the source name 'Lone star' alone cannot be disambiguated"}
+  ]
+}

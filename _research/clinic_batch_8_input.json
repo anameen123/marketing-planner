@@ -1,0 +1,372 @@
+{
+  "batchId": 8,
+  "label": "Carrollton-A",
+  "clinics": [
+    {
+      "n": "little Lantern",
+      "c": "Carrollton",
+      "s": "Primary",
+      "d": "Biju Lukose"
+    },
+    {
+      "n": "St Marys",
+      "c": "Carrollton",
+      "s": "Primary",
+      "d": "Remi"
+    },
+    {
+      "n": "Thuan Huynh, MD",
+      "c": "Carrollton",
+      "s": "",
+      "d": "Dr. Thuan Huynh"
+    },
+    {
+      "n": "Care Plus Family Clinic",
+      "c": "Carrollton",
+      "s": "",
+      "d": "Dr. Muhammad Ali Siddiqui"
+    },
+    {
+      "n": "Internal Medicine Associates",
+      "c": "Carrollton",
+      "s": "",
+      "d": "Lauren Bishop, MD"
+    },
+    {
+      "n": "WellMed at Hebron",
+      "c": "Carrollton",
+      "s": "",
+      "d": "Dr. Anis A. Ansari"
+    },
+    {
+      "n": "Fairway Family Medicine",
+      "c": "Carrollton",
+      "s": "",
+      "d": "Dr.HONG XIAO"
+    },
+    {
+      "n": "Complete Family Wellness",
+      "c": "Carrollton",
+      "s": "",
+      "d": "Dr. Salima Jaffer"
+    },
+    {
+      "n": "Carrollton Pediatrics",
+      "c": "Carrollton",
+      "s": "",
+      "d": "Dr.Muhammad Ali Mirza"
+    },
+    {
+      "n": "Giometti Ronald MD",
+      "c": "Carrollton",
+      "s": "",
+      "d": "Dr.Ronald P Giometti Jr"
+    },
+    {
+      "n": "Woven health",
+      "c": "Carrollton",
+      "s": "",
+      "d": "Dr. Leesa Condry"
+    },
+    {
+      "n": "Carrollton Family Physicians",
+      "c": "Carrollton",
+      "s": "",
+      "d": "Dr. Joey L. Hamilton"
+    },
+    {
+      "n": "Medical Clinic Of North Texas",
+      "c": "Carrollton",
+      "s": "",
+      "d": "Dr.Dr. Stephen Bryce Johnston"
+    },
+    {
+      "n": "USMD Carrollton Clinic",
+      "c": "Carrollton",
+      "s": "",
+      "d": "Dr.Van Lam"
+    },
+    {
+      "n": "Jose Burbano De Lara, MD",
+      "c": "Carrollton",
+      "s": "",
+      "d": "Dr.Jose Burbano De Lara"
+    },
+    {
+      "n": "Sanders Barry Md",
+      "c": "Carrollton",
+      "s": "GI",
+      "d": "Dr.Jason Chase Sanders"
+    },
+    {
+      "n": "Trinity North Dallas Neurology",
+      "c": "Carrollton",
+      "s": "GI",
+      "d": "Dr.Elizabeth Samuel"
+    },
+    {
+      "n": "Axis Diabetes & Endocrinology",
+      "c": "Carrollton",
+      "s": "Endocrinologist",
+      "d": "Dr. Neeraja Boddu"
+    },
+    {
+      "n": "Segovia Felix MD",
+      "c": "Carrollton",
+      "s": "Orthopedist",
+      "d": "Dr. Felix Segovia"
+    },
+    {
+      "n": "Core Vasculaar Services",
+      "c": "Carrollton",
+      "s": "GS",
+      "d": "Dr. Timothy C. Pringle"
+    },
+    {
+      "n": "Ortho Texas Orthopedics and sports medicine",
+      "c": "Carrollton",
+      "s": "Orthopedist",
+      "d": "Dr.Christopher D. Allmon"
+    },
+    {
+      "n": "Dr. Biju Lukose",
+      "c": "Carrollton",
+      "s": "GS",
+      "d": "Dr. Biju Lukose"
+    },
+    {
+      "n": "Margaret Mike, Md",
+      "c": "Carrollton",
+      "s": "NEUR",
+      "d": "Dr Margaret Mike"
+    },
+    {
+      "n": "Neurology & Sleep Clinic",
+      "c": "Carrollton",
+      "s": "NEUR",
+      "d": "Dr Kiran Shah"
+    },
+    {
+      "n": "Adnan Nadir, MD",
+      "c": "Carrollton",
+      "s": "GI",
+      "d": "Dr.Adnan Nadir"
+    },
+    {
+      "n": "Lisa R. Reznick, MD",
+      "c": "Carrollton",
+      "s": "",
+      "d": "Dr.Lisa R. Reznick"
+    },
+    {
+      "n": "David Tietze, M.D",
+      "c": "Carrollton",
+      "s": "GS",
+      "d": "David Tietze, M.D"
+    },
+    {
+      "n": "Dr. Louis Montanaro",
+      "c": "Carrollton",
+      "s": "",
+      "d": "Dr. Louis Montanaro"
+    },
+    {
+      "n": "MD medical group",
+      "c": "Carrollton",
+      "s": "",
+      "d": "Dr. Neha Manikonda"
+    },
+    {
+      "n": "MD Kids Pediatrics",
+      "c": "Carrollton",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Highlands Medical and Wellness Primary Care",
+      "c": "Carrollton",
+      "s": "",
+      "d": "Dr VAN TRAN"
+    },
+    {
+      "n": "Dr. Hardeep S. Rai",
+      "c": "Carrollton",
+      "s": "",
+      "d": "Dr. Hardeep S. Rai"
+    },
+    {
+      "n": "WellMed at Carrollton",
+      "c": "Carrollton",
+      "s": "",
+      "d": "Anis A. Ansari, MD"
+    },
+    {
+      "n": "Hebron Pediatrics",
+      "c": "Carrollton",
+      "s": "",
+      "d": "Dr. Shen Palaniswamy,"
+    },
+    {
+      "n": "Care Plus Family Clinic",
+      "c": "Carrollton",
+      "s": "",
+      "d": "Dr Muhammad Ali Siddiqui"
+    },
+    {
+      "n": "Natalia Gutierrez MD",
+      "c": "Carrollton",
+      "s": "",
+      "d": "Natalia Gutierrez MD"
+    },
+    {
+      "n": "Dr. Kyle K. Carter",
+      "c": "Carrollton",
+      "s": "",
+      "d": "Dr. Kyle K. Carter"
+    },
+    {
+      "n": "Pathway Direct  Primary care",
+      "c": "Carrollton",
+      "s": "",
+      "d": "Dr Hussain"
+    },
+    {
+      "n": "Dr. Hong Xiao",
+      "c": "Carrollton",
+      "s": "",
+      "d": "Dr. Hong Xiao"
+    },
+    {
+      "n": "Immanuel Family Clinic",
+      "c": "Carrollton",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Family Center VitaleHEALTH",
+      "c": "Carrollton",
+      "s": "",
+      "d": "jh"
+    },
+    {
+      "n": "Josey Medical Clinic",
+      "c": "Carrollton",
+      "s": "",
+      "d": "Dr. Yoosun Jeong"
+    },
+    {
+      "n": "Complete Family Wellness",
+      "c": "Carrollton",
+      "s": "",
+      "d": "Dr.Salima Jaffer"
+    },
+    {
+      "n": "Precision Family mediine",
+      "c": "Carrollton",
+      "s": "",
+      "d": "Dr. John Bailey"
+    },
+    {
+      "n": "Song Dermatalogy",
+      "c": "Carrollton",
+      "s": "",
+      "d": "Dr. Song"
+    },
+    {
+      "n": "M.D Benton Cain",
+      "c": "Carrollton",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "North texas periodontics and",
+      "c": "Carrollton",
+      "s": "",
+      "d": "Dr. Leslie Carroll"
+    },
+    {
+      "n": "V Care",
+      "c": "Carrollton",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Airrosti Carrollton",
+      "c": "Carrollton",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Peak Integrated Healthcare",
+      "c": "Carrollton",
+      "s": "",
+      "d": "DR. MATT HICKEN"
+    },
+    {
+      "n": "Evolving Beautiful Mind & Body Healthcare",
+      "c": "Carrollton",
+      "s": "",
+      "d": "Dr Ghazala N. Ahmed"
+    },
+    {
+      "n": "Elevation Spine and Sports Medicine",
+      "c": "Carrollton",
+      "s": "",
+      "d": "Dr. Konner Ackerman"
+    },
+    {
+      "n": "Dr. Shenbagavalli Palaniswamy",
+      "c": "Carrollton",
+      "s": "",
+      "d": "Dr. Shenbagavalli"
+    },
+    {
+      "n": "Pediatrics",
+      "c": "Carrollton",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "MD Lisa R. Reznik",
+      "c": "Carrollton",
+      "s": "",
+      "d": "MD Lisa R. Reznik"
+    },
+    {
+      "n": "George A.Nail MD",
+      "c": "Carrollton",
+      "s": "",
+      "d": "George A.Nail MD"
+    },
+    {
+      "n": "Castle Hills Pediatrics",
+      "c": "Carrollton",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Dr.Dandois DDS",
+      "c": "Carrollton",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "US clinics",
+      "c": "Carrollton",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Sure Cure",
+      "c": "Carrollton",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Neurology & Sleep Clinic",
+      "c": "Carrollton",
+      "s": "",
+      "d": ""
+    }
+  ]
+}

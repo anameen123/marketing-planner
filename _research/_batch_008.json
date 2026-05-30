@@ -1,0 +1,26 @@
+{
+  "found": [
+    {"type":"clinic","name":"Laurie Novosad, M.D., FASCRS","city":"McKinney","address":"5236 W University Dr Ste 4300, McKinney, TX 75071","matchConfidence":"high","matchReason":"Dr. Laurie S. Novosad MD colorectal surgeon McKinney (Texas Colon & Rectal Surgeons)"},
+    {"type":"clinic","name":"Francy Y Shu","city":"McKinney","address":"5236 W University Dr Ste 3700, McKinney, TX 75071","matchConfidence":"high","matchReason":"Dr. Francy Y. Shu MD neurologist McKinney (Baylor Scott & White Neurology)"},
+    {"type":"clinic","name":"North Texas Brain and Spine Specialists","city":"McKinney","address":"8000 Eldorado Pkwy Bldg E Ste A, McKinney, TX 75070","matchConfidence":"high","matchReason":"North Texas Brain & Spine Specialists McKinney (ntbss.com); Dr. Brite Chalunkal listed at related Texas Spine Physicians"},
+    {"type":"clinic","name":"Texas Health Internal Medicine","city":"McKinney","address":"5881 Virginia Pkwy Ste 300, McKinney, TX 75071","matchConfidence":"high","matchReason":"Texas Health Internal Medicine McKinney location"},
+    {"type":"clinic","name":"Nutritional Blessings","city":"McKinney","address":"503 N Kentucky St, McKinney, TX 75069","matchConfidence":"high","matchReason":"Nutritional Blessings McKinney"},
+    {"type":"clinic","name":"Texas Star Pain & Spine","city":"McKinney","address":"3000 Communications Pkwy Ste 200, Plano, TX 75093","matchConfidence":"low","matchReason":"Texas Star Pain & Spine (Dr. Gonzalo Gonzales DO) has Plano/Carrollton/Frisco locations; no McKinney address confirmed. Using Plano office"},
+    {"type":"clinic","name":"Comprehensive OB/GYN","city":"McKinney","address":"1700 N Lake Forest Dr, McKinney, TX 75071","matchConfidence":"high","matchReason":"Comprehensive OB/GYN McKinney; Dr. Gerald D. Luciani MD confirmed"},
+    {"type":"clinic","name":"Synergy Primary Clinic","city":"McKinney","address":"2107 Eldorado Pkwy Ste 106, McKinney, TX 75070","matchConfidence":"high","matchReason":"Synergy Primary Clinic; Dr. Saboohi Zafar MD confirmed"},
+    {"type":"clinic","name":"El Shaddai Family Clinic","city":"McKinney","address":"1740 W Virginia St Ste 400, McKinney, TX 75069","matchConfidence":"high","matchReason":"El Shaddai Family Clinic McKinney (elshaddaifamilyclinic.com)"},
+    {"type":"clinic","name":"Express Family Clinic","city":"McKinney","address":"940 Ridgeview Dr Ste 150, Allen, TX 75013","matchConfidence":"low","matchReason":"Express Family Clinic with Dr. Pardeep Parihar is in Allen TX (expressphysician.com); no McKinney location found"},
+    {"type":"clinic","name":"The Well Integrative Medicine","city":"McKinney","address":"7692 Eldorado Pkwy, McKinney, TX 75070","matchConfidence":"high","matchReason":"The Well Integrative Medicine McKinney (wellintmed.com); Dr. Brian C. Procter (same address as McKinney Family Medicine — sister practice)"},
+    {"type":"clinic","name":"Pain Treatment Institute","city":"McKinney","address":"7668 Eldorado Pkwy Ste 100, McKinney, TX 75070","matchConfidence":"high","matchReason":"Pain Treatment Institute McKinney; Dr. Sameer Syed MD confirmed"},
+    {"type":"clinic","name":"Lice Clinics of America","city":"McKinney","address":"3120 Hudson Crossing Ste A2, McKinney, TX 75070","matchConfidence":"high","matchReason":"Lice Clinics of America McKinney"},
+    {"type":"clinic","name":"Texas family healthcare","city":"McKinney","address":"140 S Custer Rd Ste 100, McKinney, TX 75070","matchConfidence":"high","matchReason":"Texas Health Family Care McKinney; Dr. Sophia Hussain MD family medicine confirmed"},
+    {"type":"clinic","name":"PebblePath Pediatric Dentistry&Orthodontics","city":"McKinney","address":"6633 Eldorado Pkwy Ste 100, McKinney, TX 75070","matchConfidence":"high","matchReason":"PebblePath Pediatric Dentistry McKinney (pebblepathdds.com)"},
+    {"type":"clinic","name":"North Dallas Urology Associates","city":"McKinney","address":"4501 Medical Center Dr Ste 100, McKinney, TX 75069","matchConfidence":"high","matchReason":"North Dallas Urology Associates McKinney; Dr. Stephen Lieman confirmed"},
+    {"type":"clinic","name":"McKinney Adult Medicine","city":"McKinney","address":"4501 Medical Center Dr Ste 200, McKinney, TX 75069","matchConfidence":"high","matchReason":"McKinney Adult Medicine; Dr. Michael Parisi DO founder confirmed"},
+    {"type":"clinic","name":"Complete Heart Care","city":"McKinney","address":"2517 Virginia Pkwy Ste 101, McKinney, TX 75071","matchConfidence":"high","matchReason":"Complete Heart Care PA McKinney; Dr. Faizan Iftikhar MD cardiologist confirmed"},
+    {"type":"clinic","name":"Just For Kids Dentistry","city":"McKinney","address":"601 Main St Ste 220, Keller, TX 76248","matchConfidence":"low","matchReason":"Dr. Jeffrey Hoffman DDS Just For Kids Dentistry is in Keller TX (not McKinney); 'Just for Kids' pediatric dentist McKinney is a separate practice — included as best match"}
+  ],
+  "notFound": [
+    {"type":"clinic","name":"MR. DOUGLAS CONNER","city":"McKinney","reason":"Multiple Dr. Douglas Conner exist (Orthopedic in Richardson, Family Med, Radiologist in Beaumont); no specific McKinney surgeon address confirmed"}
+  ]
+}

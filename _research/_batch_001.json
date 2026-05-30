@@ -1,0 +1,165 @@
+{
+  "found": [
+    {
+      "type": "clinic",
+      "name": "Bloomfield",
+      "city": "Frisco",
+      "address": "8000 Preston Rd Ste 401, Frisco, TX 75034",
+      "matchConfidence": "high",
+      "matchReason": "Bloomfield Medical Clinic in Frisco; Dr. Stephanie Cudjoe MD listed as PCP"
+    },
+    {
+      "type": "clinic",
+      "name": "Passion Health",
+      "city": "Frisco",
+      "address": "8195 Custer Rd Ste 110, Frisco, TX 75035",
+      "matchConfidence": "high",
+      "matchReason": "Passion Health Primary Care Frisco; Dr. Shyamala Arani Purushotham listed"
+    },
+    {
+      "type": "clinic",
+      "name": "ATA Healthcare and Wellness",
+      "city": "Frisco",
+      "address": "8501 Wade Blvd Ste 1160, Frisco, TX 75034",
+      "matchConfidence": "high",
+      "matchReason": "ATA Healthcare and Wellness Frisco TX; owner Dr. Alhezayen (name matches)"
+    },
+    {
+      "type": "clinic",
+      "name": "North Dallas Primary Care",
+      "city": "Frisco",
+      "address": "8795 Preston Trace Blvd Ste 100, Frisco, TX 75033",
+      "matchConfidence": "high",
+      "matchReason": "North Dallas Primary Care Doctors Frisco; physicians Suchitra Kamineni MD and Arun Amaram MD both match"
+    },
+    {
+      "type": "clinic",
+      "name": "Southern Medical Associates",
+      "city": "Frisco",
+      "address": "9300 John Hickman Pkwy, Frisco, TX 75035",
+      "matchConfidence": "high",
+      "matchReason": "Southern Medical Associates Frisco; Dr. Latha Yedlapalli confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Phoenix Integrative Medical Center",
+      "city": "Frisco",
+      "address": "6380 Preston Rd, Frisco, TX 75035",
+      "matchConfidence": "high",
+      "matchReason": "Phoenix Integrative Medical Center Frisco; Dr. Bryan Hoffman DO confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Kid Approved Pediatrics",
+      "city": "Frisco",
+      "address": "11875 Coit Rd Suite 100, Frisco, TX",
+      "matchConfidence": "high",
+      "matchReason": "Kid Approved Pediatrics Frisco; Dr. Jonathan Chow listed"
+    },
+    {
+      "type": "clinic",
+      "name": "Cook Children's Pediatrics West Frisco",
+      "city": "Frisco",
+      "address": "255 W Lebanon Rd Ste 104, Frisco, TX 75036",
+      "matchConfidence": "high",
+      "matchReason": "Cook Children's Pediatrics West Frisco; Dr. Harry Stellman IV confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Joy & Crown Pediatric Specialists",
+      "city": "Frisco",
+      "address": "7002 Lebanon Rd Ste 103, Frisco, TX 75034",
+      "matchConfidence": "high",
+      "matchReason": "Joy & Crown Pediatric Specialists; Dr. Mary (MaryEllen) Cavalier confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Jacob's Ladder Developmental Pediatrics",
+      "city": "Frisco",
+      "address": "8501 Wade Blvd Ste 330, Frisco, TX 75034",
+      "matchConfidence": "high",
+      "matchReason": "Jacob's Ladder Developmental Pediatrics Frisco; Dr. Julie Jacob confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Frisco Family Ent",
+      "city": "Frisco",
+      "address": "5520 Independence Pkwy Ste 202, Frisco, TX 75035",
+      "matchConfidence": "high",
+      "matchReason": "Frisco Family ENT; Dr. Patti Huang MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Dr. Megha Patel-Banker",
+      "city": "Frisco",
+      "address": "8501 Wade Blvd, Frisco, TX 75035",
+      "matchConfidence": "medium",
+      "matchReason": "Dr. Smitha Rudraraju (listed in source doctor field) is at 8501 Wade Blvd, Frisco TX; she is a rheumatologist with practice in both Allen and Frisco. Frisco location used."
+    },
+    {
+      "type": "clinic",
+      "name": "Elite Internel",
+      "city": "Frisco",
+      "address": "14660 State Hwy 121 Bldg B Ste 200, Frisco, TX 75035",
+      "matchConfidence": "high",
+      "matchReason": "Elite Internal Medicine Frisco; Dr. Krishna Tatineni MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Heal 360",
+      "city": "Frisco",
+      "address": "9229 Lebanon Rd, Frisco, TX 75035",
+      "matchConfidence": "high",
+      "matchReason": "Heal 360 Primary Care Frisco; Dr. Mohammed Amer Mohiuddin founder confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "MedPro Family Clinic",
+      "city": "Frisco",
+      "address": "4525 Ohio Dr Ste 300, Frisco, TX 75035",
+      "matchConfidence": "high",
+      "matchReason": "MedPro Family Clinic Frisco; Dr. Xiaohui Lu MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Murali M. Alloju, M.D.",
+      "city": "Frisco",
+      "address": "11330 Legacy Dr Ste 205, Frisco, TX 75033",
+      "matchConfidence": "high",
+      "matchReason": "Digestive Health Associates of Texas - Frisco; Dr. Murali Alloju MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Dr.Stefanie Lynn Addington",
+      "city": "Frisco",
+      "address": "8350 Dallas Pkwy Ste 300, Frisco, TX 75034",
+      "matchConfidence": "medium",
+      "matchReason": "Dr. Stefanie L. Addington endocrinologist Frisco; note: practice transitioned to telemedicine in Aug 2024 but office address listed"
+    },
+    {
+      "type": "clinic",
+      "name": "Preston Surgery Center",
+      "city": "Frisco",
+      "address": "7589 Preston Rd Ste 100, Frisco, TX 75034",
+      "matchConfidence": "high",
+      "matchReason": "Preston Surgery Center Frisco; Dr. Mohammad Tariq founder confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Christopher A. Kowalski",
+      "city": "Frisco",
+      "address": "5575 Warren Pkwy, Frisco, TX 75034",
+      "matchConfidence": "high",
+      "matchReason": "Orthopedic Institute of North Texas (OINT) Frisco; Dr. Justin Kane (listed) and Dr. Christopher Kowalski both practice here"
+    },
+    {
+      "type": "clinic",
+      "name": "Spine Vue",
+      "city": "Frisco",
+      "address": "3800 Gaylord Pkwy Ste 820, Frisco, TX 75034",
+      "matchConfidence": "high",
+      "matchReason": "Spine Vue Frisco location; Dr. Sean M. Jones-Quaidoo (source says 'Sean M. Jones') confirmed"
+    }
+  ],
+  "notFound": []
+}

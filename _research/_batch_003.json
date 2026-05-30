@@ -1,0 +1,150 @@
+{
+  "found": [
+    {
+      "type": "clinic",
+      "name": "Greenhill family physians",
+      "city": "Frisco",
+      "address": "5575 Warren Pkwy Ste 106, Frisco, TX 75034",
+      "matchConfidence": "high",
+      "matchReason": "Greenhill Family Physicians (already known from prior enrichment as 'Greenhill Family Physicians'); Dr. Mike Lee MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Village Health Partners - Frisco Medical Village",
+      "city": "Frisco",
+      "address": "9990 Dallas Pkwy Ste 200, Frisco, TX 75033",
+      "matchConfidence": "high",
+      "matchReason": "Village Health Partners Frisco Medical Village; Catalyst Physician Group location"
+    },
+    {
+      "type": "clinic",
+      "name": "ProMed Health Primary Care - Frisco",
+      "city": "Frisco",
+      "address": "11691 Independence Pkwy Unit 110, Frisco, TX 75035",
+      "matchConfidence": "high",
+      "matchReason": "ProMed Health Primary Care Frisco; Dr. Kavitha Ilayaraja confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "AlphaHealth Frisco Primary Care",
+      "city": "Frisco",
+      "address": "255 W Lebanon Rd Ste 116, Frisco, TX 75036",
+      "matchConfidence": "high",
+      "matchReason": "AlphaHealth Frisco Primary Care (ahealthmd.com); Dr. Neethu Benny lead physician confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Connections wellness group",
+      "city": "Frisco",
+      "address": "255 Lebanon Rd Ste 124, Frisco, TX 75036",
+      "matchConfidence": "high",
+      "matchReason": "Connections Wellness Group Frisco mental health"
+    },
+    {
+      "type": "clinic",
+      "name": "Pediatrics R Us",
+      "city": "Frisco",
+      "address": "255 W Lebanon Ste 324, Frisco, TX 75036",
+      "matchConfidence": "high",
+      "matchReason": "Pediatrics R Us Frisco (txpedsrus.com); Dr. Taha Saif MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Monkey Mouths",
+      "city": "Frisco",
+      "address": "255 W Lebanon Rd Ste 316, Frisco, TX 75036",
+      "matchConfidence": "high",
+      "matchReason": "Monkey Mouths Frisco speech therapy office"
+    },
+    {
+      "type": "clinic",
+      "name": "Body Loom Wellness",
+      "city": "Frisco",
+      "address": "255 W Lebanon Rd Ste 106, Frisco, TX 75036",
+      "matchConfidence": "high",
+      "matchReason": "Bodyloom Wellness MedSpa Frisco (bodyloom.com)"
+    },
+    {
+      "type": "clinic",
+      "name": "Frisco Mental Health Services",
+      "city": "Frisco",
+      "address": "255 Lebanon Rd Ste 224, Frisco, TX 75036",
+      "matchConfidence": "high",
+      "matchReason": "Frisco Mental Health Services (myfriscocare.com); Dr. Furqan Rizvi psychiatrist confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Behavioral Innovations",
+      "city": "Frisco",
+      "address": "8795 Preston Trace Blvd, Frisco, TX 75033",
+      "matchConfidence": "medium",
+      "matchReason": "Behavioral Innovations East Frisco location (ABA therapy)"
+    },
+    {
+      "type": "clinic",
+      "name": "Stonebrook Medical Associates",
+      "city": "Frisco",
+      "address": "8200 Stonebrook Pkwy Ste 100, Frisco, TX 75034",
+      "matchConfidence": "high",
+      "matchReason": "Stonebrook Family Medicine Frisco; Dr. Mona Chacko confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Tx Health Internal Med",
+      "city": "Frisco",
+      "address": "13024 Dallas Pkwy Ste 110, Frisco, TX 75034",
+      "matchConfidence": "high",
+      "matchReason": "Texas Health Internal Medicine Frisco (one of two locations); both at Dallas Pkwy"
+    }
+  ],
+  "notFound": [
+    {
+      "type": "clinic",
+      "name": "ABC Pediatrics",
+      "city": "Frisco",
+      "reason": "Prior enrichment confirmed no ABC Pediatrics found in Frisco (nearest in McKinney)"
+    },
+    {
+      "type": "clinic",
+      "name": "bright kids pediatrics",
+      "city": "Frisco",
+      "reason": "Bright Kids Peds is in McKinney (1400 N Coit Rd) per prior enrichment, not Frisco; source data city mismatch"
+    },
+    {
+      "type": "clinic",
+      "name": "Plano clinic Supreme",
+      "city": "Frisco",
+      "reason": "Plano Supreme Primary Care is in Plano (4020 Hedgcoxe Rd), not Frisco — per prior enrichment"
+    },
+    {
+      "type": "clinic",
+      "name": "Omni",
+      "city": "Frisco",
+      "reason": "Ambiguous — Omni Medical Center is in Plano; only Omnispine Pain (specialty) is in Frisco. Per prior enrichment, could not disambiguate"
+    },
+    {
+      "type": "clinic",
+      "name": "Boomfield",
+      "city": "Frisco",
+      "reason": "Possible typo for 'Bloomfield' but doctor 'Nafeesa' does not match Bloomfield's Dr. Cudjoe. Insufficient info to disambiguate"
+    },
+    {
+      "type": "clinic",
+      "name": "Dr. Hong Xiao MD",
+      "city": "Frisco",
+      "reason": "Dr. Hong Xiao practices at Fairway Family Medicine in Carrollton (4100 Fairway Dr Ste 320), not Frisco. City mismatch."
+    },
+    {
+      "type": "clinic",
+      "name": "MD Kids Pediactrics",
+      "city": "Frisco",
+      "reason": "Dr. Hung Truong listed at MD Kids Pediatrics Dallas (2750 W Northwest Hwy Ste 170, Dallas) — no Frisco location of MD Kids Pediatrics confirmed in search"
+    },
+    {
+      "type": "clinic",
+      "name": "Care Express Clinic",
+      "city": "Frisco",
+      "reason": "Dr. Muhammad Ali Siddiqui's Care Express Clinic is in Dallas (1143 S Buckner Blvd), not Frisco"
+    }
+  ]
+}

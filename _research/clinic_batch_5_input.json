@@ -1,0 +1,414 @@
+{
+  "batchId": 5,
+  "label": "McKinney-B",
+  "clinics": [
+    {
+      "n": "Comprehensive OBGYN",
+      "c": "McKinney",
+      "s": "",
+      "d": "Gerald D Luciani, MD"
+    },
+    {
+      "n": "Craig Ranch OB/GYN",
+      "c": "McKinney",
+      "s": "",
+      "d": "Heather Derrick, MD"
+    },
+    {
+      "n": "Padda, Manmeet - Digestive Health Associates of Texas Pa",
+      "c": "McKinney",
+      "s": "",
+      "d": "Dr. Padda"
+    },
+    {
+      "n": "Banks, Tracey - Tracey Banks, MD",
+      "c": "McKinney",
+      "s": "",
+      "d": "Tracey Banks, MD"
+    },
+    {
+      "n": "Express Family Clinic",
+      "c": "McKinney",
+      "s": "",
+      "d": "Dr. Parihar Pardeep"
+    },
+    {
+      "n": "Pediatric Heathcare Associates",
+      "c": "McKinney",
+      "s": "",
+      "d": "Elizabeth BonnetMD, FAAP"
+    },
+    {
+      "n": "MCKINNEY RANCH FAMILY DENTAL + KIDS",
+      "c": "McKinney",
+      "s": "Periodontist",
+      "d": "Dr. Hsia"
+    },
+    {
+      "n": "ORTHODONIST",
+      "c": "McKinney",
+      "s": "",
+      "d": "DR. Victor Sigoda"
+    },
+    {
+      "n": "Best kids care",
+      "c": "McKinney",
+      "s": "",
+      "d": "Dr. Masoud Al masi"
+    },
+    {
+      "n": "Graff Foot Ankle & Wound CareMckinney",
+      "c": "McKinney",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Village Green Memory Care",
+      "c": "McKinney",
+      "s": "",
+      "d": "Dr.Nish Sabir"
+    },
+    {
+      "n": "Revive Primary Care",
+      "c": "McKinney",
+      "s": "",
+      "d": "Keesha Copeland APRN, AGNP-C"
+    },
+    {
+      "n": "Blue Diamond Physical MedicineMckinney",
+      "c": "McKinney",
+      "s": "",
+      "d": "Dr.James W. Lundin, DC, FNP-C"
+    },
+    {
+      "n": "Southern Charm Pediatrics",
+      "c": "McKinney",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Synergy Primary Clinic",
+      "c": "McKinney",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Princeton Medical Associates",
+      "c": "McKinney",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Metroplex Medical Centre",
+      "c": "McKinney",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Premier Independant",
+      "c": "McKinney",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "El Shaddai Family clinic",
+      "c": "McKinney",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Pure Health",
+      "c": "McKinney",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Express Family Clinic",
+      "c": "McKinney",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Care Choice",
+      "c": "McKinney",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Highland Medical and primary",
+      "c": "McKinney",
+      "s": "PCP",
+      "d": "Van Tran MD"
+    },
+    {
+      "n": "Natalia Gutierrez MD",
+      "c": "McKinney",
+      "s": "MD",
+      "d": "Natalia Gutierrez MD"
+    },
+    {
+      "n": "Dr. Kyle K. Carter MD",
+      "c": "McKinney",
+      "s": "MD",
+      "d": "Dr. Kyle Carter MD"
+    },
+    {
+      "n": "Nutricional Blessing",
+      "c": "McKinney",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Synergy Primary Clinic",
+      "c": "McKinney",
+      "s": "PCP",
+      "d": "Dr. Saboohi Zafar , MD"
+    },
+    {
+      "n": "El Shaddai Family clinic",
+      "c": "McKinney",
+      "s": "",
+      "d": "Beena Paul, MSN , FNP-C"
+    },
+    {
+      "n": "Children choice red",
+      "c": "McKinney",
+      "s": "MD",
+      "d": "Neha Heider MD"
+    },
+    {
+      "n": "TX Institute of Cardiology",
+      "c": "McKinney",
+      "s": "MD",
+      "d": "Faisail Wahid MD"
+    },
+    {
+      "n": "Cynder Hopkins Family Medicine",
+      "c": "McKinney",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Metroplex Medical Centre",
+      "c": "McKinney",
+      "s": "MD",
+      "d": "Antonine Albert MD"
+    },
+    {
+      "n": "Banks Tracey A. MD",
+      "c": "McKinney",
+      "s": "MD",
+      "d": "Senia Bendt CPC, COBGC"
+    },
+    {
+      "n": "Allen OB/GYN",
+      "c": "McKinney",
+      "s": "MD",
+      "d": "Sreedhar Tallapureddy MD"
+    },
+    {
+      "n": "North Central Womans Health",
+      "c": "McKinney",
+      "s": "MD",
+      "d": ""
+    },
+    {
+      "n": "Craig Ranch OB/GYN",
+      "c": "McKinney",
+      "s": "MD",
+      "d": "Allison Atlas MD"
+    },
+    {
+      "n": "Peak Fertility",
+      "c": "McKinney",
+      "s": "MD",
+      "d": "Amber Klimczak MD"
+    },
+    {
+      "n": "Texas Institute for Neurological Disorders",
+      "c": "McKinney",
+      "s": "MD",
+      "d": "Easwar Sundaram JR. MD"
+    },
+    {
+      "n": "North Dallas Urology",
+      "c": "McKinney",
+      "s": "MD",
+      "d": "Alexander Martin MD"
+    },
+    {
+      "n": "Complete Heart Care",
+      "c": "McKinney",
+      "s": "PA",
+      "d": "Faizan Iftikhar MD, FACP, FACC, P.A"
+    },
+    {
+      "n": "Village Green Memory Care",
+      "c": "McKinney",
+      "s": "MD",
+      "d": "Nish Sabir"
+    },
+    {
+      "n": "Julia Minigutti PA-C",
+      "c": "McKinney",
+      "s": "PA",
+      "d": "Julia Minigutti PA -C"
+    },
+    {
+      "n": "El Shddai Family clinic",
+      "c": "McKinney",
+      "s": "MD",
+      "d": "Beena Paul FNP-C"
+    },
+    {
+      "n": "Texas Health Care Neck and back",
+      "c": "McKinney",
+      "s": "MD",
+      "d": "Dr.Douglas Lester"
+    },
+    {
+      "n": "AIRROSTI",
+      "c": "McKinney",
+      "s": "DC",
+      "d": "Dr. Keith Maraffa"
+    },
+    {
+      "n": "The Adley Craig Racnh",
+      "c": "McKinney",
+      "s": "APTS.",
+      "d": "______none"
+    },
+    {
+      "n": "Revive Primary Care",
+      "c": "McKinney",
+      "s": "APRN",
+      "d": "Keesha Copeland APRN, AGNP-C"
+    },
+    {
+      "n": "Alpha Orthopedics and sports",
+      "c": "McKinney",
+      "s": "MD",
+      "d": "Brian Snow , MD"
+    },
+    {
+      "n": "Next Step Orthopedics",
+      "c": "McKinney",
+      "s": "MD",
+      "d": "Dominique Nickson , MD"
+    },
+    {
+      "n": "Digestive Health Associates",
+      "c": "McKinney",
+      "s": "MD",
+      "d": "Sanjay Nayyar, MD"
+    },
+    {
+      "n": "Texas Institute for Neurological Disorders",
+      "c": "McKinney",
+      "s": "MD",
+      "d": "Indu Mayakrishnan , MD"
+    },
+    {
+      "n": "NTX Medical Clinic",
+      "c": "McKinney",
+      "s": "MD",
+      "d": "Jayasree Kailasam , MD"
+    },
+    {
+      "n": "GRAFF Foot-Ankle Wound Care",
+      "c": "McKinney",
+      "s": "DPM",
+      "d": "Evan Kyprios DPM, AACFAS, CWSP"
+    },
+    {
+      "n": "Texas Allergy MD",
+      "c": "McKinney",
+      "s": "MD",
+      "d": "Nana Mireku MD , FACAAI , FAAAAI"
+    },
+    {
+      "n": "CommonGood Medical",
+      "c": "McKinney",
+      "s": "MD",
+      "d": ""
+    },
+    {
+      "n": "Unity Wellness Clinic and Rehab",
+      "c": "McKinney",
+      "s": "MD",
+      "d": ""
+    },
+    {
+      "n": "Exult Healthcare",
+      "c": "McKinney",
+      "s": "MD",
+      "d": ""
+    },
+    {
+      "n": "Blue Diamond Physical Medicine",
+      "c": "McKinney",
+      "s": "MD",
+      "d": "Dr.James W. Lundin, DC, FNP-C"
+    },
+    {
+      "n": "Holistic Health Center of Dallas",
+      "c": "McKinney",
+      "s": "MD",
+      "d": ""
+    },
+    {
+      "n": "Visalakshi Rao Vallury",
+      "c": "McKinney",
+      "s": "MD",
+      "d": ""
+    },
+    {
+      "n": "Texas Health Digestive Specialist",
+      "c": "McKinney",
+      "s": "MD",
+      "d": ""
+    },
+    {
+      "n": "Synapse Psychotherapy , LLC",
+      "c": "McKinney",
+      "s": "LCSW",
+      "d": "Joseph Dustin Cobb, LCSW"
+    },
+    {
+      "n": "Craig Ranch OB/GYN",
+      "c": "McKinney",
+      "s": "OB",
+      "d": "Andrew Shimer, MD"
+    },
+    {
+      "n": "Cesar Reyes MD",
+      "c": "McKinney",
+      "s": "MD",
+      "d": "Cesar Reyes , MD"
+    },
+    {
+      "n": "Mckinney Footcare",
+      "c": "McKinney",
+      "s": "DPM",
+      "d": "Nehla Modha , DPM , AACFAS"
+    },
+    {
+      "n": "DHAT Mckinney",
+      "c": "McKinney",
+      "s": "MD",
+      "d": "Ravi S. Chittajallu, MD"
+    },
+    {
+      "n": "Brian Joe , MD Neurology",
+      "c": "McKinney",
+      "s": "MD",
+      "d": "Brian Joe, MD"
+    },
+    {
+      "n": "Ashna Adams D.O",
+      "c": "McKinney",
+      "s": "D.O",
+      "d": "Asha Adams , D.O"
+    }
+  ]
+}

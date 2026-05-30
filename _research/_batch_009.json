@@ -1,0 +1,25 @@
+{
+  "found": [
+    {"type":"clinic","name":"Children's Choice Pediatrics","city":"McKinney","address":"6587 Virginia Pkwy, McKinney, TX 75071","matchConfidence":"high","matchReason":"Children's Choice Pediatrics McKinney (same as 'Children Choice Pediatrics' already found)"},
+    {"type":"clinic","name":"Exult Healthcare","city":"McKinney","address":"4801 Medical Center Dr, McKinney, TX 75069","matchConfidence":"high","matchReason":"Exult Healthcare McKinney; Dr. Deepika Bhargava MD psychiatrist confirmed"},
+    {"type":"clinic","name":"Dr Visalakshi Rao Vallury","city":"McKinney","address":"5971 Virginia Pkwy Ste 100, McKinney, TX 75071","matchConfidence":"high","matchReason":"Dr. Visalakshi Rao Vallury MD family medicine McKinney"},
+    {"type":"clinic","name":"McKinney Endodontics","city":"McKinney","address":"5913 Virginia Pkwy Ste 400, McKinney, TX 75071","matchConfidence":"high","matchReason":"McKinney Endodontics; Dr. Paul D. Clark DDS confirmed"},
+    {"type":"clinic","name":"Holistic Health Center of Dallas","city":"McKinney","address":"1701 W Eldorado Pkwy Ste 202, McKinney, TX 75069","matchConfidence":"high","matchReason":"Holistic Health Center of Dallas McKinney location"},
+    {"type":"clinic","name":"Unity Wellness group","city":"McKinney","address":"1701 Eldorado Pkwy Ste 202, McKinney, TX 75069","matchConfidence":"high","matchReason":"Unity Wellness Group McKinney; Dr. Sumit Katyal MD confirmed"},
+    {"type":"clinic","name":"CommonGood Medical","city":"McKinney","address":"103 E Lamar St, McKinney, TX 75069","matchConfidence":"high","matchReason":"CommonGood Medical (formerly Hope Clinic of McKinney); Dr. Theresa Olfson MD confirmed"},
+    {"type":"clinic","name":"Craig Ranch OB/GYN","city":"McKinney","address":"7900 Henneman Way Ste 100, McKinney, TX 75070","matchConfidence":"high","matchReason":"Craig Ranch OB/GYN McKinney; Dr. Heather Derrick MD confirmed"},
+    {"type":"clinic","name":"Padda, Manmeet - Digestive Health Associates of Texas Pa","city":"McKinney","address":"4521 Medical Center Dr Ste 500, McKinney, TX 75069","matchConfidence":"high","matchReason":"Dr. Manmeet Padda DHAT McKinney gastroenterologist confirmed"},
+    {"type":"clinic","name":"Banks, Tracey - Tracey Banks, MD","city":"McKinney","address":"6609 Virginia Pkwy, McKinney, TX 75071","matchConfidence":"high","matchReason":"Dr. Tracey Banks MD OB/GYN McKinney (Adriatica Women's Health) - duplicate of 'Adriatica Womens health'"},
+    {"type":"clinic","name":"Pediatric Heathcare Associates","city":"McKinney","address":"3701 Eldorado Pkwy Ste A, McKinney, TX 75070","matchConfidence":"high","matchReason":"Pediatric Healthcare Associates McKinney (phamckinney.com); Dr. Elizabeth Bonnet MD FAAP confirmed"},
+    {"type":"clinic","name":"MCKINNEY RANCH FAMILY DENTAL + KIDS","city":"McKinney","address":"3950 S Ridge Rd Ste 500, McKinney, TX 75070","matchConfidence":"medium","matchReason":"McKinney Ranch Family Dental address found; 'Dr. Hsia' specifically not confirmed but practice address verified"},
+    {"type":"clinic","name":"ORTHODONIST","city":"McKinney","address":"7700 Eldorado Pkwy Ste 200, McKinney, TX 75070","matchConfidence":"high","matchReason":"Sigoda Orthodontics; Dr. Victor Sigoda DDS orthodontist McKinney confirmed"},
+    {"type":"clinic","name":"Best kids care","city":"McKinney","address":"4200 S Lake Forest Dr Ste 100, McKinney, TX 75070","matchConfidence":"high","matchReason":"Best Kids Care McKinney; Dr. Masoud Almasi MD pediatrician confirmed"},
+    {"type":"clinic","name":"Graff Foot Ankle & Wound CareMckinney","city":"McKinney","address":"1400 N Coit Rd Ste 503, McKinney, TX 75071","matchConfidence":"high","matchReason":"Graff Foot, Ankle and Wound Care McKinney"},
+    {"type":"clinic","name":"Village Green Memory Care","city":"McKinney","address":"3149 Medical Center Dr, McKinney, TX 75069","matchConfidence":"high","matchReason":"Village Green Memory Care McKinney; Nish Sabir Director of Operations confirmed"},
+    {"type":"clinic","name":"Revive Primary Care","city":"McKinney","address":"4987 W University Dr Ste 150, McKinney, TX 75071","matchConfidence":"high","matchReason":"Revive Primary Care & Med Spa McKinney; Keesha Copeland APRN AGNP-C confirmed"},
+    {"type":"clinic","name":"Blue Diamond Physical MedicineMckinney","city":"McKinney","address":"270 Redbud Blvd Ste 100, McKinney, TX 75069","matchConfidence":"high","matchReason":"Blue Diamond Physical Medicine McKinney; Dr. James W. Lundin DC FNP-C confirmed"},
+    {"type":"clinic","name":"Southern Charm Pediatrics","city":"McKinney","address":"1400 N Coit Rd Ste 302, McKinney, TX 75071","matchConfidence":"high","matchReason":"Southern Charm Pediatrics McKinney temporary location"},
+    {"type":"clinic","name":"Metroplex Medical Centre","city":"McKinney","address":"5971 Virginia Pkwy Ste 100, McKinney, TX 75071","matchConfidence":"high","matchReason":"Metroplex Medical Centre McKinney; Dr. Antoine Albert MD (source typo 'Antonine')"}
+  ],
+  "notFound": []
+}

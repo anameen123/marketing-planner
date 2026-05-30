@@ -1,0 +1,342 @@
+{
+  "batchId": 1,
+  "label": "Frisco-A",
+  "clinics": [
+    {
+      "n": "Bloomfield",
+      "c": "Frisco",
+      "s": "PCP",
+      "d": "Cudjoe, MD"
+    },
+    {
+      "n": "Passion Health",
+      "c": "Frisco",
+      "s": "PCP",
+      "d": "Purushotham Arani, MD"
+    },
+    {
+      "n": "ATA Healthcare and Wellness",
+      "c": "Frisco",
+      "s": "PCP",
+      "d": "Mona Alhezayen, Jolene Aden-Else"
+    },
+    {
+      "n": "North Dallas Primary Care",
+      "c": "Frisco",
+      "s": "PCP",
+      "d": "Dr.Suchitra, Dr Arun Amaram"
+    },
+    {
+      "n": "Southern Medical Associates",
+      "c": "Frisco",
+      "s": "PCP",
+      "d": "Dr. Latha Yedlapalli, Dr. Sri Venkat Yedlapalli, Babita John"
+    },
+    {
+      "n": "Care Now",
+      "c": "Frisco",
+      "s": "UC",
+      "d": ""
+    },
+    {
+      "n": "Phoenix Integrative Medical Center",
+      "c": "Frisco",
+      "s": "PCP",
+      "d": "Dr. Hoffman, MD."
+    },
+    {
+      "n": "Healing Care Pediatrics",
+      "c": "Frisco",
+      "s": "",
+      "d": "Dr Khanum"
+    },
+    {
+      "n": "Kid Approved Pediatrics",
+      "c": "Frisco",
+      "s": "",
+      "d": "Dr. Jonathan Chow"
+    },
+    {
+      "n": "Cook Children's Pediatrics West Frisco",
+      "c": "Frisco",
+      "s": "",
+      "d": "Dr.Harry Stellman IV"
+    },
+    {
+      "n": "Joy & Crown Pediatric Specialists",
+      "c": "Frisco",
+      "s": "",
+      "d": "Dr.MaryEllen Cavalier"
+    },
+    {
+      "n": "Jacob's Ladder Developmental Pediatrics",
+      "c": "Frisco",
+      "s": "",
+      "d": "Dr. Julie Jacob"
+    },
+    {
+      "n": "Frisco Family Ent",
+      "c": "Frisco",
+      "s": "",
+      "d": "Dr.Patti Huang"
+    },
+    {
+      "n": "Dr. Megha Patel-Banker",
+      "c": "Frisco",
+      "s": "",
+      "d": "Dr. Smitha Rudraraju"
+    },
+    {
+      "n": "Elite Internel",
+      "c": "Frisco",
+      "s": "",
+      "d": "Dr Krishna C. Tatineni"
+    },
+    {
+      "n": "Heal 360",
+      "c": "Frisco",
+      "s": "",
+      "d": "Dr.Mohammed Amer Mohiuddin"
+    },
+    {
+      "n": "MedPro Family Clinic",
+      "c": "Frisco",
+      "s": "",
+      "d": "Dr.Xiaohui Lu"
+    },
+    {
+      "n": "Murali M. Alloju, M.D.",
+      "c": "Frisco",
+      "s": "Gastroenterologist",
+      "d": "Dr.Murali Alloju"
+    },
+    {
+      "n": "Dr.Stefanie Lynn Addington",
+      "c": "Frisco",
+      "s": "Endocrinologist",
+      "d": "Dr.Stefanie L. addington"
+    },
+    {
+      "n": "Preston Surgery Center",
+      "c": "Frisco",
+      "s": "GS",
+      "d": "DR. MOHAMMAD TARIQ"
+    },
+    {
+      "n": "Christopher A. Kowalski",
+      "c": "Frisco",
+      "s": "Orthopedics",
+      "d": "Dr. Justin M. Kane"
+    },
+    {
+      "n": "Spine Vue",
+      "c": "Frisco",
+      "s": "Spine Surgeon",
+      "d": "Dr.Dr. Sean M. Jones"
+    },
+    {
+      "n": "Lone Star Neurology",
+      "c": "Frisco",
+      "s": "Orthopedist",
+      "d": "J.field Scovell, lii,M.d."
+    },
+    {
+      "n": "Preformance Ortho & Sports Medicine",
+      "c": "Frisco",
+      "s": "Orthopedics",
+      "d": "Dr. Troy Diehl"
+    },
+    {
+      "n": "North Texas Endocrinology",
+      "c": "Frisco",
+      "s": "Endocrinologist",
+      "d": "Dr.PETER BRESSLER"
+    },
+    {
+      "n": "Affinity NEUROCARE",
+      "c": "Frisco",
+      "s": "NEUR",
+      "d": "Dr.Nnamdi C. Dike"
+    },
+    {
+      "n": "Bent Tree Family Physicians",
+      "c": "Frisco",
+      "s": "",
+      "d": "Dr. Tariq Khan"
+    },
+    {
+      "n": "Lewis Pain & Physical Medicine",
+      "c": "Frisco",
+      "s": "Pain Management",
+      "d": "Dr. Jerry Lewis"
+    },
+    {
+      "n": "Spine & Joint Physicians of Frisco",
+      "c": "Frisco",
+      "s": "Pain Management",
+      "d": "S.. Justin Badiyan, MD"
+    },
+    {
+      "n": "OmniSpine Pain Management",
+      "c": "Frisco",
+      "s": "Pain Management",
+      "d": "Dr Ashley A Joseph"
+    },
+    {
+      "n": "Pain Management of North Dallas, PA",
+      "c": "Frisco",
+      "s": "Pain Management",
+      "d": "Dr. Craig Neleson, MD"
+    },
+    {
+      "n": "Precision Spine Care",
+      "c": "Frisco",
+      "s": "Pain Management",
+      "d": "Charles R. Gordon, MD"
+    },
+    {
+      "n": "Comprehensive Pain Management",
+      "c": "Frisco",
+      "s": "Pain Management",
+      "d": "Rodolfo Herrera, MD"
+    },
+    {
+      "n": "Pain and spine physicans",
+      "c": "Frisco",
+      "s": "Pain Management",
+      "d": "Dr. Irfan Ali"
+    },
+    {
+      "n": "Dr. Sameer Ali Syed",
+      "c": "Frisco",
+      "s": "Pain Management",
+      "d": "Dr. Sameer Ali Syed"
+    },
+    {
+      "n": "North Texas Synergy Pain",
+      "c": "Frisco",
+      "s": "Pain Management",
+      "d": "Meet Dr. Spicer"
+    },
+    {
+      "n": "Pain Specialists of Frisco",
+      "c": "Frisco",
+      "s": "Pain Management",
+      "d": "Dr Mahesh Mohan"
+    },
+    {
+      "n": "Texas Spine Consultants",
+      "c": "Frisco",
+      "s": "Pain Management",
+      "d": "Robert G. Viere, M.D."
+    },
+    {
+      "n": "Frisco Center for Internal Medicine",
+      "c": "Frisco",
+      "s": "",
+      "d": "Neela Shah, MD"
+    },
+    {
+      "n": "WillowsWomens Health",
+      "c": "Frisco",
+      "s": "",
+      "d": "Shruti Benjamin, MD"
+    },
+    {
+      "n": "Inspire Health",
+      "c": "Frisco",
+      "s": "",
+      "d": "Stephanie Reinhold Garza, MD"
+    },
+    {
+      "n": "Greenhill Family Physicians",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "West Fisco Health & Wellness",
+      "c": "Frisco",
+      "s": "",
+      "d": "Andrew Minigutti, M.D."
+    },
+    {
+      "n": "Stonebriar Pediatrics",
+      "c": "Frisco",
+      "s": "",
+      "d": "Thai V. Hoang, MD"
+    },
+    {
+      "n": "Frisco Obstetrics and Gynecology, PA",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "EVIVE HEALTH AND BEAUTY",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Greenhill family physians",
+      "c": "Frisco",
+      "s": "",
+      "d": "Dr Mike"
+    },
+    {
+      "n": "Village Health Partners - Frisco Medical Village",
+      "c": "Frisco",
+      "s": "",
+      "d": "Lisa Abbott, MD"
+    },
+    {
+      "n": "ProMed Health Primary Care - Frisco",
+      "c": "Frisco",
+      "s": "",
+      "d": "Dr. Kavitha Ilayaraja"
+    },
+    {
+      "n": "AlphaHealth Frisco Primary Care",
+      "c": "Frisco",
+      "s": "",
+      "d": "Dr. Neethu Benny"
+    },
+    {
+      "n": "Connections wellness group",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Pediatrics R Us",
+      "c": "Frisco",
+      "s": "",
+      "d": "Taha Saif, MD"
+    },
+    {
+      "n": "Monkey Mouths",
+      "c": "Frisco",
+      "s": "",
+      "d": "Nikki Wensel Rustad, M.A"
+    },
+    {
+      "n": "Body Loom Wellness",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    },
+    {
+      "n": "Frisco Mental Health Services",
+      "c": "Frisco",
+      "s": "",
+      "d": "Dr Furqan Rizvi"
+    },
+    {
+      "n": "Behavioral Innovations",
+      "c": "Frisco",
+      "s": "",
+      "d": ""
+    }
+  ]
+}

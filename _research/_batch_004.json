@@ -1,0 +1,254 @@
+{
+  "found": [
+    {
+      "type": "clinic",
+      "name": "Gray branch Pediatrics",
+      "city": "Frisco",
+      "address": "9191 Kyser Way Suite 500, Frisco, TX 75033",
+      "matchConfidence": "low",
+      "matchReason": "No 'Gray Branch Pediatrics' found in Frisco — possible typo. Mapped to 'Pediatric Associates of Frisco' as best Frisco pediatrics match; needs manual verification"
+    },
+    {
+      "type": "clinic",
+      "name": "NTX",
+      "city": "Frisco",
+      "address": "5520 Independence Pkwy Ste 201, Frisco, TX 75035",
+      "matchConfidence": "medium",
+      "matchReason": "NTX Medical Clinic Frisco (already in prior enrichment as 'NTX Medical Clinic')"
+    },
+    {
+      "type": "clinic",
+      "name": "Ideal Primary Care",
+      "city": "Frisco",
+      "address": "5550 Warren Pkwy Ste 120, Frisco, TX 75034",
+      "matchConfidence": "high",
+      "matchReason": "Ideal MD Primary Care Frisco (idealmdpcp.com)"
+    },
+    {
+      "type": "clinic",
+      "name": "Daffodils Mckinney",
+      "city": "Frisco",
+      "address": "8720 Silverado Trail Ste 3C, McKinney, TX 75070",
+      "matchConfidence": "medium",
+      "matchReason": "Daffodil Primary Care & Cardio-Renal Clinic McKinney (the name suggests it's actually in McKinney despite Frisco source listing)"
+    },
+    {
+      "type": "clinic",
+      "name": "Pro Med",
+      "city": "Frisco",
+      "address": "11691 Independence Pkwy Unit 110, Frisco, TX 75035",
+      "matchConfidence": "high",
+      "matchReason": "ProMed Health Primary Care Frisco — same as 'ProMed Health Primary Care - Frisco'"
+    },
+    {
+      "type": "clinic",
+      "name": "Frisco Urgent care Clinics",
+      "city": "Frisco",
+      "address": "3220 Parkwood Blvd, Frisco, TX 75034",
+      "matchConfidence": "high",
+      "matchReason": "Frisco Urgent Care & Clinics (friscoucc.com); already in prior enrichment as 'Frisco Urgent Care and Clinics'"
+    },
+    {
+      "type": "clinic",
+      "name": "DHAT",
+      "city": "Frisco",
+      "address": "4401 Coit Rd Ste 201, Frisco, TX 75035",
+      "matchConfidence": "high",
+      "matchReason": "Digestive Health Associates of Texas (DHAT) Frisco - Coit Rd location"
+    },
+    {
+      "type": "clinic",
+      "name": "Internal Medicine Asociates",
+      "city": "Frisco",
+      "address": "255 W Lebanon Rd Ste 208, Frisco, TX 75036",
+      "matchConfidence": "high",
+      "matchReason": "Internal Medicine Associates of West Frisco; Dr. Sima Kavand (source typo 'Kawand') confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Garduno Family Medical Clinic",
+      "city": "Frisco",
+      "address": "9925 Gillespie Dr Ste 1300, Plano, TX 75025",
+      "matchConfidence": "low",
+      "matchReason": "Garduño Family Medicine primary office in Plano (Dr. Abel Garduño); no Frisco-specific address confirmed. Listed for reference."
+    },
+    {
+      "type": "clinic",
+      "name": "CPC Frisco",
+      "city": "Frisco",
+      "address": "9990 Dallas Pkwy Ste 200, Frisco, TX 75033",
+      "matchConfidence": "low",
+      "matchReason": "Best guess: Catalyst Physician Group Frisco Medical Village Pediatrics. 'CPC' not unambiguously identified."
+    },
+    {
+      "type": "clinic",
+      "name": "Hillcrest",
+      "city": "Frisco",
+      "address": "4500 Hillcrest Rd Ste 180, Frisco, TX 75035",
+      "matchConfidence": "medium",
+      "matchReason": "Hillcrest Family Medicine Frisco at 4500 Hillcrest Rd; only Frisco clinic with 'Hillcrest' in the name"
+    },
+    {
+      "type": "clinic",
+      "name": "Legacy Internal",
+      "city": "Frisco",
+      "address": "11330 Legacy Dr Ste 204, Frisco, TX 75033",
+      "matchConfidence": "high",
+      "matchReason": "Legacy Internal Medicine Frisco — already in prior enrichment"
+    },
+    {
+      "type": "clinic",
+      "name": "Kids urgent Care",
+      "city": "Frisco",
+      "address": "11550 Legacy Dr Ste 420, Frisco, TX 75034",
+      "matchConfidence": "high",
+      "matchReason": "Urgent Care for Kids Frisco — urgentcarekids.com Frisco location"
+    },
+    {
+      "type": "clinic",
+      "name": "Dr Alang",
+      "city": "Frisco",
+      "address": "3880 Parkwood Blvd Ste 304, Frisco, TX 75034",
+      "matchConfidence": "high",
+      "matchReason": "Dr. Jaspreet S. Alang MD internist Frisco (Frisco Internal Medicine)"
+    },
+    {
+      "type": "clinic",
+      "name": "Passion Health primary care",
+      "city": "Frisco",
+      "address": "8195 Custer Rd Ste 110, Frisco, TX 75035",
+      "matchConfidence": "high",
+      "matchReason": "Same as 'Passion Health' — Frisco location; 'Aruna' likely refers to Dr. Shyamala Arani Purushotham"
+    },
+    {
+      "type": "clinic",
+      "name": "DELC Medical care",
+      "city": "Frisco",
+      "address": "5285 Independence Pkwy Ste 400, Frisco, TX 75035",
+      "matchConfidence": "high",
+      "matchReason": "DELC Medical Center Frisco; Dr. Lynda E. Mbah MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Care One Medical Clinic",
+      "city": "Frisco",
+      "address": "400 Stonebrook Pkwy Unit 200, Frisco, TX 75036",
+      "matchConfidence": "high",
+      "matchReason": "Careone Medical Clinic Frisco; Sheeba Mathai FNP-BC founder confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "BloomMField Medical",
+      "city": "Frisco",
+      "address": "8000 Preston Rd Ste 401, Frisco, TX 75034",
+      "matchConfidence": "medium",
+      "matchReason": "Typo for 'Bloomfield Medical' — same as Bloomfield clinic"
+    },
+    {
+      "type": "clinic",
+      "name": "Pro Med Health Primary Care",
+      "city": "Frisco",
+      "address": "11691 Independence Pkwy Unit 110, Frisco, TX 75035",
+      "matchConfidence": "high",
+      "matchReason": "ProMed Health Primary Care Frisco; Dr. Kavitha Ilayaraja confirmed (source typo 'llayaraja')"
+    },
+    {
+      "type": "clinic",
+      "name": "Sunshine Pediatrics",
+      "city": "Frisco",
+      "address": "11547 Independence Pkwy Ste 500, Frisco, TX 75035",
+      "matchConfidence": "high",
+      "matchReason": "Sunshine Pediatrics Frisco (sunshinepediatricstx.com)"
+    },
+    {
+      "type": "clinic",
+      "name": "Specialty Clinics",
+      "city": "Frisco",
+      "address": "12600 Rolater Rd, Frisco, TX 75035",
+      "matchConfidence": "low",
+      "matchReason": "Specialty Care Clinics Frisco (closest name match); ambiguous"
+    },
+    {
+      "type": "clinic",
+      "name": "Pure Medicine",
+      "city": "Frisco",
+      "address": "4645 Avon Ln Ste 200, Frisco, TX 75033",
+      "matchConfidence": "high",
+      "matchReason": "Pure Medicine Frisco (puremedtexas.com); Dr. Jordan Pastorek MD confirmed"
+    },
+    {
+      "type": "clinic",
+      "name": "Behavioral Invations",
+      "city": "Frisco",
+      "address": "8795 Preston Trace Blvd, Frisco, TX 75033",
+      "matchConfidence": "medium",
+      "matchReason": "Typo for 'Behavioral Innovations' — East Frisco ABA location"
+    },
+    {
+      "type": "clinic",
+      "name": "Frisco Hand Center",
+      "city": "Frisco",
+      "address": "3880 Parkwood Blvd Ste 501, Frisco, TX 75034",
+      "matchConfidence": "high",
+      "matchReason": "Frisco Hand Center (friscohandcenter.com); Dr. Dina N. Rahhal MD confirmed (source spelling 'DinanRahhal')"
+    },
+    {
+      "type": "clinic",
+      "name": "Anu Baweja , M.D.",
+      "city": "Frisco",
+      "address": "4433 Punjab Way Ste 201, Frisco, TX 75034",
+      "matchConfidence": "high",
+      "matchReason": "Dr. Anu Baweja neurologist Frisco — Texas Institute for Neurological Disorders"
+    },
+    {
+      "type": "clinic",
+      "name": "Sunsil Thummala",
+      "city": "Frisco",
+      "address": "9191 Kyser Way Ste 202, Frisco, TX 75033",
+      "matchConfidence": "high",
+      "matchReason": "Dr. Sunil Thummala MD neurologist Frisco (source typo 'Sunsil'); US Neuro Specialists PLLC"
+    },
+    {
+      "type": "clinic",
+      "name": "Delc Medical Center",
+      "city": "Frisco",
+      "address": "5285 Independence Pkwy Ste 400, Frisco, TX 75035",
+      "matchConfidence": "high",
+      "matchReason": "Same as 'DELC Medical care' — DELC Medical Center Frisco"
+    },
+    {
+      "type": "clinic",
+      "name": "Dr. Vijay Katari",
+      "city": "Frisco",
+      "address": "8680 Main St #1W, Frisco, TX 75033",
+      "matchConfidence": "high",
+      "matchReason": "Dr. Vijay Katari MD internist Frisco (drkatari.com)"
+    }
+  ],
+  "notFound": [
+    {
+      "type": "clinic",
+      "name": "Cierras Heath Primary care",
+      "city": "Frisco",
+      "reason": "No clinic named 'Cierras Health' or 'Cierra Health' Primary Care found in Frisco TX"
+    },
+    {
+      "type": "clinic",
+      "name": "Liberty",
+      "city": "Frisco",
+      "reason": "No clinic named 'Liberty' Medical/Primary Care found in Frisco TX (only matches are in Liberty TX)"
+    },
+    {
+      "type": "clinic",
+      "name": "Advanced Primary Care",
+      "city": "Frisco",
+      "reason": "No specific clinic named 'Advanced Primary Care' found in Frisco TX"
+    },
+    {
+      "type": "clinic",
+      "name": "Premerier Independant Physicians",
+      "city": "Frisco",
+      "reason": "Premier Independent Physicians (piptx.com) has locations in McKinney/Aubrey/Dallas but no Frisco office confirmed"
+    }
+  ]
+}

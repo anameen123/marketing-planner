@@ -1,0 +1,25 @@
+{
+  "found": [
+    {"type":"clinic","name":"Back to Health Clinic","city":"Plano","address":"2301 Ohio Dr Ste 245, Plano, TX 75093","matchConfidence":"medium","matchReason":"Back to Health Clinic chiropractor Plano (Dr. Marjaneh Ghassemitari DC)"},
+    {"type":"clinic","name":"Dr. Geeta Rajan","city":"Plano","address":"4601 Old Shepard Pl Ste 406, Plano, TX 75093","matchConfidence":"high","matchReason":"Dr. Geeta Rajan MD neurologist (Plano Neurology PA)"},
+    {"type":"clinic","name":"Childrens health neurology","city":"Plano","address":"7609 Preston Rd Ste P1100, Plano, TX 75024","matchConfidence":"high","matchReason":"Children's Health Neurology Plano"},
+    {"type":"clinic","name":"Indu Mayakrishnan M.D","city":"Plano","address":"7920 Preston Rd Ste 100, Plano, TX 75024","matchConfidence":"high","matchReason":"Dr. Indu Mayakrishnan MD neurologist (Texas Institute for Neurological Disorders Plano)"},
+    {"type":"clinic","name":"Mohsin Maqbool, MD","city":"Plano","address":"4032 McDermott Rd Ste 100, Plano, TX 75024","matchConfidence":"high","matchReason":"Dr. Mohsin Maqbool MD pediatric neurology (Texas Child Neurology Plano)"},
+    {"type":"clinic","name":"Balance Diabetes and Endocrinology","city":"Plano","address":"6533 Preston Rd Ste 100, Plano, TX 75024","matchConfidence":"high","matchReason":"Balance Diabetes and Endocrinology Plano; Dr. Sindura Alloju MD confirmed (duplicate)"},
+    {"type":"clinic","name":"Hope Internal Medicine Clinic","city":"Plano","address":"525 Shiloh Rd Ste 4100, Plano, TX 75074","matchConfidence":"high","matchReason":"Hope Internal Medicine Clinic Plano; Dr. Ramy Elhalwagi DO confirmed"},
+    {"type":"clinic","name":"CLINICA HISPANA PLANO TX","city":"Plano","address":"1116 Dobie Dr Ste 101, Plano, TX 75074","matchConfidence":"medium","matchReason":"Clinica Hispana Plano TX (multiple locations; using primary)"},
+    {"type":"clinic","name":"Achieve Physical Therapy","city":"Plano","address":"2200 Los Rios Blvd Ste 132, Plano, TX 75074","matchConfidence":"high","matchReason":"Achieve Physical Therapy Plano (now Therapy Partners of North Texas)"},
+    {"type":"clinic","name":"Care Choice Family Clinic","city":"Plano","address":"525 Shiloh Rd Ste 2300, Plano, TX 75074","matchConfidence":"high","matchReason":"Care Choice Family Clinic Plano; Sheeba Daniel FNP-C confirmed"},
+    {"type":"clinic","name":"Fem Care","city":"Plano","address":"525 Shiloh Rd Ste 2200, Plano, TX 75074","matchConfidence":"medium","matchReason":"FemCare OB-GYN Plano (some sources show practice is Miami-based but address listed for Plano)"},
+    {"type":"clinic","name":"Intricate Health","city":"Plano","address":"525 Shiloh Rd Ste 2100, Plano, TX 75074","matchConfidence":"high","matchReason":"Intricate Health Plano; Dr. Charmaine Gibson MD OB/GYN confirmed"},
+    {"type":"clinic","name":"Inspire Health - Plano Doctors","city":"Plano","address":"5026 Tennyson Pkwy, Plano, TX 75024","matchConfidence":"high","matchReason":"Inspire Health Plano; Dr. Bush Benjamin MD internist confirmed"},
+    {"type":"clinic","name":"Doctors of Internal Medicine","city":"Plano","address":"5941 Dallas Pkwy, Plano, TX 75093","matchConfidence":"high","matchReason":"Doctors of Internal Medicine Plano; Dr. Suryadutt Venkat MD confirmed"},
+    {"type":"clinic","name":"My Dentist in Plano","city":"Plano","address":"6545 Preston Rd Ste 100, Plano, TX 75024","matchConfidence":"high","matchReason":"My Dentist in Plano; Dr. Darren Dickson DDS confirmed"},
+    {"type":"clinic","name":"Advanced dental center","city":"Plano","address":"6541 Preston Rd Ste 100, Plano, TX 75024","matchConfidence":"high","matchReason":"Advanced Dental Center Plano; Dr. Christine Hopkins DDS confirmed"},
+    {"type":"clinic","name":"Asara Physical Therapy and Balance Clinic","city":"Plano","address":"6537 Preston Rd Ste B, Plano, TX 75024","matchConfidence":"high","matchReason":"Asara Physical Therapy and Balance Clinic Plano; Asha Gummadi PT confirmed"},
+    {"type":"clinic","name":"Premier Wellness Internal Medicine","city":"Plano","address":"3900 W 15th St Ste 404, Plano, TX 75075","matchConfidence":"high","matchReason":"Premier Wellness Internal Medicine Plano; Dr. Michelle Sun MD confirmed"},
+    {"type":"clinic","name":"Pediatric Specialists of Plano","city":"Plano","address":"3405 Midway Rd Ste 650, Plano, TX 75093","matchConfidence":"high","matchReason":"Pediatric Specialists of Plano (psopkids.com); Dr. Fatimah Ahmed MD confirmed"},
+    {"type":"clinic","name":"Infectious Disease Doctors PA","city":"Plano","address":"6537 Preston Rd, Plano, TX 75024","matchConfidence":"high","matchReason":"Infectious Disease Doctors PA Plano; Dr. Sofia Ansari MD confirmed"}
+  ],
+  "notFound": []
+}
