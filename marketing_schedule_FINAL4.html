@@ -24475,7 +24475,14 @@ function confirmEditVisit(){
           relationship: '', relNotes: '', leadNotes: '', rowConfirmed: false,
           rescheduledFrom: (S.days[di] && S.days[di].date) || '', isRescheduled: true,
           isMosque: false, isManual: false, editing: false, customCity: '',
-          bizType: row.bizType
+          bizType: row.bizType,
+          // Phase 169 (2026-05-30): carry the route association onto the
+          // ghost row. Without this, postponing a route-tagged visit
+          // produced an untagged ghost at the target date — breaking
+          // Phase 122c schedule separators on the target day and breaking
+          // Phase 165 "no traces" override (the ghost was orphaned from
+          // its route). Per-agent audit Phase 168 caught this.
+          _routeId: row._routeId
         });
       }
     }
@@ -51128,6 +51135,13 @@ function renderHistory(){
     metaPrefix + total + ' visit' + (total !== 1 ? 's' : '') + (totalPages > 1 ? ' · Page ' + memberPage + ' of ' + totalPages : '');
 
   var rows='';
+  // Phase 169 (2026-05-30): local escape helper. Phase 168 audit caught
+  // that v.clinic / v.spec / v.doctor / v.city / v.status were rendered
+  // raw into innerHTML — if any user (admin or member) ever pastes
+  // characters like <script> into a clinic name on the bank entry, it
+  // would execute when their visit history rendered. Wrap all user-
+  // controlled fields with hEsc before concatenating them into HTML.
+  function hEsc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   if(page.length===0){
     rows='<tr><td colspan="7" style="text-align:center;padding:28px;color:var(--muted)">No visits found for this member yet.</td></tr>';
   } else {
@@ -51144,11 +51158,11 @@ function renderHistory(){
       rows+='<tr>'
         +'<td style="color:var(--muted);font-size:11px">'+globalN+'</td>'
         +'<td style="font-size:11px;font-weight:500;white-space:nowrap">'+dateStr+'</td>'
-        +'<td><span class="chip c-'+(v.city||'Unknown').replace(/[^a-zA-Z]/g,'')+'">'+(v.city||'—')+'</span></td>'
-        +'<td><div style="font-weight:600;font-size:11px">'+v.clinic+'</div>'
-          +(v.spec?'<div style="font-size:10px;color:var(--muted)">'+v.spec+'</div>':'')+'</td>'
-        +'<td style="font-size:11px;color:var(--muted)">'+(v.doctor&&v.doctor!=='TBD'?v.doctor:'—')+'</td>'
-        +'<td><span class="status-pill '+stClass+'">'+(v.status||'Pending')+'</span>'+confirmed+'</td>'
+        +'<td><span class="chip c-'+(v.city||'Unknown').replace(/[^a-zA-Z]/g,'')+'">'+hEsc(v.city||'—')+'</span></td>'
+        +'<td><div style="font-weight:600;font-size:11px">'+hEsc(v.clinic)+'</div>'
+          +(v.spec?'<div style="font-size:10px;color:var(--muted)">'+hEsc(v.spec)+'</div>':'')+'</td>'
+        +'<td style="font-size:11px;color:var(--muted)">'+(v.doctor&&v.doctor!=='TBD'?hEsc(v.doctor):'—')+'</td>'
+        +'<td><span class="status-pill '+stClass+'">'+hEsc(v.status||'Pending')+'</span>'+confirmed+'</td>'
         +'<td>'+leadHtml+'</td>'
         +'</tr>';
     });
