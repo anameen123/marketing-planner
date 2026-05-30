@@ -29110,13 +29110,29 @@ function renderDayMap(di){
   // (1, 2, 3, ...) shown on the pin so members can see the order of stops.
   // First visit gets a 'Start' tag and the last gets an 'End' tag. A blue
   // polyline connects them in order so the day's route is visible at a glance.
+  // Phase 164 (2026-05-30): use _rpGetVisualCoord (which, post-Phase-161,
+  // returns the SAME hash-dithered position the clinic pins are drawn at)
+  // instead of raw getCoordForBusiness (un-dithered city centroid). The
+  // old code drew the route polyline between CITY CENTERS while the
+  // clinic pins sat dispersed via hash dither around those centers,
+  // producing the persistent "ladder" zigzag the user reported — a
+  // separate drawer that Phase 161 never touched because it bypassed
+  // _rpGetVisualCoord entirely. Helper falls through to base coord if
+  // _rpGetVisualCoord isn't loaded yet.
+  function _phase164Coord(name){
+    if(typeof _rpGetVisualCoord === 'function'){
+      var c = _rpGetVisualCoord(name);
+      if(c) return c;
+    }
+    return (typeof getCoordForBusiness === 'function') ? getCoordForBusiness(name) : null;
+  }
   var totalVisits = day.rows.filter(function(r){
-    return r && r.clinic && getCoordForBusiness(r.clinic);
+    return r && r.clinic && _phase164Coord(r.clinic);
   }).length;
   var visitOrdinal = 0;
   day.rows.forEach(function(row, idx){
     if(!row.clinic) return;
-    var coord = getCoordForBusiness(row.clinic);
+    var coord = _phase164Coord(row.clinic);
     if(!coord) return;
     visitOrdinal++;
     // Phase 67 (2026-05-28): removed the auto-START / auto-END badges on
@@ -29124,12 +29140,12 @@ function renderDayMap(di){
     // "day as a route" feature, conflicted visually with the Plan-a-Route's
     // own S marker (rep was seeing two "starts" at the same clinic). The
     // numbered pins + polyline stay.
-    // Add a tiny offset for duplicate-city pins so they don't stack invisibly
-    var dupKey = coord.lat.toFixed(3) + ',' + coord.lng.toFixed(3);
-    var stack = seenCities[dupKey] || 0;
-    var offset = stack * 0.004;
-    var lat = coord.lat + offset, lng = coord.lng + offset;
-    seenCities[dupKey] = stack + 1;
+    // Phase 164 (2026-05-30): the legacy +stack*0.004 dedup offset is
+    // gone. With _phase164Coord using the same hash dither as addPin,
+    // same-city clinics already disperse via the hash — no stack offset
+    // needed, and crucially no second offset system fighting the hash
+    // (which was what produced the route-vs-pin misalignment).
+    var lat = coord.lat, lng = coord.lng;
     var color = (row.status === 'Completed') ? '#16a34a'
               : (row.status === 'Canceled')  ? '#dc2626'
               : (row.status === 'Postponed') ? '#f59e0b'
@@ -39017,9 +39033,22 @@ function _dvShowMapToggleMulti(){
     }
     // Wipe the single-mode pulse layer; multi mode owns its own layer group.
     _dvClearShowMapPulse();
-    window._DV_SHOWMAP_SELECTED = {};
-    _dvShowMapRefreshMulti();
-    if(typeof showToast === 'function') showToast('✓ Multi mode: tap any 🔦 button on a row to add/remove it. Map auto-fits to all selected.');
+    // Phase 162 (2026-05-30): the previous code wiped _DV_SHOWMAP_SELECTED
+    // to {} then called _dvShowMapRefreshMulti, which early-returns when
+    // nothing is selected. Net result: switching to Multi rendered ZERO
+    // pulses until the rep manually clicked each row. Per user 2026-05-30:
+    // Multi must auto-select ALL visits the moment it's entered (matches
+    // Phase 96 — "Show on Map default = Multi mode with all visits
+    // selected"). _dvShowMapSelectAll populates the dict from the current
+    // day's rows AND calls refresh, so this single call replaces both
+    // lines and fixes the "Multi doesn't flash all" bug.
+    if(typeof _dvShowMapSelectAll === 'function'){
+      _dvShowMapSelectAll();
+    } else {
+      window._DV_SHOWMAP_SELECTED = {};
+      _dvShowMapRefreshMulti();
+    }
+    if(typeof showToast === 'function') showToast('✓ Multi mode: all visits highlighted. Tap any 🔦 button on a row to add/remove.');
   } else {
     if(single) single.style.display = 'inline-flex';
     if(multi)  multi.style.display  = 'none';
@@ -39038,6 +39067,68 @@ function _dvShowMapToggleMulti(){
   }
 }
 window._dvShowMapToggleMulti = _dvShowMapToggleMulti;
+
+// ════════════════════════════════════════════════════════════════════════════
+// PHASE 163 (2026-05-30) — SHOW ON MAP VISIT-COUNT GATE
+// Per user 2026-05-30: the Show on Map controls must reflect what's
+// actually possible given the day's visit count:
+//   • 0 visits → BOTH Single + Multi disabled (nothing to highlight)
+//   • 1 visit  → only Single (Multi has no meaning for a single point)
+//   • 2+ visits→ both available
+// Called from renderDayTable after every row mutation so the buttons
+// always reflect current state. Disables via .disabled attr +
+// opacity:.35 + cursor:not-allowed for unambiguous visual feedback.
+// If the user is currently IN Multi mode with only 1 visit left, we
+// also flip them back to Single so the active mode stays valid.
+// ════════════════════════════════════════════════════════════════════════════
+function _dvUpdateShowMapButtonGate(di){
+  try {
+    if(typeof S === 'undefined' || !S.days || !S.days[di]) return;
+    var rows = (S.days[di].rows || []).filter(function(r){
+      return r && r.clinic && String(r.clinic).trim().length > 0;
+    });
+    var n = rows.length;
+    var toggleBtn = document.getElementById('dv-showmap-toggle-btn');
+    var modeBtn   = document.getElementById('dv-showmap-mode-btn');
+    function setDisabled(btn, off, tip){
+      if(!btn) return;
+      btn.disabled = !!off;
+      btn.style.opacity = off ? '.35' : '1';
+      btn.style.cursor  = off ? 'not-allowed' : 'pointer';
+      btn.style.pointerEvents = off ? 'none' : '';
+      if(tip) btn.title = tip;
+    }
+    if(n === 0){
+      setDisabled(toggleBtn, true,  'No visits on this day yet — add one to enable Show on Map.');
+      setDisabled(modeBtn,   true,  'No visits on this day yet.');
+    } else if(n === 1){
+      setDisabled(toggleBtn, false, 'Highlight the single visit on the map.');
+      setDisabled(modeBtn,   true,  'Multi mode needs 2+ visits — currently only 1.');
+      // If they were in Multi with multiple, but a delete dropped to 1,
+      // snap back to Single so the active state stays meaningful.
+      if(window._DV_SHOWMAP_MULTI){
+        try {
+          window._DV_SHOWMAP_MULTI = false;
+          var single = document.getElementById('dv-showmap-single-ctrls');
+          var multi  = document.getElementById('dv-showmap-multi-ctrls');
+          if(single) single.style.display = 'inline-flex';
+          if(multi)  multi.style.display  = 'none';
+          if(modeBtn){
+            modeBtn.style.background = '#fff';
+            modeBtn.style.color = '#7c2d12';
+            modeBtn.innerHTML = '📍 Single';
+          }
+          if(typeof _dvClearShowMapMultiLayer === 'function') _dvClearShowMapMultiLayer();
+          window._DV_SHOWMAP_SELECTED = {};
+        } catch(_){}
+      }
+    } else {
+      setDisabled(toggleBtn, false, 'Highlight visits on the map.');
+      setDisabled(modeBtn,   false, 'Switch between Single (step through one) and Multi (flash all selected).');
+    }
+  } catch(e){ try { console.warn('[163] gate failed:', e); } catch(_){} }
+}
+window._dvUpdateShowMapButtonGate = _dvUpdateShowMapButtonGate;
 
 function _dvShowMapToggleSelection(ri){
   if(window._DV_SHOWMAP_SELECTED[ri]){
@@ -47687,6 +47778,10 @@ function renderDayTable(di){
   // empty, or re-render the pulse on a valid row if the current one
   // was deleted.
   if(typeof _dvSyncShowOnMapAfterRowChange === 'function') _dvSyncShowOnMapAfterRowChange(di);
+  // Phase 163 (2026-05-30): visit-count gate on the Show on Map buttons.
+  // Per user 2026-05-30: 0 visits → both Single + Multi disabled,
+  // 1 visit → only Single available, 2+ visits → both available.
+  if(typeof _dvUpdateShowMapButtonGate === 'function') _dvUpdateShowMapButtonGate(di);
   if(!day){
     var tbodyMissing = document.getElementById('day-tbody');
     if(tbodyMissing) tbodyMissing.innerHTML = '<tr><td colspan="10" style="padding:20px;text-align:center;color:var(--muted);font-style:italic">Schedule data is still loading for this day. <button onclick="refresh(S.currentDay)" style="margin-left:8px;background:var(--purple);color:#fff;border:none;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer">Retry</button></td></tr>';
