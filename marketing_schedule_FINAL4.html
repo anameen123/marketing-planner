@@ -51913,6 +51913,27 @@ function _phase177NavigateToFacility(facKey){
 }
 window._phase177NavigateToFacility = _phase177NavigateToFacility;
 
+// ════════════════════════════════════════════════════════════════════════════
+// PHASE 178 (2026-05-30) — Sidebar drawer "Locations" sub-button.
+// Wired from the new sub-button under "Teams & Locations" in the sidebar
+// (#sidebar-tab + accordion). Closes the mobile drawer, switches to the
+// members tab, then flips the outer pill to Locations so the user lands
+// directly on the facility pages.
+// ════════════════════════════════════════════════════════════════════════════
+function _phase178OpenLocations(){
+  try {
+    if(document.body.classList.contains('member-mobile') && typeof toggleMemberDrawer === 'function') {
+      toggleMemberDrawer(false);
+    }
+    window._phase175LastOuter = 'locations';
+    if(typeof switchTab === 'function') switchTab('members');
+    setTimeout(function(){
+      if(typeof _phase175SwitchOuter === 'function') _phase175SwitchOuter('locations');
+    }, 60);
+  } catch(e){ console.warn('[178] OpenLocations failed:', e); }
+}
+window._phase178OpenLocations = _phase178OpenLocations;
+
 function switchTeamTab(name){
   var treeBtn = document.getElementById('team-subtab-tree');
   var statBtn = document.getElementById('team-subtab-stats');
@@ -64517,10 +64538,14 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
     <!-- Team accordion group — admin sees it always; call-handler members
          (e.g. Duaa) also keep access on phone because the Monthly Call
          Conversions chart + "+1 Convert" button live in the Team tab. -->
-    <button class="md-nav-item nav-admin-only nav-handler-also" data-tooltip="Team" data-parent="team" onclick="memberDrawerGo('team')"><span class="md-ico">👥</span><span class="md-lbl">Team</span><span class="md-chevron">›</span></button>
+    <!-- Phase 178 (2026-05-30): rename "Team" → "Teams & Locations" and add
+         a "Locations" sub-button that jumps to the Locations facility pages
+         (Frisco / Castle Hills / UCP) via the outer pill in #members-view. -->
+    <button class="md-nav-item nav-admin-only nav-handler-also" data-tooltip="Teams &amp; Locations" data-parent="team" onclick="memberDrawerGo('team')"><span class="md-ico">👥</span><span class="md-lbl">Teams &amp; Locations</span><span class="md-chevron">›</span></button>
     <div class="md-subnav nav-admin-only nav-handler-also" data-parent="team">
       <button class="md-subnav-item" data-sub="tree"  onclick="memberDrawerSubGo('team','tree')"><span class="md-sub-ico">🌳</span><span>Tree Chart</span></button>
       <button class="md-subnav-item" data-sub="stats" onclick="memberDrawerSubGo('team','stats')"><span class="md-sub-ico">📈</span><span>Stats</span></button>
+      <button class="md-subnav-item" data-sub="locations" onclick="_phase178OpenLocations()"><span class="md-sub-ico">🏥</span><span>Locations</span></button>
     </div>
 
     <!-- Businesses accordion group — kept for everyone (members use this) -->
@@ -64546,7 +64571,7 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
          where they're locked to this tab). Per user 2026-05-19: this was
          missing from the sidebar, which is why admin reported "I don't see
          the referrals page" after the sidebar replaced the top nav. -->
-    <button id="sidebar-tab-referrals" class="md-nav-item" data-tooltip="Referrals" onclick="memberDrawerGo('referrals')"><span class="md-ico">📋</span><span class="md-lbl">Referrals</span></button>
+    <button id="sidebar-tab-referrals" class="md-nav-item" data-tooltip="Patients &amp; Referrals" onclick="memberDrawerGo('referrals')"><span class="md-ico">📋</span><span class="md-lbl">Patients &amp; Referrals</span></button>
     <button class="md-nav-item nav-admin-only" data-tooltip="Reports" onclick="memberDrawerGo('reports')"><span class="md-ico">📋</span><span class="md-lbl">Reports</span></button>
     <button class="md-nav-item nav-admin-only" data-tooltip="Activity Feed" onclick="memberDrawerGo('activity')"><span class="md-ico">📡</span><span class="md-lbl">Activity Feed</span></button>
 
