@@ -18229,6 +18229,10 @@ function renderPendingReferrals(){
   // dropdown options.
   try { _prRenderStatusChips(scopedAll); } catch(e){ console.warn('[120a] chips failed:', e); }
   try { _prSyncFilterDropdowns(scopedAll); } catch(e){ console.warn('[120a] dropdowns failed:', e); }
+  // Phase 167 (2026-05-30): paint the day-strip with per-day counts
+  // derived from the scoped list (so the badge on each day-chip matches
+  // exactly what'll show in the list when the rep taps that day).
+  try { if(typeof _prRenderDayStrip === 'function') _prRenderDayStrip(scopedAll); } catch(e){ console.warn('[167] day strip failed:', e); }
   // Now read filter values
   var statusSel = document.getElementById('pr-status-filter');
   var statusFilter = (statusSel && statusSel.value) || 'all';
@@ -18247,6 +18251,18 @@ function renderPendingReferrals(){
   // Source clinic filter
   if(clinicFilter){
     items = items.filter(function(r){ return (r.sourceName || '').toLowerCase() === clinicFilter; });
+  }
+  // Phase 167 (2026-05-30): day filter — when set, narrows to referrals
+  // whose createdAt falls on the selected calendar day. Uses _PR_FILTER_DAY
+  // (ISO YYYY-MM-DD) set by _prSetDay from the sticky day-strip nav.
+  var dayFilter = window._PR_FILTER_DAY || null;
+  if(dayFilter){
+    items = items.filter(function(r){
+      if(!r.createdAt) return false;
+      var d = new Date(r.createdAt);
+      if(isNaN(d.getTime())) return false;
+      return _prIsoDate(new Date(d.getFullYear(), d.getMonth(), d.getDate())) === dayFilter;
+    });
   }
   // Smart text search — matches anywhere in source/patient/complaint/creator
   if(search){
@@ -18271,7 +18287,16 @@ function renderPendingReferrals(){
   }).length;
   if(badge) badge.textContent = pendingCount;
   if(items.length === 0){
-    list.innerHTML = '<div style="padding:14px 16px;background:#f8fafc;border:1px dashed var(--border);border-radius:8px;text-align:center;font-size:12px;color:var(--muted);font-style:italic">No ' + (statusFilter === 'all' ? '' : statusFilter + ' ') + 'referrals to show.</div>';
+    // Phase 167 (2026-05-30): include the active day in the empty
+    // message + offer an escape button when the day filter is what
+    // narrowed it to zero (matches the Phase 152 Logged Patients
+    // pattern so the rep doesn't think the data is missing).
+    var emptyBits = [];
+    if(window._PR_FILTER_DAY) emptyBits.push('on ' + window._PR_FILTER_DAY);
+    if(statusFilter && statusFilter !== 'all') emptyBits.push(statusFilter);
+    var emptyCtx = emptyBits.length ? ' ' + emptyBits.join(' · ') : '';
+    list.innerHTML = '<div style="padding:14px 16px;background:#f8fafc;border:1px dashed var(--border);border-radius:8px;text-align:center;font-size:12px;color:var(--muted);font-style:italic">No referrals' + emptyCtx + '.</div>'
+      + (window._PR_FILTER_DAY ? '<div style="text-align:center;margin-top:8px"><button type="button" onclick="_prJumpToToday()" style="background:#fff;border:1px solid var(--border);color:#1F3864;border-radius:8px;padding:7px 14px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">📅 Clear day filter + show all</button></div>' : '');
     return;
   }
   list.innerHTML = items.map(function(r){
@@ -18469,6 +18494,119 @@ function renderPendingReferrals(){
   }).join('');
 }
 window.renderPendingReferrals = renderPendingReferrals;
+
+// ════════════════════════════════════════════════════════════════════════════
+// PHASE 167 (2026-05-30) — DAY-STRIP NAV for the Outgoing Referrals pane.
+// User: "whatever you create for the login page, you must create something
+// similar for the referrals as well." Mirrors the Phase 152 Logged Patients
+// day-strip pattern — sticky 7-day picker centered on today, mini-counts
+// per day, ◀/▶ shift the window, All button + Today shortcut.
+// State globals are independent from the Logged Patients ones so each
+// sub-tab maintains its own day selection.
+//   _PR_FILTER_DAY        : null OR ISO 'YYYY-MM-DD'
+//   _PR_DAY_STRIP_OFFSET  : how many days the strip is shifted from today
+// ════════════════════════════════════════════════════════════════════════════
+window._PR_FILTER_DAY = window._PR_FILTER_DAY || null;
+window._PR_DAY_STRIP_OFFSET = window._PR_DAY_STRIP_OFFSET || 0;
+
+function _prIsoDate(d){
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+window._prIsoDate = _prIsoDate;
+
+function _prRenderDayStrip(scopedItems){
+  var host = document.getElementById('pr-day-strip');
+  if(!host) return;
+  var today = new Date(); today.setHours(0,0,0,0);
+  var offset = window._PR_DAY_STRIP_OFFSET || 0;
+  var center = new Date(today); center.setDate(center.getDate() + offset);
+  var days = [];
+  for(var i = -3; i <= 3; i++){
+    var d = new Date(center); d.setDate(d.getDate() + i);
+    days.push(d);
+  }
+  var activeIso = window._PR_FILTER_DAY;
+  var todayIso  = _prIsoDate(today);
+  // Per-day counts of referrals created on each day (uses the scoped
+  // list so FD users see only their facility, marketing members see
+  // only their own — matches what they'll actually see on tap).
+  var perDay = {};
+  try {
+    (scopedItems || []).forEach(function(r){
+      if(!r || !r.createdAt) return;
+      var d = new Date(r.createdAt);
+      if(isNaN(d.getTime())) return;
+      var iso = _prIsoDate(new Date(d.getFullYear(), d.getMonth(), d.getDate()));
+      perDay[iso] = (perDay[iso] || 0) + 1;
+    });
+  } catch(_){}
+  var html = '<div style="display:flex;align-items:center;gap:4px;padding:2px 0">'
+    + '<button type="button" onclick="_prShiftDayStrip(-7)" title="Earlier days" style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:13px;font-weight:700;cursor:pointer;color:#1F3864;flex-shrink:0">◀</button>'
+    + '<div style="display:flex;gap:5px;overflow-x:auto;flex:1;scrollbar-width:none;-ms-overflow-style:none;padding:2px 0">';
+  days.forEach(function(d){
+    var iso = _prIsoDate(d);
+    var isToday = (iso === todayIso);
+    var isActive = (iso === activeIso);
+    var wkLbl = d.toLocaleDateString('en-US', { weekday: 'short' });
+    var dayNum = d.getDate();
+    var monthLbl = d.toLocaleDateString('en-US', { month: 'short' });
+    var count = perDay[iso] || 0;
+    var bg  = isActive ? 'linear-gradient(135deg,#7c3aed,#581c87)' : (isToday ? '#faf5ff' : '#fff');
+    var fg  = isActive ? '#fff' : (isToday ? '#7c3aed' : '#1F3864');
+    var bord = isActive ? '#7c3aed' : (isToday ? '#ddd6fe' : 'var(--border)');
+    var weight = (isActive || isToday) ? '800' : '600';
+    html += '<button type="button" onclick="_prSetDay(\'' + iso + '\')" title="' + iso + '" style="background:' + bg + ';color:' + fg + ';border:1px solid ' + bord + ';border-radius:10px;padding:7px 10px;font-size:10px;font-weight:' + weight + ';cursor:pointer;font-family:DM Sans,sans-serif;display:flex;flex-direction:column;align-items:center;gap:1px;min-width:50px;flex-shrink:0;transition:all .12s">'
+      + '<span style="font-size:9px;text-transform:uppercase;letter-spacing:.04em;opacity:.85">' + wkLbl + '</span>'
+      + '<span style="font-size:16px;font-weight:800;line-height:1.05">' + dayNum + '</span>'
+      + '<span style="font-size:8px;opacity:.7">' + monthLbl + '</span>'
+      + (count > 0 ? '<span style="background:' + (isActive ? 'rgba(255,255,255,.25)' : '#fef3c7') + ';color:' + (isActive ? '#fff' : '#7c2d12') + ';font-size:8px;font-weight:700;padding:1px 5px;border-radius:8px;font-family:DM Mono,monospace;margin-top:2px">' + count + '</span>' : '<span style="font-size:8px;opacity:.4;margin-top:2px">·</span>')
+      + '</button>';
+  });
+  html += '</div>'
+    + '<button type="button" onclick="_prShiftDayStrip(7)" title="Later days" style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:13px;font-weight:700;cursor:pointer;color:#1F3864;flex-shrink:0">▶</button>'
+    + '<button type="button" onclick="_prSetDay(null)" title="Show all dates" style="background:' + (activeIso ? '#f1f5f9' : 'linear-gradient(135deg,#15803d,#16a34a)') + ';color:' + (activeIso ? 'var(--muted)' : '#fff') + ';border:1px solid ' + (activeIso ? 'var(--border)' : '#16a34a') + ';border-radius:8px;padding:6px 10px;font-size:10px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;flex-shrink:0;margin-left:4px">All</button>';
+  if(activeIso || offset !== 0){
+    html += '<button type="button" onclick="_prJumpToToday()" title="Jump back to today" style="background:#fff;border:1px solid #fbbf24;color:#92400e;border-radius:8px;padding:6px 10px;font-size:10px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;flex-shrink:0;margin-left:4px">📅 Today</button>';
+  }
+  html += '</div>';
+  host.innerHTML = html;
+}
+window._prRenderDayStrip = _prRenderDayStrip;
+
+function _prSetDay(iso){
+  window._PR_FILTER_DAY = iso || null;
+  if(iso){
+    var today = new Date(); today.setHours(0,0,0,0);
+    var picked = new Date(iso + 'T12:00:00');
+    var diffDays = Math.round((picked.getTime() - today.getTime()) / (24*60*60*1000));
+    window._PR_DAY_STRIP_OFFSET = diffDays;
+  }
+  if(typeof renderPendingReferrals === 'function') renderPendingReferrals();
+}
+window._prSetDay = _prSetDay;
+
+function _prShiftDayStrip(delta){
+  window._PR_DAY_STRIP_OFFSET = (window._PR_DAY_STRIP_OFFSET || 0) + delta;
+  // Refresh strip with current scope
+  try {
+    var scoped = (typeof PENDING_REFERRALS !== 'undefined' && Array.isArray(PENDING_REFERRALS)) ? PENDING_REFERRALS.slice() : [];
+    var isFD = (CURRENT_USER && CURRENT_USER.role === 'front_desk');
+    if(isFD && CURRENT_USER.facilityKey){
+      scoped = scoped.filter(function(r){ return r.destinationFacility === CURRENT_USER.facilityKey; });
+    } else if(typeof isMarketingMember === 'function' && isMarketingMember()){
+      scoped = scoped.filter(function(r){ return typeof isMine === 'function' && isMine(r.createdBy); });
+    }
+    _prRenderDayStrip(scoped);
+  } catch(_){ _prRenderDayStrip([]); }
+}
+window._prShiftDayStrip = _prShiftDayStrip;
+
+function _prJumpToToday(){
+  window._PR_DAY_STRIP_OFFSET = 0;
+  window._PR_FILTER_DAY = null;
+  if(typeof renderPendingReferrals === 'function') renderPendingReferrals();
+}
+window._prJumpToToday = _prJumpToToday;
 
 // ════════════════════════════════════════════════════════════════════════════
 // PHASE 166 (2026-05-30) — PENDING REFERRAL DETAIL CARD
@@ -61601,6 +61739,13 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
          _crRenderMonthlySummary() on every renderPendingReferrals(). Shows
          this-month totals + success / unsuccessful ratios. Read-only. -->
     <div id="pr-monthly-summary" style="margin-bottom:10px"></div>
+    <!-- Phase 167 (2026-05-30): sticky 7-day strip nav, mirrors the
+         Logged Patients sub-tab pattern (Phase 152). Lets the rep jump
+         to any day's referrals + see per-day creation counts at a glance.
+         Renders via _prRenderDayStrip(). -->
+    <div id="pr-day-strip-wrap" style="position:sticky;top:0;z-index:30;background:linear-gradient(180deg,#fff 70%,rgba(255,255,255,0));padding:8px 0;margin-bottom:8px;border-bottom:1px solid var(--border)">
+      <div id="pr-day-strip"></div>
+    </div>
     <!-- Phase 120a (2026-05-29): status pill chips with live counts.
          Click → filters the list to that status. Active chip is purple-
          filled. Populated by _prRenderStatusChips() on every render. -->
