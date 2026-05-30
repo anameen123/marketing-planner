@@ -51934,6 +51934,24 @@ function _phase178OpenLocations(){
 }
 window._phase178OpenLocations = _phase178OpenLocations;
 
+// Phase 178 rev 2 (2026-05-30): "Team" sidebar sub-button. Opens the
+// members tab and explicitly flips the outer pill to "team" so the inner
+// Team page (with its own Tree Chart / Stats / Overview / Performance /
+// History navigation) is shown — even if the user was last on Locations.
+function _phase178OpenTeam(){
+  try {
+    if(document.body.classList.contains('member-mobile') && typeof toggleMemberDrawer === 'function') {
+      toggleMemberDrawer(false);
+    }
+    window._phase175LastOuter = 'team';
+    if(typeof switchTab === 'function') switchTab('members');
+    setTimeout(function(){
+      if(typeof _phase175SwitchOuter === 'function') _phase175SwitchOuter('team');
+    }, 60);
+  } catch(e){ console.warn('[178] OpenTeam failed:', e); }
+}
+window._phase178OpenTeam = _phase178OpenTeam;
+
 function switchTeamTab(name){
   var treeBtn = document.getElementById('team-subtab-tree');
   var statBtn = document.getElementById('team-subtab-stats');
@@ -64538,14 +64556,15 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
     <!-- Team accordion group — admin sees it always; call-handler members
          (e.g. Duaa) also keep access on phone because the Monthly Call
          Conversions chart + "+1 Convert" button live in the Team tab. -->
-    <!-- Phase 178 (2026-05-30): rename "Team" → "Teams & Locations" and add
-         a "Locations" sub-button that jumps to the Locations facility pages
-         (Frisco / Castle Hills / UCP) via the outer pill in #members-view. -->
+    <!-- Phase 178 (2026-05-30, rev 2): "Teams & Locations" accordion now has
+         exactly TWO sub-items — "Team" and "Locations" — matching the outer
+         pill inside #members-view. The Team page's own internal navigation
+         (Tree Chart, Stats, Overview / Performance / History) is reached
+         AFTER clicking into the Team pane, not from the sidebar. -->
     <button class="md-nav-item nav-admin-only nav-handler-also" data-tooltip="Teams &amp; Locations" data-parent="team" onclick="memberDrawerGo('team')"><span class="md-ico">👥</span><span class="md-lbl">Teams &amp; Locations</span><span class="md-chevron">›</span></button>
     <div class="md-subnav nav-admin-only nav-handler-also" data-parent="team">
-      <button class="md-subnav-item" data-sub="tree"  onclick="memberDrawerSubGo('team','tree')"><span class="md-sub-ico">🌳</span><span>Tree Chart</span></button>
-      <button class="md-subnav-item" data-sub="stats" onclick="memberDrawerSubGo('team','stats')"><span class="md-sub-ico">📈</span><span>Stats</span></button>
-      <button class="md-subnav-item" data-sub="locations" onclick="_phase178OpenLocations()"><span class="md-sub-ico">🏥</span><span>Locations</span></button>
+      <button class="md-subnav-item" data-sub="team_inner"   onclick="_phase178OpenTeam()"><span class="md-sub-ico">👥</span><span>Team</span></button>
+      <button class="md-subnav-item" data-sub="locations"    onclick="_phase178OpenLocations()"><span class="md-sub-ico">🏥</span><span>Locations</span></button>
     </div>
 
     <!-- Businesses accordion group — kept for everyone (members use this) -->
