@@ -3457,6 +3457,7 @@ button:not([disabled]):not(.no-press):active {
         <div style="display:flex;gap:6px;flex-wrap:wrap">
           <button onclick="exportMonthlyPDF()" style="background:#fee2e2;color:#991b1b;border:none;border-radius:8px;padding:9px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;display:inline-flex;align-items:center;gap:6px">📄 PDF</button>
           <button onclick="exportMonthlyExcel()" style="background:#d1fae5;color:#065f46;border:none;border-radius:8px;padding:9px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;display:inline-flex;align-items:center;gap:6px">📊 Excel</button>
+          <button onclick="presentMonthlyVoiced()" style="background:#ede9fe;color:#5b21b6;border:none;border-radius:8px;padding:9px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;display:inline-flex;align-items:center;gap:6px" title="Open a voice-narrated slide presentation (ElevenLabs)">🎙 Voice deck</button>
           <button onclick="exportMonthlyBundle()" style="background:#fff;color:#1F3864;border:none;border-radius:8px;padding:9px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;display:inline-flex;align-items:center;gap:6px">↓ CSVs</button>
         </div>
       </div>
@@ -3472,6 +3473,7 @@ button:not([disabled]):not(.no-press):active {
         <div style="display:flex;gap:6px;flex-wrap:wrap">
           <button onclick="exportHuddleQuarterlyPDF()" style="background:#fee2e2;color:#991b1b;border:none;border-radius:8px;padding:9px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;display:inline-flex;align-items:center;gap:6px">📄 PDF</button>
           <button onclick="exportHuddleQuarterlyExcel()" style="background:#d1fae5;color:#065f46;border:none;border-radius:8px;padding:9px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;display:inline-flex;align-items:center;gap:6px">📊 Excel</button>
+          <button onclick="presentHuddleVoiced()" style="background:#ede9fe;color:#5b21b6;border:none;border-radius:8px;padding:9px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;display:inline-flex;align-items:center;gap:6px" title="Open a voice-narrated huddle presentation (ElevenLabs)">🎙 Huddle deck</button>
           <button onclick="exportQuarterlyBundle()" style="background:#fff;color:#1F3864;border:none;border-radius:8px;padding:9px 14px;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;display:inline-flex;align-items:center;gap:6px">↓ CSVs</button>
         </div>
       </div>
@@ -12050,6 +12052,21 @@ function renderProfileView(){
     +   '</div>'
     +   (recent ? '<div style="font-size:10px;color:var(--muted);margin-top:6px">' + recent.replace(/</g,'&lt;') + '</div>' : '')
     + '</div>'
+    // Phase 182 (2026-05-31) — Admin-only ElevenLabs settings panel for the
+    // voice-annotated presentations. Stores API key + selected voice locally;
+    // tied to the 🎙 Voice deck / 🎙 Huddle deck buttons on the Reports tab.
+    + ((u.role === 'admin')
+        ? '<div style="background:linear-gradient(135deg,#f5f3ff,#ede9fe);border:1px solid #c4b5fd;border-left:3px solid #7c3aed;border-radius:12px;padding:18px 24px;margin-bottom:16px;box-shadow:0 2px 8px rgba(124,58,237,.08)">'
+          +   '<div style="font-size:13px;font-weight:700;color:#5b21b6;margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em">🎙 ElevenLabs voice presentations (admin)</div>'
+          +   '<div style="font-size:11.5px;color:#4c1d95;line-height:1.55;margin-bottom:12px">'
+          +     'Powers the <strong>Voice deck</strong> and <strong>Huddle deck</strong> buttons in the Reports tab. Slides + narration are auto-built from the period\'s data; one click generates each slide\'s audio with your chosen ElevenLabs voice.<br>'
+          +     'Current voice: <strong>' + _phase181EscHtml(_phase182GetVoiceLabel()) + '</strong> · Key: <strong>' + (_phase182GetKey() ? '✓ saved' : 'not set') + '</strong>'
+          +   '</div>'
+          +   '<div style="display:flex;justify-content:flex-end">'
+          +     '<button onclick="_phase182OpenSettingsModal()" style="background:#7c3aed;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">⚙️ Open ElevenLabs settings</button>'
+          +   '</div>'
+          + '</div>'
+        : '')
     // Phase 180 (2026-05-30) — Admin-only "Monthly reports" panel. Per-month
     // export to backend (Supabase / SharePoint via DataLayer) plus a browser
     // CSV download for manual SharePoint upload when SharePoint isn't the
@@ -56645,6 +56662,423 @@ function exportHuddleQuarterlyExcel(){
   if(typeof showToast === 'function') showToast('📊 Huddle Excel downloaded');
 }
 window.exportHuddleQuarterlyExcel = exportHuddleQuarterlyExcel;
+
+// ════════════════════════════════════════════════════════════════════════════
+// PHASE 182 (2026-05-31) — VOICE-ANNOTATED PRESENTATIONS (ElevenLabs)
+// Per user 2026-05-31: "create a presentation. Let's say voice annotated
+// presentation. I already have subscription with the eleven labs."
+//
+// Flow:
+//   1. Admin pastes ElevenLabs API key once (Profile → ElevenLabs panel)
+//   2. Picks a voice from their account (dropdown auto-populated)
+//   3. Reports tab → "🎙 Voice presentation" button on Monthly + Huddle cards
+//   4. App builds a slide deck from the report data with auto-written
+//      narration scripts (editable inline before generation)
+//   5. Click "Play" → app calls ElevenLabs per slide → MP3 plays + slide
+//      auto-advances when audio ends
+//   6. Audio cached in-memory by hash(script + voiceId) — re-clicking the
+//      same slide is instant; editing the script invalidates that slide
+//      only.
+//
+// Storage:
+//   wcg_elevenlabs_key_v1   — API key (localStorage, browser only — never
+//                             pushed to Supabase/SharePoint)
+//   wcg_elevenlabs_voice_v1 — preferred voice ID
+//
+// Default voice: Rachel (21m00Tcm4TlvDq8ikWAM) — ElevenLabs' most-used
+// female voice, neutral American accent. Admin can swap any time.
+// ════════════════════════════════════════════════════════════════════════════
+
+var _PHASE182_AUDIO_CACHE = {};   // in-memory: hash → Blob URL
+
+function _phase182GetKey(){ try { return localStorage.getItem('wcg_elevenlabs_key_v1') || ''; } catch(_){ return ''; } }
+function _phase182SetKey(k){ try { localStorage.setItem('wcg_elevenlabs_key_v1', String(k || '')); } catch(_){} }
+function _phase182GetVoiceId(){ try { return localStorage.getItem('wcg_elevenlabs_voice_v1') || '21m00Tcm4TlvDq8ikWAM'; } catch(_){ return '21m00Tcm4TlvDq8ikWAM'; } }
+function _phase182SetVoiceId(v){ try { localStorage.setItem('wcg_elevenlabs_voice_v1', String(v || '')); } catch(_){} }
+function _phase182GetVoiceLabel(){ try { return localStorage.getItem('wcg_elevenlabs_voice_label_v1') || 'Rachel (default)'; } catch(_){ return 'Rachel'; } }
+function _phase182SetVoiceLabel(v){ try { localStorage.setItem('wcg_elevenlabs_voice_label_v1', String(v || '')); } catch(_){} }
+window._phase182GetKey = _phase182GetKey;
+window._phase182GetVoiceId = _phase182GetVoiceId;
+window._phase182GetVoiceLabel = _phase182GetVoiceLabel;
+
+// Hash for audio cache. Simple djb2 — collisions don't matter (cache miss
+// just regenerates) so we trade hash quality for tiny size.
+function _phase182Hash(s){
+  var h = 5381; for(var i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+  return Math.abs(h).toString(36);
+}
+
+// ── ElevenLabs API ─────────────────────────────────────────────────────────
+async function _phase182ListVoices(){
+  var key = _phase182GetKey();
+  if(!key) throw new Error('Paste an ElevenLabs API key first.');
+  var r = await fetch('https://api.elevenlabs.io/v1/voices', { headers: { 'xi-api-key': key }});
+  if(!r.ok) throw new Error('ElevenLabs error ' + r.status + ': ' + (await r.text()).slice(0, 200));
+  var j = await r.json();
+  return j.voices || [];
+}
+window._phase182ListVoices = _phase182ListVoices;
+
+async function _phase182GenerateAudio(text, voiceId){
+  var key = _phase182GetKey();
+  if(!key) throw new Error('Paste an ElevenLabs API key first.');
+  voiceId = voiceId || _phase182GetVoiceId();
+  var cacheKey = _phase182Hash(voiceId + '|' + text);
+  if(_PHASE182_AUDIO_CACHE[cacheKey]) return _PHASE182_AUDIO_CACHE[cacheKey];
+  var r = await fetch('https://api.elevenlabs.io/v1/text-to-speech/' + encodeURIComponent(voiceId), {
+    method: 'POST',
+    headers: {
+      'xi-api-key': key,
+      'Content-Type': 'application/json',
+      'Accept': 'audio/mpeg'
+    },
+    body: JSON.stringify({
+      text: text,
+      model_id: 'eleven_multilingual_v2',
+      voice_settings: { stability: 0.5, similarity_boost: 0.75, style: 0, use_speaker_boost: true }
+    })
+  });
+  if(!r.ok){
+    var msg = await r.text();
+    throw new Error('TTS failed (' + r.status + '): ' + msg.slice(0, 300));
+  }
+  var blob = await r.blob();
+  var url = URL.createObjectURL(blob);
+  _PHASE182_AUDIO_CACHE[cacheKey] = url;
+  return url;
+}
+window._phase182GenerateAudio = _phase182GenerateAudio;
+
+// ── Slide deck builders — generate slides + narration scripts from data ──
+function _phase182BuildMonthlyDeck(year, month){
+  var data = _phase181CollectMonthlyData(year, month);
+  var slides = [];
+  slides.push({
+    title: 'Monthly Marketing Report',
+    subtitle: data.label,
+    body: '<div style="font-size:18px;line-height:1.6"><strong>' + data.totals.visits + '</strong> total visits<br><strong>' + data.totals.completed + '</strong> completed<br><strong>$' + data.totals.spend.toFixed(2) + '</strong> in spending</div>',
+    narration: 'Welcome to the ' + data.label + ' marketing report. This month, the team made a total of ' + data.totals.visits + ' visits, with ' + data.totals.completed + ' marked as completed. Total team spending was ' + data.totals.spend.toFixed(2) + ' dollars. Let us walk through the highlights.'
+  });
+  if(data.memberTotals.length){
+    var top = data.memberTotals.slice(0, 3);
+    var bodyHtml = top.map(function(m, i){
+      var medal = ['🥇','🥈','🥉'][i] || '•';
+      return '<div style="margin:8px 0">' + medal + ' <strong>' + _phase181EscHtml(m.member) + '</strong> — ' + m.completed + ' completed out of ' + m.visits + ' visits · $' + m.spend.toFixed(2) + ' spend</div>';
+    }).join('');
+    slides.push({
+      title: 'Top performers',
+      subtitle: 'Ranked by completed visits',
+      body: bodyHtml,
+      narration: 'Top performers this month. ' + top.map(function(m, i){
+        var rank = ['first','second','third'][i] || ('number ' + (i+1));
+        return 'In ' + rank + ' place, ' + m.member + ' with ' + m.completed + ' completed visits out of ' + m.visits + ' total, and a spend of ' + m.spend.toFixed(2) + ' dollars.';
+      }).join(' ') + ' Excellent work team.'
+    });
+  }
+  // Stats by status
+  var completion = data.totals.visits ? Math.round((data.totals.completed / data.totals.visits) * 100) : 0;
+  slides.push({
+    title: 'Completion ratio',
+    subtitle: data.label,
+    body: '<div style="font-size:48px;font-weight:800;color:#1F3864">' + completion + '%</div><div style="font-size:14px;color:#64748b;margin-top:8px">' + data.totals.completed + ' completed of ' + data.totals.visits + ' total visits</div>',
+    narration: 'Our completion ratio this month was ' + completion + ' percent. That is ' + data.totals.completed + ' completed visits out of ' + data.totals.visits + ' total. '
+              + (completion >= 80 ? 'A strong showing — keep it up.'
+                : completion >= 60 ? 'Room to grow. Let us focus on closing more visits next month.'
+                : 'We need to improve here. Let us dig into the barriers and address them together.')
+  });
+  slides.push({
+    title: 'Thank you',
+    subtitle: 'End of ' + data.label + ' report',
+    body: '<div style="font-size:24px;color:#1F3864">Questions?</div><div style="font-size:14px;color:#64748b;margin-top:16px">Full data available in the PDF + Excel exports.</div>',
+    narration: 'That concludes the ' + data.label + ' marketing report. Thank you for your hard work this month. The full breakdown is available in the PDF and Excel exports. Are there any questions?'
+  });
+  return { title: 'Monthly Report — ' + data.label, slides: slides };
+}
+window._phase182BuildMonthlyDeck = _phase182BuildMonthlyDeck;
+
+function _phase182BuildHuddleDeck(qLabel){
+  var data = _phase181CollectHuddleData(qLabel);
+  var slides = [];
+  slides.push({
+    title: 'Quarterly Huddle',
+    subtitle: qLabel + ' · ' + data.range,
+    body: '<div style="font-size:18px;line-height:1.6"><strong>' + data.totals.visits + '</strong> visits this quarter<br><strong>' + data.totals.completed + '</strong> completed<br><strong>$' + data.totals.spend.toFixed(2) + '</strong> total spend</div>',
+    narration: 'Welcome to our ' + qLabel + ' team huddle. Over this past quarter, from ' + data.range + ', the team completed ' + data.totals.visits + ' visits total, with ' + data.totals.completed + ' marked as completed. Our total spending was ' + data.totals.spend.toFixed(2) + ' dollars. Let us go through the key results.'
+  });
+  // Top businesses by referrals
+  var active = data.byBusiness.filter(function(b){ return b.refs > 0; });
+  if(active.length){
+    var topBiz = active.slice(0, 5);
+    var bodyHtml = topBiz.map(function(b, i){
+      return '<div style="margin:6px 0;font-size:13px">' + (i+1) + '. <strong>' + _phase181EscHtml(b.business) + '</strong> — ' + b.refs + ' referral(s)' + (b.tier ? ' · ' + _phase181EscHtml(b.tier) : '') + (b.spend ? ' · $' + b.spend.toFixed(2) + ' spent' : '') + '</div>';
+    }).join('');
+    slides.push({
+      title: 'Top referral sources',
+      subtitle: 'Patient referrals by clinic — ' + qLabel,
+      body: bodyHtml,
+      narration: 'Our top referral sources this quarter. ' + topBiz.map(function(b, i){
+        return (i + 1) + '. ' + b.business + ' brought in ' + b.refs + ' patient referrals.';
+      }).join(' ') + ' These relationships are our backbone — let us continue investing in them.'
+    });
+  }
+  // Spend distribution
+  var clinicSpend = 0, mvaSpend = 0, outreachSpend = 0;
+  data.byBusiness.forEach(function(b){
+    if(b.type === 'clinic') clinicSpend += b.spend;
+    else if(b.type === 'mva') mvaSpend += b.spend;
+    else outreachSpend += b.spend;
+  });
+  slides.push({
+    title: 'Spend breakdown',
+    subtitle: 'Where did the quarter go?',
+    body: '<div style="font-size:14px;line-height:2"><strong>Clinics:</strong> $' + clinicSpend.toFixed(2) + '<br><strong>MVA attorneys:</strong> $' + mvaSpend.toFixed(2) + '<br><strong>Outreach:</strong> $' + outreachSpend.toFixed(2) + '</div>',
+    narration: 'Our quarterly spend broken down. Clinics: ' + clinicSpend.toFixed(2) + ' dollars. MVA attorneys: ' + mvaSpend.toFixed(2) + ' dollars. Outreach: ' + outreachSpend.toFixed(2) + ' dollars. We will review whether each category is delivering proportional return.'
+  });
+  slides.push({
+    title: 'Looking ahead',
+    subtitle: 'Goals for next quarter',
+    body: '<div style="font-size:16px;color:#1F3864;line-height:1.7">• Strengthen top-5 referral relationships<br>• Identify and revive dormant accounts<br>• Match spend with conversion data</div>',
+    narration: 'Looking ahead to next quarter, we will focus on three priorities. First, deepening relationships with our top five referral sources. Second, identifying dormant accounts that we can revive. And third, matching our spend more closely to actual conversion data. Let us discuss these together.'
+  });
+  slides.push({
+    title: 'Thank you',
+    subtitle: 'Open floor — questions and discussion',
+    body: '<div style="font-size:22px;color:#1F3864">Open for discussion</div>',
+    narration: 'That wraps up the data review. Thank you all for the hard work this quarter. The floor is now open for questions and discussion.'
+  });
+  return { title: qLabel + ' Huddle Presentation', slides: slides };
+}
+window._phase182BuildHuddleDeck = _phase182BuildHuddleDeck;
+
+// ── Presentation viewer modal ──────────────────────────────────────────────
+var _PHASE182_DECK_STATE = null;   // { deck, idx, audio, autoAdvance }
+
+function _phase182OpenPresentation(deck){
+  if(!deck || !Array.isArray(deck.slides) || !deck.slides.length){
+    alert('Deck has no slides.');
+    return;
+  }
+  _PHASE182_DECK_STATE = { deck: deck, idx: 0, audio: null, autoAdvance: true };
+  var existing = document.getElementById('phase182-presenter');
+  if(existing) existing.remove();
+  var modal = document.createElement('div');
+  modal.id = 'phase182-presenter';
+  modal.style.cssText = 'position:fixed;inset:0;background:#0f172a;z-index:99999;display:flex;flex-direction:column;font-family:DM Sans,sans-serif;color:#fff';
+  modal.innerHTML = ''
+    + '<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 22px;background:rgba(255,255,255,.04);border-bottom:1px solid rgba(255,255,255,.08)">'
+    +   '<div><div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;opacity:.6">🎙 Voice presentation</div>'
+    +   '<div id="phase182-deck-title" style="font-size:16px;font-weight:700"></div></div>'
+    +   '<div><span id="phase182-progress" style="font-size:13px;opacity:.7;margin-right:14px"></span>'
+    +     '<button onclick="_phase182ClosePresentation()" style="background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.2);border-radius:8px;padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer">✕ Exit</button></div>'
+    + '</div>'
+    + '<div id="phase182-slide" style="flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:40px 60px;text-align:center;background:linear-gradient(135deg,#1F3864,#0f172a)"></div>'
+    + '<div style="background:rgba(255,255,255,.04);border-top:1px solid rgba(255,255,255,.08);padding:14px 22px">'
+    +   '<details style="margin-bottom:12px"><summary style="cursor:pointer;font-size:11px;opacity:.7;text-transform:uppercase;letter-spacing:.05em">📝 Narration script (edit before generating)</summary>'
+    +     '<textarea id="phase182-script" style="width:100%;min-height:80px;margin-top:8px;padding:10px 12px;background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.15);border-radius:8px;color:#fff;font-family:inherit;font-size:12px;line-height:1.5;resize:vertical"></textarea>'
+    +   '</details>'
+    +   '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">'
+    +     '<button onclick="_phase182Prev()" style="background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.2);border-radius:8px;padding:9px 14px;font-size:12px;font-weight:600;cursor:pointer">◀ Prev</button>'
+    +     '<button id="phase182-play-btn" onclick="_phase182PlayCurrent()" style="background:#10b981;color:#fff;border:none;border-radius:8px;padding:9px 22px;font-size:13px;font-weight:700;cursor:pointer">▶ Play voice</button>'
+    +     '<button id="phase182-pause-btn" onclick="_phase182PauseAudio()" style="background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.2);border-radius:8px;padding:9px 14px;font-size:12px;font-weight:600;cursor:pointer;display:none">⏸ Pause</button>'
+    +     '<button onclick="_phase182Next()" style="background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.2);border-radius:8px;padding:9px 14px;font-size:12px;font-weight:600;cursor:pointer">Next ▶</button>'
+    +     '<label style="font-size:11px;opacity:.7;display:flex;align-items:center;gap:6px;margin-left:auto"><input id="phase182-auto" type="checkbox" checked onchange="_PHASE182_DECK_STATE.autoAdvance=this.checked"> Auto-advance after audio</label>'
+    +     '<span style="font-size:11px;opacity:.6">Voice: ' + _phase181EscHtml(_phase182GetVoiceLabel()) + '</span>'
+    +   '</div>'
+    + '</div>';
+  document.body.appendChild(modal);
+  document.getElementById('phase182-deck-title').textContent = deck.title;
+  _phase182RenderSlide();
+}
+window._phase182OpenPresentation = _phase182OpenPresentation;
+
+function _phase182RenderSlide(){
+  var st = _PHASE182_DECK_STATE;
+  if(!st) return;
+  var slide = st.deck.slides[st.idx];
+  if(!slide) return;
+  var box = document.getElementById('phase182-slide');
+  if(box){
+    box.innerHTML = ''
+      + '<div style="font-size:14px;opacity:.7;letter-spacing:.05em;text-transform:uppercase;margin-bottom:10px">' + _phase181EscHtml(slide.subtitle || '') + '</div>'
+      + '<div style="font-size:44px;font-weight:800;line-height:1.1;margin-bottom:32px;letter-spacing:-.01em">' + _phase181EscHtml(slide.title) + '</div>'
+      + '<div style="font-size:18px;max-width:780px">' + (slide.body || '') + '</div>';
+  }
+  var scriptEl = document.getElementById('phase182-script');
+  if(scriptEl) scriptEl.value = slide.narration || '';
+  var prog = document.getElementById('phase182-progress');
+  if(prog) prog.textContent = 'Slide ' + (st.idx + 1) + ' of ' + st.deck.slides.length;
+  // Stop any playing audio
+  _phase182PauseAudio();
+}
+
+async function _phase182PlayCurrent(){
+  var st = _PHASE182_DECK_STATE;
+  if(!st) return;
+  var slide = st.deck.slides[st.idx];
+  var scriptEl = document.getElementById('phase182-script');
+  var text = (scriptEl && scriptEl.value) || slide.narration || '';
+  if(!text.trim()){ alert('Narration script is empty.'); return; }
+  slide.narration = text;   // capture edits
+  var playBtn = document.getElementById('phase182-play-btn');
+  var pauseBtn = document.getElementById('phase182-pause-btn');
+  if(playBtn) { playBtn.textContent = '⏳ Generating…'; playBtn.disabled = true; }
+  try {
+    var url = await _phase182GenerateAudio(text, _phase182GetVoiceId());
+    if(st.audio){ try { st.audio.pause(); } catch(_){} }
+    st.audio = new Audio(url);
+    st.audio.onended = function(){
+      if(playBtn){ playBtn.textContent = '▶ Play voice'; playBtn.disabled = false; }
+      if(pauseBtn) pauseBtn.style.display = 'none';
+      if(_PHASE182_DECK_STATE && _PHASE182_DECK_STATE.autoAdvance && _PHASE182_DECK_STATE.idx < _PHASE182_DECK_STATE.deck.slides.length - 1){
+        setTimeout(function(){ _phase182Next(); _phase182PlayCurrent(); }, 700);
+      }
+    };
+    st.audio.onerror = function(){ if(playBtn){ playBtn.textContent = '▶ Play voice'; playBtn.disabled = false; } alert('Audio playback failed.'); };
+    if(playBtn){ playBtn.textContent = '▶ Playing…'; }
+    if(pauseBtn) pauseBtn.style.display = 'inline-block';
+    await st.audio.play();
+  } catch(e){
+    if(playBtn){ playBtn.textContent = '▶ Play voice'; playBtn.disabled = false; }
+    alert('ElevenLabs error: ' + (e && e.message ? e.message : e));
+  }
+}
+window._phase182PlayCurrent = _phase182PlayCurrent;
+
+function _phase182PauseAudio(){
+  var st = _PHASE182_DECK_STATE;
+  if(st && st.audio){
+    try { st.audio.pause(); } catch(_){}
+    st.audio = null;
+  }
+  var playBtn = document.getElementById('phase182-play-btn');
+  var pauseBtn = document.getElementById('phase182-pause-btn');
+  if(playBtn){ playBtn.textContent = '▶ Play voice'; playBtn.disabled = false; }
+  if(pauseBtn) pauseBtn.style.display = 'none';
+}
+window._phase182PauseAudio = _phase182PauseAudio;
+
+function _phase182Next(){
+  var st = _PHASE182_DECK_STATE;
+  if(!st) return;
+  if(st.idx < st.deck.slides.length - 1){ st.idx++; _phase182RenderSlide(); }
+}
+window._phase182Next = _phase182Next;
+
+function _phase182Prev(){
+  var st = _PHASE182_DECK_STATE;
+  if(!st) return;
+  if(st.idx > 0){ st.idx--; _phase182RenderSlide(); }
+}
+window._phase182Prev = _phase182Prev;
+
+function _phase182ClosePresentation(){
+  _phase182PauseAudio();
+  var m = document.getElementById('phase182-presenter');
+  if(m) m.remove();
+  _PHASE182_DECK_STATE = null;
+}
+window._phase182ClosePresentation = _phase182ClosePresentation;
+
+// ── Settings modal (paste key, pick voice) ─────────────────────────────────
+async function _phase182OpenSettingsModal(){
+  var existing = document.getElementById('phase182-settings');
+  if(existing) existing.remove();
+  var m = document.createElement('div');
+  m.id = 'phase182-settings';
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.7);z-index:99998;display:flex;align-items:center;justify-content:center;padding:20px;font-family:DM Sans,sans-serif';
+  m.innerHTML = ''
+    + '<div style="background:#fff;border-radius:14px;max-width:540px;width:100%;padding:24px 28px;box-shadow:0 20px 60px rgba(0,0,0,.5)">'
+    +   '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">'
+    +     '<div style="font-size:18px;font-weight:800;color:#1F3864">🎙 ElevenLabs settings</div>'
+    +     '<button onclick="document.getElementById(\'phase182-settings\').remove()" style="background:transparent;border:none;font-size:22px;cursor:pointer;color:#64748b">×</button>'
+    +   '</div>'
+    +   '<label style="display:block;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">API key</label>'
+    +   '<input id="phase182-key-in" type="password" value="' + _phase181EscHtml(_phase182GetKey()) + '" placeholder="sk_… or your ElevenLabs key" style="width:100%;padding:10px 12px;border:1px solid #cbd5e1;border-radius:8px;font-family:DM Mono,monospace;font-size:12px;margin-bottom:6px">'
+    +   '<div style="font-size:10px;color:#64748b;margin-bottom:14px">Stored locally in your browser only — never sent to Supabase or SharePoint. Get yours at <a href="https://elevenlabs.io/app/settings/api-keys" target="_blank" rel="noopener" style="color:#1F3864">elevenlabs.io → Settings → API Keys</a>.</div>'
+    +   '<div style="display:flex;gap:8px;margin-bottom:14px">'
+    +     '<button onclick="_phase182SaveKeyAndLoad()" style="background:#1F3864;color:#fff;border:none;border-radius:8px;padding:9px 16px;font-size:12px;font-weight:700;cursor:pointer">Save key + load voices</button>'
+    +     '<button onclick="_phase182TestVoice()" style="background:#10b981;color:#fff;border:none;border-radius:8px;padding:9px 16px;font-size:12px;font-weight:700;cursor:pointer">🔊 Test current voice</button>'
+    +   '</div>'
+    +   '<label style="display:block;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Voice</label>'
+    +   '<div id="phase182-voice-area"><div style="font-size:12px;color:#64748b;font-style:italic">Save your key to load voices…</div></div>'
+    + '</div>';
+  document.body.appendChild(m);
+  if(_phase182GetKey()){
+    try { await _phase182RefreshVoiceList(); } catch(e){ document.getElementById('phase182-voice-area').innerHTML = '<div style="font-size:12px;color:#dc2626">Failed to load voices: ' + _phase181EscHtml(e.message) + '</div>'; }
+  }
+}
+window._phase182OpenSettingsModal = _phase182OpenSettingsModal;
+
+async function _phase182SaveKeyAndLoad(){
+  var k = (document.getElementById('phase182-key-in') || {}).value || '';
+  _phase182SetKey(k.trim());
+  await _phase182RefreshVoiceList();
+}
+window._phase182SaveKeyAndLoad = _phase182SaveKeyAndLoad;
+
+async function _phase182RefreshVoiceList(){
+  var area = document.getElementById('phase182-voice-area');
+  if(area) area.innerHTML = '<div style="font-size:12px;color:#64748b">Loading…</div>';
+  try {
+    var voices = await _phase182ListVoices();
+    var cur = _phase182GetVoiceId();
+    var html = '<select id="phase182-voice-sel" onchange="_phase182SaveVoice()" style="width:100%;padding:9px 12px;border:1px solid #cbd5e1;border-radius:8px;font-size:12px;font-family:DM Sans,sans-serif">';
+    voices.forEach(function(v){
+      html += '<option value="' + _phase181EscHtml(v.voice_id) + '" data-label="' + _phase181EscHtml(v.name) + '"' + (v.voice_id === cur ? ' selected' : '') + '>' + _phase181EscHtml(v.name) + (v.labels && v.labels.gender ? ' (' + _phase181EscHtml(v.labels.gender) + ')' : '') + '</option>';
+    });
+    html += '</select>';
+    html += '<div style="font-size:10px;color:#64748b;margin-top:6px">' + voices.length + ' voice(s) available in your ElevenLabs account.</div>';
+    if(area) area.innerHTML = html;
+  } catch(e){
+    if(area) area.innerHTML = '<div style="font-size:12px;color:#dc2626;padding:10px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px">Failed: ' + _phase181EscHtml(e.message) + '</div>';
+  }
+}
+window._phase182RefreshVoiceList = _phase182RefreshVoiceList;
+
+function _phase182SaveVoice(){
+  var sel = document.getElementById('phase182-voice-sel');
+  if(!sel) return;
+  var opt = sel.options[sel.selectedIndex];
+  _phase182SetVoiceId(sel.value);
+  _phase182SetVoiceLabel((opt && opt.getAttribute('data-label')) || sel.value);
+}
+window._phase182SaveVoice = _phase182SaveVoice;
+
+async function _phase182TestVoice(){
+  try {
+    var url = await _phase182GenerateAudio('Hello — this is a test of the selected ElevenLabs voice from the WCG marketing planner.', _phase182GetVoiceId());
+    var a = new Audio(url); a.play();
+  } catch(e){
+    alert('Test failed: ' + (e && e.message ? e.message : e));
+  }
+}
+window._phase182TestVoice = _phase182TestVoice;
+
+// ── Entry points wired into Reports tab buttons ────────────────────────────
+function presentMonthlyVoiced(){
+  if(!(typeof isAdmin === 'function' && isAdmin())){ if(typeof showToast === 'function') showToast('Admin only.'); return; }
+  if(!_phase182GetKey()){
+    if(confirm('No ElevenLabs API key saved. Open settings to paste your key?')) _phase182OpenSettingsModal();
+    return;
+  }
+  var y = parseInt((document.getElementById('export-month-year') || {}).value, 10);
+  var m = parseInt((document.getElementById('export-month-num') || {}).value, 10);
+  if(isNaN(y) || isNaN(m)){ if(typeof showToast === 'function') showToast('Pick a month + year first.'); return; }
+  _phase182OpenPresentation(_phase182BuildMonthlyDeck(y, m));
+}
+window.presentMonthlyVoiced = presentMonthlyVoiced;
+
+function presentHuddleVoiced(){
+  if(!(typeof isAdmin === 'function' && isAdmin())){ if(typeof showToast === 'function') showToast('Admin only.'); return; }
+  if(!_phase182GetKey()){
+    if(confirm('No ElevenLabs API key saved. Open settings to paste your key?')) _phase182OpenSettingsModal();
+    return;
+  }
+  var qLabel = (document.getElementById('export-quarter') || {}).value || '';
+  if(!qLabel.match(/^\d{4}-Q[1-4]$/)){ if(typeof showToast === 'function') showToast('Pick a quarter first.'); return; }
+  _phase182OpenPresentation(_phase182BuildHuddleDeck(qLabel));
+}
+window.presentHuddleVoiced = presentHuddleVoiced;
 
 function exportRecords(){
   var filter=document.getElementById('rec-member-filter').value;
