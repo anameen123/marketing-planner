@@ -16181,13 +16181,16 @@ window.submitMismatchReason = submitMismatchReason;
 // ═══════════════════════════════════════════════════════════════════════
 function switchReferralSubtab(which){
   // Phase 119 (2026-05-29): 3-tab nav — Outgoing / Calendar / Logged.
-  // Outgoing = pending-referrals panel (what members create).
-  // Calendar = month grid of logged patients.
-  // List     = logged patients table ("All entries" → renamed "Logged patients").
+  // Phase 183 (2026-05-31): added 4th tab "Referral list" + Outgoing now
+  // auto-locks to today's pending only (per user "I just want this to be
+  // active on daily basis ... when something is approved or declined ...
+  // it has to disappear and go"). The new Referral list tab holds the
+  // full historical record across all statuses.
   var paneOut  = document.getElementById('rl-pane-outgoing');
   var paneList = document.getElementById('rl-pane-list');
   var paneCal  = document.getElementById('rl-pane-calendar');
   var tabOut   = document.getElementById('rl-subtab-outgoing');
+  var tabRef   = document.getElementById('rl-subtab-reflist');
   var tabList  = document.getElementById('rl-subtab-list');
   var tabCal   = document.getElementById('rl-subtab-calendar');
   if(!paneList || !paneCal) return;
@@ -16202,8 +16205,16 @@ function switchReferralSubtab(which){
     if(paneOut)  paneOut.style.display  = '';
     paneList.style.display = 'none';
     paneCal.style.display  = 'none';
-    setTab(tabOut, true);  setTab(tabList, false); setTab(tabCal, false);
-    // Render pending list + empty-state hint
+    setTab(tabOut, true); setTab(tabRef, false); setTab(tabList, false); setTab(tabCal, false);
+    // Phase 183 lock: today + active only. Both filters are forced — the
+    // day strip and lifecycle segment will hide themselves under this mode.
+    window._PR_MODE = 'outgoing';
+    window._PR_FILTER_DAY = (typeof _prIsoDate === 'function') ? _prIsoDate(new Date()) : null;
+    window._PR_FILTER_LIFECYCLE = 'active';
+    // Reset the legacy status select to 'all' so the lifecycle filter is
+    // the sole gate (else 'pending' chip selection from Reflist leaks in).
+    var statusSel = document.getElementById('pr-status-filter');
+    if(statusSel) statusSel.value = 'all';
     if(typeof renderPendingReferrals === 'function') renderPendingReferrals();
     setTimeout(function(){
       var wrap = document.getElementById('pending-referrals-wrap');
@@ -16212,12 +16223,31 @@ function switchReferralSubtab(which){
         empty.style.display = (wrap && wrap.style.display !== 'none') ? 'none' : 'block';
       }
     }, 50);
+  } else if(which === 'reflist'){
+    // Phase 183: full historical referral list. Reuses the same pane so the
+    // table format + interactions are identical, just with all filters
+    // unlocked and the day strip + lifecycle segment visible for free
+    // navigation. Clears the Outgoing-mode lock from any prior visit.
+    if(paneOut)  paneOut.style.display  = '';
+    paneList.style.display = 'none';
+    paneCal.style.display  = 'none';
+    setTab(tabOut, false); setTab(tabRef, true); setTab(tabList, false); setTab(tabCal, false);
+    window._PR_MODE = 'reflist';
+    window._PR_FILTER_DAY = null;          // free day navigation
+    window._PR_FILTER_LIFECYCLE = 'all';   // show every status
+    var statusSel2 = document.getElementById('pr-status-filter');
+    if(statusSel2) statusSel2.value = 'all';
+    if(typeof renderPendingReferrals === 'function') renderPendingReferrals();
+    setTimeout(function(){
+      var wrap = document.getElementById('pending-referrals-wrap');
+      var empty = document.getElementById('rl-outgoing-empty');
+      if(empty) empty.style.display = 'none';   // empty hint is for Outgoing only
+    }, 50);
   } else if(which === 'calendar'){
     if(paneOut)  paneOut.style.display  = 'none';
     paneList.style.display = 'none';
     paneCal.style.display  = '';
-    setTab(tabOut, false); setTab(tabList, false); setTab(tabCal, true);
-    // Init calendar to current month if first open
+    setTab(tabOut, false); setTab(tabRef, false); setTab(tabList, false); setTab(tabCal, true);
     if(typeof RL_CAL_MONTH === 'undefined' || RL_CAL_MONTH == null){
       var now = new Date();
       window.RL_CAL_MONTH = { y: now.getFullYear(), m: now.getMonth() };
@@ -16228,10 +16258,7 @@ function switchReferralSubtab(which){
     if(paneOut)  paneOut.style.display  = 'none';
     paneList.style.display = '';
     paneCal.style.display  = 'none';
-    setTab(tabOut, false); setTab(tabList, true); setTab(tabCal, false);
-    // Phase 152 (2026-05-30): paint the day-strip + survey segmented
-    // control on every tab-switch so the live counts reflect any new
-    // entries logged since the last visit.
+    setTab(tabOut, false); setTab(tabRef, false); setTab(tabList, true); setTab(tabCal, false);
     try { if(typeof _rlRenderDayStrip === 'function') _rlRenderDayStrip(); } catch(_){}
     try { if(typeof _rlRenderSurveySegment === 'function') _rlRenderSurveySegment(); } catch(_){}
     renderReferralLog();
@@ -18449,6 +18476,23 @@ function renderPendingReferrals(){
     return;
   }
   wrap.style.display = 'block';
+  // Phase 183 (2026-05-31): show/hide the day strip + lifecycle segment
+  // based on the view mode. Outgoing = locked to today+active, so those
+  // controls would be misleading; Reflist = full historical, show them all.
+  var mode = window._PR_MODE || 'outgoing';
+  var dayStripWrap = document.getElementById('pr-day-strip-wrap');
+  var lifecycleSeg = document.getElementById('pr-lifecycle-seg');
+  if(dayStripWrap) dayStripWrap.style.display = (mode === 'outgoing') ? 'none' : '';
+  if(lifecycleSeg) lifecycleSeg.parentElement.style.display = (mode === 'outgoing') ? 'none' : '';
+  // Title + subtitle swap so the user knows which view they're in.
+  var titleEl = wrap.querySelector('div[style*="font-weight:700"][style*="color:#581c87"]');
+  if(titleEl){
+    if(mode === 'outgoing'){
+      titleEl.innerHTML = '📥 Outgoing today <span id="pr-count-badge" style="background:#7c3aed;color:#fff;font-size:10px;padding:1px 8px;border-radius:10px;font-weight:700">0</span>';
+    } else {
+      titleEl.innerHTML = '📋 Referral list <span id="pr-count-badge" style="background:#7c3aed;color:#fff;font-size:10px;padding:1px 8px;border-radius:10px;font-weight:700">0</span>';
+    }
+  }
   // Phase 112b (2026-05-29): monthly counters + ratios summary card at the
   // top of the list. Read-only. Computed from the FULL PENDING_REFERRALS
   // (not the current filter view) so the rep sees the real numbers, and
@@ -63876,7 +63920,9 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
        separate panes. Default = Outgoing (most-actioned tab). -->
   <div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:18px">
     <button id="rl-subtab-outgoing" onclick="switchReferralSubtab('outgoing')"
-            style="padding:11px 22px;font-size:13px;font-weight:600;color:var(--purple);cursor:pointer;border:none;background:none;border-bottom:3px solid var(--purple);font-family:'DM Sans',sans-serif;margin-bottom:-2px">📥 Outgoing referrals</button>
+            style="padding:11px 22px;font-size:13px;font-weight:600;color:var(--purple);cursor:pointer;border:none;background:none;border-bottom:3px solid var(--purple);font-family:'DM Sans',sans-serif;margin-bottom:-2px" title="Today's active referrals — resolved items disappear from here automatically">📥 Outgoing (today)</button>
+    <button id="rl-subtab-reflist" onclick="switchReferralSubtab('reflist')"
+            style="padding:11px 22px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;border:none;background:none;border-bottom:3px solid transparent;font-family:'DM Sans',sans-serif;margin-bottom:-2px" title="Full historical list of every referral — confirmed, unconfirmed, expired, retracted">📋 Referral list</button>
     <button id="rl-subtab-calendar" onclick="switchReferralSubtab('calendar')"
             style="padding:11px 22px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;border:none;background:none;border-bottom:3px solid transparent;font-family:'DM Sans',sans-serif;margin-bottom:-2px">📅 Calendar (by day)</button>
     <button id="rl-subtab-list" onclick="switchReferralSubtab('list')"
