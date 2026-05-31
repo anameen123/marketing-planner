@@ -8222,7 +8222,13 @@ var DataLayer = (function(){
       // ETag). When its content changes, we know SOMETHING upstream did
       // and we pull the full key set immediately. Gets us ~1-sec cross-
       // device latency without burning Graph API quota on 10 files.
-      'wcg_sync_tick_v1':               'sync-tick.json'
+      'wcg_sync_tick_v1':               'sync-tick.json',
+      // Phase 180 (2026-05-30): monthly report snapshots. Each entry inside
+      // the object is keyed by 'YYYY-MM' so all months live in a single file.
+      // Snapshots are immutable per period (re-export only overrides if
+      // admin explicitly chooses to). Survives Reset Test Data because the
+      // reset clears only the live wcg_schedule_v1 / referrals — not this.
+      'wcg_monthly_reports_v1':         'monthly-reports.json'
       // Per-user "which notifs I've read" keys stay in localStorage (per-user, not shared)
     },
     // Azure SignalR pushEndpoint removed (per user 2026-05-21).
@@ -12036,6 +12042,57 @@ function renderProfileView(){
     +   '</div>'
     +   (recent ? '<div style="font-size:10px;color:var(--muted);margin-top:6px">' + recent.replace(/</g,'&lt;') + '</div>' : '')
     + '</div>'
+    // Phase 180 (2026-05-30) — Admin-only "Monthly reports" panel. Per-month
+    // export to backend (Supabase / SharePoint via DataLayer) plus a browser
+    // CSV download for manual SharePoint upload when SharePoint isn't the
+    // active backend. Survives Reset Test Data because reports live in their
+    // own key (wcg_monthly_reports_v1).
+    + ((u.role === 'admin')
+        ? (function(){
+            // Build a "previous 12 months" picker so admin can re-export any
+            // month they need to. Includes the current month at the top for
+            // quick "save what we have so far" snapshots.
+            var picker = '';
+            var now = new Date();
+            for(var i = 0; i < 13; i++){
+              var d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+              var lbl = _phase180MonthLabel(d.getFullYear(), d.getMonth());
+              var val = d.getFullYear() + '-' + (d.getMonth());
+              var tag = i === 0 ? ' (current, partial)' : (i === 1 ? ' (last month)' : '');
+              picker += '<option value="' + val + '">' + lbl + tag + '</option>';
+            }
+            // Build a list of already-exported months from the live store
+            var exportedList = '';
+            try {
+              var rep = (typeof DataLayer !== 'undefined' && DataLayer.load) ? DataLayer.load(_PHASE180_KEY) : null;
+              if(rep && typeof rep === 'object'){
+                var keys = Object.keys(rep).sort().reverse().slice(0, 6);
+                if(keys.length){
+                  exportedList = '<div style="font-size:10.5px;color:#3b3a39;margin-top:10px;padding-top:10px;border-top:1px dashed #cbd5e1">'
+                              + '<strong>Recent exports:</strong> '
+                              + keys.map(function(k){
+                                  var snap = rep[k];
+                                  return '<span style="background:#dbeafe;color:#1e40af;border:1px solid #bfdbfe;border-radius:6px;padding:1px 7px;margin-right:4px;display:inline-block;font-weight:600">' + (snap.label || k) + '</span>';
+                                }).join('')
+                              + '</div>';
+                }
+              }
+            } catch(_){}
+            return '<div style="background:linear-gradient(135deg,#eff6ff,#dbeafe);border:1px solid #bfdbfe;border-left:3px solid #1F3864;border-radius:12px;padding:18px 24px;margin-bottom:16px;box-shadow:0 2px 8px rgba(31,56,100,.08)">'
+              +   '<div style="font-size:13px;font-weight:700;color:#1e3a8a;margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em">📊 Monthly report exports (admin)</div>'
+              +   '<div style="font-size:11.5px;color:#1e40af;line-height:1.55;margin-bottom:12px">'
+              +     'Snapshots the period\'s visits, logged patients, referrals, per-member tallies + facility totals. Saves to <strong>' + ((typeof DataLayer !== 'undefined' && DataLayer._config && DataLayer._config.backend === 'supabase') ? 'Supabase' : 'SharePoint') + '</strong> (your active backend) and downloads a CSV you can drop into SharePoint. Survives <em>Reset test data</em>.'
+              +   '</div>'
+              +   '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">'
+              +     '<label style="font-size:11px;font-weight:700;color:#1e3a8a">Month:</label>'
+              +     '<select id="ph180-month-pick" style="background:#fff;border:1px solid #bfdbfe;border-radius:6px;padding:6px 10px;font-family:DM Sans,sans-serif;font-size:12px;color:#1e3a8a">' + picker + '</select>'
+              +     '<button onclick="(function(){var p=document.getElementById(\'ph180-month-pick\');if(!p)return;var v=(p.value||\'\').split(\'-\');if(v.length===2)_phase180SaveMonthlyReport(parseInt(v[0],10),parseInt(v[1],10));})()" style="background:#1F3864;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">💾 Save selected month</button>'
+              +     '<button onclick="_phase180SavePreviousMonth()" style="background:#7030A0;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">⏮ Save last month</button>'
+              +   '</div>'
+              +   exportedList
+              + '</div>';
+          })()
+        : '')
     // Phase 179 (2026-05-30, rev 2) — Admin-only "Reset Test Data" panel.
     // Wipes schedule visits + saved routes + all referrals (logged, pending,
     // business-tied). Preserves businesses, lead status, settings.
@@ -12044,7 +12101,7 @@ function renderProfileView(){
           +   '<div style="font-size:13px;font-weight:700;color:#92400e;margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em">⚠ Reset test data (admin)</div>'
           +   '<div style="font-size:11.5px;color:#78350f;line-height:1.55;margin-bottom:12px">'
           +     'Clears <strong>every visit on the schedule</strong>, <strong>every referral</strong> (logged patients + pending + business-tied), and saved-route records — so you can start clean.<br>'
-          +     '<strong>Preserved:</strong> every business card (including new ones you added), every lead status, team config, sync settings. Pushes the empty state to the backend so all devices update.'
+          +     '<strong>Preserved:</strong> every business card (including new ones you added), every lead status, every saved monthly report, team config, sync settings. Pushes the empty state to the backend so all devices update.'
           +   '</div>'
           +   '<div style="display:flex;justify-content:flex-end">'
           +     '<button onclick="_phase179ClearScheduleVisits()" style="background:#f59e0b;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">🧹 Reset test data</button>'
@@ -52107,6 +52164,377 @@ function _phase179ClearScheduleVisits(){
   }
 }
 window._phase179ClearScheduleVisits = _phase179ClearScheduleVisits;
+
+// ════════════════════════════════════════════════════════════════════════════
+// PHASE 180 (2026-05-30) — MONTHLY REPORT EXPORTS (admin-only)
+// Per user 2026-05-30: "for the monthly reports, can you please save one
+// share point, right, exported? Either in the each month or each three
+// months." Picked monthly — quarterly can always be reconstructed by
+// aggregating three monthly reports, but you can't go the other direction.
+//
+// Architecture:
+//   • Snapshots live under a SINGLE key wcg_monthly_reports_v1, an object
+//     keyed by 'YYYY-MM'. One file in SharePoint (monthly-reports.json),
+//     one row in Supabase's wcg_kv table — sync is automatic via DataLayer.
+//   • Survives Reset Test Data because Phase 179 only wipes live data keys.
+//   • Each snapshot captures: visits on the schedule, logged patients,
+//     pending referrals (created in period), business-tied referrals (added
+//     in period), per-member tallies, per-facility tallies, generation
+//     timestamp + generator identity for audit.
+//   • Also offers a browser CSV download so admin can manually drop the
+//     report into SharePoint via the SharePoint web UI if Supabase is the
+//     active backend and SharePoint isn't.
+//
+// Trigger surfaces:
+//   • Manual button in admin Profile page (per-month picker)
+//   • Auto-prompt banner on app load: if last month hasn't been exported
+//     yet AND today is at least the 2nd of the new month, show a yellow
+//     banner with "Export May 2026 now" button.
+// ════════════════════════════════════════════════════════════════════════════
+var _PHASE180_KEY = 'wcg_monthly_reports_v1';
+
+function _phase180MonthLabel(year, month){
+  var names = ['January','February','March','April','May','June',
+               'July','August','September','October','November','December'];
+  return names[month] + ' ' + year;   // month is 0-11
+}
+
+function _phase180MonthKey(year, month){
+  return year + '-' + String(month + 1).padStart(2, '0');  // YYYY-MM
+}
+
+// Parse a row's date — schedule rows store .date as 'YYYY-MM-DD' string.
+function _phase180RowInMonth(row, year, month){
+  if(!row || !row.date) return false;
+  var parts = String(row.date).split('-');
+  if(parts.length < 3) return false;
+  return parseInt(parts[0], 10) === year && (parseInt(parts[1], 10) - 1) === month;
+}
+
+// Parse an entry's date — referral_log uses entryDate ('YYYY-MM-DD') OR ts.
+function _phase180EntryInMonth(entry, year, month){
+  if(!entry) return false;
+  var ds = entry.entryDate || ((entry.ts || '') + '').slice(0,10);
+  if(!ds) return false;
+  var parts = String(ds).split('-');
+  if(parts.length < 3) return false;
+  return parseInt(parts[0], 10) === year && (parseInt(parts[1], 10) - 1) === month;
+}
+
+// Parse a referral's createdAt ISO string.
+function _phase180RefInMonth(ref, year, month){
+  if(!ref || !ref.createdAt) return false;
+  try {
+    var d = new Date(ref.createdAt);
+    if(isNaN(d.getTime())) return false;
+    return d.getFullYear() === year && d.getMonth() === month;
+  } catch(_){ return false; }
+}
+
+function _phase180GenerateSnapshot(year, month){
+  var visits = [];
+  var totalSpending = 0;
+  if(typeof S !== 'undefined' && S && Array.isArray(S.days)){
+    S.days.forEach(function(day){
+      if(!day || !Array.isArray(day.rows)) return;
+      day.rows.forEach(function(row){
+        if(!_phase180RowInMonth({date: day.date}, year, month)) return;
+        var spend = (row.spending && row.spending.total) ? Number(row.spending.total) : 0;
+        if(!isNaN(spend)) totalSpending += spend;
+        visits.push({
+          date: day.date,
+          clinic: row.clinic || '',
+          city: row.city || '',
+          member: row.member || '',
+          status: row.status || '',
+          spending: spend,
+          leadStatus: row.leadStatus || '',
+          notes: row.notes || '',
+          routeId: row._routeId || ''
+        });
+      });
+    });
+  }
+  var loggedPatients = [];
+  if(typeof REFERRAL_LOG !== 'undefined' && Array.isArray(REFERRAL_LOG)){
+    REFERRAL_LOG.forEach(function(e){
+      if(_phase180EntryInMonth(e, year, month)){
+        loggedPatients.push({
+          entryDate: e.entryDate,
+          entryTime: e.entryTime,
+          patientNumber: e.patientNumber || '',
+          age: e.age != null ? e.age : '',
+          gender: e.gender || '',
+          chiefComplaint: e.chiefComplaint || '',
+          sourceBusiness: e.sourceBusiness || '',
+          destinationFacility: e.destinationFacility || '',
+          memberName: e.memberName || '',
+          filledByName: e.filledByName || '',
+          paymentType: e.paymentType || '',
+          channel: e.channel || ''
+        });
+      }
+    });
+  }
+  var pending = [];
+  if(typeof PENDING_REFERRALS !== 'undefined' && Array.isArray(PENDING_REFERRALS)){
+    PENDING_REFERRALS.forEach(function(r){
+      if(_phase180RefInMonth(r, year, month)){
+        pending.push({
+          createdAt: r.createdAt,
+          sourceName: r.sourceName || '',
+          sourceType: r.sourceType || '',
+          destinationFacility: r.destinationFacility || '',
+          patientName: r.patientName || '',
+          status: r.status || '',
+          createdBy: r.createdBy || ''
+        });
+      }
+    });
+  }
+  // BUSINESS_REFERRALS is an object: { businessName: [refEntries...] }
+  var bizRefs = [];
+  if(typeof BUSINESS_REFERRALS !== 'undefined' && BUSINESS_REFERRALS){
+    try {
+      Object.keys(BUSINESS_REFERRALS).forEach(function(name){
+        var arr = BUSINESS_REFERRALS[name];
+        if(!Array.isArray(arr)) return;
+        arr.forEach(function(r){
+          if(_phase180RefInMonth(r, year, month)){
+            bizRefs.push({
+              business: name,
+              createdAt: r.createdAt,
+              patientName: r.patientName || '',
+              status: r.status || '',
+              destinationFacility: r.destinationFacility || ''
+            });
+          }
+        });
+      });
+    } catch(_){}
+  }
+  // Per-member tallies
+  var perMember = {};
+  visits.forEach(function(v){
+    if(!v.member) return;
+    if(!perMember[v.member]) perMember[v.member] = { member: v.member, visits: 0, completed: 0, spending: 0, patientsLogged: 0 };
+    perMember[v.member].visits++;
+    if(v.status === 'Completed') perMember[v.member].completed++;
+    perMember[v.member].spending += v.spending;
+  });
+  loggedPatients.forEach(function(p){
+    if(!p.memberName) return;
+    if(!perMember[p.memberName]) perMember[p.memberName] = { member: p.memberName, visits: 0, completed: 0, spending: 0, patientsLogged: 0 };
+    perMember[p.memberName].patientsLogged++;
+  });
+  // Per-facility tallies
+  var perFacility = {};
+  loggedPatients.forEach(function(p){
+    var k = p.destinationFacility || '—';
+    if(!perFacility[k]) perFacility[k] = { facility: k, patientsLogged: 0 };
+    perFacility[k].patientsLogged++;
+  });
+  return {
+    period: _phase180MonthKey(year, month),
+    label: _phase180MonthLabel(year, month),
+    generatedAt: new Date().toISOString(),
+    generatedBy: (typeof CURRENT_USER !== 'undefined' && CURRENT_USER ? (CURRENT_USER.name || CURRENT_USER.username || 'admin') : 'unknown'),
+    totals: {
+      visits: visits.length,
+      visitsCompleted: visits.filter(function(v){ return v.status === 'Completed'; }).length,
+      spending: Math.round(totalSpending * 100) / 100,
+      loggedPatients: loggedPatients.length,
+      pendingReferrals: pending.length,
+      businessReferrals: bizRefs.length
+    },
+    perMember: Object.keys(perMember).map(function(k){ return perMember[k]; }),
+    perFacility: Object.keys(perFacility).map(function(k){ return perFacility[k]; }),
+    visits: visits,
+    loggedPatients: loggedPatients,
+    pendingReferrals: pending,
+    businessReferrals: bizRefs
+  };
+}
+
+function _phase180CsvEscape(s){
+  if(s == null) return '';
+  var v = String(s);
+  if(v.indexOf(',') < 0 && v.indexOf('"') < 0 && v.indexOf('\n') < 0) return v;
+  return '"' + v.replace(/"/g, '""') + '"';
+}
+
+function _phase180BuildCsvSummary(snap){
+  var lines = [];
+  lines.push('Monthly report,' + _phase180CsvEscape(snap.label));
+  lines.push('Generated,' + snap.generatedAt + ',by,' + _phase180CsvEscape(snap.generatedBy));
+  lines.push('');
+  lines.push('TOTALS');
+  lines.push('Visits,' + snap.totals.visits);
+  lines.push('Visits completed,' + snap.totals.visitsCompleted);
+  lines.push('Total spending,' + snap.totals.spending);
+  lines.push('Logged patients,' + snap.totals.loggedPatients);
+  lines.push('Pending referrals created,' + snap.totals.pendingReferrals);
+  lines.push('Business referrals,' + snap.totals.businessReferrals);
+  lines.push('');
+  lines.push('PER MEMBER');
+  lines.push('Member,Visits,Completed,Spending,Patients logged');
+  snap.perMember.forEach(function(m){
+    lines.push([m.member, m.visits, m.completed, m.spending, m.patientsLogged].map(_phase180CsvEscape).join(','));
+  });
+  lines.push('');
+  lines.push('PER FACILITY');
+  lines.push('Facility,Patients logged');
+  snap.perFacility.forEach(function(f){
+    lines.push([f.facility, f.patientsLogged].map(_phase180CsvEscape).join(','));
+  });
+  lines.push('');
+  lines.push('VISITS');
+  lines.push('Date,Clinic,City,Member,Status,Spending,Notes');
+  snap.visits.forEach(function(v){
+    lines.push([v.date, v.clinic, v.city, v.member, v.status, v.spending, v.notes].map(_phase180CsvEscape).join(','));
+  });
+  lines.push('');
+  lines.push('LOGGED PATIENTS');
+  lines.push('Date,Time,Patient #,Age,Gender,Source,Destination,Marketer,Filled by,Payment,Channel,Chief complaint');
+  snap.loggedPatients.forEach(function(p){
+    lines.push([p.entryDate, p.entryTime, p.patientNumber, p.age, p.gender, p.sourceBusiness, p.destinationFacility, p.memberName, p.filledByName, p.paymentType, p.channel, p.chiefComplaint].map(_phase180CsvEscape).join(','));
+  });
+  lines.push('');
+  lines.push('PENDING REFERRALS (created in period)');
+  lines.push('Created at,Source,Type,Destination,Patient,Status,Created by');
+  snap.pendingReferrals.forEach(function(r){
+    lines.push([r.createdAt, r.sourceName, r.sourceType, r.destinationFacility, r.patientName, r.status, r.createdBy].map(_phase180CsvEscape).join(','));
+  });
+  return lines.join('\n');
+}
+
+function _phase180DownloadFile(filename, content, mime){
+  try {
+    var blob = new Blob([content], { type: mime || 'application/octet-stream' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function(){ try { document.body.removeChild(a); URL.revokeObjectURL(url); } catch(_){} }, 100);
+    return true;
+  } catch(e){
+    console.warn('[180] download failed:', e);
+    return false;
+  }
+}
+
+function _phase180SaveMonthlyReport(year, month, opts){
+  opts = opts || {};
+  if(typeof CURRENT_USER === 'undefined' || !CURRENT_USER || CURRENT_USER.role !== 'admin'){
+    if(!opts.silent) alert('Admin-only action.');
+    return false;
+  }
+  var snap = _phase180GenerateSnapshot(year, month);
+  var monthKey = snap.period;
+  // Merge into the all-months object
+  var existing = {};
+  try {
+    var loaded = (typeof DataLayer !== 'undefined' && DataLayer.load) ? DataLayer.load(_PHASE180_KEY) : null;
+    if(loaded && typeof loaded === 'object') existing = loaded;
+  } catch(_){}
+  if(existing[monthKey] && !opts.overwrite){
+    var ok = window.confirm('A report for ' + snap.label + ' already exists.\n\nOverwrite it with a fresh snapshot?\n\nThe previous snapshot will be replaced.');
+    if(!ok) return false;
+  }
+  existing[monthKey] = snap;
+  try {
+    if(typeof DataLayer !== 'undefined' && DataLayer.save){
+      DataLayer.save(_PHASE180_KEY, existing);   // routes to Supabase / SharePoint via the active backend
+    } else {
+      try { localStorage.setItem(_PHASE180_KEY, JSON.stringify(existing)); } catch(_){}
+    }
+  } catch(e){
+    alert('Save to backend failed: ' + (e && e.message ? e.message : e) + '\n\nCSV download still works below.');
+  }
+  // Always download the CSV so admin can drop it into SharePoint manually if needed
+  var csv = _phase180BuildCsvSummary(snap);
+  var fn = 'WCG-monthly-report-' + monthKey + '.csv';
+  _phase180DownloadFile(fn, csv, 'text/csv');
+  // Also remember we've exported this month locally — guards the auto-prompt
+  try {
+    var seen = JSON.parse(localStorage.getItem('wcg_exported_months_v1') || '[]');
+    if(seen.indexOf(monthKey) < 0) seen.push(monthKey);
+    localStorage.setItem('wcg_exported_months_v1', JSON.stringify(seen));
+  } catch(_){}
+  if(!opts.silent){
+    alert('Saved monthly report for ' + snap.label + '.\n\n'
+        + '• ' + snap.totals.visits + ' visit(s)\n'
+        + '• ' + snap.totals.loggedPatients + ' logged patient(s)\n'
+        + '• ' + snap.totals.pendingReferrals + ' pending referral(s)\n'
+        + '• ' + snap.totals.businessReferrals + ' business referral(s)\n\n'
+        + 'A CSV download started for the SharePoint upload, and the full snapshot was saved to the backend.');
+  }
+  return true;
+}
+window._phase180SaveMonthlyReport = _phase180SaveMonthlyReport;
+
+// Convenience: export the immediately-prior month (the most common case).
+function _phase180SavePreviousMonth(){
+  var now = new Date();
+  var y = now.getFullYear(), m = now.getMonth() - 1;
+  if(m < 0){ m = 11; y -= 1; }
+  return _phase180SaveMonthlyReport(y, m);
+}
+window._phase180SavePreviousMonth = _phase180SavePreviousMonth;
+
+function _phase180SaveCurrentMonth(){
+  var now = new Date();
+  return _phase180SaveMonthlyReport(now.getFullYear(), now.getMonth());
+}
+window._phase180SaveCurrentMonth = _phase180SaveCurrentMonth;
+
+// On app load, if we're past the 2nd of the month AND last month's snapshot
+// is missing from wcg_exported_months_v1, show a one-time banner asking the
+// admin to export. Suppressed when there's no admin viewer.
+function _phase180MaybePromptForPreviousMonth(){
+  try {
+    if(typeof CURRENT_USER === 'undefined' || !CURRENT_USER || CURRENT_USER.role !== 'admin') return;
+    var now = new Date();
+    if(now.getDate() < 2) return;   // give admin at least a day's grace into the new month
+    var prevY = now.getFullYear(), prevM = now.getMonth() - 1;
+    if(prevM < 0){ prevM = 11; prevY -= 1; }
+    var key = _phase180MonthKey(prevY, prevM);
+    var seen = [];
+    try { seen = JSON.parse(localStorage.getItem('wcg_exported_months_v1') || '[]'); } catch(_){}
+    if(seen.indexOf(key) >= 0) return;
+    // Also check the backend store in case another device already exported.
+    try {
+      var rep = (typeof DataLayer !== 'undefined' && DataLayer.load) ? DataLayer.load(_PHASE180_KEY) : null;
+      if(rep && rep[key]) {
+        seen.push(key);
+        try { localStorage.setItem('wcg_exported_months_v1', JSON.stringify(seen)); } catch(_){}
+        return;
+      }
+    } catch(_){}
+    // Show a non-blocking banner at the top of the page.
+    if(document.getElementById('phase180-prompt-banner')) return;   // already showing
+    var label = _phase180MonthLabel(prevY, prevM);
+    var bar = document.createElement('div');
+    bar.id = 'phase180-prompt-banner';
+    bar.style.cssText = 'position:sticky;top:0;z-index:9000;background:linear-gradient(135deg,#fffbeb,#fef3c7);border-bottom:1px solid #fde68a;border-left:4px solid #f59e0b;padding:10px 18px;display:flex;align-items:center;gap:14px;font-family:DM Sans,sans-serif;box-shadow:0 2px 8px rgba(245,158,11,.15)';
+    bar.innerHTML = ''
+      + '<div style="font-size:13px;color:#78350f;flex:1">📊 <strong>' + label + '</strong> monthly report hasn\'t been exported yet. Save a snapshot to SharePoint?</div>'
+      + '<button onclick="_phase180SavePreviousMonth();var b=document.getElementById(\'phase180-prompt-banner\');if(b)b.remove();" style="background:#f59e0b;color:#fff;border:none;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">Export ' + label + ' now</button>'
+      + '<button onclick="var b=document.getElementById(\'phase180-prompt-banner\');if(b)b.remove();var s=[];try{s=JSON.parse(localStorage.getItem(\'wcg_exported_months_v1\')||\'[]\');}catch(_){};s.push(\'' + key + '\');try{localStorage.setItem(\'wcg_exported_months_v1\',JSON.stringify(s));}catch(_){};" style="background:transparent;border:1px solid #d97706;color:#78350f;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:600;cursor:pointer;font-family:DM Sans,sans-serif" title="Don\'t ask again for this month">Dismiss</button>';
+    document.body.insertBefore(bar, document.body.firstChild);
+  } catch(e){ console.warn('[180] prompt failed:', e); }
+}
+window._phase180MaybePromptForPreviousMonth = _phase180MaybePromptForPreviousMonth;
+
+// Fire the prompt check after the app's initial render settles. Idle delay
+// keeps it out of the critical-path render so login feels instant.
+try {
+  setTimeout(function(){
+    try { _phase180MaybePromptForPreviousMonth(); } catch(_){}
+  }, 2500);
+} catch(_){}
 
 function switchTeamTab(name){
   var treeBtn = document.getElementById('team-subtab-tree');
