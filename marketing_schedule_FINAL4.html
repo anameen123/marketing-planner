@@ -12036,6 +12036,22 @@ function renderProfileView(){
     +   '</div>'
     +   (recent ? '<div style="font-size:10px;color:var(--muted);margin-top:6px">' + recent.replace(/</g,'&lt;') + '</div>' : '')
     + '</div>'
+    // Phase 179 (2026-05-30) — Admin-only "Reset Test Data" panel. Lets the
+    // admin wipe every visit from every day in the schedule while preserving
+    // businesses, lead status, referrals, and settings. Strong inline copy
+    // explains exactly what will be cleared so there's no surprise.
+    + ((u.role === 'admin')
+        ? '<div style="background:#fffbeb;border:1px solid #fde68a;border-left:3px solid #f59e0b;border-radius:12px;padding:18px 24px;margin-bottom:16px;box-shadow:0 2px 8px rgba(245,158,11,.08)">'
+          +   '<div style="font-size:13px;font-weight:700;color:#92400e;margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em">⚠ Reset test data (admin)</div>'
+          +   '<div style="font-size:11.5px;color:#78350f;line-height:1.55;margin-bottom:12px">'
+          +     'Clears <strong>every visit on the schedule</strong> across every day, plus saved-route records.<br>'
+          +     '<strong>Preserved:</strong> every business card (including new ones you added), every lead status, referrals, team config, sync settings. Pushes the empty schedule to the backend so all devices update.'
+          +   '</div>'
+          +   '<div style="display:flex;justify-content:flex-end">'
+          +     '<button onclick="_phase179ClearScheduleVisits()" style="background:#f59e0b;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">🧹 Clear all schedule visits</button>'
+          +   '</div>'
+          + '</div>'
+        : '')
     // Account actions
     + '<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px 24px;box-shadow:0 2px 8px rgba(15,23,42,.04)">'
     +   '<div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:10px;text-transform:uppercase;letter-spacing:.05em">🔐 Account</div>'
@@ -51951,6 +51967,105 @@ function _phase178OpenTeam(){
   } catch(e){ console.warn('[178] OpenTeam failed:', e); }
 }
 window._phase178OpenTeam = _phase178OpenTeam;
+
+// ════════════════════════════════════════════════════════════════════════════
+// PHASE 179 (2026-05-30) — RESET TEST VISITS (admin-only)
+// Per user 2026-05-30: clear all actions taken in the testing stage. Scope
+// narrowed by follow-up: "any visits on the schedule should be removed, if
+// any new card is added then keep that as well." Plus the standing rule
+// "keep the lead status only" — meaning leads / clinic-status data stays.
+//
+// What this CLEARS:
+//   • Every day.rows array in S.days (all visits, all dates)
+//   • Per-day saved-route artifacts (wcg_saved_route_v1_*,
+//     wcg_saved_routes_v2_*, wcg_route_seq_v1_*) — they reference visits
+//     that no longer exist, so they'd be orphans.
+//
+// What this PRESERVES:
+//   • BUSINESSES list, including any newly added cards
+//   • wcg_clinic_leads_v1 (lead status on every business)
+//   • REFERRAL_LOG, PENDING_REFERRALS, BUSINESS_REFERRALS (referral data)
+//   • Team config, auth, settings, sync keys, geocode cache
+//   • Chat history, admin notifications
+//
+// Sync: S.days is saved through DataLayer so the empty state propagates to
+// Supabase / SharePoint. localStorage route keys are deleted directly.
+// ════════════════════════════════════════════════════════════════════════════
+function _phase179ClearScheduleVisits(){
+  if(typeof CURRENT_USER === 'undefined' || !CURRENT_USER || CURRENT_USER.role !== 'admin'){
+    alert('Admin-only action.');
+    return false;
+  }
+  // Count what's about to be cleared so the confirm is informative.
+  var visitCount = 0, dayCount = 0;
+  if(typeof S !== 'undefined' && S && Array.isArray(S.days)){
+    S.days.forEach(function(d){
+      if(d && Array.isArray(d.rows) && d.rows.length){
+        visitCount += d.rows.length;
+        dayCount++;
+      }
+    });
+  }
+  var routeKeyCount = 0;
+  try {
+    for(var i = 0; i < localStorage.length; i++){
+      var k = localStorage.key(i);
+      if(k && (k.indexOf('wcg_saved_route_v1_') === 0
+            || k.indexOf('wcg_saved_routes_v2_') === 0
+            || k.indexOf('wcg_route_seq_v1_') === 0)){
+        routeKeyCount++;
+      }
+    }
+  } catch(_){}
+
+  var msg = 'Clear ALL schedule visits?\n\n'
+          + '• ' + visitCount + ' visit row(s) across ' + dayCount + ' day(s) will be removed\n'
+          + '• ' + routeKeyCount + ' saved-route record(s) will be removed\n\n'
+          + 'PRESERVED:\n'
+          + '  · Every business / clinic card (including ones you added)\n'
+          + '  · Lead status on every business\n'
+          + '  · Referrals (logged + pending)\n'
+          + '  · Team config, sync settings, chat\n\n'
+          + 'This syncs to the backend. Type CLEAR (caps) below to confirm.';
+  var t = window.prompt(msg, '');
+  if(t !== 'CLEAR'){
+    alert('Cancelled — nothing was changed.');
+    return false;
+  }
+
+  try {
+    // 1) Empty every day's visit rows
+    if(typeof S !== 'undefined' && S && Array.isArray(S.days)){
+      S.days.forEach(function(d){
+        if(d && Array.isArray(d.rows)) d.rows = [];
+      });
+    }
+    // 2) Delete per-day route artifacts from localStorage
+    var keysToKill = [];
+    for(var i = 0; i < localStorage.length; i++){
+      var k = localStorage.key(i);
+      if(k && (k.indexOf('wcg_saved_route_v1_') === 0
+            || k.indexOf('wcg_saved_routes_v2_') === 0
+            || k.indexOf('wcg_route_seq_v1_') === 0)){
+        keysToKill.push(k);
+      }
+    }
+    keysToKill.forEach(function(k){ try { localStorage.removeItem(k); } catch(_){} });
+
+    // 3) Push empty schedule to backend (Supabase / SharePoint via DataLayer)
+    if(typeof _saveSImmediate === 'function') _saveSImmediate();
+
+    alert('Done. Cleared ' + visitCount + ' visit(s) and ' + keysToKill.length
+        + ' route record(s). The page will now reload.');
+    setTimeout(function(){ try { location.reload(); } catch(_){} }, 200);
+    return true;
+  } catch(e){
+    alert('Failed: ' + (e && e.message ? e.message : e));
+    console.error('[179] clear failed:', e);
+    return false;
+  }
+}
+window._phase179ClearScheduleVisits = _phase179ClearScheduleVisits;
 
 function switchTeamTab(name){
   var treeBtn = document.getElementById('team-subtab-tree');
