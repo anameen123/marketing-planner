@@ -17017,7 +17017,41 @@ function _phase192SwitchPage(which){
   window._RFL_PAGE = which;
   // Drive the existing Phase 189 page switcher for channels/members pages.
   if(which === 'channels' || which === 'members'){
-    if(typeof _phase189SwitchReflistPage === 'function') return _phase189SwitchReflistPage(which);
+    // Hide trends page if we're flipping away from it
+    var tpHide = document.getElementById('rfl-page-trends');
+    if(tpHide) tpHide.style.display = 'none';
+    if(typeof _phase189SwitchReflistPage === 'function') {
+      // Also paint nav buttons (Phase 192 set has 5 buttons not 3)
+      ['confirmed','rejected','trends','channels','members'].forEach(function(p){
+        var b = document.getElementById('rfl-page-btn-' + p);
+        if(!b) return;
+        b.style.background = (p === which) ? '#7030A0' : 'transparent';
+        b.style.color = (p === which) ? '#fff' : 'var(--muted)';
+      });
+      return _phase189SwitchReflistPage(which);
+    }
+  }
+  // Phase 193 (NEW) — Trends page
+  if(which === 'trends'){
+    var list1     = document.getElementById('pending-referrals-wrap');
+    var listEmp1  = document.getElementById('rl-outgoing-empty');
+    var chP1      = document.getElementById('rfl-page-channels');
+    var mbP1      = document.getElementById('rfl-page-members');
+    var tp        = document.getElementById('rfl-page-trends');
+    if(list1)    list1.style.display = 'none';
+    if(listEmp1) listEmp1.style.display = 'none';
+    if(chP1)     chP1.style.display = 'none';
+    if(mbP1)     mbP1.style.display = 'none';
+    if(tp)       tp.style.display = '';
+    ['confirmed','rejected','trends','channels','members'].forEach(function(p){
+      var b = document.getElementById('rfl-page-btn-' + p);
+      if(!b) return;
+      b.style.background = (p === which) ? '#7030A0' : 'transparent';
+      b.style.color = (p === which) ? '#fff' : 'var(--muted)';
+    });
+    _phase193RenderTrends();
+    _phase193RenderLocTrends();
+    return;
   }
   // For confirmed/rejected pages: relocate widgets out, show the list.
   if(typeof _phase189RelocateWidgets === 'function') _phase189RelocateWidgets();
@@ -17025,9 +17059,11 @@ function _phase192SwitchPage(which){
   var listEmpty = document.getElementById('rl-outgoing-empty');
   var chPage    = document.getElementById('rfl-page-channels');
   var mbPage    = document.getElementById('rfl-page-members');
+  var trendsPg  = document.getElementById('rfl-page-trends');
   if(list)      list.style.display      = '';
   if(chPage)    chPage.style.display    = 'none';
   if(mbPage)    mbPage.style.display    = 'none';
+  if(trendsPg)  trendsPg.style.display  = 'none';
   if(listEmpty) listEmpty.style.display = 'none';
   // Force the right status filter for the chosen page.
   var sel = document.getElementById('pr-status-filter');
@@ -17036,22 +17072,19 @@ function _phase192SwitchPage(which){
   }
   window._PR_FILTER_LIFECYCLE = 'all';
   window._PR_FILTER_DAY = null;
-  // Paint active state on the page nav (4 buttons).
-  ['confirmed','rejected','channels','members'].forEach(function(p){
+  // Paint active state on the page nav (5 buttons).
+  ['confirmed','rejected','trends','channels','members'].forEach(function(p){
     var b = document.getElementById('rfl-page-btn-' + p);
     if(!b) return;
     b.style.background = (p === which) ? '#7030A0' : 'transparent';
     b.style.color = (p === which) ? '#fff' : 'var(--muted)';
   });
-  // Hide the filter dropdowns row + chip row when on rejected page (user:
-  // "for the rejected no filters only list with calendar filter").
+  // Hide the chip row, lifecycle segment, smart-search row when on rejected.
   var chipRow = document.getElementById('pr-status-chips');
-  var dropRow = document.querySelector('#rl-pane-outgoing #pending-referrals-wrap > div[style*="flex-wrap:wrap"][style*="gap:6px"][style*="margin-bottom:10px"]');
   if(chipRow){
     var chipParent = chipRow.parentElement;
     if(chipParent) chipParent.style.display = (which === 'rejected') ? 'none' : '';
   }
-  // Hide both the smart-search row AND the segmented control on rejected.
   var lifecycle = document.getElementById('pr-lifecycle-seg');
   if(lifecycle && lifecycle.parentElement){
     lifecycle.parentElement.style.display = (which === 'rejected') ? 'none' : '';
@@ -17063,6 +17096,232 @@ function _phase192SwitchPage(which){
   }
   if(typeof renderPendingReferrals === 'function') renderPendingReferrals();
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+// PHASE 193 (2026-05-31) — REFERRAL TRENDS CHARTS
+// User: "where are all the fucking line charts and bar charts for the
+// logged patients?? and another ones for the referrals"
+// Data source: PENDING_REFERRALS (wcg_pending_referrals_v1).
+// Each record has createdAt (ISO timestamp), status (pending/approved/
+// declined/incomplete/retracted), destinationFacility (frisco_er /
+// castle_hills_er / plano_uc), sourceName (clinic / MVA / UC Plano).
+// ════════════════════════════════════════════════════════════════════════════
+
+function _phase193CollectMonthlySeries(monthsInput){
+  var now = new Date();
+  var months = (monthsInput === 'ytd') ? (now.getMonth() + 1) : Math.max(1, Math.min(60, parseInt(monthsInput, 10) || 6));
+  var buckets = [];
+  for(var i = months - 1; i >= 0; i--){
+    var d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    buckets.push({ y: d.getFullYear(), m: d.getMonth(),
+      label: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()] + ' ' + (d.getFullYear() % 100),
+      confirmed: 0, rejected: 0, pending: 0, total: 0 });
+  }
+  if(typeof PENDING_REFERRALS !== 'undefined' && Array.isArray(PENDING_REFERRALS)){
+    PENDING_REFERRALS.forEach(function(r){
+      if(!r || !r.createdAt) return;
+      var d = new Date(r.createdAt);
+      if(isNaN(d.getTime())) return;
+      var y = d.getFullYear(), m = d.getMonth();
+      for(var i = 0; i < buckets.length; i++){
+        if(buckets[i].y === y && buckets[i].m === m){
+          buckets[i].total++;
+          if(r.status === 'approved') buckets[i].confirmed++;
+          else if(r.status === 'pending') buckets[i].pending++;
+          else buckets[i].rejected++;  // declined / incomplete / retracted
+          break;
+        }
+      }
+    });
+  }
+  return buckets;
+}
+window._phase193CollectMonthlySeries = _phase193CollectMonthlySeries;
+
+function _phase193RenderTrends(){
+  var sel = document.getElementById('rfl-trend-period');
+  var months = (sel && sel.value) || '6';
+  var series = _phase193CollectMonthlySeries(months);
+  var svg = document.getElementById('rfl-trend-svg');
+  if(!svg) return;
+  var w = 600, h = 220, padL = 38, padR = 18, padT = 24, padB = 40;
+  if(!series.length){ svg.innerHTML = '<text x="50%" y="50%" text-anchor="middle" fill="#94a3b8" font-size="11" font-family="DM Sans,sans-serif">No data</text>'; svg.setAttribute('viewBox','0 0 ' + w + ' ' + h); return; }
+  var max = 1;
+  series.forEach(function(s){
+    if(s.confirmed > max) max = s.confirmed;
+    if(s.rejected > max) max = s.rejected;
+  });
+  var stepX = (w - padL - padR) / Math.max(1, series.length - 1);
+  var parts = ['<g font-family="DM Sans,sans-serif">'];
+  [0, 0.5, 1].forEach(function(f){
+    var y = padT + (h - padT - padB) * (1 - f);
+    parts.push('<line x1="' + padL + '" y1="' + y + '" x2="' + (w - padR) + '" y2="' + y + '" stroke="#e2e8f0"/>');
+    parts.push('<text x="' + (padL - 6) + '" y="' + (y + 4) + '" text-anchor="end" font-size="9" fill="#94a3b8">' + Math.round(max * f) + '</text>');
+  });
+  function drawSeries(getter, color, label){
+    var pts = series.map(function(s, i){
+      return { x: padL + i * stepX, y: padT + (h - padT - padB) * (1 - getter(s) / max), v: getter(s), s: s };
+    });
+    var pathD = pts.map(function(p, i){ return (i === 0 ? 'M' : 'L') + p.x.toFixed(1) + ' ' + p.y.toFixed(1); }).join(' ');
+    parts.push('<path d="' + pathD + '" fill="none" stroke="' + color + '" stroke-width="2.5"/>');
+    pts.forEach(function(p, i){
+      parts.push('<circle data-i="' + i + '" data-kind="' + label + '" cx="' + p.x + '" cy="' + p.y + '" r="5" fill="' + color + '" stroke="#fff" stroke-width="2" style="cursor:pointer"><title>' + p.s.label + ' · ' + label + ': ' + p.v + '</title></circle>');
+    });
+  }
+  drawSeries(function(s){ return s.confirmed; }, '#16a34a', 'Confirmed');
+  drawSeries(function(s){ return s.rejected;  }, '#dc2626', 'Rejected');
+  // x-axis labels
+  series.forEach(function(s, i){
+    parts.push('<text x="' + (padL + i * stepX) + '" y="' + (h - padB + 16) + '" text-anchor="middle" font-size="10" fill="#64748b">' + s.label + '</text>');
+  });
+  // legend
+  parts.push('<g transform="translate(' + padL + ', ' + 8 + ')"><rect width="10" height="10" fill="#16a34a" rx="2"/><text x="14" y="9" font-size="10" fill="#0f172a">Confirmed</text><rect x="80" width="10" height="10" fill="#dc2626" rx="2"/><text x="94" y="9" font-size="10" fill="#0f172a">Rejected</text></g>');
+  parts.push('</g>');
+  svg.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
+  svg.innerHTML = parts.join('');
+  Array.prototype.forEach.call(svg.querySelectorAll('circle[data-i]'), function(c){
+    c.addEventListener('click', function(){
+      var idx = parseInt(c.getAttribute('data-i'), 10);
+      if(series[idx]) _phase193OpenMonthDrill(series[idx].y, series[idx].m, null);
+    });
+  });
+}
+window._phase193RenderTrends = _phase193RenderTrends;
+
+function _phase193RenderLocTrends(){
+  var sel = document.getElementById('rfl-loctrend-period');
+  var months = parseInt((sel && sel.value) || '6', 10);
+  var svg = document.getElementById('rfl-loctrend-svg');
+  if(!svg || typeof REFERRAL_FACILITIES === 'undefined') return;
+  var now = new Date();
+  var buckets = [];
+  for(var i = months - 1; i >= 0; i--){
+    var d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    var b = { y: d.getFullYear(), m: d.getMonth(),
+      label: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()] + ' ' + (d.getFullYear() % 100), perFac: {} };
+    REFERRAL_FACILITIES.forEach(function(f){ b.perFac[f.key] = 0; });
+    buckets.push(b);
+  }
+  if(typeof PENDING_REFERRALS !== 'undefined' && Array.isArray(PENDING_REFERRALS)){
+    PENDING_REFERRALS.forEach(function(r){
+      if(!r || !r.createdAt) return;
+      var d = new Date(r.createdAt);
+      if(isNaN(d.getTime())) return;
+      for(var i = 0; i < buckets.length; i++){
+        if(buckets[i].y === d.getFullYear() && buckets[i].m === d.getMonth()){
+          if(buckets[i].perFac.hasOwnProperty(r.destinationFacility)){
+            buckets[i].perFac[r.destinationFacility]++;
+          }
+          break;
+        }
+      }
+    });
+  }
+  var w = 600, h = 240, padL = 36, padR = 18, padT = 20, padB = 68;
+  var max = 1;
+  buckets.forEach(function(b){ REFERRAL_FACILITIES.forEach(function(f){ if(b.perFac[f.key] > max) max = b.perFac[f.key]; }); });
+  var groupW = (w - padL - padR) / buckets.length;
+  var barW = Math.max((groupW - 8) / REFERRAL_FACILITIES.length, 4);
+  var colorMap = { frisco_er: '#1F3864', castle_hills_er: '#7c3aed', plano_uc: '#16a34a' };
+  var parts = ['<g font-family="DM Sans,sans-serif">'];
+  [0, 0.5, 1].forEach(function(f){
+    var y = padT + (h - padT - padB) * (1 - f);
+    parts.push('<line x1="' + padL + '" y1="' + y + '" x2="' + (w - padR) + '" y2="' + y + '" stroke="#e2e8f0"/>');
+    parts.push('<text x="' + (padL - 6) + '" y="' + (y + 4) + '" text-anchor="end" font-size="9" fill="#94a3b8">' + Math.round(max * f) + '</text>');
+  });
+  buckets.forEach(function(b, gi){
+    var gx = padL + gi * groupW + 4;
+    REFERRAL_FACILITIES.forEach(function(f, fi){
+      var n = b.perFac[f.key] || 0;
+      var bx = gx + fi * barW;
+      var bh = (h - padT - padB) * (n / max);
+      var by = (h - padB) - bh;
+      var fill = colorMap[f.key] || '#64748b';
+      parts.push('<rect data-y="' + b.y + '" data-m="' + b.m + '" data-fac="' + f.key + '" x="' + bx + '" y="' + by + '" width="' + barW + '" height="' + bh + '" fill="' + fill + '" rx="2" style="cursor:pointer"><title>' + f.short + ' · ' + b.label + ': ' + n + '</title></rect>');
+    });
+    parts.push('<text x="' + (gx + (REFERRAL_FACILITIES.length * barW) / 2) + '" y="' + (h - padB + 14) + '" text-anchor="middle" font-size="10" fill="#64748b">' + b.label + '</text>');
+  });
+  REFERRAL_FACILITIES.forEach(function(f, fi){
+    var lx = padL + fi * 110;
+    var ly = h - 14;
+    parts.push('<rect x="' + lx + '" y="' + (ly - 8) + '" width="10" height="10" fill="' + (colorMap[f.key] || '#64748b') + '" rx="2"/>');
+    parts.push('<text x="' + (lx + 14) + '" y="' + ly + '" font-size="10" fill="#0f172a">' + f.short + '</text>');
+  });
+  parts.push('</g>');
+  svg.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
+  svg.innerHTML = parts.join('');
+  Array.prototype.forEach.call(svg.querySelectorAll('rect[data-fac]'), function(rEl){
+    rEl.addEventListener('click', function(){
+      var y = parseInt(rEl.getAttribute('data-y'), 10);
+      var m = parseInt(rEl.getAttribute('data-m'), 10);
+      var fac = rEl.getAttribute('data-fac');
+      _phase193OpenMonthDrill(y, m, fac);
+    });
+  });
+}
+window._phase193RenderLocTrends = _phase193RenderLocTrends;
+
+function _phase193OpenMonthDrill(y, m, facilityKey){
+  // Build a breakdown for this month / facility:
+  //   • per status (Confirmed / Rejected / Pending)
+  //   • per source clinic (top 10)
+  //   • per facility (when facilityKey not set)
+  var bySource = {}, byStatus = { approved: 0, rejected: 0, pending: 0 }, byFacility = {};
+  if(typeof PENDING_REFERRALS !== 'undefined' && Array.isArray(PENDING_REFERRALS)){
+    PENDING_REFERRALS.forEach(function(r){
+      if(!r || !r.createdAt) return;
+      var d = new Date(r.createdAt);
+      if(isNaN(d.getTime())) return;
+      if(d.getFullYear() !== y || d.getMonth() !== m) return;
+      if(facilityKey && r.destinationFacility !== facilityKey) return;
+      var src = r.sourceName || '(unknown)';
+      bySource[src] = (bySource[src] || 0) + 1;
+      byFacility[r.destinationFacility || '?'] = (byFacility[r.destinationFacility || '?'] || 0) + 1;
+      if(r.status === 'approved') byStatus.approved++;
+      else if(r.status === 'pending') byStatus.pending++;
+      else byStatus.rejected++;
+    });
+  }
+  var total = byStatus.approved + byStatus.rejected + byStatus.pending;
+  var monthName = ['January','February','March','April','May','June','July','August','September','October','November','December'][m] + ' ' + y;
+  var facName = facilityKey ? (REFERRAL_FACILITIES.find(function(f){ return f.key === facilityKey; }) || {}).label || facilityKey : 'All locations';
+  function esc(s){ return String(s == null ? '' : s).replace(/</g, '&lt;'); }
+  function pct(n){ return total ? Math.round((n / total) * 100) : 0; }
+  var existing = document.getElementById('phase193-drill');
+  if(existing) existing.remove();
+  var m1 = document.createElement('div');
+  m1.id = 'phase193-drill';
+  m1.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.7);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;font-family:DM Sans,sans-serif';
+  var sourcesHtml = Object.keys(bySource).sort(function(a, b){ return bySource[b] - bySource[a]; }).slice(0, 12).map(function(s){
+    return '<tr style="border-bottom:1px solid var(--border)"><td style="padding:6px 4px">' + esc(s) + '</td><td style="padding:6px 4px;text-align:right;font-weight:700;color:#1F3864">' + bySource[s] + '</td><td style="padding:6px 4px;text-align:right;color:var(--muted);font-size:11px">' + pct(bySource[s]) + '%</td></tr>';
+  }).join('');
+  var facHtml = Object.keys(byFacility).sort(function(a, b){ return byFacility[b] - byFacility[a]; }).map(function(k){
+    var def = (typeof REFERRAL_FACILITIES !== 'undefined') ? REFERRAL_FACILITIES.find(function(f){ return f.key === k; }) : null;
+    return '<tr style="border-bottom:1px solid var(--border)"><td style="padding:6px 4px">🏥 ' + esc(def ? def.label : k) + '</td><td style="padding:6px 4px;text-align:right;font-weight:700;color:#1F3864">' + byFacility[k] + '</td><td style="padding:6px 4px;text-align:right;color:var(--muted);font-size:11px">' + pct(byFacility[k]) + '%</td></tr>';
+  }).join('');
+  m1.innerHTML = ''
+    + '<div style="background:#fff;border-radius:14px;max-width:780px;width:100%;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.5);overflow:hidden">'
+    +   '<div style="background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;padding:16px 22px;display:flex;align-items:center;justify-content:space-between;gap:10px">'
+    +     '<div><div style="font-size:11px;opacity:.8;text-transform:uppercase;letter-spacing:.06em">Referrals · ' + esc(monthName) + '</div><div style="font-size:17px;font-weight:800">🏥 ' + esc(facName) + '</div></div>'
+    +     '<button onclick="document.getElementById(\'phase193-drill\').remove()" style="background:rgba(255,255,255,.18);border:none;color:#fff;font-size:20px;width:32px;height:32px;border-radius:8px;cursor:pointer">×</button>'
+    +   '</div>'
+    +   '<div style="padding:18px 22px;overflow-y:auto;flex:1">'
+    +     '<div style="font-size:11px;color:var(--muted);margin-bottom:10px"><strong style="color:var(--text)">Data source:</strong> PENDING_REFERRALS records with createdAt in ' + esc(monthName) + (facilityKey ? ' · destinationFacility=' + esc(facilityKey) : '') + '</div>'
+    +     '<div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:18px">'
+    +       '<div style="flex:1;min-width:140px;background:#f0fdf4;border:1px solid #bbf7d0;border-left:3px solid #16a34a;border-radius:10px;padding:10px 12px"><div style="font-size:10px;color:#166534;text-transform:uppercase;font-weight:700">✓ Confirmed</div><div style="font-size:22px;font-weight:800;color:#16a34a">' + byStatus.approved + '</div><div style="font-size:9px;color:var(--muted)">' + pct(byStatus.approved) + '% of ' + total + '</div></div>'
+    +       '<div style="flex:1;min-width:140px;background:#fef2f2;border:1px solid #fecaca;border-left:3px solid #dc2626;border-radius:10px;padding:10px 12px"><div style="font-size:10px;color:#991b1b;text-transform:uppercase;font-weight:700">✗ Rejected</div><div style="font-size:22px;font-weight:800;color:#dc2626">' + byStatus.rejected + '</div><div style="font-size:9px;color:var(--muted)">' + pct(byStatus.rejected) + '% of ' + total + '</div></div>'
+    +       '<div style="flex:1;min-width:140px;background:#fffbeb;border:1px solid #fcd34d;border-left:3px solid #f59e0b;border-radius:10px;padding:10px 12px"><div style="font-size:10px;color:#92400e;text-transform:uppercase;font-weight:700">⏳ Pending</div><div style="font-size:22px;font-weight:800;color:#f59e0b">' + byStatus.pending + '</div><div style="font-size:9px;color:var(--muted)">' + pct(byStatus.pending) + '% of ' + total + '</div></div>'
+    +     '</div>'
+    +     '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px">'
+    +       '<div><div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">By source (clinic / MVA / UC Plano)</div><table style="width:100%;font-size:12px;border-collapse:collapse">' + (sourcesHtml || '<tr><td style="padding:6px 4px;color:var(--muted);font-style:italic">No data</td></tr>') + '</table></div>'
+    +       (facilityKey ? '' : '<div><div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">By location</div><table style="width:100%;font-size:12px;border-collapse:collapse">' + (facHtml || '<tr><td style="padding:6px 4px;color:var(--muted);font-style:italic">No data</td></tr>') + '</table></div>')
+    +     '</div>'
+    +     '<div style="text-align:center;font-size:18px;font-weight:800;color:#1F3864;margin-top:14px">Total: ' + total + '</div>'
+    +   '</div>'
+    + '</div>';
+  document.body.appendChild(m1);
+}
+window._phase193OpenMonthDrill = _phase193OpenMonthDrill;
 window._phase192SwitchPage = _phase192SwitchPage;
 
 // Replace the Phase 189 page-nav buttons with the new 4-button row.
@@ -17071,10 +17330,11 @@ function _phase192UpgradePageNav(){
   if(!nav) return;
   if(nav.dataset && nav.dataset.ph192Done === '1') return;
   nav.innerHTML = ''
-    + '<button type="button" id="rfl-page-btn-confirmed" onclick="_phase192SwitchPage(\'confirmed\')" style="flex:1;padding:8px 12px;font-size:12px;font-weight:700;color:#fff;background:#7030A0;border:none;border-radius:7px;cursor:pointer;font-family:DM Sans,sans-serif">✓ Confirmed</button>'
-    + '<button type="button" id="rfl-page-btn-rejected" onclick="_phase192SwitchPage(\'rejected\')" style="flex:1;padding:8px 12px;font-size:12px;font-weight:700;color:var(--muted);background:transparent;border:none;border-radius:7px;cursor:pointer;font-family:DM Sans,sans-serif">✗ Rejected</button>'
-    + '<button type="button" id="rfl-page-btn-channels" onclick="_phase192SwitchPage(\'channels\')" style="flex:1;padding:8px 12px;font-size:12px;font-weight:700;color:var(--muted);background:transparent;border:none;border-radius:7px;cursor:pointer;font-family:DM Sans,sans-serif">🔍 Source channels</button>'
-    + '<button type="button" id="rfl-page-btn-members" onclick="_phase192SwitchPage(\'members\')" style="flex:1;padding:8px 12px;font-size:12px;font-weight:700;color:var(--muted);background:transparent;border:none;border-radius:7px;cursor:pointer;font-family:DM Sans,sans-serif">👥 Per-member totals</button>';
+    + '<button type="button" id="rfl-page-btn-confirmed" onclick="_phase192SwitchPage(\'confirmed\')" style="flex:1;padding:8px 10px;font-size:11.5px;font-weight:700;color:#fff;background:#7030A0;border:none;border-radius:7px;cursor:pointer;font-family:DM Sans,sans-serif">✓ Confirmed</button>'
+    + '<button type="button" id="rfl-page-btn-rejected" onclick="_phase192SwitchPage(\'rejected\')" style="flex:1;padding:8px 10px;font-size:11.5px;font-weight:700;color:var(--muted);background:transparent;border:none;border-radius:7px;cursor:pointer;font-family:DM Sans,sans-serif">✗ Rejected</button>'
+    + '<button type="button" id="rfl-page-btn-trends" onclick="_phase192SwitchPage(\'trends\')" style="flex:1;padding:8px 10px;font-size:11.5px;font-weight:700;color:var(--muted);background:transparent;border:none;border-radius:7px;cursor:pointer;font-family:DM Sans,sans-serif">📈 Trends</button>'
+    + '<button type="button" id="rfl-page-btn-channels" onclick="_phase192SwitchPage(\'channels\')" style="flex:1;padding:8px 10px;font-size:11.5px;font-weight:700;color:var(--muted);background:transparent;border:none;border-radius:7px;cursor:pointer;font-family:DM Sans,sans-serif">🔍 Channels</button>'
+    + '<button type="button" id="rfl-page-btn-members" onclick="_phase192SwitchPage(\'members\')" style="flex:1;padding:8px 10px;font-size:11.5px;font-weight:700;color:var(--muted);background:transparent;border:none;border-radius:7px;cursor:pointer;font-family:DM Sans,sans-serif">👥 Per-member</button>';
   if(nav.dataset) nav.dataset.ph192Done = '1';
 }
 try { setTimeout(_phase192UpgradePageNav, 200); } catch(_){}
@@ -65897,6 +66157,44 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
        picks the matching page button. -->
   <div id="rfl-page-channels" style="display:none"></div>
   <div id="rfl-page-members" style="display:none"></div>
+
+  <!-- Phase 193 (2026-05-31): TRENDS page — line + bar charts for
+       referrals over time. Data source: PENDING_REFERRALS records
+       (wcg_pending_referrals_v1), bucketed by createdAt month.
+       Click any dot/bar → drill-down modal showing the per-source-clinic +
+       per-facility + per-status breakdown for that month. -->
+  <div id="rfl-page-trends" style="display:none">
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--text)">📈 Referrals over time</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px">Confirmed (green line) vs Rejected (red line) per month · click any dot to see the per-source + per-facility breakdown for that month.</div>
+        </div>
+        <select id="rfl-trend-period" onchange="_phase193RenderTrends()" style="background:#fff;border:1px solid var(--border);border-radius:7px;padding:5px 9px;font-size:11px;font-family:DM Sans,sans-serif">
+          <option value="3">Last 3 months</option>
+          <option value="6" selected>Last 6 months</option>
+          <option value="12">Last 12 months</option>
+          <option value="36">Last 3 years</option>
+        </select>
+      </div>
+      <svg id="rfl-trend-svg" width="100%" height="220" style="display:block;overflow:visible"></svg>
+    </div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--text)">🏥 Per-location referrals</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px">Per-facility per-month grouped bars · click any bar to drill in.</div>
+        </div>
+        <select id="rfl-loctrend-period" onchange="_phase193RenderLocTrends()" style="background:#fff;border:1px solid var(--border);border-radius:7px;padding:5px 9px;font-size:11px;font-family:DM Sans,sans-serif">
+          <option value="3">Last 3 months</option>
+          <option value="6" selected>Last 6 months</option>
+          <option value="12">Last 12 months</option>
+          <option value="36">Last 3 years</option>
+        </select>
+      </div>
+      <svg id="rfl-loctrend-svg" width="100%" height="240" style="display:block;overflow:visible"></svg>
+    </div>
+  </div>
   </div><!-- /rl-pane-outgoing -->
 
   <!-- ═══════════════════════════════════════════════════════════════════
