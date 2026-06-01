@@ -2482,68 +2482,116 @@ button:not([disabled]):not(.no-press):active {
     </div>
   </div>
 
-  <!-- Monthly Completion Ratio -->
-  <div id="monthly-completion-wrap" style="display:none;background:var(--card);border-radius:14px;border:1px solid var(--border);padding:20px;margin-bottom:18px;box-shadow:0 2px 12px rgba(31,56,100,.05)">
-    <!-- Header (period buttons isolated from the bar-toggle click via stopPropagation) -->
-    <div class="mc-bar-clickable" id="mc-bar-clickable" onclick="toggleMonthlyCompletionTrend(event)">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">
-        <div>
-          <div style="font-size:13px;font-weight:700;color:var(--text)">Monthly Completion Ratio</div>
-          <div style="font-size:11px;color:var(--muted);margin-top:2px">Completed vs assigned visits per month · click bar for trend</div>
-        </div>
-        <div style="display:flex;gap:6px" onclick="event.stopPropagation()">
-          <button onclick="event.stopPropagation();setMonthlyPeriod(3)" id="mp-btn-3" style="padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;background:var(--purple);border:none;color:#fff">3 Months</button>
-          <button onclick="event.stopPropagation();setMonthlyPeriod(6)" id="mp-btn-6" style="padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;background:var(--card);border:1px solid var(--border);color:var(--muted)">6 Months</button>
-        </div>
-      </div>
-      <!-- Big rate + bar for current month (this is the clickable "bar") -->
-      <div id="monthly-current-rate"></div>
-      <div class="mc-bar-hint">
-        <span class="mc-chev" id="mc-chev">▾</span>
-        <span id="mc-bar-hint-text">Click to show trend graph</span>
-      </div>
-    </div>
-    <!-- Trend graph — collapsed by default. Slides down when the bar is clicked. -->
-    <div class="mc-trend-collapsible" id="mc-trend-collapsible">
-      <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin:14px 0 8px">Trend</div>
-      <div style="background:#fafbfc;border-radius:10px;padding:12px;border:1px solid var(--border)">
-        <svg id="monthly-rate-svg" width="100%" height="140" style="display:block;overflow:visible"></svg>
-      </div>
-    </div>
-  </div><!-- /monthly-completion-wrap -->
-
-  <!-- Monthly Call Conversions removed 2026-05-27 per user. -->
+  <!-- Phase 185 (2026-05-31): Monthly Completion Ratio block MOVED to the
+       Performance panel below per user "Completion ratio is supposed to be
+       in the performance, not in the overview ... Monthly completion ratio."
+       Overview keeps the all-time KPI cards only. -->
   </div><!-- /panel-overview -->
 
-  <!-- Performance Panel -->
+  <!-- Performance Panel — Phase 185 (2026-05-31) FULL RESTRUCTURE.
+       Replaces the static last-3/6-months charts with a month-switcher
+       layout: prev/next arrows, future months locked, past months go back
+       to June 2026 (when fresh tracking starts per user). Each counter
+       updates live for the selected month + has its own compact chart
+       that expands inline. -->
   <div class="profile-panel" id="panel-performance">
-    <!-- Counter row removed — those numbers already appear in the Overview KPI cards above. -->
-    <div class="perf-chart-block">
-      <div class="perf-chart-header">
-        <div class="perf-chart-title">📈 Monthly Completion Ratio — Line Chart</div>
-        <select class="perf-period-sel" id="perf-line-period" onchange="renderPerfCharts()">
-          <option value="3">Last 3 Months</option>
-          <option value="6">Last 6 Months</option>
-        </select>
+    <!-- Month switcher — Phase 185 head. Locked from going past current
+         month; locked from going earlier than June 2026 (when fresh
+         tracking starts per user "we're gonna start recording from
+         tomorrow or next month"). -->
+    <div id="perf-month-bar" style="background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;border-radius:14px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;box-shadow:0 4px 14px rgba(31,56,100,.15)">
+      <div style="display:flex;align-items:center;gap:14px;flex:1;min-width:240px">
+        <button type="button" id="perf-month-prev" onclick="_phase185NavMonth(-1)" title="Previous month" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.2);color:#fff;border-radius:8px;width:34px;height:34px;cursor:pointer;font-size:18px;font-weight:700">‹</button>
+        <div style="flex:1;text-align:center">
+          <div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;opacity:.7">Viewing performance for</div>
+          <div id="perf-month-label" style="font-size:20px;font-weight:800;line-height:1.1;margin-top:2px">—</div>
+          <div id="perf-month-live-tag" style="display:none;font-size:9px;font-weight:700;background:#10b981;color:#fff;padding:2px 8px;border-radius:8px;margin-top:4px;display:inline-block">● LIVE</div>
+        </div>
+        <button type="button" id="perf-month-next" onclick="_phase185NavMonth(1)" title="Next month" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.2);color:#fff;border-radius:8px;width:34px;height:34px;cursor:pointer;font-size:18px;font-weight:700">›</button>
       </div>
-      <div style="font-size:10px;color:var(--muted);margin-bottom:6px;font-style:italic">Completion ratio (% of assigned visits marked Completed) per month · last point = <strong>live current month</strong>, updates as visits get confirmed.</div>
-      <div style="background:#fafbfc;border-radius:8px;padding:10px;border:1px solid var(--border)">
-        <svg id="perf-line-svg" width="100%" height="160" style="display:block;overflow:visible"></svg>
+      <button type="button" onclick="_phase185JumpToCurrentMonth()" style="background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.25);color:#fff;border-radius:8px;padding:7px 14px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">Today</button>
+    </div>
+
+    <!-- Live monthly KPI counter grid — compact cards, each opens a chart
+         on click. Numbers update live for the selected month. -->
+    <div id="perf-monthly-counters" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:16px"></div>
+
+    <!-- Monthly Completion Ratio — RELOCATED from Overview to here per
+         user (Phase 185). Bar + trend graph (collapsible) tied to the
+         selected month above. -->
+    <div id="monthly-completion-wrap" style="display:none;background:var(--card);border-radius:14px;border:1px solid var(--border);padding:20px;margin-bottom:16px;box-shadow:0 2px 12px rgba(31,56,100,.05)">
+      <div class="mc-bar-clickable" id="mc-bar-clickable" onclick="toggleMonthlyCompletionTrend(event)">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+          <div>
+            <div style="font-size:13px;font-weight:700;color:var(--text)">Monthly Completion Ratio</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px">Completed vs assigned visits · click bar for trend</div>
+          </div>
+          <div style="display:flex;gap:6px" onclick="event.stopPropagation()">
+            <button onclick="event.stopPropagation();setMonthlyPeriod(3)" id="mp-btn-3" style="padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;background:var(--purple);border:none;color:#fff">3 Months</button>
+            <button onclick="event.stopPropagation();setMonthlyPeriod(6)" id="mp-btn-6" style="padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;background:var(--card);border:1px solid var(--border);color:var(--muted)">6 Months</button>
+          </div>
+        </div>
+        <div id="monthly-current-rate"></div>
+        <div class="mc-bar-hint">
+          <span class="mc-chev" id="mc-chev">▾</span>
+          <span id="mc-bar-hint-text">Click to show trend graph</span>
+        </div>
+      </div>
+      <div class="mc-trend-collapsible" id="mc-trend-collapsible">
+        <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin:14px 0 8px">Trend</div>
+        <div style="background:#fafbfc;border-radius:10px;padding:12px;border:1px solid var(--border)">
+          <svg id="monthly-rate-svg" width="100%" height="140" style="display:block;overflow:visible"></svg>
+        </div>
       </div>
     </div>
-    <div class="perf-chart-block">
-      <div class="perf-chart-header">
-        <div class="perf-chart-title">📊 Monthly Completion Ratio — Bar Chart</div>
-        <select class="perf-period-sel" id="perf-bar-period" onchange="renderPerfCharts()">
-          <option value="3">Last 3 Months</option>
-          <option value="6">Last 6 Months</option>
-        </select>
+
+    <!-- Per-area visits + per-type leads — compact + expandable per Phase 185.
+         Charts are mounted by _phase185RenderPerfCharts when the month
+         switcher fires. -->
+    <details class="perf-chart-block" style="margin-bottom:12px">
+      <summary style="cursor:pointer;font-size:13px;font-weight:700;color:var(--text);padding:8px 0;list-style:none;display:flex;align-items:center;gap:6px">
+        <span style="font-size:11px">▸</span> 🗺 Monthly visits by area <span id="perf-visits-area-total" style="font-size:11px;color:var(--muted);font-weight:500;margin-left:auto"></span>
+      </summary>
+      <div style="background:#fafbfc;border-radius:8px;padding:10px;border:1px solid var(--border);margin-top:8px">
+        <svg id="perf-area-svg" width="100%" height="180" style="display:block;overflow:visible"></svg>
       </div>
-      <div style="font-size:10px;color:var(--muted);margin-bottom:6px;font-style:italic">Same data as the line chart, displayed as bars per month · last bar = <strong>live current month</strong>.</div>
-      <div style="background:#fafbfc;border-radius:8px;padding:10px;border:1px solid var(--border)">
-        <svg id="perf-bar-svg" width="100%" height="160" style="display:block;overflow:visible"></svg>
+    </details>
+    <details class="perf-chart-block" style="margin-bottom:12px">
+      <summary style="cursor:pointer;font-size:13px;font-weight:700;color:var(--text);padding:8px 0;list-style:none;display:flex;align-items:center;gap:6px">
+        <span style="font-size:11px">▸</span> 🎯 Monthly leads by type <span id="perf-leads-type-total" style="font-size:11px;color:var(--muted);font-weight:500;margin-left:auto"></span>
+      </summary>
+      <div style="font-size:10px;color:var(--muted);margin:6px 0;font-style:italic">Established leads this month, split by clinic vs MVA attorney.</div>
+      <div style="background:#fafbfc;border-radius:8px;padding:10px;border:1px solid var(--border);margin-top:6px">
+        <svg id="perf-leads-svg" width="100%" height="180" style="display:block;overflow:visible"></svg>
       </div>
-    </div>
+    </details>
+    <details class="perf-chart-block" style="margin-bottom:12px">
+      <summary style="cursor:pointer;font-size:13px;font-weight:700;color:var(--text);padding:8px 0;list-style:none;display:flex;align-items:center;gap:6px">
+        <span style="font-size:11px">▸</span> 👥 Monthly patient referrals <span id="perf-referrals-total" style="font-size:11px;color:var(--muted);font-weight:500;margin-left:auto"></span>
+      </summary>
+      <div style="background:#fafbfc;border-radius:8px;padding:10px;border:1px solid var(--border);margin-top:8px">
+        <svg id="perf-referrals-svg" width="100%" height="180" style="display:block;overflow:visible"></svg>
+      </div>
+    </details>
+
+    <!-- Side activities calendar — Phase 185 (NEW). Members log manual
+         activities by day; admin sees everyone's. Compact + expandable.
+         Renderer set up below; storage in wcg_side_activities_v1 -->
+    <details class="perf-chart-block" id="perf-side-activities-block" open style="margin-bottom:12px">
+      <summary style="cursor:pointer;font-size:13px;font-weight:700;color:var(--text);padding:8px 0;list-style:none;display:flex;align-items:center;gap:6px">
+        <span style="font-size:11px">▾</span> 📝 Side activities <span id="perf-side-total" style="font-size:11px;color:var(--muted);font-weight:500;margin-left:auto"></span>
+      </summary>
+      <div style="background:#fafbfc;border-radius:10px;padding:10px;border:1px solid var(--border);margin-top:8px">
+        <div id="perf-side-activities-grid"></div>
+      </div>
+    </details>
+
+    <!-- Hidden legacy SVGs kept for back-compat with renderPerfCharts() if
+         it's invoked from outside. Phase 185 introduced new IDs above. -->
+    <svg id="perf-line-svg" style="display:none"></svg>
+    <svg id="perf-bar-svg" style="display:none"></svg>
+    <select id="perf-line-period" style="display:none"><option value="3">3</option><option value="6">6</option></select>
+    <select id="perf-bar-period" style="display:none"><option value="3">3</option><option value="6">6</option></select>
   </div><!-- /panel-performance -->
 
   <!-- History Panel -->
@@ -49549,6 +49597,386 @@ function switchProfileTab(tab){
 }
 window.switchProfileTab=switchProfileTab;
 
+// ════════════════════════════════════════════════════════════════════════════
+// PHASE 185 (2026-05-31) — MEMBER PERFORMANCE PANEL — MONTH-SWITCHABLE
+// Per user 2026-05-31: "Right now, it has the line chart and the bar chart.
+// Okay? I don't see any counters, any numbers. Completion ratio is supposed
+// to be in the performance, not in the, uh, overview. Monthly completion
+// ratio." Plus: month switcher with prev/next, future locked, past back to
+// June 2026 (start of fresh tracking per the data wipe).
+//
+// Architecture:
+//   • window._PERF_MONTH = { y, m } — currently viewed month (0-indexed)
+//   • _phase185NavMonth(±1) — swap month, with clamping to [2026-06, now]
+//   • _phase185RenderMonthBar() — refreshes header label + arrow disabled state
+//   • _phase185RenderCounters() — paints the per-month counter grid
+//   • _phase185RenderPerfCharts() — paints area / leads / referrals SVG charts
+//   • _phase185RenderSideActivities() — renders the daily activity calendar
+//
+// Fresh-tracking floor: June 2026 (per user wipe + restart instruction).
+// Future-month floor: today's current month — arrow disabled past that.
+// ════════════════════════════════════════════════════════════════════════════
+var _PERF_FRESH_FLOOR = { y: 2026, m: 5 };   // June 2026 = m index 5
+
+function _phase185EnsureMonth(){
+  if(!window._PERF_MONTH){
+    var n = new Date();
+    window._PERF_MONTH = { y: n.getFullYear(), m: n.getMonth() };
+  }
+}
+window._phase185EnsureMonth = _phase185EnsureMonth;
+
+function _phase185MonthLabel(y, m){
+  return ['January','February','March','April','May','June','July','August','September','October','November','December'][m] + ' ' + y;
+}
+
+function _phase185NavMonth(delta){
+  _phase185EnsureMonth();
+  var d = new Date(window._PERF_MONTH.y, window._PERF_MONTH.m + delta, 1);
+  var newY = d.getFullYear(), newM = d.getMonth();
+  // clamp lower bound to fresh-floor
+  if(newY < _PERF_FRESH_FLOOR.y || (newY === _PERF_FRESH_FLOOR.y && newM < _PERF_FRESH_FLOOR.m)){
+    return;   // refuse going earlier than fresh-tracking floor
+  }
+  // clamp upper bound to current month
+  var now = new Date();
+  if(newY > now.getFullYear() || (newY === now.getFullYear() && newM > now.getMonth())){
+    return;   // refuse going into future
+  }
+  window._PERF_MONTH = { y: newY, m: newM };
+  _phase185RefreshPerf();
+}
+window._phase185NavMonth = _phase185NavMonth;
+
+function _phase185JumpToCurrentMonth(){
+  var now = new Date();
+  window._PERF_MONTH = { y: now.getFullYear(), m: now.getMonth() };
+  _phase185RefreshPerf();
+}
+window._phase185JumpToCurrentMonth = _phase185JumpToCurrentMonth;
+
+function _phase185IsCurrentMonth(){
+  _phase185EnsureMonth();
+  var now = new Date();
+  return window._PERF_MONTH.y === now.getFullYear() && window._PERF_MONTH.m === now.getMonth();
+}
+
+function _phase185RenderMonthBar(){
+  _phase185EnsureMonth();
+  var label = document.getElementById('perf-month-label');
+  if(label) label.textContent = _phase185MonthLabel(window._PERF_MONTH.y, window._PERF_MONTH.m);
+  var live = document.getElementById('perf-month-live-tag');
+  if(live) live.style.display = _phase185IsCurrentMonth() ? 'inline-block' : 'none';
+  var now = new Date();
+  // Disable next when at current month
+  var atTop = (window._PERF_MONTH.y === now.getFullYear() && window._PERF_MONTH.m === now.getMonth());
+  var nextBtn = document.getElementById('perf-month-next');
+  if(nextBtn){ nextBtn.style.opacity = atTop ? '.35' : '1'; nextBtn.style.cursor = atTop ? 'not-allowed' : 'pointer'; }
+  // Disable prev when at floor
+  var atBottom = (window._PERF_MONTH.y === _PERF_FRESH_FLOOR.y && window._PERF_MONTH.m === _PERF_FRESH_FLOOR.m);
+  var prevBtn = document.getElementById('perf-month-prev');
+  if(prevBtn){ prevBtn.style.opacity = atBottom ? '.35' : '1'; prevBtn.style.cursor = atBottom ? 'not-allowed' : 'pointer'; }
+}
+
+// Collect the selected month's data for the currentMember. Mirrors the
+// shape exportMonthlyBundle uses but scoped to currentMember.
+function _phase185CollectMonth(){
+  _phase185EnsureMonth();
+  var y = window._PERF_MONTH.y, m = window._PERF_MONTH.m;
+  var visits = 0, completed = 0, postponed = 0, canceled = 0, pending = 0;
+  var spending = 0, leadsClinic = 0, leadsMva = 0;
+  var byArea = {};
+  var perDay = {};
+  if(typeof S !== 'undefined' && S && Array.isArray(S.days)){
+    S.days.forEach(function(d){
+      if(!d || !d.date) return;
+      var dt = new Date(d.date + 'T00:00:00');
+      if(dt.getFullYear() !== y || dt.getMonth() !== m) return;
+      (d.rows || []).forEach(function(r){
+        if(!r || !r.clinic) return;
+        // Member scope: only count rows belonging to currentMember (else use all if currentMember missing)
+        var matches = true;
+        if(typeof currentMember !== 'undefined' && currentMember){
+          var members = (typeof getRowMembers === 'function') ? getRowMembers(r) : [r.member];
+          matches = members.indexOf(currentMember) >= 0;
+        }
+        if(!matches) return;
+        visits++;
+        if(r.status === 'Completed'){ completed++; perDay[d.date] = (perDay[d.date] || 0) + 1; }
+        else if(r.status === 'Postponed') postponed++;
+        else if(r.status === 'Canceled') canceled++;
+        else pending++;
+        if(r.spending && r.status === 'Completed' && r.rowConfirmed && !r.spending.zeroSpending){
+          spending += (parseFloat(r.spending.total) || 0);
+        }
+        if(r.leadStatus === 'established'){
+          var bt = (typeof getBizTypeForName === 'function') ? getBizTypeForName(r.clinic) : 'clinic';
+          if(bt === 'mva') leadsMva++; else leadsClinic++;
+        }
+        var area = r.area || r.city || '(no area)';
+        if(!byArea[area]) byArea[area] = 0;
+        byArea[area]++;
+      });
+    });
+  }
+  // Patient referrals attributed to this member (REFERRAL_LOG entries in this month with memberName match)
+  var referrals = 0;
+  if(typeof REFERRAL_LOG !== 'undefined' && Array.isArray(REFERRAL_LOG)){
+    REFERRAL_LOG.forEach(function(e){
+      if(!e || !e.entryDate) return;
+      var parts = String(e.entryDate).split('-');
+      if(parts.length < 3) return;
+      if(parseInt(parts[0], 10) !== y || (parseInt(parts[1], 10) - 1) !== m) return;
+      var name = (typeof currentMember !== 'undefined' && currentMember) ? currentMember : '';
+      if(!name) { referrals++; return; }
+      var arr = Array.isArray(e.memberNames) ? e.memberNames : [e.memberName];
+      if(arr.indexOf(name) >= 0) referrals++;
+    });
+  }
+  var ratio = visits ? Math.round((completed / visits) * 100) : 0;
+  return {
+    visits: visits, completed: completed, postponed: postponed, canceled: canceled, pending: pending,
+    ratio: ratio, spending: Math.round(spending * 100) / 100,
+    leadsClinic: leadsClinic, leadsMva: leadsMva, leadsTotal: leadsClinic + leadsMva,
+    referrals: referrals,
+    byArea: byArea, perDay: perDay
+  };
+}
+window._phase185CollectMonth = _phase185CollectMonth;
+
+function _phase185RenderCounters(){
+  var d = _phase185CollectMonth();
+  var box = document.getElementById('perf-monthly-counters');
+  if(!box) return;
+  function card(icon, label, value, color){
+    return '<div style="background:#fff;border:1px solid var(--border);border-left:3px solid ' + color + ';border-radius:10px;padding:12px 14px;box-shadow:0 1px 3px rgba(15,23,42,.04)">'
+      +    '<div style="font-size:9.5px;text-transform:uppercase;color:var(--muted);font-weight:700;letter-spacing:.05em">' + icon + ' ' + label + '</div>'
+      +    '<div style="font-size:22px;font-weight:800;color:' + color + ';margin-top:4px;line-height:1.05">' + value + '</div>'
+      +  '</div>';
+  }
+  box.innerHTML = ''
+    + card('✓', 'Completion ratio', d.ratio + '%',  '#16a34a')
+    + card('📋', 'Completed visits',  String(d.completed), '#1F3864')
+    + card('🎯', 'Business leads',     String(d.leadsTotal), '#7c3aed')
+    + card('👥', 'Patient referrals',  String(d.referrals), '#0891b2')
+    + card('💰', 'Monthly spending',   '$' + d.spending.toFixed(2), '#d97706')
+    + card('🗺',  'Total visits',       String(d.visits), '#64748b');
+  // Also update the per-section totals next to expandable summaries
+  var aTot = document.getElementById('perf-visits-area-total');
+  if(aTot) aTot.textContent = d.visits + ' visit(s) across ' + Object.keys(d.byArea).length + ' area(s)';
+  var lTot = document.getElementById('perf-leads-type-total');
+  if(lTot) lTot.textContent = d.leadsTotal + ' total — ' + d.leadsClinic + ' clinic, ' + d.leadsMva + ' MVA';
+  var rTot = document.getElementById('perf-referrals-total');
+  if(rTot) rTot.textContent = d.referrals + ' attributed referral(s)';
+}
+window._phase185RenderCounters = _phase185RenderCounters;
+
+// Simple SVG renderers — keep it scrappy, no library. Visits per area = bar chart.
+function _phase185RenderAreaChart(d){
+  var svg = document.getElementById('perf-area-svg');
+  if(!svg) return;
+  var entries = Object.keys(d.byArea).map(function(k){ return { area: k, count: d.byArea[k] }; })
+                                     .sort(function(a, b){ return b.count - a.count; })
+                                     .slice(0, 10);
+  if(!entries.length){ svg.innerHTML = '<text x="50%" y="50%" text-anchor="middle" fill="#94a3b8" font-size="11" font-family="DM Sans,sans-serif">No visits this month</text>'; return; }
+  var w = 600, h = 180, pad = 70;
+  var max = Math.max.apply(null, entries.map(function(e){ return e.count; }));
+  var barH = (h - pad) / entries.length - 4;
+  var parts = ['<g font-family="DM Sans,sans-serif">'];
+  entries.forEach(function(e, i){
+    var y = 10 + i * (barH + 4);
+    var bw = ((w - pad - 20) * (e.count / max));
+    parts.push('<rect x="' + pad + '" y="' + y + '" width="' + bw + '" height="' + barH + '" fill="#1F3864" rx="3"/>');
+    parts.push('<text x="' + (pad - 8) + '" y="' + (y + barH/2 + 4) + '" text-anchor="end" font-size="10" fill="#0f172a">' + (e.area.length > 14 ? e.area.slice(0,12) + '…' : e.area) + '</text>');
+    parts.push('<text x="' + (pad + bw + 6) + '" y="' + (y + barH/2 + 4) + '" font-size="10" font-weight="700" fill="#1F3864">' + e.count + '</text>');
+  });
+  parts.push('</g>');
+  svg.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
+  svg.innerHTML = parts.join('');
+}
+
+function _phase185RenderLeadsChart(d){
+  var svg = document.getElementById('perf-leads-svg');
+  if(!svg) return;
+  var c = d.leadsClinic, m = d.leadsMva;
+  if(!c && !m){ svg.innerHTML = '<text x="50%" y="50%" text-anchor="middle" fill="#94a3b8" font-size="11" font-family="DM Sans,sans-serif">No leads established this month</text>'; return; }
+  var w = 600, h = 180;
+  var max = Math.max(c, m, 1);
+  var barW = 120;
+  var leftX = w/2 - barW - 30;
+  var rightX = w/2 + 30;
+  var topY = 30;
+  var bottomY = h - 30;
+  var avail = bottomY - topY;
+  var hC = avail * (c / max);
+  var hM = avail * (m / max);
+  svg.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
+  svg.innerHTML = '<g font-family="DM Sans,sans-serif">'
+    + '<rect x="' + leftX + '" y="' + (bottomY - hC) + '" width="' + barW + '" height="' + hC + '" fill="#1F3864" rx="6"/>'
+    + '<text x="' + (leftX + barW/2) + '" y="' + (bottomY - hC - 8) + '" text-anchor="middle" font-size="18" font-weight="800" fill="#1F3864">' + c + '</text>'
+    + '<text x="' + (leftX + barW/2) + '" y="' + (bottomY + 18) + '" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">🏥 Clinic</text>'
+    + '<rect x="' + rightX + '" y="' + (bottomY - hM) + '" width="' + barW + '" height="' + hM + '" fill="#7c3aed" rx="6"/>'
+    + '<text x="' + (rightX + barW/2) + '" y="' + (bottomY - hM - 8) + '" text-anchor="middle" font-size="18" font-weight="800" fill="#7c3aed">' + m + '</text>'
+    + '<text x="' + (rightX + barW/2) + '" y="' + (bottomY + 18) + '" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">⚖ MVA</text>'
+    + '</g>';
+}
+
+function _phase185RenderReferralsChart(d){
+  var svg = document.getElementById('perf-referrals-svg');
+  if(!svg) return;
+  // Day-by-day count for the selected month
+  _phase185EnsureMonth();
+  var y = window._PERF_MONTH.y, mo = window._PERF_MONTH.m;
+  var daysInMonth = new Date(y, mo+1, 0).getDate();
+  var perDay = new Array(daysInMonth).fill(0);
+  var memberName = (typeof currentMember !== 'undefined' && currentMember) ? currentMember : '';
+  if(typeof REFERRAL_LOG !== 'undefined' && Array.isArray(REFERRAL_LOG)){
+    REFERRAL_LOG.forEach(function(e){
+      if(!e || !e.entryDate) return;
+      var parts = String(e.entryDate).split('-');
+      if(parts.length < 3) return;
+      if(parseInt(parts[0], 10) !== y || (parseInt(parts[1], 10) - 1) !== mo) return;
+      if(memberName){
+        var arr = Array.isArray(e.memberNames) ? e.memberNames : [e.memberName];
+        if(arr.indexOf(memberName) < 0) return;
+      }
+      var day = parseInt(parts[2], 10);
+      if(day >= 1 && day <= daysInMonth) perDay[day - 1]++;
+    });
+  }
+  var total = perDay.reduce(function(s, v){ return s + v; }, 0);
+  if(!total){ svg.innerHTML = '<text x="50%" y="50%" text-anchor="middle" fill="#94a3b8" font-size="11" font-family="DM Sans,sans-serif">No referrals attributed this month</text>'; return; }
+  var w = 600, h = 180, pad = 26;
+  var max = Math.max.apply(null, perDay);
+  var step = (w - pad * 2) / daysInMonth;
+  var barW = Math.max(step - 2, 2);
+  var parts = ['<g font-family="DM Sans,sans-serif">'];
+  perDay.forEach(function(v, i){
+    if(v <= 0) return;
+    var x = pad + i * step;
+    var bh = (h - pad - 16) * (v / max);
+    var by = h - pad - bh;
+    parts.push('<rect x="' + x + '" y="' + by + '" width="' + barW + '" height="' + bh + '" fill="#0891b2" rx="2"/>');
+    if(v >= max) parts.push('<text x="' + (x + barW/2) + '" y="' + (by - 4) + '" text-anchor="middle" font-size="9" font-weight="700" fill="#0891b2">' + v + '</text>');
+  });
+  // baseline
+  parts.push('<line x1="' + pad + '" y1="' + (h - pad - 12) + '" x2="' + (w - pad) + '" y2="' + (h - pad - 12) + '" stroke="#cbd5e1" stroke-width="1"/>');
+  parts.push('<text x="' + pad + '" y="' + (h - 6) + '" font-size="9" fill="#94a3b8">Day 1</text>');
+  parts.push('<text x="' + (w - pad) + '" y="' + (h - 6) + '" text-anchor="end" font-size="9" fill="#94a3b8">Day ' + daysInMonth + '</text>');
+  parts.push('</g>');
+  svg.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
+  svg.innerHTML = parts.join('');
+}
+
+// ── Side activities (NEW Phase 185) ────────────────────────────────────────
+// Stored per-member in wcg_side_activities_v1: { memberName: { 'YYYY-MM-DD': [ { id, title, notes, ts } ] } }
+var _SA_KEY = 'wcg_side_activities_v1';
+
+function _phase185LoadSideActivities(){
+  try {
+    if(typeof DataLayer !== 'undefined' && DataLayer.load){
+      var v = DataLayer.load(_SA_KEY);
+      if(v && typeof v === 'object') return v;
+    }
+    var raw = localStorage.getItem(_SA_KEY);
+    if(raw) return JSON.parse(raw);
+  } catch(_){}
+  return {};
+}
+function _phase185SaveSideActivities(all){
+  try {
+    if(typeof DataLayer !== 'undefined' && DataLayer.save) DataLayer.save(_SA_KEY, all);
+    else localStorage.setItem(_SA_KEY, JSON.stringify(all));
+  } catch(_){}
+}
+window._phase185LoadSideActivities = _phase185LoadSideActivities;
+
+function _phase185AddSideActivity(dateIso){
+  if(typeof currentMember === 'undefined' || !currentMember){ alert('Select a member first.'); return; }
+  var title = window.prompt('Activity title for ' + dateIso + ':', '');
+  if(!title) return;
+  var notes = window.prompt('Notes (optional):', '') || '';
+  var all = _phase185LoadSideActivities();
+  if(!all[currentMember]) all[currentMember] = {};
+  if(!all[currentMember][dateIso]) all[currentMember][dateIso] = [];
+  all[currentMember][dateIso].push({ id: 'sa-' + Math.random().toString(36).slice(2,8), title: title, notes: notes, ts: dateIso });
+  _phase185SaveSideActivities(all);
+  _phase185RenderSideActivities();
+}
+window._phase185AddSideActivity = _phase185AddSideActivity;
+
+function _phase185DeleteSideActivity(dateIso, id){
+  if(!confirm('Delete this activity?')) return;
+  var all = _phase185LoadSideActivities();
+  if(all[currentMember] && all[currentMember][dateIso]){
+    all[currentMember][dateIso] = all[currentMember][dateIso].filter(function(a){ return a.id !== id; });
+    if(!all[currentMember][dateIso].length) delete all[currentMember][dateIso];
+  }
+  _phase185SaveSideActivities(all);
+  _phase185RenderSideActivities();
+}
+window._phase185DeleteSideActivity = _phase185DeleteSideActivity;
+
+function _phase185RenderSideActivities(){
+  var host = document.getElementById('perf-side-activities-grid');
+  if(!host) return;
+  _phase185EnsureMonth();
+  var y = window._PERF_MONTH.y, mo = window._PERF_MONTH.m;
+  var firstDow = new Date(y, mo, 1).getDay();
+  var daysInMonth = new Date(y, mo+1, 0).getDate();
+  var all = _phase185LoadSideActivities();
+  var mine = (typeof currentMember !== 'undefined' && currentMember && all[currentMember]) ? all[currentMember] : {};
+  var pad = function(n){ return n < 10 ? '0' + n : '' + n; };
+  var html = '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;font-family:DM Sans,sans-serif;font-size:11px">';
+  ['S','M','T','W','T','F','S'].forEach(function(d){
+    html += '<div style="text-align:center;font-weight:700;color:var(--muted);padding:4px 0;font-size:10px;text-transform:uppercase;letter-spacing:.05em">' + d + '</div>';
+  });
+  for(var i = 0; i < firstDow; i++) html += '<div></div>';
+  var totalActs = 0;
+  for(var day = 1; day <= daysInMonth; day++){
+    var dateIso = y + '-' + pad(mo+1) + '-' + pad(day);
+    var acts = mine[dateIso] || [];
+    totalActs += acts.length;
+    var hasActs = acts.length > 0;
+    html += '<div style="border:1px solid ' + (hasActs ? '#7c3aed' : 'var(--border)') + ';border-radius:6px;padding:6px 5px;min-height:44px;background:' + (hasActs ? '#faf5ff' : '#fff') + ';cursor:pointer;position:relative" onclick="_phase185AddSideActivity(\'' + dateIso + '\')" title="Click to add activity for ' + dateIso + '">'
+        +     '<div style="font-size:10px;font-weight:700;color:' + (hasActs ? '#7c3aed' : '#94a3b8') + '">' + day + '</div>';
+    acts.forEach(function(a){
+      var safeT = String(a.title).replace(/</g,'&lt;').slice(0, 16);
+      html += '<div style="font-size:9px;background:#7c3aed;color:#fff;border-radius:4px;padding:1px 4px;margin-top:2px;line-height:1.3;display:flex;align-items:center;gap:3px" onclick="event.stopPropagation();_phase185DeleteSideActivity(\'' + dateIso + '\',\'' + a.id + '\')" title="' + (a.notes ? String(a.notes).replace(/"/g,'&quot;') : a.title) + ' (click to delete)">' + safeT + '</div>';
+    });
+    html += '</div>';
+  }
+  html += '</div>';
+  host.innerHTML = html;
+  var tot = document.getElementById('perf-side-total');
+  if(tot) tot.textContent = totalActs + ' activity(ies) this month';
+}
+window._phase185RenderSideActivities = _phase185RenderSideActivities;
+
+function _phase185RefreshPerf(){
+  _phase185RenderMonthBar();
+  _phase185RenderCounters();
+  var d = _phase185CollectMonth();
+  _phase185RenderAreaChart(d);
+  _phase185RenderLeadsChart(d);
+  _phase185RenderReferralsChart(d);
+  _phase185RenderSideActivities();
+  // Also let the legacy Monthly Completion Ratio block re-render itself
+  try { if(typeof renderMonthlyCompletion === 'function') renderMonthlyCompletion(); } catch(_){}
+}
+window._phase185RefreshPerf = _phase185RefreshPerf;
+
+// Hook into the existing switchProfileTab to refresh when Performance opens.
+(function(){
+  var orig = window.switchProfileTab;
+  window.switchProfileTab = function(tab){
+    try { orig.apply(this, arguments); } catch(_){}
+    if(tab === 'performance'){
+      try { _phase185RefreshPerf(); } catch(e){ console.warn('[185] perf refresh failed:', e); }
+    }
+  };
+})();
+
 // ── MONTH TARGET SUM (sum of all weekly targets set within a calendar month) ──
 function getMonthTargetSum(name,year,month){
   if(!WEEKLY_TARGETS[name])return 0;
@@ -52217,12 +52645,49 @@ function _phase179ClearScheduleVisits(){
     // 4) Push empty schedule to backend (Supabase / SharePoint via DataLayer)
     if(typeof _saveSImmediate === 'function') _saveSImmediate();
 
+    // 5) PHASE 184 (2026-05-31): wipe additional counters / historical
+    // state per user "all the counters, the referrals, anything on list
+    // that is saved... clear them out. This application has to be brand
+    // new." Each one is guarded so missing globals are no-ops.
+    try {
+      if(typeof MONTHLY_COMPLETION_HISTORY !== 'undefined'){
+        MONTHLY_COMPLETION_HISTORY = {};
+        window.MONTHLY_COMPLETION_HISTORY = MONTHLY_COMPLETION_HISTORY;
+      }
+      if(typeof OUTREACH_ENGAGEMENT !== 'undefined' && typeof _OE_LS_KEY !== 'undefined'){
+        OUTREACH_ENGAGEMENT = {};
+        window.OUTREACH_ENGAGEMENT = OUTREACH_ENGAGEMENT;
+        if(typeof DataLayer !== 'undefined' && DataLayer.save) DataLayer.save(_OE_LS_KEY, OUTREACH_ENGAGEMENT);
+      }
+      if(typeof ADMIN_NOTIFICATIONS !== 'undefined' && typeof ADMIN_NOTIF_LS_KEY !== 'undefined'){
+        ADMIN_NOTIFICATIONS = [];
+        window.ADMIN_NOTIFICATIONS = ADMIN_NOTIFICATIONS;
+        if(typeof DataLayer !== 'undefined' && DataLayer.save) DataLayer.save(ADMIN_NOTIF_LS_KEY, ADMIN_NOTIFICATIONS);
+      }
+      if(typeof SHIFT_TOTALS !== 'undefined' && typeof SHIFT_TOTALS_LS_KEY !== 'undefined'){
+        SHIFT_TOTALS = {};
+        window.SHIFT_TOTALS = SHIFT_TOTALS;
+        if(typeof DataLayer !== 'undefined' && DataLayer.save) DataLayer.save(SHIFT_TOTALS_LS_KEY, SHIFT_TOTALS);
+      }
+      // Per-user "which notifs I've read" keys
+      var prefixes = ['wcg_admin_notif_read_', 'wcg_admin_notif_read_ts_'];
+      for(var i = localStorage.length - 1; i >= 0; i--){
+        var k = localStorage.key(i);
+        if(k && prefixes.some(function(p){ return k.indexOf(p) === 0; })){
+          try { localStorage.removeItem(k); } catch(_){}
+        }
+      }
+    } catch(e){ console.warn('[184] auxiliary clear failed:', e); }
+
     alert('Done. Cleared:\n'
         + '  • ' + visitCount + ' visit(s)\n'
         + '  • ' + keysToKill.length + ' route record(s)\n'
         + '  • ' + loggedCount + ' logged patient(s)\n'
         + '  • ' + pendingCount + ' pending referral(s)\n'
-        + '  • ' + bizRefCount + ' business-referral entry/entries\n\n'
+        + '  • ' + bizRefCount + ' business-referral entry/entries\n'
+        + '  • monthly completion history\n'
+        + '  • outreach engagement counters\n'
+        + '  • admin notifications + shift totals\n\n'
         + 'The page will now reload.');
     setTimeout(function(){ try { location.reload(); } catch(_){} }, 200);
     return true;
