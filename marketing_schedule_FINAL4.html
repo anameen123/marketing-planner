@@ -1154,12 +1154,24 @@ body.member-view .marquee-bar-tagline{background:linear-gradient(135deg,#60a5fa,
 /* Cards: pure white with a thin blue border + soft drop shadow */
 body.member-view .cal-card,
 body.member-view .team-summary,
-body.member-view .profile-card,
 body.member-view .mcard,
 body.member-view .gauge-card{
   background:#fff;
   border:1px solid #dbeafe;
   box-shadow:0 4px 14px rgba(30,64,175,.07);
+}
+/* Phase 197 (2026-05-31): KEEP the profile-card on its dark navy background
+   even in member-view. The inner .ps stat tiles use rgba(255,255,255,.10)
+   + pastel number colors (#86efac / #fcd34d / #fca5a5 / #c4b5fd) that only
+   read correctly against a dark surface. The earlier blanket white override
+   made the numbers float as washed-out pastels on white. Per user "the
+   colors are different why would you fuck with the colors" → revert to the
+   original dark navy card. */
+body.member-view .profile-card{
+  background:var(--navy);
+  border:1px solid rgba(255,255,255,.08);
+  box-shadow:0 4px 14px rgba(31,56,100,.18);
+  color:#fff;
 }
 /* Team-summary uses navy fill on admin; on member-view shift to a softer
    blue card so it doesn't feel like a hard dark block on a phone. */
