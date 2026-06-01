@@ -39025,6 +39025,64 @@ function _rpOptIsGreenOrYellow(name){
 }
 window._rpOptIsGreenOrYellow = _rpOptIsGreenOrYellow;
 
+// ════════════════════════════════════════════════════════════════════════════
+// PHASE 198 (2026-05-31) — SAME-WEEK SCHEDULED EXCLUSION
+// Per user: "the pins that can be a candidate ... not selected by any other
+// member in the same week (added to the schedule) or by the member himself
+// in the same week as well, it can't be neither as we agreed on."
+//
+// daysSinceLastVisit only counts COMPLETED visits — it doesn't see pending
+// rows already on the schedule. So a clinic booked Tuesday by someone else
+// would still surface as a candidate Wednesday. This helper closes that gap.
+//
+// Definition of "this week": Mon-Sun calendar week containing the day being
+// planned (S.days[_DV_LAST_DI] if a day-view is open, else today).
+// Scope: ANY member, ANY status — the user wants no double-booking at all.
+// ════════════════════════════════════════════════════════════════════════════
+function _phase198IsBookedThisWeek(name){
+  try {
+    if(!name || typeof S === 'undefined' || !S || !Array.isArray(S.days)) return false;
+    var pivot;
+    if(typeof _DV_LAST_DI === 'number' && S.days[_DV_LAST_DI] && S.days[_DV_LAST_DI].date){
+      pivot = new Date(S.days[_DV_LAST_DI].date + 'T12:00:00');
+    } else {
+      pivot = new Date();
+    }
+    // Monday = (day + 6) % 7 days back (Sun=0 → 6 back, Mon=1 → 0 back)
+    var dow = pivot.getDay();
+    var back = (dow + 6) % 7;
+    var mon = new Date(pivot); mon.setDate(pivot.getDate() - back); mon.setHours(0,0,0,0);
+    var sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+    var pad = function(n){ return n < 10 ? '0' + n : '' + n; };
+    var iso = function(d){ return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()); };
+    var monIso = iso(mon), sunIso = iso(sun);
+    for(var i = 0; i < S.days.length; i++){
+      var d = S.days[i];
+      if(!d || !d.date || !Array.isArray(d.rows)) continue;
+      if(d.date < monIso || d.date > sunIso) continue;
+      for(var j = 0; j < d.rows.length; j++){
+        var r = d.rows[j];
+        if(!r || !r.clinic) continue;
+        if(r.clinic === name) return true;   // any member, any status
+      }
+    }
+    return false;
+  } catch(_){ return false; }
+}
+window._phase198IsBookedThisWeek = _phase198IsBookedThisWeek;
+
+// Composite filter for Pick & Plan circle candidates. Combines:
+//   • Phase 57: green / yellow only (no fresh red, no warm yellow already
+//     touched in last 7 days)
+//   • Phase 198: not already on the schedule this Mon-Sun week
+function _phase198IsCandidateEligible(name){
+  if(!name) return false;
+  if(typeof _rpOptIsGreenOrYellow === 'function' && !_rpOptIsGreenOrYellow(name)) return false;
+  if(_phase198IsBookedThisWeek(name)) return false;
+  return true;
+}
+window._phase198IsCandidateEligible = _phase198IsCandidateEligible;
+
 // Called by the per-pin click listener (in addPin) when in Optimize mode.
 function _rpOptConsumePinClick(name, exactCoord){
   if(!window._RP_OPT_AWAITING_PICK || !name) return false;
@@ -41912,10 +41970,15 @@ function _rpOptSetSizeMode(mode){
   var inactive = 'flex:1;background:transparent;color:#1e3a8a;border:none;padding:6px 10px;font-size:10.5px;font-weight:600;cursor:pointer;border-radius:6px';
   if(manBtn) manBtn.setAttribute('style', mode === 'manual' ? active : inactive);
   if(fitBtn) fitBtn.setAttribute('style', mode === 'fit'    ? active : inactive);
+  // Phase 198 (2026-05-31): show BOTH inputs at once so they interact
+  // bidirectionally — matches the Corridor pattern per user "fit radius
+  // and set n visits should interact bidirectionally just like the
+  // corridor options." Mode now only controls which one is the PRIMARY
+  // driver (drag handle behavior), but both displays stay live.
   var radiusRow = document.getElementById('rp-opt-circle-radius-row');
   var fitRow    = document.getElementById('rp-opt-circle-fit-row');
-  if(radiusRow) radiusRow.style.display = mode === 'manual' ? 'flex' : 'none';
-  if(fitRow)    fitRow.style.display    = mode === 'fit'    ? 'flex' : 'none';
+  if(radiusRow) radiusRow.style.display = 'flex';
+  if(fitRow)    fitRow.style.display    = 'flex';
   // Enable/disable the drag handle based on mode (manual = enabled, fit = disabled)
   if(_DV_OPT_CIRCLE_HANDLE){
     try {
@@ -41932,6 +41995,26 @@ function _rpOptSetSizeMode(mode){
   }
 }
 window._rpOptSetSizeMode = _rpOptSetSizeMode;
+
+// Phase 198: push the live in-circle count into the fit-N input so the
+// two readouts stay in sync. Called whenever the radius changes from the
+// drag handle OR from a programmatic update.
+function _phase198SyncFitFromRadius(){
+  try {
+    var cnt = (window._RP_OPT_CIRCLE_STAGED || []).length;
+    var fitInp = document.getElementById('rp-opt-circle-fit-count');
+    if(fitInp){
+      fitInp.value = cnt;
+      // The fit-radius span (next to the N input) mirrors the manual radius
+      // span so the user sees the same number in both spots.
+      var fitDisp = document.getElementById('rp-opt-circle-fit-radius-display');
+      if(fitDisp && window._RP_OPT_CIRCLE && typeof window._RP_OPT_CIRCLE.radius === 'number'){
+        fitDisp.textContent = '±' + window._RP_OPT_CIRCLE.radius.toFixed(2) + ' mi';
+      }
+    }
+  } catch(_){}
+}
+window._phase198SyncFitFromRadius = _phase198SyncFitFromRadius;
 
 function _rpOptUpdateRadiusDisplay(){
   var d = document.getElementById('rp-opt-circle-radius-display');
@@ -41974,7 +42057,8 @@ function _rpOptOnFitCountChange(){
   function consider(name){
     if(!name) return;
     if(excluded[name]) return;                    // Phase 108 fix #2
-    if(typeof _rpOptIsGreenOrYellow === 'function' && !_rpOptIsGreenOrYellow(name)) return;
+    // Phase 198: combine green/yellow + same-week-not-booked into one check.
+    if(typeof _phase198IsCandidateEligible === 'function' && !_phase198IsCandidateEligible(name)) return;
     var coord = (typeof _rpGetVisualCoord === 'function') ? _rpGetVisualCoord(name) : null;
     if(!coord && typeof getCoordForBusiness === 'function') coord = getCoordForBusiness(name);
     if(!coord) return;
@@ -42146,8 +42230,9 @@ function _rpOptRecomputeCircleTargets(){
   var hits = [];
   function consider(name, bizType){
     if(window._RP_OPT_CIRCLE_EXCLUDED[name]) return;
-    // Phase 57: only green/yellow inside the circle.
-    if(typeof _rpOptIsGreenOrYellow === 'function' && !_rpOptIsGreenOrYellow(name)) return;
+    // Phase 57 + Phase 198: green/yellow only AND not already booked this
+    // week by ANY member (no double-booking).
+    if(typeof _phase198IsCandidateEligible === 'function' && !_phase198IsCandidateEligible(name)) return;
     var coord = (typeof _rpGetVisualCoord === 'function') ? _rpGetVisualCoord(name) : null;
     if(!coord && typeof getCoordForBusiness === 'function') coord = getCoordForBusiness(name);
     if(!coord) return;
@@ -42180,6 +42265,9 @@ function _rpOptRecomputeCircleTargets(){
   // Start picker stays empty until confirm
   _rpOptRenderTargetList();
   _rpOptRenderStartPicker();
+  // Phase 198: keep the N input + fit-radius span in sync with the live
+  // staged count so both readouts always agree.
+  if(typeof _phase198SyncFitFromRadius === 'function') _phase198SyncFitFromRadius();
 }
 window._rpOptRecomputeCircleTargets = _rpOptRecomputeCircleTargets;
 
