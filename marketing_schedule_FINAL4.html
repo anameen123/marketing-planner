@@ -49743,7 +49743,11 @@ function _phase185CollectMonth(){
         if(r.spending && r.status === 'Completed' && r.rowConfirmed && !r.spending.zeroSpending){
           spending += (parseFloat(r.spending.total) || 0);
         }
-        if(r.leadStatus === 'established'){
+        // Phase 186 fix (2026-05-31): canonical field is r.relationship,
+        // NOT r.leadStatus. Earlier I used r.leadStatus everywhere which
+        // is silent-fail because rows don't have that field — every lead
+        // counter returned 0 even when established leads existed.
+        if(r.relationship === 'established'){
           var bt = (typeof getBizTypeForName === 'function') ? getBizTypeForName(r.clinic) : 'clinic';
           if(bt === 'mva') leadsMva++; else leadsClinic++;
         }
@@ -50059,10 +50063,68 @@ function _phase185RefreshPerf(){
   _phase185RenderEmptyHint(d);
   // Also let the legacy Monthly Completion Ratio block re-render itself
   try { if(typeof renderMonthlyCompletion === 'function') renderMonthlyCompletion(); } catch(_){}
-  // Debug breadcrumb so the console shows what scope was used.
-  try { console.info('[185]', { month: _phase185MonthLabel(window._PERF_MONTH.y, window._PERF_MONTH.m), member: (typeof currentMember !== 'undefined') ? currentMember : '(none)', totals: d }); } catch(_){}
+  // Phase 186 debug breadcrumb: dumps month + member + totals AND a sample
+  // of in-month rows so we can see exactly what fields the rows have.
+  // Use _phase185Debug() from console any time.
+  try {
+    var sample = [];
+    if(typeof S !== 'undefined' && S && Array.isArray(S.days)){
+      var y2 = window._PERF_MONTH.y, m2 = window._PERF_MONTH.m;
+      for(var di = 0; di < S.days.length && sample.length < 3; di++){
+        var day = S.days[di];
+        if(!day || !day.date) continue;
+        var dt = new Date(day.date + 'T00:00:00');
+        if(dt.getFullYear() !== y2 || dt.getMonth() !== m2) continue;
+        if(!Array.isArray(day.rows)) continue;
+        for(var ri = 0; ri < day.rows.length && sample.length < 3; ri++){
+          var r = day.rows[ri];
+          if(!r || !r.clinic) continue;
+          sample.push({
+            date: day.date, clinic: r.clinic, member: r.member,
+            memberConfirmed: r.memberConfirmed, status: r.status,
+            relationship: r.relationship, leadStatus: r.leadStatus,
+            spendingTotal: r.spending && r.spending.total
+          });
+        }
+      }
+    }
+    console.info('[185]', {
+      month: _phase185MonthLabel(window._PERF_MONTH.y, window._PERF_MONTH.m),
+      member: (typeof currentMember !== 'undefined') ? currentMember : '(none)',
+      totals: d, sample: sample
+    });
+  } catch(_){}
 }
 window._phase185RefreshPerf = _phase185RefreshPerf;
+
+// Hand-rollable debug helper for console use. Type _phase185Debug() to
+// dump everything Phase 185 sees right now.
+window._phase185Debug = function(){
+  if(typeof S === 'undefined' || !S || !Array.isArray(S.days)){ console.log('No S.days'); return; }
+  var total = 0, withMember = 0, withRelationship = 0, established = 0;
+  var name = (typeof currentMember !== 'undefined') ? currentMember : null;
+  var matchedForMember = 0;
+  S.days.forEach(function(d){
+    if(!d || !Array.isArray(d.rows)) return;
+    d.rows.forEach(function(r){
+      if(!r || !r.clinic) return;
+      total++;
+      if(r.member) withMember++;
+      if(r.relationship) withRelationship++;
+      if(r.relationship === 'established') established++;
+      if(name && (r.member === name || (Array.isArray(r.coMembers) && r.coMembers.indexOf(name) >= 0))) matchedForMember++;
+    });
+  });
+  console.log('[185 debug]', {
+    totalRowsInSchedule: total,
+    rowsWithMember: withMember,
+    rowsWithRelationshipField: withRelationship,
+    rowsWithEstablishedLead: established,
+    currentMember: name,
+    rowsMatchingCurrentMember: matchedForMember,
+    sampleDates: S.days.filter(function(d){ return d && Array.isArray(d.rows) && d.rows.length; }).slice(0, 5).map(function(d){ return d.date; })
+  });
+};
 
 // Hook into the existing switchProfileTab to refresh when Performance opens.
 (function(){
@@ -52880,7 +52942,7 @@ function _phase180GenerateSnapshot(year, month){
           member: row.member || '',
           status: row.status || '',
           spending: spend,
-          leadStatus: row.leadStatus || '',
+          leadStatus: row.relationship || '',
           notes: row.notes || '',
           routeId: row._routeId || ''
         });
@@ -57027,7 +57089,7 @@ function _phase181CollectMonthlyData(year, month){
         area: r.area || '',
         specialty: r.specialty || '',
         status: r.status || 'Pending',
-        leadStatus: r.leadStatus || '',
+        leadStatus: r.relationship || '',
         spend: spend,
         notes: r.notes || ''
       });
