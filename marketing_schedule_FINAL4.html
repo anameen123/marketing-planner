@@ -33159,12 +33159,28 @@ function renderDayMap(di){
     }
     return (typeof getCoordForBusiness === 'function') ? getCoordForBusiness(name) : null;
   }
+  /* Phase 213 (2026-06-01) — honor the day-view member filter on the map
+     so it matches the table. Mirrors the _isVisibleRow gate in renderDayTable
+     (around line 52086). Without this, picking one member in the FILTER
+     dropdown filters the table but the map keeps showing every pin + the
+     polyline for everyone, which is what the user reported as broken. */
+  var _dmFilterMember = (typeof _CAL_MEMBER_FILTER === 'string') ? _CAL_MEMBER_FILTER : '';
+  var _dmIsAdmin     = (typeof isAdmin === 'function') && isAdmin();
+  function _dmRowMatchesFilter(r){
+    if(!r) return false;
+    if(!_dmFilterMember || _DAY_VIEW_SHOW_ALL || _dmIsAdmin) return true;
+    var members = [];
+    if(typeof getRowMembers === 'function') members = getRowMembers(r) || [];
+    if(!members.length && r.member) members = [r.member];
+    return members.indexOf(_dmFilterMember) >= 0;
+  }
   var totalVisits = day.rows.filter(function(r){
-    return r && r.clinic && _phase164Coord(r.clinic);
+    return r && r.clinic && _phase164Coord(r.clinic) && _dmRowMatchesFilter(r);
   }).length;
   var visitOrdinal = 0;
   day.rows.forEach(function(row, idx){
     if(!row.clinic) return;
+    if(!_dmRowMatchesFilter(row)) return;  /* Phase 213 filter gate */
     var coord = _phase164Coord(row.clinic);
     if(!coord) return;
     visitOrdinal++;
@@ -48200,6 +48216,16 @@ function _performAddVisitPush(dateList, originalDi, name, type, area, contact, s
     if(foundDi < 0){ skipped.push(iso); return; }
     S.days[foundDi].rows.push(makeRow());
     pushed++;
+    /* Phase 213 (2026-06-01) BUG FIX — user: "Member Actions is empty, I
+       saw they added visits today!!!" Root cause: _performAddVisitPush
+       pushed the row to S.days but never logged the action to
+       ACTIVITY_LOG, so the Member Actions feed always read 0 entries
+       and showed the outer empty-state. Log a row per push so each
+       added visit appears in the feed. Skip if the schema's missing
+       (defensive — old localStorage migrations). */
+    if(typeof logActivity === 'function' && member){
+      try { logActivity('added', member, name, '', iso); } catch(_){}
+    }
   });
 
   // 2) Auto-add to the matching Bank tab if not already present
@@ -52039,6 +52065,12 @@ function setDayViewMemberFilter(value){
   }
   if(typeof S !== 'undefined' && S.currentDay != null){
     renderDayTable(S.currentDay);
+    /* Phase 213 (2026-06-01) BUG FIX — user: "when the filter is applied for
+       one member it will affect the map as well, so it will show the path
+       created only for that member." Previously the filter only re-rendered
+       the table; the map kept showing every pin + the OSRM polyline for
+       everyone. Re-render the map too so it matches the visible table. */
+    if(typeof renderDayMap === 'function') renderDayMap(S.currentDay);
   }
 }
 window.setDayViewMemberFilter = setDayViewMemberFilter;
@@ -59830,15 +59862,14 @@ function renderKPICards(name){
   var spendLabel = monthsBack === 0 ? 'This month'
                  : monthsBack === 1 ? 'Last month'
                  : monthsBack + ' months ago';
-  cards+='<div class="kpi-card" title="' + name + '’s spending across Completed visits in the selected month.">'
-    +'<div class="kpi-card-top"><div class="kpi-label">💰 Spending</div>'
-    +'<span class="kpi-badge badge-grey" style="font-weight:700">' + spendLabel.toUpperCase() + '</span></div>'
-    +'<div class="kpi-nums"><div class="kpi-actual" style="color:#16a34a">' + spendFormatted + '</div></div>'
-    // Per user 2026-05-24 dedupe T1: dropped "X completed visits" subtitle
-    // — same number already on the avatar strip + Completion Ratio card.
-    // Kept just the live-update hint as a small footer.
-    +'<div class="kpi-sub" style="opacity:.7">updates live as visits complete</div>'
-    +'</div>';
+  /* Phase 213 (2026-06-01) — per user OK.docx: "I don't care about the
+     spending. For each member." The 💰 Spending tile on the member
+     profile is dropped. Team-level spending stays in the Finances tab
+     and the Team Performance KPI strip (Phase 188), which the user did
+     NOT ask to remove. */
+  // Spending tile removed — see Phase 213 note above. (Vars spendFormatted /
+  // spendLabel kept declared so any other consumer downstream still resolves.)
+  void spendFormatted; void spendLabel;
 
   document.getElementById('kpi-cards').innerHTML=cards;
   // Per user 2026-05-22: month-navigator next to the period label.
