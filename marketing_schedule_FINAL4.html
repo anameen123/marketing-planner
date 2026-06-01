@@ -21075,6 +21075,13 @@ function renderPendingReferrals(){
         var minLeft = Math.max(1, Math.round((REFERRAL_APPROVE_RETRACT_MS - ageMs) / 60000));
         actions = '<div style="margin-top:8px"><button onclick="event.stopPropagation();retractApprovedReferral(\'' + r.id + '\')" style="background:transparent;border:1px solid #fca5a5;color:#991b1b;border-radius:6px;padding:5px 12px;font-size:10px;font-weight:600;cursor:pointer">↩ Retract confirmation (' + minLeft + ' min left)</button></div>';
       }
+    } else if(r.status === 'declined' && typeof _prCanOverrideRejection === 'function' && _prCanOverrideRejection(r)){
+      /* Phase 206 (2026-06-01) — Override rejection. Only the FD whose
+         own .declinedBy stamp matches (or admin) can flip a rejection
+         back into Pending → Log Patient → Confirmed. 1-hour window. */
+      var rejMin = (typeof _prMinutesLeftOnRejectionOverride === 'function') ? _prMinutesLeftOnRejectionOverride(r) : 0;
+      var isAdminOR = (typeof isAdmin === 'function' && isAdmin());
+      actions = '<div style="margin-top:8px"><button onclick="event.stopPropagation();overrideRejectedReferral(\'' + r.id + '\')" style="background:#16a34a;color:#fff;border:none;border-radius:6px;padding:7px 14px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">↪ Override rejection → Confirm' + (isAdminOR ? '' : ' (' + rejMin + ' min left)') + '</button></div>';
     }
     // Marketing creator retraction (before front desk approves)
     if(isCreator && !isFD && r.status === 'pending' && (r.createdBy === (CURRENT_USER && CURRENT_USER.name) || (typeof isAdmin === 'function' && isAdmin()))){
@@ -21094,11 +21101,15 @@ function renderPendingReferrals(){
     var meName    = (CURRENT_USER && CURRENT_USER.name) || '';
     var isMyRef   = !!meName && r.createdBy === meName;
     var isDestFD  = isFD && CURRENT_USER && CURRENT_USER.facilityKey === r.destinationFacility;
-    /* Phase 204 (2026-06-01) — per user: "edit as well can be done and
-       it will override everything before as long as it's pending."
-       Edit was previously allowed on any non-retracted status; tighten
-       to pending-only so the override semantics only apply pre-FD-action. */
-    var canEdit   = (r.status === 'pending') && (isMyRef || isAdminViewer || isDestFD);
+    /* Phase 204 — Edit was previously allowed on any non-retracted
+       status; tighten to pending-only so the override semantics only
+       apply pre-FD-action.
+       Phase 206 (2026-06-01) — also drop destination FD from canEdit
+       per user: "There will be an edit only for him [the creator],
+       not for the front desk. The one who created that only can do it."
+       Destination FD has separate override paths on the Confirmed and
+       Rejected pages. */
+    var canEdit   = (r.status === 'pending') && (isMyRef || isAdminViewer);
     if(canEdit){
       actions += '<div style="margin-top:6px"><button onclick="event.stopPropagation();_prOpenEditReferral(\'' + r.id + '\')" style="background:#fff;color:#1F3864;border:1px solid #c4b5fd;border-radius:5px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">✏ Edit referral</button></div>';
     }
@@ -21276,6 +21287,12 @@ function renderPendingReferrals(){
         var minLeftRow = Math.max(1, Math.round((REFERRAL_APPROVE_RETRACT_MS - ageMsRow) / 60000));
         rowActions = '<button onclick="event.stopPropagation();retractApprovedReferral(\'' + r.id + '\')" style="background:transparent;border:1px solid #fca5a5;color:#991b1b;border-radius:5px;padding:4px 8px;font-size:10px;font-weight:600;cursor:pointer;white-space:nowrap" title="Retract within ' + minLeftRow + ' min">↩ Retract</button>';
       }
+    } else if(r.status === 'declined' && typeof _prCanOverrideRejection === 'function' && _prCanOverrideRejection(r)){
+      /* Phase 206 — compact row-strip Override button on the Rejected page. */
+      var rejMinRow = (typeof _prMinutesLeftOnRejectionOverride === 'function') ? _prMinutesLeftOnRejectionOverride(r) : 0;
+      var isAdminORRow = (typeof isAdmin === 'function' && isAdmin());
+      var titleAttr = isAdminORRow ? 'Override rejection — admin' : ('Override rejection within ' + rejMinRow + ' min');
+      rowActions = '<button onclick="event.stopPropagation();overrideRejectedReferral(\'' + r.id + '\')" style="background:#16a34a;color:#fff;border:none;border-radius:5px;padding:4px 9px;font-size:10px;font-weight:700;cursor:pointer;white-space:nowrap" title="' + titleAttr + '">↪ Override</button>';
     }
     if(canEdit){
       rowActions += (rowActions ? ' ' : '')
@@ -21619,14 +21636,24 @@ function _phase166OpenPendingReferralCard(refId){
       // Footer
       +   '<div style="padding:14px 22px;background:#f8fafc;border-top:1px solid var(--border);display:flex;justify-content:space-between;gap:10px;flex-shrink:0">'
       +     '<button type="button" onclick="document.getElementById(\'' + modalId + '\').remove()" style="background:#fff;color:#475569;border:1px solid var(--border);border-radius:8px;padding:9px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">Close</button>'
-      /* Phase 204 (2026-06-01): Edit gated to pending-only (override
-         semantics only apply pre-FD-action). Hard 🗑 Delete button
-         beside Edit, creator+admin only. */
-      +     (r.status === 'pending' && typeof _prOpenEditReferral === 'function'
+      /* Phase 204: Edit gated to pending-only.
+         Phase 206 (2026-06-01): also gated to creator + admin (no
+         destination FD) per user's edit-permission spec. */
+      +     ((function(){
+              if(r.status !== 'pending') return false;
+              if(typeof _prOpenEditReferral !== 'function') return false;
+              if(typeof isAdmin === 'function' && isAdmin()) return true;
+              return !!(CURRENT_USER && CURRENT_USER.name === r.createdBy);
+            })()
             ? '<button type="button" onclick="document.getElementById(\'' + modalId + '\').remove(); _prOpenEditReferral(\'' + safe(r.id) + '\')" style="background:linear-gradient(135deg,#1F3864,#1e3a8a);color:#fff;border:none;border-radius:8px;padding:9px 22px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">✎ Edit referral</button>'
             : '')
       +     (typeof _prCanDeletePendingReferral === 'function' && _prCanDeletePendingReferral(r)
             ? '<button type="button" onclick="document.getElementById(\'' + modalId + '\').remove(); _prDeletePendingReferral(\'' + safe(r.id) + '\')" style="background:#fff;color:#991b1b;border:1px solid #fca5a5;border-radius:8px;padding:9px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;margin-left:8px" title="Hard-delete this pending referral (irreversible)">🗑 Delete</button>'
+            : '')
+      /* Phase 206 — Override rejection button in the patient detail modal.
+         Only the FD who rejected (within 1h) or admin sees it. */
+      +     (typeof _prCanOverrideRejection === 'function' && _prCanOverrideRejection(r)
+            ? '<button type="button" onclick="document.getElementById(\'' + modalId + '\').remove(); overrideRejectedReferral(\'' + safe(r.id) + '\')" style="background:#16a34a;color:#fff;border:none;border-radius:8px;padding:9px 22px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;margin-left:8px" title="Flip this rejection back into Confirmed via Log Patient">↪ Override rejection → Confirm</button>'
             : '')
       +   '</div>'
       + '</div>';
@@ -21895,6 +21922,107 @@ function _crFinalizeDecline(ref){
   if(typeof showToast === 'function') showToast('Referral marked Unconfirmed.');
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+// PHASE 206 (2026-06-01) — FD OVERRIDE OF OWN REJECTION
+// User: "If the front desk clicked on decline or whatever reject by mistake,
+// then it will be moved to the rejected list. So I can go there, and I can
+// say override. There will be a click for the front desk only — the three
+// accounts — each one actually can override his action, not the other front
+// desks. He can go to the rejected referrals list, find it, and click
+// Override. It will turn into Confirmed and it will exactly do the same
+// thing — take them to the login patients and all the data will be exported.
+// Same thing as he's confirming in the first time. And that action will be
+// overridden, which means any counters or triggers it has triggered will be
+// removed, obviously."
+//
+// Permission gate (_prCanOverrideRejection):
+//   • admin                                  — always allowed
+//   • FD whose own .declinedBy stamp matches — within 1-hour window
+//   • anyone else                            — blocked
+//
+// Implementation: clear the rejection metadata, flip status back to
+// 'pending', then call approvePendingReferral(id) — that opens the Log
+// Patient form pre-filled (Phase 25), and on save the patient log entry
+// is created and the referral becomes 'approved'. So Trends (REFERRAL_LOG)
+// picks up the new confirmation automatically, and the prior rejection
+// leaves no orphan trace because no REFERRAL_LOG entry was created when
+// it was rejected in the first place.
+// ════════════════════════════════════════════════════════════════════════════
+function _prCanOverrideRejection(ref){
+  if(!ref || ref.status !== 'declined') return false;
+  if(typeof isAdmin === 'function' && isAdmin()) return true;
+  if(!CURRENT_USER || CURRENT_USER.role !== 'front_desk') return false;
+  if(ref.declinedBy !== CURRENT_USER.name) return false;
+  if(!ref.declinedAt) return false;
+  var age = Date.now() - new Date(ref.declinedAt).getTime();
+  if(isNaN(age)) return false;
+  return age < REFERRAL_APPROVE_RETRACT_MS;  // 1-hour window, same as retract-confirmation
+}
+window._prCanOverrideRejection = _prCanOverrideRejection;
+
+function _prMinutesLeftOnRejectionOverride(ref){
+  if(!ref || !ref.declinedAt) return 0;
+  var left = REFERRAL_APPROVE_RETRACT_MS - (Date.now() - new Date(ref.declinedAt).getTime());
+  return Math.max(0, Math.round(left / 60000));
+}
+window._prMinutesLeftOnRejectionOverride = _prMinutesLeftOnRejectionOverride;
+
+function overrideRejectedReferral(id){
+  var ref = (PENDING_REFERRALS || []).find(function(r){ return r.id === id; });
+  if(!ref){ if(typeof showToast === 'function') showToast('Referral not found.'); return; }
+  if(ref.status !== 'declined'){
+    if(typeof showToast === 'function') showToast('Override only applies to Rejected referrals. This one is "' + ref.status + '".');
+    return;
+  }
+  if(!_prCanOverrideRejection(ref)){
+    if(typeof showToast === 'function') showToast('Only ' + (ref.declinedBy || 'the FD who rejected it') + ' or admin can override this rejection (within 1 hour of the rejection).');
+    return;
+  }
+  function _doOverride(){
+    /* Stamp the audit trail BEFORE flipping status so the prior rejection
+       isn't lost — useful when admin reviews history. */
+    if(!Array.isArray(ref.rejectionOverrideHistory)) ref.rejectionOverrideHistory = [];
+    ref.rejectionOverrideHistory.push({
+      at: new Date().toISOString(),
+      by: (CURRENT_USER && CURRENT_USER.name) || '?',
+      previousDeclinedAt: ref.declinedAt || null,
+      previousDeclinedBy: ref.declinedBy || null
+    });
+    /* Clear the rejection metadata. */
+    ref.status = 'pending';
+    ref.declinedAt = null;
+    ref.declinedBy = null;
+    /* Audit log entry so it appears in the patient detail's followUpActions
+       history (mirrors the pattern from Phase 19b). */
+    if(typeof _crLogFollowUpAction === 'function'){
+      _crLogFollowUpAction(id, 'rejection_overridden', 'Rejection overridden — proceeding to confirm + log patient.');
+    } else if(typeof _savePendingReferrals === 'function'){
+      _savePendingReferrals();
+    }
+    /* Hand off to the existing approve flow — opens the Log Patient
+       form pre-filled with this referral's data. On save, the referral
+       transitions to 'approved' + a REFERRAL_LOG entry is created, so
+       Trends (Phase 205, confirmed-only) picks it up automatically. */
+    if(typeof approvePendingReferral === 'function'){
+      approvePendingReferral(id);
+    } else if(typeof showToast === 'function'){
+      showToast('Status reset to Pending — open the Log Patient form to complete confirmation.');
+    }
+  }
+  if(typeof showConfirm === 'function'){
+    showConfirm({
+      icon: '↪',
+      msg: 'Override this rejection and turn it into a Confirmed patient?',
+      sub: 'The Log Patient form will open pre-filled with the referral details. Save it and the referral becomes Confirmed — same as a first-time confirmation. The previous rejection is logged in the audit trail.',
+      yesLabel: 'Override → Confirm',
+      onConfirm: _doOverride
+    });
+  } else if(window.confirm('Override this rejection and open the Log Patient form? It will become Confirmed once you save.')) {
+    _doOverride();
+  }
+}
+window.overrideRejectedReferral = overrideRejectedReferral;
+
 function retractApprovedReferral(id){
   var ref = (PENDING_REFERRALS || []).find(function(r){ return r.id === id; });
   if(!ref || ref.status !== 'approved') return;
@@ -21967,22 +22095,24 @@ function _crFinalizeRetract(ref){
 function _prOpenEditReferral(refId){
   var ref = (PENDING_REFERRALS || []).find(function(r){ return r.id === refId; });
   if(!ref){ if(typeof showToast === 'function') showToast('Referral not found.'); return; }
-  /* Phase 204 (2026-06-01) — Edit is now pending-only per user: "edit
-     as well can be done and it will override everything before as long
-     as it's pending." After FD acts (approved / declined / incomplete
-     / retracted) the override semantics no longer apply. */
+  /* Phase 204 (2026-06-01) — Edit is now pending-only. After FD acts
+     (approved / declined / incomplete / retracted) the override
+     semantics no longer apply. */
   if(ref.status !== 'pending'){
     if(typeof showToast === 'function') showToast('Edit only works while status is Pending. This referral is "' + ref.status + '".');
     return;
   }
-  // Permission check — creator OR admin OR destination FD
+  /* Phase 206 (2026-06-01) — Edit gating tightened to creator + admin
+     only per user: "There will be an edit only for him, not for the
+     front desk. The one who created that only can do it. Otherwise,
+     it's locked for everyone else except for the admin." Destination
+     FD has its own override path (overrideRejectedReferral on the
+     Rejected page; retractApprovedReferral on the Confirmed page). */
   var meName   = (CURRENT_USER && CURRENT_USER.name) || '';
-  var isFD     = (CURRENT_USER && CURRENT_USER.role === 'front_desk');
   var isAdmin0 = (typeof isAdmin === 'function') && isAdmin();
   var isMine   = !!meName && ref.createdBy === meName;
-  var isDestFD = isFD && CURRENT_USER && CURRENT_USER.facilityKey === ref.destinationFacility;
-  if(!(isMine || isAdmin0 || isDestFD)){
-    if(typeof showToast === 'function') showToast('You can only edit referrals you created (or ones destined for your facility).');
+  if(!(isMine || isAdmin0)){
+    if(typeof showToast === 'function') showToast('Only the creator (or admin) can edit a pending referral.');
     return;
   }
   // Stash the editing id so _crSaveReferral knows to override instead of push
