@@ -2943,6 +2943,12 @@ button:not([disabled]):not(.no-press):active {
         <label style="display:flex;align-items:center;gap:6px;background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:8px 10px;cursor:pointer;font-size:11px;font-weight:600">
           <input type="radio" name="cr-source-type" value="mva" onchange="_crSourceTypeChanged()" style="accent-color:#f59e0b"> ⚖ MVA Attorney
         </label>
+        <!-- Phase 201 (2026-05-31): third source type per user — for patients
+             that called via a Google search and the member is taking that
+             call. Free-text caller field (no suggestions); sourceType = 'google'. -->
+        <label style="display:flex;align-items:center;gap:6px;background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:8px 10px;cursor:pointer;font-size:11px;font-weight:600">
+          <input type="radio" name="cr-source-type" value="google" onchange="_crSourceTypeChanged()" style="accent-color:#16a34a"> 🔍 Google call
+        </label>
       </div>
       <div style="position:relative;margin-bottom:14px">
         <input type="text" id="cr-source" placeholder="Pick a type above first" disabled
@@ -17922,7 +17928,7 @@ function _rlRenderCalDayDetail(iso){
     referralsHtml = '<div style="display:flex;flex-direction:column;gap:6px">';
     refsToday.forEach(function(r){
       var fac = REFERRAL_FACILITIES.find(function(f){ return f.key === r.destinationFacility; });
-      var typeIcon = r.sourceType === 'mva' ? '⚖' : r.sourceType === 'wcg_facility' ? '🏥' : '🏥';
+      var typeIcon = r.sourceType === 'mva' ? '⚖' : r.sourceType === 'wcg_facility' ? '🏥' : r.sourceType === 'google' ? '🔍' : '🏥';
       var _ph192 = (typeof _phase192StatusDisplay === 'function') ? _phase192StatusDisplay(r.status) : { color: '#64748b', bg: '#f8fafc' };
     var statusColor = _ph192.color;
       var statusBg = r.status === 'pending' ? '#fffbeb' : r.status === 'approved' ? '#f0fdf4' : r.status === 'incomplete' ? '#fef2f2' : '#f8fafc';
@@ -19294,11 +19300,19 @@ function _crSourceTypeChanged(){
   var type = picked ? picked.value : '';
   var inp = document.getElementById('cr-source');
   if(!inp) return;
+  // Phase 201 (2026-05-31): also hide the suggestion dropdown when type
+  // changes (a leftover dropdown from the previous type would otherwise
+  // float over the new field).
+  var sug = document.getElementById('cr-source-suggest');
+  if(sug) sug.style.display = 'none';
   if(type){
     inp.disabled = false;
     inp.value = '';
     if(inp.dataset) inp.dataset.sourceType = type;
-    inp.placeholder = type === 'clinic' ? 'Search clinic by name…' : 'Search MVA attorney firm by name…';
+    if(type === 'clinic')      inp.placeholder = 'Search clinic by name…';
+    else if(type === 'mva')    inp.placeholder = 'Search MVA attorney firm by name…';
+    else if(type === 'google') inp.placeholder = 'Caller name or phone (Google search call)';
+    else                       inp.placeholder = 'Source name';
     inp.focus();
   } else {
     inp.disabled = true;
@@ -19315,6 +19329,9 @@ function _crSuggestSources(){
   if(!inp || !sug) return;
   var typeFilter = (inp.dataset && inp.dataset.sourceType) || '';
   if(!typeFilter){ sug.style.display = 'none'; return; }
+  // Phase 201: Google-call source is free text (caller's name or phone),
+  // no name list to suggest from — keep the dropdown hidden.
+  if(typeFilter === 'google'){ sug.style.display = 'none'; return; }
   var q = (inp.value || '').trim().toLowerCase();
   if(q.length < 1){ sug.style.display = 'none'; return; }
   var matches = [];
@@ -19410,17 +19427,26 @@ function _crSaveReferral(){
   } else {
     sourceType = (srcInp && srcInp.dataset && srcInp.dataset.sourceType) || '';
     sourceName = (srcInp && srcInp.value || '').trim();
-    if(!sourceType){ showErr('Pick Clinic or MVA — which type is sending the patient?'); return; }
-    if(!sourceName){ showErr('Pick the specific clinic/MVA name from the suggestions.'); return; }
-    // Strict match against the bank — no typos creating shadow entries
-    var bankList = (sourceType === 'clinic')
-      ? (typeof CLINIC_BANK !== 'undefined' ? CLINIC_BANK : [])
-      : (typeof MVA_ATTORNEYS !== 'undefined' ? MVA_ATTORNEYS : []);
-    var nameKey = (sourceType === 'clinic') ? 'n' : 'firm';
-    var matchExists = bankList.some(function(b){ return b && (b[nameKey] || '').toLowerCase() === sourceName.toLowerCase(); });
-    if(!matchExists){
-      showErr('"' + sourceName + '" isn\'t in our bank. Pick from the autocomplete suggestions (or ask admin to add the clinic first).');
+    if(!sourceType){ showErr('Pick Clinic, MVA, or Google call — what kind of source is sending the patient?'); return; }
+    if(!sourceName){
+      // Phase 201: customise the error per type so the rep knows what to enter.
+      if(sourceType === 'google') showErr('Enter the caller\'s name or phone (the person who called from Google search).');
+      else                        showErr('Pick the specific clinic/MVA name from the suggestions.');
       return;
+    }
+    // Phase 201 (2026-05-31): Google-call source is free text — skip the
+    // strict bank-list match. Clinic/MVA still validate against their banks
+    // so typos don't create shadow entries.
+    if(sourceType !== 'google'){
+      var bankList = (sourceType === 'clinic')
+        ? (typeof CLINIC_BANK !== 'undefined' ? CLINIC_BANK : [])
+        : (typeof MVA_ATTORNEYS !== 'undefined' ? MVA_ATTORNEYS : []);
+      var nameKey = (sourceType === 'clinic') ? 'n' : 'firm';
+      var matchExists = bankList.some(function(b){ return b && (b[nameKey] || '').toLowerCase() === sourceName.toLowerCase(); });
+      if(!matchExists){
+        showErr('"' + sourceName + '" isn\'t in our bank. Pick from the autocomplete suggestions (or ask admin to add the clinic first).');
+        return;
+      }
     }
   }
   var destRadio = document.querySelector('input[name="cr-dest"]:checked');
@@ -19898,7 +19924,7 @@ function renderPendingReferrals(){
   }
   list.innerHTML = items.map(function(r, i){
     var facLabel = (REFERRAL_FACILITIES.find(function(f){ return f.key === r.destinationFacility; }) || {}).label || r.destinationFacility;
-    var typeIcon = r.sourceType === 'mva' ? '⚖' : '🏥';
+    var typeIcon = r.sourceType === 'mva' ? '⚖' : r.sourceType === 'google' ? '🔍' : '🏥';
     var _ph192 = (typeof _phase192StatusDisplay === 'function') ? _phase192StatusDisplay(r.status) : { color: '#64748b', bg: '#f8fafc' };
     var statusColor = _ph192.color;
     var statusBg = r.status === 'pending' ? '#fffbeb' : r.status === 'approved' ? '#f0fdf4' : r.status === 'incomplete' ? '#fef2f2' : '#f8fafc';
@@ -20449,7 +20475,7 @@ function _phase166OpenPendingReferralCard(refId){
       +       '<div style="font-size:9px;font-weight:700;color:#1e40af;text-transform:uppercase;letter-spacing:.05em">📅 Created on</div>'
       +       '<div style="font-size:14px;font-weight:800;color:#1F3864;font-family:DM Mono,monospace;margin-top:3px">' + fmtDt(r.createdAt) + '</div>'
       +     '</div>'
-      +     row('Source', safe((r.sourceType === 'mva' ? '⚖ MVA · ' : '🏥 Clinic · ') + r.sourceName))
+      +     row('Source', safe((r.sourceType === 'mva' ? '⚖ MVA · ' : r.sourceType === 'google' ? '🔍 Google call · ' : '🏥 Clinic · ') + r.sourceName))
       +     row('Destination facility', (fac ? (typeof _phase177FacilityLink === 'function' ? _phase177FacilityLink(r.destinationFacility, fac.label) : safe(fac.label)) + (fac.city ? ' · ' + safe(fac.city) : '') : safe(r.destinationFacility)))
       +     row('Patient', safe(r.patientName || '—'))
       +     row('Patient phone', fmtPhone(r.patientPhone))
