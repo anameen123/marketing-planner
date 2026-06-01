@@ -373,7 +373,10 @@ textarea.rnotes:focus{border-color:var(--purple);outline:none}
 .profile-avatar{width:52px;height:52px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;color:#fff;flex-shrink:0}
 .profile-name{font-size:18px;font-weight:700;margin-bottom:3px}
 .profile-role{font-size:11px;opacity:.55;text-transform:uppercase;letter-spacing:.07em}
-.profile-stats{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+/* Phase 211 (2026-06-01) — was repeat(5,1fr) when the strip had 5 tiles;
+   Phase 209 dropped Postponed + Canceled, so it's now Total / Completed /
+   Leads only. 3 columns prevents 2 empty grid tracks rendering to the right. */
+.profile-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
 .ps{text-align:center;background:rgba(255,255,255,.08);border-radius:10px;padding:10px 8px}
 .ps-n{font-size:20px;font-weight:700;font-family:'DM Mono',monospace;line-height:1}
 .ps-l{font-size:9px;opacity:.55;margin-top:3px;text-transform:uppercase;letter-spacing:.07em}
@@ -395,9 +398,12 @@ textarea.rnotes:focus{border-color:var(--purple);outline:none}
    for emphasis and aligned to the available horizontal space. */
 .profile-card-compact .profile-stats{
   flex:1;
-  grid-template-columns:repeat(5,minmax(70px,1fr));
+  /* Phase 211 (2026-06-01): was repeat(5,minmax(70px,1fr)) — now 3 to
+     match the post-Phase-209 strip. min-width shrunk because 3 tiles
+     need less horizontal room than 5 did. */
+  grid-template-columns:repeat(3,minmax(70px,1fr));
   gap:7px;
-  min-width:340px;
+  min-width:220px;
 }
 .profile-card-compact .ps{
   padding:9px 6px;
@@ -18287,16 +18293,55 @@ function _phase207ApplyMonthFilterToList(){
   if(!Array.isArray(PENDING_REFERRALS)) return;
   var wrap = document.getElementById('pending-referrals-wrap');
   if(!wrap) return;
-  var nodes = wrap.querySelectorAll('[data-refid]');
+  /* Phase 211 (2026-06-01) BUG FIX — was querySelectorAll('[data-refid]')
+     but the table rows actually emit data-pending-id (see renderPendingReferrals
+     row template). That mismatch made the DOM filter a silent no-op:
+     querySelectorAll returned an empty NodeList, and rows from other months
+     never got hidden. Both selector + attribute getter now match the
+     emitted markup. */
+  var nodes = wrap.querySelectorAll('[data-pending-id]');
+  var visibleCount = 0, hiddenCount = 0;
   Array.prototype.forEach.call(nodes, function(node){
-    var id = node.getAttribute('data-refid');
+    var id = node.getAttribute('data-pending-id');
     var ref = PENDING_REFERRALS.find(function(r){ return r.id === id; });
-    if(!ref){ node.style.display = ''; return; }
+    if(!ref){ node.style.display = ''; visibleCount++; return; }
     var d = _phase207StatusStampDate(ref, mode);
     var visible = d && _phase207IsoMonth(d) === viewMonth;
     node.style.display = visible ? '' : 'none';
+    if(visible) visibleCount++; else hiddenCount++;
   });
+  /* Phase 211 — when the month filter hid every row but the underlying
+     list wasn't empty, the existing empty-state didn't fire (it gates on
+     items.length pre-filter). Synthesize a banner so users on an empty
+     month see context + a way out, instead of a silently blank page. */
+  _phase211EnsureMonthEmptyBanner(visibleCount, hiddenCount, viewMonth, mode);
 }
+
+function _phase211EnsureMonthEmptyBanner(visibleCount, hiddenCount, viewMonth, mode){
+  var host = document.getElementById('pending-referrals-wrap');
+  if(!host) return;
+  var bannerId = 'ph211-month-empty';
+  var existing = document.getElementById(bannerId);
+  if(visibleCount > 0 || hiddenCount === 0){
+    if(existing) existing.remove();
+    return;
+  }
+  /* All rows hidden + at least one was filtered out — show the banner. */
+  var parts = viewMonth.split('-');
+  var d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, 1);
+  var monthLabel = d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  var actionLabel = mode === 'confirmed' ? 'confirmed' : 'rejected';
+  var html = '<div id="' + bannerId + '" style="background:#fff;border:1px dashed var(--border);border-radius:10px;padding:24px 18px;text-align:center;margin:8px 0">'
+    +   '<div style="font-size:13px;color:var(--muted);font-style:italic;margin-bottom:10px">No referrals ' + actionLabel + ' in ' + monthLabel + ' · ' + hiddenCount + ' record' + (hiddenCount === 1 ? '' : 's') + ' on other months</div>'
+    +   '<button type="button" onclick="_phase207NavMonth(0)" style="background:#1F3864;color:#fff;border:none;border-radius:7px;padding:7px 16px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">📅 Jump to current month</button>'
+    + '</div>';
+  if(existing){
+    existing.outerHTML = html;
+  } else {
+    host.insertAdjacentHTML('beforeend', html);
+  }
+}
+window._phase211EnsureMonthEmptyBanner = _phase211EnsureMonthEmptyBanner;
 window._phase207ApplyMonthFilterToList = _phase207ApplyMonthFilterToList;
 
 // ── PHASE 207 (cont.) — LIVE WEEK/MONTH COUNTERS ABOVE TRENDS ───────────────
@@ -22868,9 +22913,13 @@ function _rlSourceTypeChanged(){
       inp.disabled = false;
       inp.value = '';
       if(inp.dataset) inp.dataset.sourceType = type;
+      /* Phase 211 (2026-06-01) — 'google' placeholder mirrors the outgoing
+         form (Phase 201): free-text caller name from a Google search call,
+         no bank autocomplete. */
       inp.placeholder = type === 'clinic'   ? 'Search clinics by name…'
                        : type === 'mva'      ? 'Search MVA attorney firms by name…'
                        : type === 'outreach' ? 'Search community outreach events / organizations…'
+                       : type === 'google'   ? 'Caller name or phone (Google search call)'
                        : '';
     } else {
       inp.disabled = true;
@@ -22882,6 +22931,7 @@ function _rlSourceTypeChanged(){
     lbl.innerHTML = (type === 'clinic')   ? 'Clinic name <span style="color:#ef4444">*</span>'
                   : (type === 'mva')      ? 'MVA firm name <span style="color:#ef4444">*</span>'
                   : (type === 'outreach') ? 'Outreach event / organization <span style="color:#ef4444">*</span>'
+                  : (type === 'google')   ? 'Caller name / phone <span style="color:#ef4444">*</span>'
                   : 'Business name <span style="color:#ef4444">*</span>';
   }
   // Close any open suggest dropdown
@@ -22910,6 +22960,10 @@ function _rlSuggestSources(){
   // TYPE picked above (clinic / mva / outreach). If no type is picked yet
   // (legacy code path), search all three.
   var typeFilter = window._rlSourceTypeFilter || null;
+  /* Phase 211 (2026-06-01) — for sourceType='google' there's no bank to
+     search; the field is free-text caller name/phone. Mirror Phase 201's
+     skip in _crSuggestSources. */
+  if(typeFilter === 'google'){ sug.style.display = 'none'; return; }
   var matches = [];
   if((!typeFilter || typeFilter === 'clinic') && typeof CLINIC_BANK !== 'undefined'){
     CLINIC_BANK.forEach(function(c){
@@ -23226,7 +23280,11 @@ function submitReferralForm(){
   // Strict mode for business channel: typed name must match a record in
   // CLINIC_BANK / MVA_ATTORNEYS / OUTREACH. Prevents typos that would
   // create "shadow clinics" not in the database.
-  if(chDef && chDef.business){
+  // Phase 211 (2026-06-01) — exempt sourceType==='google' (a free-text
+  // caller name from a Google search call), mirroring the Phase 201 skip
+  // in _crSaveReferral. Without this, FD confirming a 🔍 Google call
+  // pending referral hits "isn't in our database" and can't save.
+  if(chDef && chDef.business && data.sourceType !== 'google'){
     var bizExists = _referralSourceExists(data.sourceBusiness);
     if(!bizExists){
       showErr('"' + data.sourceBusiness + '" isn\'t in our clinic / MVA / outreach database. Pick from the suggestion list, or ask admin to add it first.');
@@ -69064,12 +69122,20 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
              outreach event" channel — they're not referrals in the
              call-the-front-desk sense. Referrals are only from clinics or
              MVA attorneys. -->
-        <div id="rl-source-type-row" style="display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin-bottom:10px">
+        <!-- Phase 211 (2026-06-01) — added 'google' source-type radio to match
+             Phase 201's outgoing form. Without this, approvePendingReferral
+             can't prefill the radio for sourceType='google' referrals, the
+             strict bank-check fires on submit, and Google-call referrals
+             can never reach status='approved'. -->
+        <div id="rl-source-type-row" style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px">
           <label style="display:flex;align-items:center;gap:6px;background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:8px 10px;cursor:pointer;font-size:11px;font-weight:600;color:var(--text)">
             <input type="radio" name="rl-source-type" value="clinic" onchange="_rlSourceTypeChanged()" style="accent-color:#3b82f6"> 🏥 Clinic
           </label>
           <label style="display:flex;align-items:center;gap:6px;background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:8px 10px;cursor:pointer;font-size:11px;font-weight:600;color:var(--text)">
             <input type="radio" name="rl-source-type" value="mva" onchange="_rlSourceTypeChanged()" style="accent-color:#f59e0b"> ⚖ MVA Attorney
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:8px 10px;cursor:pointer;font-size:11px;font-weight:600;color:var(--text)">
+            <input type="radio" name="rl-source-type" value="google" onchange="_rlSourceTypeChanged()" style="accent-color:#16a34a"> 🔍 Google call
           </label>
         </div>
         <label id="rl-source-name-label" style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Business name <span style="color:#ef4444">*</span></label>
