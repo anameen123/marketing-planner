@@ -19333,14 +19333,43 @@ function _crSuggestSources(){
   }
   matches = matches.slice(0, 10);
   if(matches.length === 0){ sug.style.display = 'none'; return; }
+  // Phase 200 (2026-05-31) FIX — the previous render put the name inside an
+  // inline onclick attribute, which double-broke clicks:
+  //   (a) names with apostrophes (e.g. "O'Brien Clinic") produced invalid
+  //       inline JS because backslash isn't an HTML attr escape, so the
+  //       handler silently failed
+  //   (b) onclick races with the input's onblur — mousedown moves focus
+  //       AWAY from the input before the click can fire, so the dropdown
+  //       sometimes hid before click resolved
+  // Switch to:
+  //   • data-name attribute (real HTML escaping — no inline JS at all)
+  //   • event delegation on the suggest container, listening for mousedown
+  //     (fires BEFORE the blur, so the pick wins the race)
+  function _hEsc(s){
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
   sug.innerHTML = matches.map(function(m){
-    var safe = m.name.replace(/'/g,"\\'").replace(/"/g,'&quot;');
-    var city = m.city ? ' <span style="color:var(--muted);font-size:10px">· ' + m.city + '</span>' : '';
-    return '<div onclick="_crPickSource(\'' + safe + '\')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid #f1f5f9;font-size:12px;color:var(--text)" onmouseover="this.style.background=\'#faf5ff\'" onmouseout="this.style.background=\'#fff\'">'
-      + '<strong>' + m.name.replace(/</g,'&lt;') + '</strong>' + city
+    var city = m.city ? ' <span style="color:var(--muted);font-size:10px">· ' + _hEsc(m.city) + '</span>' : '';
+    return '<div class="cr-source-sug-row" data-name="' + _hEsc(m.name) + '" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid #f1f5f9;font-size:12px;color:var(--text)" onmouseover="this.style.background=\'#faf5ff\'" onmouseout="this.style.background=\'#fff\'">'
+      + '<strong>' + _hEsc(m.name) + '</strong>' + city
       + '</div>';
   }).join('');
   sug.style.display = 'block';
+  // Wire mousedown via delegation — only once per container. preventDefault
+  // stops the input from blurring (so the dropdown doesn't snap shut before
+  // we read the picked value).
+  if(!sug.dataset.ph200Wired){
+    sug.addEventListener('mousedown', function(ev){
+      var row = ev.target.closest && ev.target.closest('.cr-source-sug-row');
+      if(!row) return;
+      ev.preventDefault();   // keep input focused; no blur-race
+      var picked = row.getAttribute('data-name') || '';
+      if(picked && typeof _crPickSource === 'function') _crPickSource(picked);
+    });
+    sug.dataset.ph200Wired = '1';
+  }
 }
 window._crSuggestSources = _crSuggestSources;
 
