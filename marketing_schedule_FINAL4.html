@@ -23804,7 +23804,12 @@ var S={
         isMosque:false,isManual:false,editing:false,customCity:''});
     })
   });}),
-  cal:{y:2026,m:4},popup:null,popY:2026,popM:4,
+  // Phase 186 (2026-05-31): initialize calendar view to the CURRENT month
+  // instead of hardcoded May 2026. Otherwise the calendar stays on May
+  // forever even after the system date rolls into June. Same for popY/popM
+  // which the day-popup uses for its month context.
+  cal:{y:(new Date()).getFullYear(),m:(new Date()).getMonth()},popup:null,
+  popY:(new Date()).getFullYear(),popM:(new Date()).getMonth(),
   currentDay:null
 };
 
@@ -47329,31 +47334,43 @@ function confirmRow(di,ri){
   // Per user 2026-05-22 audit: gate confirmation by ownership + date.
   // Before this, members could finalize another member's row.
   if(typeof _rowGuard === 'function' && !_rowGuard(di, ri)) return;
-  // ── PREREQUISITE 1: if status is Completed, the lead outcome must be saved first ──
-  // For non-outreach clinics. Outreach is excluded from the lead system.
-  if(row.status === 'Completed' && row.clinic){
+  // ════════════════════════════════════════════════════════════════════════
+  // PHASE 186 (2026-05-31): hard-gate confirmation on spending + lead status.
+  // User 2026-05-31: "when any marketing team member take a visit they need
+  // to fill the spending and the lead otherwise don't let them confirm."
+  // Previously this used quiet toasts that members could miss. Now it shows
+  // a blocking modal with the exact missing item(s), preventing confirm
+  // until both are filled.
+  // ════════════════════════════════════════════════════════════════════════
+  if(row.status === 'Completed'){
     var isOutreach = false;
     if(typeof OUTREACH !== 'undefined' && OUTREACH){
       isOutreach = OUTREACH.some(function(o){ return o.name === row.clinic; });
     }
-    if(!isOutreach && (!row.relationship || row.relationship === '')){
-      showToast('Save the lead outcome first (Set/Update Lead Status button to the left).');
-      return;
-    }
-  }
-  // ── PREREQUISITE 2: if status is Completed, spending must be recorded ──
-  // Per user 2026-05-19: a visit can't be marked Completed without entering
-  // how much was spent during it. Either a real amount with items, or an
-  // explicit $0 (zeroSpending flag set by the 💰 spending modal). Applies
-  // to ALL business types because spending is a hard reporting requirement.
-  if(row.status === 'Completed'){
+    var missingLead = !isOutreach && row.clinic && (!row.relationship || row.relationship === '');
     var hasSpending = row.spending && (
       row.spending.zeroSpending === true ||
       (typeof row.spending.total !== 'undefined' && row.spending.total !== null) ||
       (Array.isArray(row.spending.items) && row.spending.items.length > 0)
     );
-    if(!hasSpending){
-      showToast('Add the spending first (even $0). Tap the 💰 Spending column on this row.');
+    var missingSpend = !hasSpending;
+    if(missingLead || missingSpend){
+      var bits = [];
+      if(missingSpend) bits.push('• <strong>Spending</strong> — tap the 💰 column on this row (enter the real amount, or mark $0)');
+      if(missingLead)  bits.push('• <strong>Lead status</strong> — tap "Set Lead Status" on this row (Established / Needs work / Dead end)');
+      if(typeof showConfirm === 'function'){
+        showConfirm({
+          icon: '🔒',
+          msg: 'Can\'t confirm yet — fill these first',
+          sub: bits.join('\n') + '\n\nBoth are required for every completed visit. This applies to every member (no admin exception).',
+          yesLabel: 'Got it',
+          danger: true,
+          hideCancel: true,
+          onConfirm: function(){}
+        });
+      } else {
+        alert('Cannot confirm yet. Missing:\n' + bits.join('\n').replace(/<[^>]+>/g, ''));
+      }
       return;
     }
   }
@@ -49031,6 +49048,17 @@ function renderCalGrid(){
   // member so they only see their own visits by default. Admin stays on
   // 'All members'.
   if(typeof _seedCalFilterDefault === 'function') _seedCalFilterDefault();
+  // Phase 186 (2026-05-31): if the system clock has crossed into a NEW
+  // month while we were displaying an older one, auto-roll forward so the
+  // calendar isn't stuck on May after June 1 hits. Only auto-advances —
+  // never goes backward — so users actively browsing earlier months are
+  // never yanked back.
+  var _now = new Date();
+  var _curY = _now.getFullYear(), _curM = _now.getMonth();
+  if(S.cal.y < _curY || (S.cal.y === _curY && S.cal.m < _curM)){
+    S.cal.y = _curY;
+    S.cal.m = _curM;
+  }
   var y=S.cal.y,m=S.cal.m;
   document.getElementById('cal-month-label').textContent=MN[m]+' '+y;
   var fd2=new Date(y,m,1).getDay(),last=new Date(y,m+1,0).getDate(),t=new Date();
