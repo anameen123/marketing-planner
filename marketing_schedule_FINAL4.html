@@ -2822,7 +2822,7 @@ button:not([disabled]):not(.no-press):active {
             <option value="1">Last 1 month</option>
             <option value="3">Last 3 months</option>
             <option value="6" selected>Last 6 months</option>
-            <option value="12">Last 12 months</option>
+            <option value="12">Last 12 months</option><option value="24">Last 2 years</option>
             <option value="ytd">This calendar year</option>
           </select>
         </summary>
@@ -2838,7 +2838,7 @@ button:not([disabled]):not(.no-press):active {
             <option value="1">Last 1 month</option>
             <option value="3">Last 3 months</option>
             <option value="6" selected>Last 6 months</option>
-            <option value="12">Last 12 months</option>
+            <option value="12">Last 12 months</option><option value="24">Last 2 years</option>
             <option value="ytd">This calendar year</option>
           </select>
         </summary>
@@ -15148,7 +15148,7 @@ function _phase204CollectChannelMonthlySeries(channelKey, monthsBack){
     var d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     var key = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
     var b = { key: key, y: d.getFullYear(), m: d.getMonth(),
-              label: labels[d.getMonth()] + ' ' + (d.getFullYear() % 100),
+              label: labels[d.getMonth()] + ' ' + d.getFullYear(),
               total: 0, perFac: {} };
     (typeof REFERRAL_FACILITIES !== 'undefined' ? REFERRAL_FACILITIES : []).forEach(function(f){
       b.perFac[f.key] = 0;
@@ -15714,7 +15714,7 @@ function _phase191CollectSeries(months, facilityKey){
         n += parseInt(e.patientCount, 10) || 1;
       });
     }
-    series.push({ y: y, m: m, count: n, label: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m] + ' ' + (y % 100) });
+    series.push({ y: y, m: m, count: n, label: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m] + ' ' + y });
   }
   return series;
 }
@@ -15778,7 +15778,7 @@ function _phase191RenderLocTrend(){
   var allMonths = [];
   for(var i = months - 1; i >= 0; i--){
     var d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    var bucket = { y: d.getFullYear(), m: d.getMonth(), label: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()] + ' ' + (d.getFullYear() % 100), perFac: {} };
+    var bucket = { y: d.getFullYear(), m: d.getMonth(), label: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()] + ' ' + d.getFullYear(), perFac: {} };
     facs.forEach(function(f){ bucket.perFac[f.key] = 0; });
     allMonths.push(bucket);
   }
@@ -17617,7 +17617,7 @@ function _phase193CollectMonthlySeries(monthsInput){
   for(var i = months - 1; i >= 0; i--){
     var d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     buckets.push({ y: d.getFullYear(), m: d.getMonth(),
-      label: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()] + ' ' + (d.getFullYear() % 100),
+      label: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()] + ' ' + d.getFullYear(),
       confirmed: 0, rejected: 0, pending: 0, total: 0 });
   }
   if(typeof PENDING_REFERRALS !== 'undefined' && Array.isArray(PENDING_REFERRALS)){
@@ -17701,7 +17701,7 @@ function _phase193RenderLocTrends(){
   for(var i = months - 1; i >= 0; i--){
     var d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     var b = { y: d.getFullYear(), m: d.getMonth(),
-      label: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()] + ' ' + (d.getFullYear() % 100), perFac: {} };
+      label: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()] + ' ' + d.getFullYear(), perFac: {} };
     REFERRAL_FACILITIES.forEach(function(f){ b.perFac[f.key] = 0; });
     buckets.push(b);
   }
@@ -17926,7 +17926,7 @@ function _phase205CollectSeries(){
     var key = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
     buckets.push({
       key: key, y: d.getFullYear(), m: d.getMonth(),
-      label: labels[d.getMonth()] + ' ' + (d.getFullYear() % 100),
+      label: labels[d.getMonth()] + ' ' + d.getFullYear(),
       total: 0,
       entries: []  // store matching entries so the drill modal can reuse
     });
@@ -53504,7 +53504,7 @@ function _phase187CollectTeamMonthlySeries(monthsInput){
     var ratio = visits ? Math.round((completed / visits) * 100) : 0;
     series.push({
       year: y, month: m,
-      label: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m] + ' ' + (y % 100),
+      label: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m] + ' ' + y,
       visits: visits, completed: completed, ratio: ratio,
       isCurrent: (y === now.getFullYear() && m === now.getMonth())
     });
@@ -68648,7 +68648,7 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
           <select id="ph205-period" onchange="_phase205SetPeriod(this.value)" style="background:#fff;border:1px solid var(--border);border-radius:7px;padding:6px 10px;font-size:11px;font-family:DM Sans,sans-serif">
             <option value="3">Last 3 months</option>
             <option value="6" selected>Last 6 months</option>
-            <option value="12">Last 12 months</option>
+            <option value="12">Last 12 months</option><option value="24">Last 2 years</option>
           </select>
           <div style="display:flex;gap:3px;background:#f1f5f9;border-radius:8px;padding:2px">
             <button id="ph205-mode-line" onclick="_phase205SetMode('line')" style="background:#1F3864;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer">📈 Line</button>
@@ -68725,7 +68725,7 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
         <select id="lp-trend-period" onchange="event.stopPropagation();_phase191RenderTrend()" onclick="event.stopPropagation()" style="background:#fff;border:1px solid var(--border);border-radius:7px;padding:5px 9px;font-size:11px;font-family:DM Sans,sans-serif">
           <option value="3">Last 3 months</option>
           <option value="6" selected>Last 6 months</option>
-          <option value="12">Last 12 months</option>
+          <option value="12">Last 12 months</option><option value="24">Last 2 years</option>
           <option value="36">Last 3 years</option>
         </select>
       </summary>
@@ -68742,7 +68742,7 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
         <select id="lp-loctrend-period" onchange="event.stopPropagation();_phase191RenderLocTrend()" onclick="event.stopPropagation()" style="background:#fff;border:1px solid var(--border);border-radius:7px;padding:5px 9px;font-size:11px;font-family:DM Sans,sans-serif">
           <option value="3">Last 3 months</option>
           <option value="6" selected>Last 6 months</option>
-          <option value="12">Last 12 months</option>
+          <option value="12">Last 12 months</option><option value="24">Last 2 years</option>
           <option value="36">Last 3 years</option>
         </select>
       </summary>
