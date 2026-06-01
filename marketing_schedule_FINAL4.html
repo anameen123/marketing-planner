@@ -16965,6 +16965,135 @@ function _phase189RelocateWidgets(){
 }
 window._phase189RelocateWidgets = _phase189RelocateWidgets;
 
+// ════════════════════════════════════════════════════════════════════════════
+// PHASE 192 (2026-05-31) — STATUS CONSOLIDATION + CONFIRMED/REJECTED LISTS
+// Per user: "we need only 3 [statuses] — pending, confirmed, rejected ...
+// for the referrals list there should be two list one for the rejected
+// no filters only list with calendar filter and another one for the
+// confirmed in the confirmed we need only 4 filters + calendar."
+//
+// Internal status keys (pending / approved / declined / incomplete /
+// retracted) stay for back-compat. Display layer merges declined +
+// incomplete + retracted into one ✗ Rejected.
+//
+// The Phase 189 Referrals sub-tab page nav (List · Channels · Per-member)
+// becomes 4-page: Confirmed · Rejected · Channels · Per-member. Both
+// list pages share the rl-pane-outgoing list renderer (renderPendingReferrals)
+// but with different forced filter state, and the Rejected page hides the
+// chip row + dropdown filters to leave just the day strip.
+// ════════════════════════════════════════════════════════════════════════════
+
+function _phase192StatusDisplay(status){
+  if(status === 'pending')   return { label: '⏳ Pending',   color: '#f59e0b', bg: '#fffbeb' };
+  if(status === 'approved')  return { label: '✓ Confirmed', color: '#16a34a', bg: '#f0fdf4' };
+  if(status === 'declined' || status === 'incomplete' || status === 'retracted'){
+    return { label: '✗ Rejected', color: '#dc2626', bg: '#fef2f2' };
+  }
+  return { label: status || '—', color: '#64748b', bg: '#f8fafc' };
+}
+window._phase192StatusDisplay = _phase192StatusDisplay;
+
+// Tweak the status dropdown options (legacy hidden select) so any leftover
+// JS lookups still work. The chip render now drives the visible UI.
+function _phase192SyncStatusSelect(){
+  var sel = document.getElementById('pr-status-filter');
+  if(!sel) return;
+  if(sel.dataset && sel.dataset.ph192Done === '1') return;
+  sel.innerHTML = ''
+    + '<option value="all" selected>All statuses</option>'
+    + '<option value="pending">⏳ Pending</option>'
+    + '<option value="approved">✓ Confirmed</option>'
+    + '<option value="rejected">✗ Rejected</option>';
+  if(sel.dataset) sel.dataset.ph192Done = '1';
+}
+try { setTimeout(_phase192SyncStatusSelect, 200); } catch(_){}
+
+// Override the Phase 189 page switcher to support 4 pages. The 'confirmed'
+// and 'rejected' pages both show the rl-pane-outgoing list, but with
+// different forced-status state. Source channels + Per-member pages
+// unchanged.
+function _phase192SwitchPage(which){
+  if(!which) which = 'confirmed';
+  window._RFL_PAGE = which;
+  // Drive the existing Phase 189 page switcher for channels/members pages.
+  if(which === 'channels' || which === 'members'){
+    if(typeof _phase189SwitchReflistPage === 'function') return _phase189SwitchReflistPage(which);
+  }
+  // For confirmed/rejected pages: relocate widgets out, show the list.
+  if(typeof _phase189RelocateWidgets === 'function') _phase189RelocateWidgets();
+  var list      = document.getElementById('pending-referrals-wrap');
+  var listEmpty = document.getElementById('rl-outgoing-empty');
+  var chPage    = document.getElementById('rfl-page-channels');
+  var mbPage    = document.getElementById('rfl-page-members');
+  if(list)      list.style.display      = '';
+  if(chPage)    chPage.style.display    = 'none';
+  if(mbPage)    mbPage.style.display    = 'none';
+  if(listEmpty) listEmpty.style.display = 'none';
+  // Force the right status filter for the chosen page.
+  var sel = document.getElementById('pr-status-filter');
+  if(sel){
+    sel.value = (which === 'rejected') ? 'rejected' : 'approved';
+  }
+  window._PR_FILTER_LIFECYCLE = 'all';
+  window._PR_FILTER_DAY = null;
+  // Paint active state on the page nav (4 buttons).
+  ['confirmed','rejected','channels','members'].forEach(function(p){
+    var b = document.getElementById('rfl-page-btn-' + p);
+    if(!b) return;
+    b.style.background = (p === which) ? '#7030A0' : 'transparent';
+    b.style.color = (p === which) ? '#fff' : 'var(--muted)';
+  });
+  // Hide the filter dropdowns row + chip row when on rejected page (user:
+  // "for the rejected no filters only list with calendar filter").
+  var chipRow = document.getElementById('pr-status-chips');
+  var dropRow = document.querySelector('#rl-pane-outgoing #pending-referrals-wrap > div[style*="flex-wrap:wrap"][style*="gap:6px"][style*="margin-bottom:10px"]');
+  if(chipRow){
+    var chipParent = chipRow.parentElement;
+    if(chipParent) chipParent.style.display = (which === 'rejected') ? 'none' : '';
+  }
+  // Hide both the smart-search row AND the segmented control on rejected.
+  var lifecycle = document.getElementById('pr-lifecycle-seg');
+  if(lifecycle && lifecycle.parentElement){
+    lifecycle.parentElement.style.display = (which === 'rejected') ? 'none' : '';
+  }
+  var search = document.getElementById('pr-smart-search');
+  if(search){
+    var searchRow = search.parentElement;
+    if(searchRow) searchRow.style.display = (which === 'rejected') ? 'none' : '';
+  }
+  if(typeof renderPendingReferrals === 'function') renderPendingReferrals();
+}
+window._phase192SwitchPage = _phase192SwitchPage;
+
+// Replace the Phase 189 page-nav buttons with the new 4-button row.
+function _phase192UpgradePageNav(){
+  var nav = document.getElementById('rfl-page-nav');
+  if(!nav) return;
+  if(nav.dataset && nav.dataset.ph192Done === '1') return;
+  nav.innerHTML = ''
+    + '<button type="button" id="rfl-page-btn-confirmed" onclick="_phase192SwitchPage(\'confirmed\')" style="flex:1;padding:8px 12px;font-size:12px;font-weight:700;color:#fff;background:#7030A0;border:none;border-radius:7px;cursor:pointer;font-family:DM Sans,sans-serif">✓ Confirmed</button>'
+    + '<button type="button" id="rfl-page-btn-rejected" onclick="_phase192SwitchPage(\'rejected\')" style="flex:1;padding:8px 12px;font-size:12px;font-weight:700;color:var(--muted);background:transparent;border:none;border-radius:7px;cursor:pointer;font-family:DM Sans,sans-serif">✗ Rejected</button>'
+    + '<button type="button" id="rfl-page-btn-channels" onclick="_phase192SwitchPage(\'channels\')" style="flex:1;padding:8px 12px;font-size:12px;font-weight:700;color:var(--muted);background:transparent;border:none;border-radius:7px;cursor:pointer;font-family:DM Sans,sans-serif">🔍 Source channels</button>'
+    + '<button type="button" id="rfl-page-btn-members" onclick="_phase192SwitchPage(\'members\')" style="flex:1;padding:8px 12px;font-size:12px;font-weight:700;color:var(--muted);background:transparent;border:none;border-radius:7px;cursor:pointer;font-family:DM Sans,sans-serif">👥 Per-member totals</button>';
+  if(nav.dataset) nav.dataset.ph192Done = '1';
+}
+try { setTimeout(_phase192UpgradePageNav, 200); } catch(_){}
+
+// Hook switchReferralSubtab so opening Referrals sub-tab lands on Confirmed
+// page by default (instead of generic list).
+(function(){
+  var orig = window.switchReferralSubtab;
+  if(typeof orig !== 'function') return;
+  window.switchReferralSubtab = function(which){
+    try { orig.apply(this, arguments); } catch(_){}
+    if(which === 'reflist'){
+      _phase192UpgradePageNav();
+      // Default page = confirmed (user landing experience)
+      _phase192SwitchPage(window._RFL_PAGE || 'confirmed');
+    }
+  };
+})();
+
 function _phase189SwitchReflistPage(which){
   if(!which) which = 'list';
   _PHASE189_REFLIST_PAGE = which;
@@ -17519,12 +17648,13 @@ function _rlRenderCalDayDetail(iso){
     refsToday.forEach(function(r){
       var fac = REFERRAL_FACILITIES.find(function(f){ return f.key === r.destinationFacility; });
       var typeIcon = r.sourceType === 'mva' ? '⚖' : r.sourceType === 'wcg_facility' ? '🏥' : '🏥';
-      var statusColor = r.status === 'pending' ? '#f59e0b' : r.status === 'approved' ? '#16a34a' : r.status === 'declined' ? '#9ca3af' : r.status === 'incomplete' ? '#dc2626' : '#64748b';
+      var _ph192 = (typeof _phase192StatusDisplay === 'function') ? _phase192StatusDisplay(r.status) : { color: '#64748b', bg: '#f8fafc' };
+    var statusColor = _ph192.color;
       var statusBg = r.status === 'pending' ? '#fffbeb' : r.status === 'approved' ? '#f0fdf4' : r.status === 'incomplete' ? '#fef2f2' : '#f8fafc';
       // Phase 112a (2026-05-29): renamed display labels per user — internal
     // status keys (approved/declined) unchanged for back-compat, only the
     // human-visible badge shows Confirmed / Unconfirmed (Phase 147 rename).
-    var statusLabel = r.status === 'pending' ? '⏳ Pending' : r.status === 'approved' ? '✓ Confirmed' : r.status === 'declined' ? '✗ Unconfirmed' : r.status === 'incomplete' ? '⏰ Incomplete (no-show)' : '↩ Retracted';
+    var statusLabel = _ph192.label || r.status;
       var expDt = r.expectedAt ? new Date(r.expectedAt) : null;
       var expTime = (expDt && !isNaN(expDt.getTime())) ? expDt.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}) : '—';
       var creatorLbl = r.creatorRole === 'uc_plano_fd' ? ('🏥 UC Plano · ' + (r.createdBy || '?')) : ('👥 ' + (r.createdBy || '—'));
@@ -19159,15 +19289,21 @@ function _prRenderStatusChips(scopedItems){
   if(!host) return;
   var sel = document.getElementById('pr-status-filter');
   var current = (sel && sel.value) || 'all';
-  var counts = { all: scopedItems.length, pending: 0, approved: 0, declined: 0, incomplete: 0, retracted: 0 };
-  scopedItems.forEach(function(r){ if(counts[r.status] != null) counts[r.status]++; });
+  // Phase 192 (2026-05-31): collapse 5 statuses → 3. Internal status keys
+  // (pending / approved / declined / incomplete / retracted) are kept for
+  // back-compat but declined / incomplete / retracted all display as
+  // ✗ Rejected per user: "we need only 3 — pending, confirmed, rejected."
+  var counts = { all: scopedItems.length, pending: 0, approved: 0, rejected: 0 };
+  scopedItems.forEach(function(r){
+    if(r.status === 'pending')  counts.pending++;
+    else if(r.status === 'approved') counts.approved++;
+    else if(r.status === 'declined' || r.status === 'incomplete' || r.status === 'retracted') counts.rejected++;
+  });
   var defs = [
-    { key:'all',         label:'All',          icon:'',   color:'#1F3864' },
-    { key:'pending',     label:'Pending',      icon:'⏳', color:'#d97706' },
-    { key:'approved',    label:'Confirmed',    icon:'✓',  color:'#16a34a' },
-    { key:'declined',    label:'Unconfirmed',  icon:'✗',  color:'#dc2626' },
-    { key:'incomplete',  label:'Incomplete',   icon:'⏰', color:'#7c2d12' },
-    { key:'retracted',   label:'Retracted',    icon:'↩',  color:'#64748b' }
+    { key:'all',       label:'All',       icon:'',   color:'#1F3864' },
+    { key:'pending',   label:'Pending',   icon:'⏳', color:'#d97706' },
+    { key:'approved',  label:'Confirmed', icon:'✓',  color:'#16a34a' },
+    { key:'rejected',  label:'Rejected',  icon:'✗',  color:'#dc2626' }
   ];
   host.innerHTML = defs.map(function(d){
     var active = (d.key === current);
@@ -19321,7 +19457,15 @@ function renderPendingReferrals(){
   var items = scopedAll;
   // Status filter
   if(statusFilter !== 'all'){
-    items = items.filter(function(r){ return r.status === statusFilter; });
+    // Phase 192: 'rejected' is a virtual chip that matches any of the 3
+    // historical rejection variants. Other chips match by exact key.
+    if(statusFilter === 'rejected'){
+      items = items.filter(function(r){
+        return r.status === 'declined' || r.status === 'incomplete' || r.status === 'retracted';
+      });
+    } else {
+      items = items.filter(function(r){ return r.status === statusFilter; });
+    }
   }
   // Creator (member) filter
   if(memberFilter){
@@ -19396,12 +19540,13 @@ function renderPendingReferrals(){
   list.innerHTML = items.map(function(r, i){
     var facLabel = (REFERRAL_FACILITIES.find(function(f){ return f.key === r.destinationFacility; }) || {}).label || r.destinationFacility;
     var typeIcon = r.sourceType === 'mva' ? '⚖' : '🏥';
-    var statusColor = r.status === 'pending' ? '#f59e0b' : r.status === 'approved' ? '#16a34a' : r.status === 'declined' ? '#9ca3af' : r.status === 'incomplete' ? '#dc2626' : '#64748b';
+    var _ph192 = (typeof _phase192StatusDisplay === 'function') ? _phase192StatusDisplay(r.status) : { color: '#64748b', bg: '#f8fafc' };
+    var statusColor = _ph192.color;
     var statusBg = r.status === 'pending' ? '#fffbeb' : r.status === 'approved' ? '#f0fdf4' : r.status === 'incomplete' ? '#fef2f2' : '#f8fafc';
     // Phase 112a (2026-05-29): renamed display labels per user — internal
     // status keys (approved/declined) unchanged for back-compat, only the
     // human-visible badge shows Confirmed / Unconfirmed (Phase 147 rename).
-    var statusLabel = r.status === 'pending' ? '⏳ Pending' : r.status === 'approved' ? '✓ Confirmed' : r.status === 'declined' ? '✗ Unconfirmed' : r.status === 'incomplete' ? '⏰ Incomplete (no-show)' : '↩ Retracted';
+    var statusLabel = _ph192.label || r.status;
     var expDt = r.expectedAt ? new Date(r.expectedAt) : null;
     var expStr = (expDt && !isNaN(expDt.getTime())) ? expDt.toLocaleString('en-US',{weekday:'short',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}) : '—';
     var creatorLbl = r.creatorRole === 'uc_plano_fd' ? ('UC Plano FD · ' + (r.createdBy || '?')) : (r.createdBy || '—');
@@ -19872,8 +20017,9 @@ function _phase166OpenPendingReferralCard(refId){
     document.body.appendChild(modal);
     function safe(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
     var fac = (typeof REFERRAL_FACILITIES !== 'undefined') ? REFERRAL_FACILITIES.find(function(f){ return f.key === r.destinationFacility; }) : null;
-    var statusColor = r.status === 'pending' ? '#f59e0b' : r.status === 'approved' ? '#16a34a' : r.status === 'declined' ? '#9ca3af' : r.status === 'incomplete' ? '#dc2626' : '#64748b';
-    var statusLabel = r.status === 'pending' ? '⏳ Pending' : r.status === 'approved' ? '✓ Confirmed' : r.status === 'declined' ? '✗ Unconfirmed' : r.status === 'incomplete' ? '⏰ Incomplete (no-show)' : '↩ Retracted';
+    var _ph192 = (typeof _phase192StatusDisplay === 'function') ? _phase192StatusDisplay(r.status) : { color: '#64748b', bg: '#f8fafc' };
+    var statusColor = _ph192.color;
+    var statusLabel = _ph192.label || r.status;
     function fmtDt(iso){
       if(!iso) return '—';
       var d = new Date(iso);
