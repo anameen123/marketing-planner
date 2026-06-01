@@ -15075,6 +15075,92 @@ function getChannelCountForMonth(channelKey, mKey){
 }
 window.getChannelCountForMonth = getChannelCountForMonth;
 
+// ── PHASE 204 (2026-06-01) — WEEKLY COUNTS + CHANNEL TREND DATA ─────────────
+// User: "I need weekly and monthly ones, in the same way I can switch
+// between the months. And once I click on the channel name, show a window
+// that will have the line chart for the last 3 / 6 months and 1 year to
+// see the trends for each channel."
+//
+// Week-key convention: 'YYYY-MM-DD' of the Monday of that week. Simpler
+// than ISO-8601 week numbering and easier to navigate (just add/subtract
+// 7 days). Same channel x bucket shape as monthly.
+function _phase204IsoMonday(d){
+  var dd = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  var dow = dd.getDay();                 // 0..6 (Sun..Sat)
+  var back = (dow === 0) ? 6 : (dow - 1);
+  dd.setDate(dd.getDate() - back);
+  var p = function(n){ return n < 10 ? '0' + n : n; };
+  return dd.getFullYear() + '-' + p(dd.getMonth() + 1) + '-' + p(dd.getDate());
+}
+window._phase204IsoMonday = _phase204IsoMonday;
+
+function getChannelCountsWeekly(){
+  var out = {};
+  REFERRAL_CHANNELS.forEach(function(c){ out[c.key] = { total: 0 }; });
+  REFERRAL_LOG.forEach(function(e){
+    if(!e) return;
+    var ch = e.sourceChannel || 'business';
+    var bucket = out[ch];
+    if(!bucket){ bucket = { total: 0 }; out[ch] = bucket; }
+    var d = e.entryDate || (e.ts || '').slice(0, 10);
+    if(!d || d.length < 10) return;
+    var dt = new Date(d.slice(0,4) + '-' + d.slice(5,7) + '-' + d.slice(8,10) + 'T12:00:00');
+    if(isNaN(dt.getTime())) return;
+    var wKey = _phase204IsoMonday(dt);    // Monday YYYY-MM-DD
+    bucket[wKey] = (bucket[wKey] || 0) + (parseInt(e.patientCount, 10) || 1);
+    bucket.total += (parseInt(e.patientCount, 10) || 1);
+  });
+  return out;
+}
+window.getChannelCountsWeekly = getChannelCountsWeekly;
+
+// Build a time series for ONE channel across N months back, with per-
+// destination-facility breakdown per month — used by the trend modal.
+//   returns: [
+//     { key: 'YYYY-MM', label: 'Jan 26', total: n, perFac: { frisco_er: n, castle_hills_er: n, plano_uc: n } },
+//     ...
+//   ]
+function _phase204CollectChannelMonthlySeries(channelKey, monthsBack){
+  var months = Math.max(1, Math.min(60, parseInt(monthsBack, 10) || 6));
+  var now = new Date();
+  var buckets = [];
+  var labels = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  for(var i = months - 1; i >= 0; i--){
+    var d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    var key = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+    var b = { key: key, y: d.getFullYear(), m: d.getMonth(),
+              label: labels[d.getMonth()] + ' ' + (d.getFullYear() % 100),
+              total: 0, perFac: {} };
+    (typeof REFERRAL_FACILITIES !== 'undefined' ? REFERRAL_FACILITIES : []).forEach(function(f){
+      b.perFac[f.key] = 0;
+    });
+    buckets.push(b);
+  }
+  if(Array.isArray(REFERRAL_LOG)){
+    REFERRAL_LOG.forEach(function(e){
+      if(!e) return;
+      var ch = e.sourceChannel || 'business';
+      if(ch !== channelKey) return;
+      var d = e.entryDate || (e.ts || '').slice(0, 10);
+      if(!d || d.length < 7) return;
+      var mKey = d.slice(0, 7);
+      for(var i = 0; i < buckets.length; i++){
+        if(buckets[i].key === mKey){
+          var add = parseInt(e.patientCount, 10) || 1;
+          buckets[i].total += add;
+          var fac = e.destinationFacility;
+          if(fac && buckets[i].perFac.hasOwnProperty(fac)){
+            buckets[i].perFac[fac] += add;
+          }
+          break;
+        }
+      }
+    });
+  }
+  return buckets;
+}
+window._phase204CollectChannelMonthlySeries = _phase204CollectChannelMonthlySeries;
+
 // ── HISTORY VIEW: per-business referral breakdown ─────────────────────
 // Returns { byMonth: {'YYYY-MM': count}, byQuarter: {'YYYY-Qn': count},
 //           total: N, mostRecent: ISO, trend: 'up'|'down'|'flat' }.
@@ -16103,35 +16189,70 @@ function renderReferralLog(){
     pm.innerHTML = pmHtml || '<div style="font-size:11px;color:var(--muted);font-style:italic">No members configured yet.</div>';
   }
 
-  // ── Per-channel monthly counters (v2) ────────────────────────────────
-  // Each card shows: channel label, the viewed month's count, plus delta vs
-  // the previous month. Month is navigable via ◀ / ▶ / Today buttons.
+  // ── Per-channel counters (v3, Phase 204) ─────────────────────────────
+  // User: "I need weekly and monthly ones, in the same way I can switch
+  // between the months." Plus: clicking a channel name opens a trend
+  // modal (line/bar over last 3/6/12 months with per-facility drill).
   var ch = document.getElementById('rl-channels');
   if(ch){
-    var counts = getChannelCountsMonthly();
+    if(!window.RL_CHANNEL_PERIOD) window.RL_CHANNEL_PERIOD = 'monthly';
+    var period = window.RL_CHANNEL_PERIOD;
     if(!window.RL_CHANNEL_MONTH){
       var nowC = new Date();
       window.RL_CHANNEL_MONTH = nowC.getFullYear() + '-' + String(nowC.getMonth()+1).padStart(2,'0');
     }
-    var viewMonth = window.RL_CHANNEL_MONTH;   // YYYY-MM
-    var vmParts = viewMonth.split('-');
-    var vmDate = new Date(parseInt(vmParts[0],10), parseInt(vmParts[1],10)-1, 1);
-    var prevDate = new Date(vmDate.getFullYear(), vmDate.getMonth() - 1, 1);
-    var prevMonth = prevDate.getFullYear() + '-' + String(prevDate.getMonth()+1).padStart(2,'0');
-    var monthLabel = vmDate.toLocaleDateString('en-US',{month:'long',year:'numeric'});
+    if(!window.RL_CHANNEL_WEEK){
+      window.RL_CHANNEL_WEEK = _phase204IsoMonday(new Date());
+    }
+
+    var headerLabel, prevLabel, viewKey, prevKey, counts;
+    if(period === 'weekly'){
+      counts = getChannelCountsWeekly();
+      viewKey = window.RL_CHANNEL_WEEK;            // 'YYYY-MM-DD' of Monday
+      var vwParts = viewKey.split('-');
+      var vwStart = new Date(parseInt(vwParts[0],10), parseInt(vwParts[1],10)-1, parseInt(vwParts[2],10));
+      var vwEnd   = new Date(vwStart.getFullYear(), vwStart.getMonth(), vwStart.getDate() + 6);
+      var pwStart = new Date(vwStart.getFullYear(), vwStart.getMonth(), vwStart.getDate() - 7);
+      prevKey = _phase204IsoMonday(pwStart);
+      var p2 = function(n){ return n < 10 ? '0' + n : n; };
+      headerLabel = 'Week of ' + (vwStart.getMonth()+1) + '/' + p2(vwStart.getDate())
+                  + ' – ' + (vwEnd.getMonth()+1) + '/' + p2(vwEnd.getDate()) + ' ' + vwStart.getFullYear();
+      prevLabel = 'prev wk';
+    } else {
+      counts = getChannelCountsMonthly();
+      viewKey = window.RL_CHANNEL_MONTH;
+      var vmParts = viewKey.split('-');
+      var vmDate = new Date(parseInt(vmParts[0],10), parseInt(vmParts[1],10)-1, 1);
+      var prevDate = new Date(vmDate.getFullYear(), vmDate.getMonth() - 1, 1);
+      prevKey = prevDate.getFullYear() + '-' + String(prevDate.getMonth()+1).padStart(2,'0');
+      headerLabel = '📅 ' + vmDate.toLocaleDateString('en-US',{month:'long',year:'numeric'});
+      prevLabel = 'prev';
+    }
+
+    // Pill toggle (Monthly / Weekly) + nav buttons + Today.
+    var pillBtn = function(label, val){
+      var active = (period === val);
+      return '<button onclick="_phase204SetChannelPeriod(\'' + val + '\')" style="'
+        + 'background:' + (active ? '#1F3864' : '#fff') + ';'
+        + 'color:' + (active ? '#fff' : '#1F3864') + ';'
+        + 'border:1px solid ' + (active ? '#1F3864' : 'var(--border)') + ';'
+        + 'border-radius:6px;padding:4px 10px;font-size:10.5px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">' + label + '</button>';
+    };
+    var navFn = (period === 'weekly') ? 'navChannelCountersWeek' : 'navChannelCountersMonth';
 
     var chHtml = '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px">'
-              +   '<div style="font-size:11px;color:var(--muted)"><strong style="color:var(--text)">📅 ' + monthLabel + '</strong> — referrals by source channel</div>'
-              +   '<div style="display:flex;align-items:center;gap:6px">'
-              +     '<button onclick="navChannelCountersMonth(-1)" style="background:#fff;border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer;color:#1F3864">◀</button>'
-              +     '<button onclick="navChannelCountersMonth(1)"  style="background:#fff;border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer;color:#1F3864">▶</button>'
-              +     '<button onclick="navChannelCountersMonth(0)"  style="background:#f1f5f9;border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:10px;font-weight:600;cursor:pointer;color:var(--muted)">Today</button>'
+              +   '<div style="font-size:11px;color:var(--muted)"><strong style="color:var(--text)">' + headerLabel + '</strong> — referrals by source channel</div>'
+              +   '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'
+              +     '<div style="display:flex;gap:3px;background:#f1f5f9;border-radius:8px;padding:2px">' + pillBtn('Monthly','monthly') + pillBtn('Weekly','weekly') + '</div>'
+              +     '<button onclick="' + navFn + '(-1)" style="background:#fff;border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer;color:#1F3864">◀</button>'
+              +     '<button onclick="' + navFn + '(1)"  style="background:#fff;border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer;color:#1F3864">▶</button>'
+              +     '<button onclick="' + navFn + '(0)"  style="background:#f1f5f9;border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:10px;font-weight:600;cursor:pointer;color:var(--muted)">Today</button>'
               +   '</div>'
               + '</div>'
               + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px">';
     REFERRAL_CHANNELS.forEach(function(c){
-      var thisCnt = (counts[c.key] && counts[c.key][viewMonth]) || 0;
-      var prevCnt = (counts[c.key] && counts[c.key][prevMonth]) || 0;
+      var thisCnt = (counts[c.key] && counts[c.key][viewKey]) || 0;
+      var prevCnt = (counts[c.key] && counts[c.key][prevKey]) || 0;
       var deltaHtml = '';
       if(thisCnt > prevCnt && prevCnt > 0)      deltaHtml = '<span style="color:#16a34a">▲ ' + (thisCnt - prevCnt) + '</span>';
       else if(thisCnt < prevCnt && prevCnt > 0) deltaHtml = '<span style="color:#dc2626">▼ ' + (prevCnt - thisCnt) + '</span>';
@@ -16139,17 +16260,19 @@ function renderReferralLog(){
       else                                       deltaHtml = '<span style="color:var(--muted)">—</span>';
       var bg = c.business ? '#eef2ff' : '#f8fafc';
       var border = c.business ? '#a5b4fc' : 'var(--border)';
+      /* Phase 204 — channel label is now clickable; opens the trend modal. */
+      var safeKey = String(c.key).replace(/'/g,"\\'");
       chHtml += '<div style="background:' + bg + ';border:1px solid ' + border + ';border-radius:10px;padding:9px 11px">'
-              + '<div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em">' + c.icon + ' ' + c.label + '</div>'
+              + '<button type="button" onclick="_phase204OpenChannelTrend(\'' + safeKey + '\')" '
+              +   'style="display:block;width:100%;text-align:left;background:transparent;border:none;padding:0;cursor:pointer;font-family:DM Sans,sans-serif" '
+              +   'title="Click to see 3/6/12-month trend for this channel">'
+              +   '<div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;text-decoration:underline;text-decoration-style:dotted;text-decoration-color:#94a3b8">' + c.icon + ' ' + c.label + '</div>'
+              + '</button>'
               + '<div style="display:flex;align-items:baseline;justify-content:space-between;margin-top:3px">'
               +   '<div style="font-size:20px;font-weight:800;font-family:DM Mono,monospace;color:#1F3864">' + thisCnt + '</div>'
               +   '<div style="font-size:10px">' + deltaHtml + '</div>'
               + '</div>'
-              // Per user 2026-05-24 dedupe RF1: dropped "· total: N" — the
-              // gradient hero card up top already shows the grand total, and
-              // summing the channel totals here was an easy way for them to
-              // drift apart. Keep just the previous-month comparison.
-              + '<div style="font-size:9px;color:var(--muted);margin-top:2px">prev: ' + prevCnt + '</div>'
+              + '<div style="font-size:9px;color:var(--muted);margin-top:2px">' + prevLabel + ': ' + prevCnt + '</div>'
               + '</div>';
     });
     chHtml += '</div>';
@@ -16703,6 +16826,243 @@ function navChannelCountersMonth(delta){
   renderReferralLog();
 }
 window.navChannelCountersMonth = navChannelCountersMonth;
+
+// ── PHASE 204 (2026-06-01) — Weekly switcher + click-to-trend modal ─────────
+// User: "I need weekly and monthly ones … and once I click on the channel
+// name to show a window that will have the line chart for the last 3 / 6
+// months and 1 year to see the trends for each channel, and for each line
+// chart once I click on the dot inside these line charts it will show me
+// how much for each location. This all can be done by bar charts for the
+// same periods with dividing the bar with each channel."
+function _phase204SetChannelPeriod(period){
+  window.RL_CHANNEL_PERIOD = (period === 'weekly') ? 'weekly' : 'monthly';
+  if(typeof renderReferralLog === 'function') renderReferralLog();
+}
+window._phase204SetChannelPeriod = _phase204SetChannelPeriod;
+
+function navChannelCountersWeek(delta){
+  var cur = window.RL_CHANNEL_WEEK;
+  if(!cur || delta === 0){
+    cur = _phase204IsoMonday(new Date());
+  } else {
+    var parts = cur.split('-');
+    var d = new Date(parseInt(parts[0],10), parseInt(parts[1],10) - 1, parseInt(parts[2],10) + (delta * 7));
+    cur = _phase204IsoMonday(d);
+  }
+  window.RL_CHANNEL_WEEK = cur;
+  if(typeof renderReferralLog === 'function') renderReferralLog();
+}
+window.navChannelCountersWeek = navChannelCountersWeek;
+
+function _phase204OpenChannelTrend(channelKey){
+  var ch = REFERRAL_CHANNELS.find(function(c){ return c.key === channelKey; });
+  if(!ch){ if(typeof showToast === 'function') showToast('Unknown channel.'); return; }
+  /* Stash the active period + mode so the in-modal controls can update
+     just the modal body without losing state. */
+  window._PH204_TREND = {
+    channelKey: channelKey,
+    months: 6,
+    mode: 'line'
+  };
+  var existing = document.getElementById('phase204-trend');
+  if(existing) existing.remove();
+  var m = document.createElement('div');
+  m.id = 'phase204-trend';
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.7);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;font-family:DM Sans,sans-serif';
+  m.innerHTML = ''
+    + '<div style="background:#fff;border-radius:14px;max-width:820px;width:100%;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.5);overflow:hidden">'
+    +   '<div style="background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;padding:16px 22px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">'
+    +     '<div>'
+    +       '<div style="font-size:11px;opacity:.85;text-transform:uppercase;letter-spacing:.06em">Source channel trend</div>'
+    +       '<div style="font-size:17px;font-weight:800">' + ch.icon + ' ' + ch.label + '</div>'
+    +       '<div style="font-size:10px;opacity:.85;margin-top:2px">Click any dot/bar → per-location breakdown for that month</div>'
+    +     '</div>'
+    +     '<button onclick="document.getElementById(\'phase204-trend\').remove()" style="background:rgba(255,255,255,.18);border:none;color:#fff;font-size:20px;width:32px;height:32px;border-radius:8px;cursor:pointer">×</button>'
+    +   '</div>'
+    +   '<div style="padding:14px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">'
+    +     '<div style="display:flex;gap:6px">'
+    +       '<button onclick="_phase204TrendSetPeriod(3)"  id="ph204-tp-3"  style="background:#fff;border:1px solid var(--border);border-radius:6px;padding:5px 11px;font-size:11px;font-weight:700;cursor:pointer;color:#1F3864">3 months</button>'
+    +       '<button onclick="_phase204TrendSetPeriod(6)"  id="ph204-tp-6"  style="background:#1F3864;color:#fff;border:1px solid #1F3864;border-radius:6px;padding:5px 11px;font-size:11px;font-weight:700;cursor:pointer">6 months</button>'
+    +       '<button onclick="_phase204TrendSetPeriod(12)" id="ph204-tp-12" style="background:#fff;border:1px solid var(--border);border-radius:6px;padding:5px 11px;font-size:11px;font-weight:700;cursor:pointer;color:#1F3864">1 year</button>'
+    +     '</div>'
+    +     '<div style="display:flex;gap:3px;background:#f1f5f9;border-radius:8px;padding:2px">'
+    +       '<button onclick="_phase204TrendSetMode(\'line\')" id="ph204-tm-line" style="background:#1F3864;color:#fff;border:none;border-radius:6px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer">📈 Line</button>'
+    +       '<button onclick="_phase204TrendSetMode(\'bar\')"  id="ph204-tm-bar"  style="background:transparent;color:#1F3864;border:none;border-radius:6px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer">📊 Bar (stacked by location)</button>'
+    +     '</div>'
+    +   '</div>'
+    +   '<div id="ph204-trend-body" style="padding:18px 22px;overflow-y:auto;flex:1"></div>'
+    + '</div>';
+  document.body.appendChild(m);
+  _phase204TrendRenderBody();
+}
+window._phase204OpenChannelTrend = _phase204OpenChannelTrend;
+
+function _phase204TrendSetPeriod(months){
+  if(!window._PH204_TREND) return;
+  window._PH204_TREND.months = months;
+  ['3','6','12'].forEach(function(p){
+    var b = document.getElementById('ph204-tp-' + p);
+    if(!b) return;
+    var active = (parseInt(p,10) === months);
+    b.style.background = active ? '#1F3864' : '#fff';
+    b.style.color      = active ? '#fff'    : '#1F3864';
+    b.style.border     = '1px solid ' + (active ? '#1F3864' : 'var(--border)');
+  });
+  _phase204TrendRenderBody();
+}
+window._phase204TrendSetPeriod = _phase204TrendSetPeriod;
+
+function _phase204TrendSetMode(mode){
+  if(!window._PH204_TREND) return;
+  window._PH204_TREND.mode = (mode === 'bar') ? 'bar' : 'line';
+  ['line','bar'].forEach(function(p){
+    var b = document.getElementById('ph204-tm-' + p);
+    if(!b) return;
+    var active = (p === window._PH204_TREND.mode);
+    b.style.background = active ? '#1F3864' : 'transparent';
+    b.style.color      = active ? '#fff'    : '#1F3864';
+  });
+  _phase204TrendRenderBody();
+}
+window._phase204TrendSetMode = _phase204TrendSetMode;
+
+function _phase204TrendRenderBody(){
+  var body = document.getElementById('ph204-trend-body');
+  if(!body || !window._PH204_TREND) return;
+  var state = window._PH204_TREND;
+  var series = _phase204CollectChannelMonthlySeries(state.channelKey, state.months);
+  var ch = REFERRAL_CHANNELS.find(function(c){ return c.key === state.channelKey; });
+  var totalRange = series.reduce(function(s, b){ return s + b.total; }, 0);
+  var maxRange   = series.reduce(function(m, b){ return Math.max(m, b.total); }, 1);
+
+  // Color palette per facility (matches Phase 193 location-trends chart).
+  var facColors = { frisco_er: '#1F3864', castle_hills_er: '#7c3aed', plano_uc: '#16a34a' };
+  var FAC = (typeof REFERRAL_FACILITIES !== 'undefined') ? REFERRAL_FACILITIES : [];
+
+  // Build SVG.
+  var w = 720, h = 280, padL = 40, padR = 18, padT = 18, padB = 52;
+  var n = series.length;
+  var stepX = (w - padL - padR) / Math.max(1, n - (state.mode === 'line' ? 1 : 0));
+  var parts = ['<g font-family="DM Sans,sans-serif">'];
+
+  // Y grid + labels.
+  [0, 0.5, 1].forEach(function(f){
+    var y = padT + (h - padT - padB) * (1 - f);
+    parts.push('<line x1="' + padL + '" y1="' + y + '" x2="' + (w - padR) + '" y2="' + y + '" stroke="#e2e8f0"/>');
+    parts.push('<text x="' + (padL - 6) + '" y="' + (y + 3) + '" text-anchor="end" font-size="9" fill="#94a3b8">' + Math.round(maxRange * f) + '</text>');
+  });
+
+  if(state.mode === 'line'){
+    // Line + dots — total per month.
+    var pts = series.map(function(b, i){
+      var x = padL + i * stepX;
+      var y = padT + (h - padT - padB) * (1 - (b.total / maxRange));
+      return { x: x, y: y, b: b };
+    });
+    // Polyline
+    var polyD = pts.map(function(p, i){ return (i === 0 ? 'M' : 'L') + p.x + ' ' + p.y; }).join(' ');
+    parts.push('<path d="' + polyD + '" fill="none" stroke="#1F3864" stroke-width="2.5"/>');
+    // X labels
+    pts.forEach(function(p){
+      parts.push('<text x="' + p.x + '" y="' + (h - padB + 16) + '" text-anchor="middle" font-size="10" fill="#64748b">' + p.b.label + '</text>');
+    });
+    // Dots
+    pts.forEach(function(p, i){
+      parts.push('<circle data-i="' + i + '" cx="' + p.x + '" cy="' + p.y + '" r="6" fill="#7030A0" stroke="#fff" stroke-width="2" style="cursor:pointer"><title>' + p.b.label + ': ' + p.b.total + '</title></circle>');
+      parts.push('<text x="' + p.x + '" y="' + (p.y - 10) + '" text-anchor="middle" font-size="10" font-weight="700" fill="#1F3864">' + p.b.total + '</text>');
+    });
+  } else {
+    // Stacked bars by facility.
+    var barW = Math.max(8, (stepX) * 0.62);
+    series.forEach(function(b, i){
+      var cx = padL + i * stepX + (stepX - barW) / 2;
+      var stackTop = h - padB;
+      FAC.forEach(function(f){
+        var v = b.perFac[f.key] || 0;
+        if(v === 0) return;
+        var hh = (h - padT - padB) * (v / maxRange);
+        var by = stackTop - hh;
+        var color = facColors[f.key] || '#94a3b8';
+        parts.push('<rect data-i="' + i + '" data-fac="' + f.key + '" x="' + cx + '" y="' + by + '" width="' + barW + '" height="' + hh + '" fill="' + color + '" style="cursor:pointer"><title>' + (f.short || f.label) + ' · ' + b.label + ': ' + v + '</title></rect>');
+        stackTop = by;
+      });
+      parts.push('<text x="' + (cx + barW/2) + '" y="' + (h - padB + 16) + '" text-anchor="middle" font-size="10" fill="#64748b">' + b.label + '</text>');
+      if(b.total > 0){
+        parts.push('<text x="' + (cx + barW/2) + '" y="' + (padT + (h - padT - padB) * (1 - (b.total / maxRange)) - 5) + '" text-anchor="middle" font-size="10" font-weight="700" fill="#1F3864">' + b.total + '</text>');
+      }
+    });
+    // Legend
+    var lx0 = padL;
+    FAC.forEach(function(f, i){
+      var lx = lx0 + i * 130;
+      var ly = h - 8;
+      parts.push('<rect x="' + lx + '" y="' + (ly - 10) + '" width="10" height="10" fill="' + (facColors[f.key] || '#94a3b8') + '" rx="2"/>');
+      parts.push('<text x="' + (lx + 14) + '" y="' + (ly - 1) + '" font-size="10" fill="#0f172a">' + (f.short || f.label) + '</text>');
+    });
+  }
+  parts.push('</g>');
+  var svgHtml = '<svg id="ph204-trend-svg" viewBox="0 0 ' + w + ' ' + h + '" style="width:100%;height:auto;max-height:340px">' + parts.join('') + '</svg>';
+
+  // Summary tiles
+  var avg = Math.round(totalRange / Math.max(1, series.length));
+  var summary = ''
+    + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:14px">'
+    +   '<div style="background:#eff6ff;border:1px solid #bfdbfe;border-left:3px solid #1F3864;border-radius:10px;padding:10px 12px"><div style="font-size:9px;color:#1e3a8a;text-transform:uppercase;font-weight:700">Total ' + state.months + ' mo</div><div style="font-size:22px;font-weight:800;color:#1F3864">' + totalRange + '</div></div>'
+    +   '<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-left:3px solid #16a34a;border-radius:10px;padding:10px 12px"><div style="font-size:9px;color:#166534;text-transform:uppercase;font-weight:700">Best month</div><div style="font-size:22px;font-weight:800;color:#16a34a">' + maxRange + '</div></div>'
+    +   '<div style="background:#fef3c7;border:1px solid #fde68a;border-left:3px solid #f59e0b;border-radius:10px;padding:10px 12px"><div style="font-size:9px;color:#92400e;text-transform:uppercase;font-weight:700">Avg / month</div><div style="font-size:22px;font-weight:800;color:#92400e">' + avg + '</div></div>'
+    + '</div>';
+
+  body.innerHTML = summary + svgHtml + '<div style="font-size:10px;color:var(--muted);margin-top:10px;font-style:italic;text-align:center">Click any ' + (state.mode === 'line' ? 'dot' : 'bar segment') + ' → per-location breakdown for that month.</div>';
+
+  // Click handlers (after innerHTML so we can attach to fresh nodes).
+  var svg = document.getElementById('ph204-trend-svg');
+  if(!svg) return;
+  Array.prototype.forEach.call(svg.querySelectorAll('[data-i]'), function(el){
+    el.addEventListener('click', function(){
+      var idx = parseInt(el.getAttribute('data-i'), 10);
+      if(isNaN(idx) || !series[idx]) return;
+      _phase204OpenChannelMonthDrill(state.channelKey, series[idx]);
+    });
+  });
+}
+window._phase204TrendRenderBody = _phase204TrendRenderBody;
+
+function _phase204OpenChannelMonthDrill(channelKey, bucket){
+  var ch = REFERRAL_CHANNELS.find(function(c){ return c.key === channelKey; });
+  if(!ch || !bucket) return;
+  var FAC = (typeof REFERRAL_FACILITIES !== 'undefined') ? REFERRAL_FACILITIES : [];
+  function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+  function pct(n){ return bucket.total ? Math.round((n / bucket.total) * 100) : 0; }
+  var rowsHtml = FAC.map(function(f){
+    var v = bucket.perFac[f.key] || 0;
+    return '<tr style="border-bottom:1px solid var(--border)">'
+      +   '<td style="padding:8px 6px;font-size:12px;color:var(--text)">🏥 ' + esc(f.label || f.short || f.key) + '</td>'
+      +   '<td style="padding:8px 6px;text-align:right;font-weight:800;color:#1F3864;font-size:14px">' + v + '</td>'
+      +   '<td style="padding:8px 6px;text-align:right;font-size:11px;color:var(--muted)">' + pct(v) + '%</td>'
+      + '</tr>';
+  }).join('');
+  var existing = document.getElementById('phase204-drill');
+  if(existing) existing.remove();
+  var m = document.createElement('div');
+  m.id = 'phase204-drill';
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.78);z-index:100000;display:flex;align-items:center;justify-content:center;padding:20px;font-family:DM Sans,sans-serif';
+  m.innerHTML = ''
+    + '<div style="background:#fff;border-radius:14px;max-width:520px;width:100%;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 24px 70px rgba(0,0,0,.6);overflow:hidden">'
+    +   '<div style="background:linear-gradient(135deg,#7030A0,#1F3864);color:#fff;padding:14px 22px;display:flex;align-items:center;justify-content:space-between">'
+    +     '<div>'
+    +       '<div style="font-size:11px;opacity:.85;text-transform:uppercase;letter-spacing:.06em">' + esc(ch.icon + ' ' + ch.label) + ' · ' + esc(bucket.label) + '</div>'
+    +       '<div style="font-size:18px;font-weight:800;margin-top:2px">' + bucket.total + ' referral' + (bucket.total === 1 ? '' : 's') + '</div>'
+    +     '</div>'
+    +     '<button onclick="document.getElementById(\'phase204-drill\').remove()" style="background:rgba(255,255,255,.18);border:none;color:#fff;font-size:20px;width:32px;height:32px;border-radius:8px;cursor:pointer">×</button>'
+    +   '</div>'
+    +   '<div style="padding:16px 22px;overflow-y:auto;flex:1">'
+    +     '<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">By destination location</div>'
+    +     '<table style="width:100%;border-collapse:collapse">' + rowsHtml + '</table>'
+    +   '</div>'
+    + '</div>';
+  document.body.appendChild(m);
+}
+window._phase204OpenChannelMonthDrill = _phase204OpenChannelMonthDrill;
 
 // Toggle the expandable detail row underneath a referral entry.
 function _rlToggleExpand(id){
@@ -20411,9 +20771,17 @@ function renderPendingReferrals(){
     var meName    = (CURRENT_USER && CURRENT_USER.name) || '';
     var isMyRef   = !!meName && r.createdBy === meName;
     var isDestFD  = isFD && CURRENT_USER && CURRENT_USER.facilityKey === r.destinationFacility;
-    var canEdit   = (r.status !== 'retracted') && (isMyRef || isAdminViewer || isDestFD);
+    /* Phase 204 (2026-06-01) — per user: "edit as well can be done and
+       it will override everything before as long as it's pending."
+       Edit was previously allowed on any non-retracted status; tighten
+       to pending-only so the override semantics only apply pre-FD-action. */
+    var canEdit   = (r.status === 'pending') && (isMyRef || isAdminViewer || isDestFD);
     if(canEdit){
       actions += '<div style="margin-top:6px"><button onclick="event.stopPropagation();_prOpenEditReferral(\'' + r.id + '\')" style="background:#fff;color:#1F3864;border:1px solid #c4b5fd;border-radius:5px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">✏ Edit referral</button></div>';
+    }
+    /* Phase 204A — hard-delete button (creator + admin only, pending only). */
+    if(typeof _prCanDeletePendingReferral === 'function' && _prCanDeletePendingReferral(r)){
+      actions += '<div style="margin-top:4px"><button onclick="event.stopPropagation();_prDeletePendingReferral(\'' + r.id + '\')" style="background:#fff;color:#991b1b;border:1px solid #fca5a5;border-radius:5px;padding:4px 10px;font-size:10px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif" title="Hard-delete (creator only, pending only)">🗑 Delete referral</button></div>';
     }
     // Phase 19b late-referral badge — appears on pending rows past the
     // ETA + 10 min trigger. Click → re-open follow-up modal for this ref.
@@ -20589,6 +20957,11 @@ function renderPendingReferrals(){
     if(canEdit){
       rowActions += (rowActions ? ' ' : '')
         + '<button onclick="event.stopPropagation();_prOpenEditReferral(\'' + r.id + '\')" style="background:#fff;color:#1F3864;border:1px solid #c4b5fd;border-radius:5px;padding:4px 8px;font-size:10px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;margin-left:3px;white-space:nowrap" title="Edit this referral">✏</button>';
+    }
+    /* Phase 204A — compact 🗑 chip on the row strip too (creator + admin, pending only). */
+    if(typeof _prCanDeletePendingReferral === 'function' && _prCanDeletePendingReferral(r)){
+      rowActions += (rowActions ? ' ' : '')
+        + '<button onclick="event.stopPropagation();_prDeletePendingReferral(\'' + r.id + '\')" style="background:#fff;color:#991b1b;border:1px solid #fca5a5;border-radius:5px;padding:4px 8px;font-size:10px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;margin-left:3px;white-space:nowrap" title="Delete this referral — hard remove">🗑</button>';
     }
     if(isCreator && !isFD && r.status === 'pending' && (r.createdBy === (CURRENT_USER && CURRENT_USER.name) || (typeof isAdmin === 'function' && isAdmin()))){
       rowActions += (rowActions ? ' ' : '')
@@ -20923,8 +21296,14 @@ function _phase166OpenPendingReferralCard(refId){
       // Footer
       +   '<div style="padding:14px 22px;background:#f8fafc;border-top:1px solid var(--border);display:flex;justify-content:space-between;gap:10px;flex-shrink:0">'
       +     '<button type="button" onclick="document.getElementById(\'' + modalId + '\').remove()" style="background:#fff;color:#475569;border:1px solid var(--border);border-radius:8px;padding:9px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">Close</button>'
-      +     (r.status !== 'retracted' && typeof _prOpenEditReferral === 'function'
+      /* Phase 204 (2026-06-01): Edit gated to pending-only (override
+         semantics only apply pre-FD-action). Hard 🗑 Delete button
+         beside Edit, creator+admin only. */
+      +     (r.status === 'pending' && typeof _prOpenEditReferral === 'function'
             ? '<button type="button" onclick="document.getElementById(\'' + modalId + '\').remove(); _prOpenEditReferral(\'' + safe(r.id) + '\')" style="background:linear-gradient(135deg,#1F3864,#1e3a8a);color:#fff;border:none;border-radius:8px;padding:9px 22px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">✎ Edit referral</button>'
+            : '')
+      +     (typeof _prCanDeletePendingReferral === 'function' && _prCanDeletePendingReferral(r)
+            ? '<button type="button" onclick="document.getElementById(\'' + modalId + '\').remove(); _prDeletePendingReferral(\'' + safe(r.id) + '\')" style="background:#fff;color:#991b1b;border:1px solid #fca5a5;border-radius:8px;padding:9px 18px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;margin-left:8px" title="Hard-delete this pending referral (irreversible)">🗑 Delete</button>'
             : '')
       +   '</div>'
       + '</div>';
@@ -21265,6 +21644,14 @@ function _crFinalizeRetract(ref){
 function _prOpenEditReferral(refId){
   var ref = (PENDING_REFERRALS || []).find(function(r){ return r.id === refId; });
   if(!ref){ if(typeof showToast === 'function') showToast('Referral not found.'); return; }
+  /* Phase 204 (2026-06-01) — Edit is now pending-only per user: "edit
+     as well can be done and it will override everything before as long
+     as it's pending." After FD acts (approved / declined / incomplete
+     / retracted) the override semantics no longer apply. */
+  if(ref.status !== 'pending'){
+    if(typeof showToast === 'function') showToast('Edit only works while status is Pending. This referral is "' + ref.status + '".');
+    return;
+  }
   // Permission check — creator OR admin OR destination FD
   var meName   = (CURRENT_USER && CURRENT_USER.name) || '';
   var isFD     = (CURRENT_USER && CURRENT_USER.role === 'front_desk');
@@ -21438,6 +21825,80 @@ function retractPendingReferral(id){
   if(typeof showToast === 'function') showToast('Referral canceled.');
 }
 window.retractPendingReferral = retractPendingReferral;
+
+// ════════════════════════════════════════════════════════════════════════════
+// PHASE 204A (2026-06-01) — HARD DELETE FOR CREATOR ON PENDING REFERRALS
+// User: "members or UC Plano who create a referral can actually delete the
+// referral and it will not count anywhere as long as the status for that
+// referral is pending. So there should be an option on the ongoing referral
+// to delete one. Only the member who created that can do it. Other members
+// can't do it. Same thing applies if UC Plano did create it — they are the
+// only one who can delete that."
+//
+// Differs from retractPendingReferral (Phase 11c) — that one SOFT-cancels
+// (status='retracted'; record still exists, still shown on Rejected page).
+// This HARD-removes from PENDING_REFERRALS so it does not count in any
+// chart, ranking, or list.
+//
+// Permission (strict — matches the user's standing rule that one member
+// cannot act on another's behalf):
+//   • marketing creator    → CURRENT_USER.name === ref.createdBy
+//   • UC Plano FD creator  → CURRENT_USER.name === ref.createdByAccount
+//     (UC Plano typed-name field can be anything; createdByAccount is
+//     the actual signed-in account that submitted the form)
+//   • admin                → always allowed
+//   • destination FD       → NOT allowed (they can confirm/reject; they
+//     don't get to nuke the creator's record)
+// ════════════════════════════════════════════════════════════════════════════
+function _prCanDeletePendingReferral(ref){
+  if(!ref || ref.status !== 'pending') return false;
+  if(typeof isAdmin === 'function' && isAdmin()) return true;
+  var myName = (CURRENT_USER && CURRENT_USER.name) || '';
+  if(!myName) return false;
+  if(ref.creatorRole === 'marketing'   && ref.createdBy        === myName) return true;
+  if(ref.creatorRole === 'uc_plano_fd' && ref.createdByAccount === myName) return true;
+  return false;
+}
+window._prCanDeletePendingReferral = _prCanDeletePendingReferral;
+
+function _prDeletePendingReferral(refId){
+  var idx = (PENDING_REFERRALS || []).findIndex(function(r){ return r.id === refId; });
+  if(idx < 0){ if(typeof showToast === 'function') showToast('Referral not found.'); return; }
+  var ref = PENDING_REFERRALS[idx];
+  if(ref.status !== 'pending'){
+    if(typeof showToast === 'function') showToast('Only Pending referrals can be deleted. This one is "' + ref.status + '" — use Edit to override instead.');
+    return;
+  }
+  if(!_prCanDeletePendingReferral(ref)){
+    if(typeof showToast === 'function') showToast('Only the creator (or admin) can delete this referral.');
+    return;
+  }
+  /* Double confirm — this is irreversible. */
+  var who = (ref.patientName || '(unnamed)') + ' — ' + (ref.sourceName || '?');
+  var ok = window.confirm(
+    '🗑 Delete this pending referral?\n\n' +
+    who + '\n\n' +
+    'This wipes the record entirely. It will NOT appear in Rejected, Confirmed, ' +
+    'charts, rankings, or any list. There is no undo.\n\n' +
+    'OK = delete · Cancel = keep it'
+  );
+  if(!ok) return;
+  /* Hard remove. */
+  var snapshot = PENDING_REFERRALS[idx];   // for the toast
+  PENDING_REFERRALS.splice(idx, 1);
+  if(typeof _savePendingReferrals === 'function') _savePendingReferrals();
+  /* Refresh every UI that pulls from PENDING_REFERRALS. */
+  if(typeof renderPendingReferrals === 'function') renderPendingReferrals();
+  if(typeof renderReferralLog === 'function') renderReferralLog();
+  if(typeof _phase202RenderGoogleCalls === 'function'){
+    try {
+      var gp = document.getElementById('rfl-page-google');
+      if(gp && gp.style.display !== 'none') _phase202RenderGoogleCalls();
+    } catch(_){}
+  }
+  if(typeof showToast === 'function') showToast('🗑 Referral deleted — ' + (snapshot.patientName || 'record') + ' gone.');
+}
+window._prDeletePendingReferral = _prDeletePendingReferral;
 // ════════════════════════════════════════════════════════════════════════════
 // ░░ END PHASE 11b/11c MODULE ░░
 // ════════════════════════════════════════════════════════════════════════════
