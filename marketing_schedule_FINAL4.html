@@ -2699,6 +2699,64 @@ button:not([disabled]):not(.no-press):active {
       </div>
     </div>
 
+    <!-- Phase 188 (2026-05-31): 3 inner sub-tabs inside Team Stats —
+         Overview / Performance / History — mirroring the individual
+         member profile pattern. Per user "the team overall should have
+         three subtabs just like the members." -->
+    <div style="display:inline-flex;background:#f1f3f9;border-radius:14px;padding:5px;gap:5px;margin-bottom:18px;box-shadow:inset 0 1px 2px rgba(15,23,42,.06)">
+      <button id="ts-tab-overview" type="button" onclick="_phase188SwitchTeamStatsTab('overview')" style="padding:9px 22px;font-size:13px;font-weight:700;color:#fff;cursor:pointer;border:none;background:#1F3864;border-radius:10px;font-family:'DM Sans',sans-serif">📊 Team Overview</button>
+      <button id="ts-tab-performance" type="button" onclick="_phase188SwitchTeamStatsTab('performance')" style="padding:9px 22px;font-size:13px;font-weight:700;color:var(--muted);cursor:pointer;border:none;background:transparent;border-radius:10px;font-family:'DM Sans',sans-serif">📈 Team Performance</button>
+      <button id="ts-tab-history" type="button" onclick="_phase188SwitchTeamStatsTab('history')" style="padding:9px 22px;font-size:13px;font-weight:700;color:var(--muted);cursor:pointer;border:none;background:transparent;border-radius:10px;font-family:'DM Sans',sans-serif">📋 Team History</button>
+    </div>
+
+    <!-- ─── TEAM PERFORMANCE pane (Phase 188) — month-switchable, mirror of
+         the individual member Performance with team-wide rollup + extras. -->
+    <div id="ts-pane-performance" style="display:none">
+      <!-- Month switcher header — same pattern as the member Phase 185 bar -->
+      <div id="ts-perf-month-bar" style="background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;border-radius:14px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;box-shadow:0 4px 14px rgba(31,56,100,.15)">
+        <div style="display:flex;align-items:center;gap:14px;flex:1;min-width:240px">
+          <button type="button" id="ts-perf-prev" onclick="_phase188NavMonth(-1)" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.2);color:#fff;border-radius:8px;width:34px;height:34px;cursor:pointer;font-size:18px;font-weight:700">‹</button>
+          <div style="flex:1;text-align:center">
+            <div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;opacity:.7">Team performance for</div>
+            <div id="ts-perf-month-label" style="font-size:20px;font-weight:800;line-height:1.1;margin-top:2px">—</div>
+          </div>
+          <button type="button" id="ts-perf-next" onclick="_phase188NavMonth(1)" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.2);color:#fff;border-radius:8px;width:34px;height:34px;cursor:pointer;font-size:18px;font-weight:700">›</button>
+        </div>
+        <button type="button" onclick="_phase188JumpToCurrent()" style="background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.25);color:#fff;border-radius:8px;padding:7px 14px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">Today</button>
+      </div>
+
+      <!-- Live monthly counter grid — team-wide -->
+      <div id="ts-perf-counters" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:16px"></div>
+
+      <!-- TWO donuts side-by-side: status breakdown + per-member contributions -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin-bottom:16px">
+        <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px">
+          <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:8px">🍩 Status breakdown</div>
+          <div style="font-size:10px;color:var(--muted);margin-bottom:8px">Completed / Pending / Postponed / Canceled for the selected month</div>
+          <svg id="ts-perf-status-donut" width="100%" height="220" style="display:block;overflow:visible"></svg>
+        </div>
+        <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px">
+          <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:8px">👥 Contributions by member</div>
+          <div style="font-size:10px;color:var(--muted);margin-bottom:8px">Visit count per marketing member, this month</div>
+          <svg id="ts-perf-contrib-donut" width="100%" height="220" style="display:block;overflow:visible"></svg>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── TEAM HISTORY pane (Phase 188) — list of every team event -->
+    <div id="ts-pane-history" style="display:none">
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px 22px;margin-bottom:14px">
+        <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:6px">📋 Team History</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:14px">Roll-up of every member's visit history. Each row shows date, member, business, status and outcome.</div>
+        <div id="ts-history-list" style="font-size:12px;color:var(--text)"></div>
+      </div>
+    </div>
+
+    <!-- ─── TEAM OVERVIEW pane (Phase 188) — wraps the existing all-time
+         + period-selector + line/bar/donut charts so legacy logic keeps
+         working unchanged. -->
+    <div id="ts-pane-overview">
+
     <!-- ── TEAM STATS — overview cards + contribution + team-wide line graphs ── -->
     <div style="border-top:1px solid var(--border);padding-top:24px">
       <!-- Time-period selector — affects the "Visits this period" / "Leads this period" cards -->
@@ -2744,9 +2802,11 @@ button:not([disabled]):not(.no-press):active {
             <div style="font-size:10px;color:var(--muted);margin-top:2px">Completed / assigned per month, team total · last point = live current month</div>
           </div>
           <select id="team-line-period" onchange="_phase187RenderTeamCharts()" style="background:#fff;border:1px solid var(--border);border-radius:7px;padding:5px 9px;font-size:11px;font-family:DM Sans,sans-serif">
+            <option value="1">Last 1 month</option>
             <option value="3">Last 3 months</option>
             <option value="6" selected>Last 6 months</option>
             <option value="12">Last 12 months</option>
+            <option value="ytd">This calendar year</option>
           </select>
         </div>
         <svg id="team-line-svg" width="100%" height="180" style="display:block;overflow:visible"></svg>
@@ -2758,13 +2818,16 @@ button:not([disabled]):not(.no-press):active {
             <div style="font-size:10px;color:var(--muted);margin-top:2px">Same data, bar shape · last bar = live current month</div>
           </div>
           <select id="team-bar-period" onchange="_phase187RenderTeamCharts()" style="background:#fff;border:1px solid var(--border);border-radius:7px;padding:5px 9px;font-size:11px;font-family:DM Sans,sans-serif">
+            <option value="1">Last 1 month</option>
             <option value="3">Last 3 months</option>
             <option value="6" selected>Last 6 months</option>
             <option value="12">Last 12 months</option>
+            <option value="ytd">This calendar year</option>
           </select>
         </div>
         <svg id="team-bar-svg" width="100%" height="180" style="display:block;overflow:visible"></svg>
       </div>
+    </div><!-- /ts-pane-overview -->
     </div>
   </div>
 
@@ -50145,10 +50208,17 @@ window._phase185RefreshPerf = _phase185RefreshPerf;
 // and bar visualizations. Updates on Team Stats panel open + on period
 // dropdown change.
 // ════════════════════════════════════════════════════════════════════════════
-function _phase187CollectTeamMonthlySeries(months){
-  months = Math.max(1, Math.min(24, months || 6));
-  var series = [];
+function _phase187CollectTeamMonthlySeries(monthsInput){
+  // Phase 188 (2026-05-31): accept 'ytd' to mean "start of current calendar
+  // year through now" so the new period dropdown works.
   var now = new Date();
+  var months;
+  if(monthsInput === 'ytd' || monthsInput === 'YTD'){
+    months = now.getMonth() + 1;   // Jan = 1 month, May = 5 months, etc.
+  } else {
+    months = Math.max(1, Math.min(24, parseInt(monthsInput, 10) || 6));
+  }
+  var series = [];
   for(var i = months - 1; i >= 0; i--){
     var d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     var y = d.getFullYear(), m = d.getMonth();
@@ -50237,12 +50307,259 @@ function _phase187DrawBarChart(svgEl, series){
 }
 
 function _phase187RenderTeamCharts(){
-  var lineMonths = parseInt((document.getElementById('team-line-period') || {}).value, 10) || 6;
-  var barMonths  = parseInt((document.getElementById('team-bar-period')  || {}).value, 10) || 6;
-  _phase187DrawLineChart(document.getElementById('team-line-svg'), _phase187CollectTeamMonthlySeries(lineMonths));
-  _phase187DrawBarChart(document.getElementById('team-bar-svg'), _phase187CollectTeamMonthlySeries(barMonths));
+  // Phase 188: accept ytd as a string value, not just an int.
+  var lineV = (document.getElementById('team-line-period') || {}).value || '6';
+  var barV  = (document.getElementById('team-bar-period')  || {}).value || '6';
+  _phase187DrawLineChart(document.getElementById('team-line-svg'), _phase187CollectTeamMonthlySeries(lineV));
+  _phase187DrawBarChart(document.getElementById('team-bar-svg'), _phase187CollectTeamMonthlySeries(barV));
 }
 window._phase187RenderTeamCharts = _phase187RenderTeamCharts;
+
+// ════════════════════════════════════════════════════════════════════════════
+// PHASE 188 (2026-05-31) — TEAM STATS 3-TAB RESTRUCTURE
+// Per user: Team should have three sub-tabs like members (Overview /
+// Performance / History), the Performance pane needs counters mirroring
+// the per-member ones + extras, a donut for status breakdown, and a
+// per-member contributions donut, all with month switching.
+// ════════════════════════════════════════════════════════════════════════════
+function _phase188EnsureMonth(){
+  if(!window._TS_PERF_MONTH){
+    var n = new Date();
+    window._TS_PERF_MONTH = { y: n.getFullYear(), m: n.getMonth() };
+  }
+}
+function _phase188MonthLabel(y, m){
+  return ['January','February','March','April','May','June','July','August','September','October','November','December'][m] + ' ' + y;
+}
+function _phase188NavMonth(delta){
+  _phase188EnsureMonth();
+  var d = new Date(window._TS_PERF_MONTH.y, window._TS_PERF_MONTH.m + delta, 1);
+  var newY = d.getFullYear(), newM = d.getMonth();
+  // Lower bound: same Jan 2024 floor as member panel
+  if(newY < 2024) return;
+  // Upper bound: today's month (no time travel)
+  var now = new Date();
+  if(newY > now.getFullYear() || (newY === now.getFullYear() && newM > now.getMonth())) return;
+  window._TS_PERF_MONTH = { y: newY, m: newM };
+  _phase188RefreshPerformance();
+}
+window._phase188NavMonth = _phase188NavMonth;
+function _phase188JumpToCurrent(){
+  var now = new Date();
+  window._TS_PERF_MONTH = { y: now.getFullYear(), m: now.getMonth() };
+  _phase188RefreshPerformance();
+}
+window._phase188JumpToCurrent = _phase188JumpToCurrent;
+
+function _phase188SwitchTeamStatsTab(which){
+  ['overview','performance','history'].forEach(function(name){
+    var pane = document.getElementById('ts-pane-' + name);
+    var tab  = document.getElementById('ts-tab-' + name);
+    if(pane) pane.style.display = (name === which) ? '' : 'none';
+    if(tab){
+      tab.style.background = (name === which) ? '#1F3864' : 'transparent';
+      tab.style.color = (name === which) ? '#fff' : 'var(--muted)';
+    }
+  });
+  if(which === 'performance') _phase188RefreshPerformance();
+  if(which === 'history') _phase188RenderHistory();
+  if(which === 'overview' && typeof _phase187RenderTeamCharts === 'function') _phase187RenderTeamCharts();
+}
+window._phase188SwitchTeamStatsTab = _phase188SwitchTeamStatsTab;
+
+// Team-wide data collector for the selected month.
+function _phase188CollectMonth(){
+  _phase188EnsureMonth();
+  var y = window._TS_PERF_MONTH.y, m = window._TS_PERF_MONTH.m;
+  var visits = 0, completed = 0, postponed = 0, canceled = 0, pending = 0;
+  var spending = 0, leadsClinic = 0, leadsMva = 0;
+  var perMember = {};
+  if(typeof S !== 'undefined' && S && Array.isArray(S.days)){
+    S.days.forEach(function(d){
+      if(!d || !d.date) return;
+      var dt = new Date(d.date + 'T00:00:00');
+      if(dt.getFullYear() !== y || dt.getMonth() !== m) return;
+      (d.rows || []).forEach(function(r){
+        if(!r || !r.clinic) return;
+        visits++;
+        if(r.status === 'Completed') completed++;
+        else if(r.status === 'Postponed') postponed++;
+        else if(r.status === 'Canceled') canceled++;
+        else pending++;
+        if(r.spending && r.status === 'Completed' && r.rowConfirmed && !r.spending.zeroSpending){
+          spending += (parseFloat(r.spending.total) || 0);
+        }
+        if(r.relationship === 'established'){
+          var bt = (typeof getBizTypeForName === 'function') ? getBizTypeForName(r.clinic) : 'clinic';
+          if(bt === 'mva') leadsMva++; else leadsClinic++;
+        }
+        if(r.member){
+          perMember[r.member] = (perMember[r.member] || 0) + 1;
+        }
+      });
+    });
+  }
+  // Referrals attributed in this month
+  var referrals = 0;
+  if(typeof REFERRAL_LOG !== 'undefined' && Array.isArray(REFERRAL_LOG)){
+    REFERRAL_LOG.forEach(function(e){
+      if(!e || !e.entryDate) return;
+      var parts = String(e.entryDate).split('-');
+      if(parts.length < 3) return;
+      if(parseInt(parts[0], 10) !== y || (parseInt(parts[1], 10) - 1) !== m) return;
+      referrals++;
+    });
+  }
+  return {
+    visits: visits, completed: completed, postponed: postponed, canceled: canceled, pending: pending,
+    ratio: visits ? Math.round((completed / visits) * 100) : 0,
+    spending: Math.round(spending * 100) / 100,
+    leadsClinic: leadsClinic, leadsMva: leadsMva, leadsTotal: leadsClinic + leadsMva,
+    referrals: referrals,
+    perMember: perMember
+  };
+}
+window._phase188CollectMonth = _phase188CollectMonth;
+
+function _phase188RenderMonthBar(){
+  _phase188EnsureMonth();
+  var label = document.getElementById('ts-perf-month-label');
+  if(label) label.textContent = _phase188MonthLabel(window._TS_PERF_MONTH.y, window._TS_PERF_MONTH.m);
+  var now = new Date();
+  var atTop = (window._TS_PERF_MONTH.y === now.getFullYear() && window._TS_PERF_MONTH.m === now.getMonth());
+  var next = document.getElementById('ts-perf-next');
+  if(next){ next.style.opacity = atTop ? '.35' : '1'; next.style.cursor = atTop ? 'not-allowed' : 'pointer'; }
+  var atBottom = (window._TS_PERF_MONTH.y === 2024 && window._TS_PERF_MONTH.m === 0);
+  var prev = document.getElementById('ts-perf-prev');
+  if(prev){ prev.style.opacity = atBottom ? '.35' : '1'; prev.style.cursor = atBottom ? 'not-allowed' : 'pointer'; }
+}
+
+function _phase188RenderCounters(d){
+  var box = document.getElementById('ts-perf-counters');
+  if(!box) return;
+  function card(icon, label, value, color){
+    return '<div style="background:#fff;border:1px solid var(--border);border-left:3px solid ' + color + ';border-radius:10px;padding:12px 14px;box-shadow:0 1px 3px rgba(15,23,42,.04)">'
+      +    '<div style="font-size:9.5px;text-transform:uppercase;color:var(--muted);font-weight:700;letter-spacing:.05em">' + icon + ' ' + label + '</div>'
+      +    '<div style="font-size:22px;font-weight:800;color:' + color + ';margin-top:4px;line-height:1.05">' + value + '</div>'
+      +  '</div>';
+  }
+  box.innerHTML = ''
+    + card('✓', 'Completion ratio',   d.ratio + '%',            '#16a34a')
+    + card('📋', 'Completed visits',   String(d.completed),       '#1F3864')
+    + card('🎯', 'Business leads',     String(d.leadsTotal),      '#7c3aed')
+    + card('👥', 'Patient referrals',  String(d.referrals),       '#0891b2')
+    + card('💰', 'Team spending',      '$' + d.spending.toFixed(2), '#d97706')
+    + card('🗺',  'Total visits',       String(d.visits),          '#64748b')
+    + card('🤝', 'Active members',     String(Object.keys(d.perMember).length), '#0ea5e9')
+    + card('⏳', 'Pending',            String(d.pending),         '#f59e0b');
+}
+
+// Donut renderer — shared by both donuts. segments = [{label, value, color}]
+function _phase188DrawDonut(svg, segments){
+  if(!svg) return;
+  var total = segments.reduce(function(s, x){ return s + (x.value || 0); }, 0);
+  if(!total){ svg.innerHTML = '<text x="50%" y="50%" text-anchor="middle" fill="#94a3b8" font-size="11" font-family="DM Sans,sans-serif">No data this month</text>'; svg.setAttribute('viewBox', '0 0 280 220'); return; }
+  var cx = 110, cy = 110, R = 80, r = 50;
+  var startAngle = -Math.PI / 2;
+  var parts = ['<g font-family="DM Sans,sans-serif">'];
+  segments.forEach(function(seg){
+    if(!seg.value) return;
+    var sweep = (seg.value / total) * 2 * Math.PI;
+    var endAngle = startAngle + sweep;
+    var x1 = cx + Math.cos(startAngle) * R, y1 = cy + Math.sin(startAngle) * R;
+    var x2 = cx + Math.cos(endAngle) * R,   y2 = cy + Math.sin(endAngle) * R;
+    var x3 = cx + Math.cos(endAngle) * r,   y3 = cy + Math.sin(endAngle) * r;
+    var x4 = cx + Math.cos(startAngle) * r, y4 = cy + Math.sin(startAngle) * r;
+    var large = sweep > Math.PI ? 1 : 0;
+    var d = 'M ' + x1 + ' ' + y1
+          + ' A ' + R + ' ' + R + ' 0 ' + large + ' 1 ' + x2 + ' ' + y2
+          + ' L ' + x3 + ' ' + y3
+          + ' A ' + r + ' ' + r + ' 0 ' + large + ' 0 ' + x4 + ' ' + y4
+          + ' Z';
+    parts.push('<path d="' + d + '" fill="' + seg.color + '"><title>' + seg.label + ': ' + seg.value + '</title></path>');
+    startAngle = endAngle;
+  });
+  parts.push('<text x="' + cx + '" y="' + (cy - 4) + '" text-anchor="middle" font-size="22" font-weight="800" fill="#1F3864">' + total + '</text>');
+  parts.push('<text x="' + cx + '" y="' + (cy + 16) + '" text-anchor="middle" font-size="10" fill="#64748b">total</text>');
+  // Legend on the right
+  var legendX = 220, legendY = 30;
+  segments.forEach(function(seg, i){
+    if(!seg.value) return;
+    var pct = Math.round((seg.value / total) * 100);
+    parts.push('<rect x="' + legendX + '" y="' + (legendY + i * 22) + '" width="12" height="12" fill="' + seg.color + '" rx="2"/>');
+    parts.push('<text x="' + (legendX + 18) + '" y="' + (legendY + i * 22 + 10) + '" font-size="10" fill="#0f172a" font-weight="600">' + (seg.label.length > 16 ? seg.label.slice(0, 14) + '…' : seg.label) + '</text>');
+    parts.push('<text x="' + (legendX + 18) + '" y="' + (legendY + i * 22 + 22) + '" font-size="9" fill="#64748b">' + seg.value + ' · ' + pct + '%</text>');
+  });
+  parts.push('</g>');
+  svg.setAttribute('viewBox', '0 0 380 220');
+  svg.innerHTML = parts.join('');
+}
+
+function _phase188RenderStatusDonut(d){
+  var segments = [
+    { label: 'Completed', value: d.completed, color: '#16a34a' },
+    { label: 'Pending',   value: d.pending,   color: '#f59e0b' },
+    { label: 'Postponed', value: d.postponed, color: '#7c3aed' },
+    { label: 'Canceled',  value: d.canceled,  color: '#dc2626' }
+  ];
+  _phase188DrawDonut(document.getElementById('ts-perf-status-donut'), segments);
+}
+
+function _phase188RenderContributionsDonut(d){
+  var palette = ['#1F3864', '#7c3aed', '#16a34a', '#d97706', '#0891b2', '#dc2626', '#0ea5e9', '#a855f7'];
+  var entries = Object.keys(d.perMember).map(function(name, i){
+    return { label: name, value: d.perMember[name], color: palette[i % palette.length] };
+  }).sort(function(a, b){ return b.value - a.value; });
+  _phase188DrawDonut(document.getElementById('ts-perf-contrib-donut'), entries);
+}
+
+function _phase188RefreshPerformance(){
+  _phase188RenderMonthBar();
+  var d = _phase188CollectMonth();
+  _phase188RenderCounters(d);
+  _phase188RenderStatusDonut(d);
+  _phase188RenderContributionsDonut(d);
+}
+window._phase188RefreshPerformance = _phase188RefreshPerformance;
+
+// Team-wide history list — last 50 visit events across every member.
+function _phase188RenderHistory(){
+  var host = document.getElementById('ts-history-list');
+  if(!host) return;
+  var rows = [];
+  if(typeof S !== 'undefined' && S && Array.isArray(S.days)){
+    S.days.forEach(function(d){
+      if(!d || !Array.isArray(d.rows)) return;
+      d.rows.forEach(function(r){
+        if(!r || !r.clinic) return;
+        rows.push({ date: d.date, member: r.member || '—', clinic: r.clinic, status: r.status || 'Pending', relationship: r.relationship || '' });
+      });
+    });
+  }
+  rows.sort(function(a, b){ return (b.date || '').localeCompare(a.date || ''); });
+  rows = rows.slice(0, 100);
+  if(!rows.length){ host.innerHTML = '<div style="font-size:12px;color:var(--muted);font-style:italic;padding:14px 0">No team activity yet.</div>'; return; }
+  var html = '<table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr style="background:#f8fafc">'
+    + '<th style="padding:8px 10px;text-align:left;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Date</th>'
+    + '<th style="padding:8px 10px;text-align:left;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Member</th>'
+    + '<th style="padding:8px 10px;text-align:left;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Business</th>'
+    + '<th style="padding:8px 10px;text-align:left;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Status</th>'
+    + '<th style="padding:8px 10px;text-align:left;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Lead</th>'
+    + '</tr></thead><tbody>';
+  rows.forEach(function(r){
+    var esc = function(s){ return String(s == null ? '' : s).replace(/</g, '&lt;'); };
+    html += '<tr style="border-bottom:1px solid var(--border)">'
+         +    '<td style="padding:7px 10px;color:var(--muted);white-space:nowrap">' + esc(r.date) + '</td>'
+         +    '<td style="padding:7px 10px;color:var(--text);font-weight:600">' + esc(r.member) + '</td>'
+         +    '<td style="padding:7px 10px;color:var(--text)">' + esc(r.clinic) + '</td>'
+         +    '<td style="padding:7px 10px;color:var(--text)">' + esc(r.status) + '</td>'
+         +    '<td style="padding:7px 10px;color:var(--muted)">' + esc(r.relationship) + '</td>'
+         + '</tr>';
+  });
+  html += '</tbody></table>';
+  host.innerHTML = html;
+}
+window._phase188RenderHistory = _phase188RenderHistory;
 
 // Hook switchTeamTab so the team charts paint whenever Stats opens.
 (function(){
