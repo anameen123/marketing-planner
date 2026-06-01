@@ -15390,6 +15390,483 @@ function _rlRestorePanelStates(){
 }
 window._rlRestorePanelStates = _rlRestorePanelStates;
 
+// ════════════════════════════════════════════════════════════════════════════
+// PHASE 191 (2026-05-31) — LOGGED PATIENTS 2-SUB-TAB STRUCTURE
+//   Patients sub-tab → existing renderReferralLog list
+//   Stats sub-tab    → counters per channel + per facility, month switcher,
+//                      line + bar trend charts with click-to-drill-down
+//                      modals showing per-channel breakdown + donut + the
+//                      per-day curve for that month.
+// Data sources:
+//   • Counters + charts  ← REFERRAL_LOG (wcg_referral_log_v1)
+//   • Channel defs       ← REFERRAL_CHANNELS array
+//   • Facility defs      ← REFERRAL_FACILITIES array
+// ════════════════════════════════════════════════════════════════════════════
+
+function _phase191SwitchLoggedTab(which){
+  ['patients','stats'].forEach(function(name){
+    var pane = document.getElementById('lp-page-' + name);
+    var btn  = document.getElementById('lp-tab-' + name);
+    if(pane) pane.style.display = (name === which) ? '' : 'none';
+    if(btn){
+      btn.style.background = (name === which) ? '#7030A0' : 'transparent';
+      btn.style.color = (name === which) ? '#fff' : 'var(--muted)';
+    }
+  });
+  if(which === 'stats') _phase191RefreshStats();
+}
+window._phase191SwitchLoggedTab = _phase191SwitchLoggedTab;
+
+function _phase191EnsureMonth(){
+  if(!window._LP_STATS_MONTH){
+    var n = new Date();
+    window._LP_STATS_MONTH = { y: n.getFullYear(), m: n.getMonth() };
+  }
+}
+function _phase191MonthLabel(y, m){
+  return ['January','February','March','April','May','June','July','August','September','October','November','December'][m] + ' ' + y;
+}
+function _phase191NavMonth(delta){
+  _phase191EnsureMonth();
+  var d = new Date(window._LP_STATS_MONTH.y, window._LP_STATS_MONTH.m + delta, 1);
+  if(d.getFullYear() < 2024) return;
+  var now = new Date();
+  if(d.getFullYear() > now.getFullYear() || (d.getFullYear() === now.getFullYear() && d.getMonth() > now.getMonth())) return;
+  window._LP_STATS_MONTH = { y: d.getFullYear(), m: d.getMonth() };
+  _phase191RefreshStats();
+}
+window._phase191NavMonth = _phase191NavMonth;
+function _phase191JumpToCurrent(){
+  var n = new Date();
+  window._LP_STATS_MONTH = { y: n.getFullYear(), m: n.getMonth() };
+  _phase191RefreshStats();
+}
+window._phase191JumpToCurrent = _phase191JumpToCurrent;
+
+// Helper: aggregate REFERRAL_LOG by month into {channel, facility, total} buckets.
+function _phase191CollectMonth(y, m){
+  var byChannel = {}, byFacility = {}, byChannelFacility = {}, total = 0;
+  if(typeof REFERRAL_LOG !== 'undefined' && Array.isArray(REFERRAL_LOG)){
+    REFERRAL_LOG.forEach(function(e){
+      if(!e || !e.entryDate) return;
+      var parts = String(e.entryDate).split('-');
+      if(parts.length < 3) return;
+      if(parseInt(parts[0], 10) !== y || (parseInt(parts[1], 10) - 1) !== m) return;
+      var n = parseInt(e.patientCount, 10) || 1;
+      var ch = e.channel || 'unknown';
+      var fac = e.destinationFacility || 'unknown';
+      byChannel[ch]  = (byChannel[ch]  || 0) + n;
+      byFacility[fac] = (byFacility[fac] || 0) + n;
+      var ck = fac + '|' + ch;
+      byChannelFacility[ck] = (byChannelFacility[ck] || 0) + n;
+      total += n;
+    });
+  }
+  return { total: total, byChannel: byChannel, byFacility: byFacility, byChannelFacility: byChannelFacility };
+}
+window._phase191CollectMonth = _phase191CollectMonth;
+
+function _phase191RenderMonthBar(){
+  _phase191EnsureMonth();
+  var label = document.getElementById('lp-stats-month-label');
+  if(label) label.textContent = _phase191MonthLabel(window._LP_STATS_MONTH.y, window._LP_STATS_MONTH.m);
+  var now = new Date();
+  var atTop = (window._LP_STATS_MONTH.y === now.getFullYear() && window._LP_STATS_MONTH.m === now.getMonth());
+  var next = document.getElementById('lp-stats-next');
+  if(next){ next.style.opacity = atTop ? '.35' : '1'; next.style.cursor = atTop ? 'not-allowed' : 'pointer'; }
+}
+
+function _phase191RenderCounters(d){
+  var chBox = document.getElementById('lp-stats-channel-counters');
+  var fcBox = document.getElementById('lp-stats-facility-counters');
+  var palette = ['#16a34a', '#0891b2', '#7c3aed', '#d97706', '#dc2626', '#1F3864', '#0ea5e9'];
+  function card(icon, label, value, color, onclick){
+    return '<button type="button" onclick="' + onclick + '" style="text-align:left;background:#fff;border:1px solid var(--border);border-left:3px solid ' + color + ';border-radius:10px;padding:10px 12px;box-shadow:0 1px 3px rgba(15,23,42,.04);cursor:pointer;font-family:DM Sans,sans-serif;transition:transform .12s,box-shadow .12s" onmouseover="this.style.transform=\'translateY(-1px)\';this.style.boxShadow=\'0 4px 12px rgba(15,23,42,.08)\'" onmouseout="this.style.transform=\'\';this.style.boxShadow=\'0 1px 3px rgba(15,23,42,.04)\'">'
+      +    '<div style="font-size:9.5px;text-transform:uppercase;color:var(--muted);font-weight:700;letter-spacing:.05em">' + icon + ' ' + label + '</div>'
+      +    '<div style="font-size:20px;font-weight:800;color:' + color + ';margin-top:4px;line-height:1.05">' + value + '</div>'
+      +    '<div style="font-size:9px;color:#94a3b8;margin-top:3px">Click for breakdown</div>'
+      +  '</button>';
+  }
+  if(chBox && typeof REFERRAL_CHANNELS !== 'undefined'){
+    chBox.innerHTML = REFERRAL_CHANNELS.map(function(c, i){
+      var n = d.byChannel[c.key] || 0;
+      return card(c.icon, c.label, String(n), palette[i % palette.length], "_phase191OpenChannelDrill('" + c.key.replace(/'/g, "\\'") + "')");
+    }).join('');
+  }
+  if(fcBox && typeof REFERRAL_FACILITIES !== 'undefined'){
+    fcBox.innerHTML = REFERRAL_FACILITIES.map(function(f, i){
+      var n = d.byFacility[f.key] || 0;
+      return card('🏥', f.label, String(n), palette[(i + 3) % palette.length], "_phase191OpenFacilityDrill('" + f.key.replace(/'/g, "\\'") + "')");
+    }).join('');
+  }
+}
+
+// Aggregate REFERRAL_LOG over a window of months for the trend chart.
+function _phase191CollectSeries(months, facilityKey){
+  var now = new Date();
+  var series = [];
+  for(var i = months - 1; i >= 0; i--){
+    var d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    var y = d.getFullYear(), m = d.getMonth();
+    var n = 0;
+    if(typeof REFERRAL_LOG !== 'undefined' && Array.isArray(REFERRAL_LOG)){
+      REFERRAL_LOG.forEach(function(e){
+        if(!e || !e.entryDate) return;
+        var p = String(e.entryDate).split('-');
+        if(p.length < 3) return;
+        if(parseInt(p[0], 10) !== y || (parseInt(p[1], 10) - 1) !== m) return;
+        if(facilityKey && e.destinationFacility !== facilityKey) return;
+        n += parseInt(e.patientCount, 10) || 1;
+      });
+    }
+    series.push({ y: y, m: m, count: n, label: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m] + ' ' + (y % 100) });
+  }
+  return series;
+}
+
+function _phase191DrawTrendLine(svg, series, onDot){
+  if(!svg) return;
+  var w = 600, h = 200, padL = 40, padR = 18, padT = 20, padB = 40;
+  if(!series.length){ svg.innerHTML = '<text x="50%" y="50%" text-anchor="middle" fill="#94a3b8" font-size="11" font-family="DM Sans,sans-serif">No data</text>'; svg.setAttribute('viewBox','0 0 ' + w + ' ' + h); return; }
+  var max = Math.max.apply(null, series.map(function(s){ return s.count; }));
+  if(max <= 0) max = 1;
+  var stepX = (w - padL - padR) / Math.max(1, series.length - 1);
+  var parts = ['<g font-family="DM Sans,sans-serif">'];
+  // Y gridlines
+  [0, 0.25, 0.5, 0.75, 1].forEach(function(f){
+    var y = padT + (h - padT - padB) * (1 - f);
+    parts.push('<line x1="' + padL + '" y1="' + y + '" x2="' + (w - padR) + '" y2="' + y + '" stroke="#e2e8f0"/>');
+    parts.push('<text x="' + (padL - 6) + '" y="' + (y + 4) + '" text-anchor="end" font-size="9" fill="#94a3b8">' + Math.round(max * f) + '</text>');
+  });
+  // Polyline
+  var pts = series.map(function(s, i){
+    return { x: padL + i * stepX, y: padT + (h - padT - padB) * (1 - s.count / max), s: s, i: i };
+  });
+  var pathD = pts.map(function(p, i){ return (i === 0 ? 'M' : 'L') + p.x.toFixed(1) + ' ' + p.y.toFixed(1); }).join(' ');
+  parts.push('<path d="' + pathD + '" fill="none" stroke="#1F3864" stroke-width="2.5"/>');
+  // Dots (clickable)
+  pts.forEach(function(p, i){
+    parts.push('<circle data-i="' + i + '" cx="' + p.x + '" cy="' + p.y + '" r="6" fill="#1F3864" stroke="#fff" stroke-width="2" style="cursor:pointer"><title>' + p.s.label + ': ' + p.s.count + '</title></circle>');
+    parts.push('<text x="' + p.x + '" y="' + (p.y - 12) + '" text-anchor="middle" font-size="10" font-weight="700" fill="#1F3864">' + p.s.count + '</text>');
+    parts.push('<text x="' + p.x + '" y="' + (h - padB + 16) + '" text-anchor="middle" font-size="10" fill="#64748b">' + p.s.label + '</text>');
+  });
+  parts.push('</g>');
+  svg.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
+  svg.innerHTML = parts.join('');
+  // Wire click handlers on dots
+  Array.prototype.forEach.call(svg.querySelectorAll('circle[data-i]'), function(c){
+    c.addEventListener('click', function(){
+      var idx = parseInt(c.getAttribute('data-i'), 10);
+      if(onDot && series[idx]) onDot(series[idx]);
+    });
+  });
+}
+
+function _phase191RenderTrend(){
+  var sel = document.getElementById('lp-trend-period');
+  var months = parseInt((sel && sel.value) || '6', 10);
+  var series = _phase191CollectSeries(months, null);
+  _phase191DrawTrendLine(document.getElementById('lp-trend-svg'), series, function(s){
+    _phase191OpenMonthDrill(s.y, s.m, null);
+  });
+}
+window._phase191RenderTrend = _phase191RenderTrend;
+
+function _phase191RenderLocTrend(){
+  var sel = document.getElementById('lp-loctrend-period');
+  var months = parseInt((sel && sel.value) || '6', 10);
+  var svg = document.getElementById('lp-loctrend-svg');
+  if(!svg || typeof REFERRAL_FACILITIES === 'undefined') return;
+  // Grouped bars: one set of bars per month, one bar per facility
+  var now = new Date();
+  var facs = REFERRAL_FACILITIES.slice();
+  var allMonths = [];
+  for(var i = months - 1; i >= 0; i--){
+    var d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    var bucket = { y: d.getFullYear(), m: d.getMonth(), label: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()] + ' ' + (d.getFullYear() % 100), perFac: {} };
+    facs.forEach(function(f){ bucket.perFac[f.key] = 0; });
+    allMonths.push(bucket);
+  }
+  if(typeof REFERRAL_LOG !== 'undefined' && Array.isArray(REFERRAL_LOG)){
+    REFERRAL_LOG.forEach(function(e){
+      if(!e || !e.entryDate) return;
+      var p = String(e.entryDate).split('-');
+      if(p.length < 3) return;
+      var ey = parseInt(p[0], 10), em = parseInt(p[1], 10) - 1;
+      for(var i = 0; i < allMonths.length; i++){
+        if(allMonths[i].y === ey && allMonths[i].m === em){
+          if(allMonths[i].perFac.hasOwnProperty(e.destinationFacility)){
+            allMonths[i].perFac[e.destinationFacility] += parseInt(e.patientCount, 10) || 1;
+          }
+          break;
+        }
+      }
+    });
+  }
+  var w = 600, h = 220, padL = 36, padR = 18, padT = 20, padB = 60;
+  var max = 1;
+  allMonths.forEach(function(mo){
+    facs.forEach(function(f){ if(mo.perFac[f.key] > max) max = mo.perFac[f.key]; });
+  });
+  var colorMap = { frisco_er: '#1F3864', castle_hills_er: '#7c3aed', plano_uc: '#16a34a' };
+  var groupW = (w - padL - padR) / allMonths.length;
+  var barW = Math.max((groupW - 8) / facs.length, 4);
+  var parts = ['<g font-family="DM Sans,sans-serif">'];
+  // Gridlines
+  [0, 0.5, 1].forEach(function(f){
+    var y = padT + (h - padT - padB) * (1 - f);
+    parts.push('<line x1="' + padL + '" y1="' + y + '" x2="' + (w - padR) + '" y2="' + y + '" stroke="#e2e8f0"/>');
+    parts.push('<text x="' + (padL - 4) + '" y="' + (y + 4) + '" text-anchor="end" font-size="9" fill="#94a3b8">' + Math.round(max * f) + '</text>');
+  });
+  allMonths.forEach(function(mo, gi){
+    var gx = padL + gi * groupW + 4;
+    facs.forEach(function(f, fi){
+      var n = mo.perFac[f.key] || 0;
+      var bx = gx + fi * barW;
+      var bh = (h - padT - padB) * (n / max);
+      var by = (h - padB) - bh;
+      var fill = colorMap[f.key] || '#64748b';
+      parts.push('<rect data-y="' + mo.y + '" data-m="' + mo.m + '" data-fac="' + f.key + '" x="' + bx + '" y="' + by + '" width="' + barW + '" height="' + bh + '" fill="' + fill + '" rx="2" style="cursor:pointer"><title>' + f.short + ' · ' + mo.label + ': ' + n + '</title></rect>');
+    });
+    parts.push('<text x="' + (gx + (facs.length * barW) / 2) + '" y="' + (h - padB + 14) + '" text-anchor="middle" font-size="10" fill="#64748b">' + mo.label + '</text>');
+  });
+  // Legend
+  facs.forEach(function(f, fi){
+    var lx = padL + fi * 110;
+    var ly = h - 14;
+    parts.push('<rect x="' + lx + '" y="' + (ly - 8) + '" width="10" height="10" fill="' + (colorMap[f.key] || '#64748b') + '" rx="2"/>');
+    parts.push('<text x="' + (lx + 14) + '" y="' + ly + '" font-size="10" fill="#0f172a">' + f.short + '</text>');
+  });
+  parts.push('</g>');
+  svg.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
+  svg.innerHTML = parts.join('');
+  Array.prototype.forEach.call(svg.querySelectorAll('rect[data-fac]'), function(r){
+    r.addEventListener('click', function(){
+      var y = parseInt(r.getAttribute('data-y'), 10);
+      var m = parseInt(r.getAttribute('data-m'), 10);
+      var fac = r.getAttribute('data-fac');
+      _phase191OpenMonthDrill(y, m, fac);
+    });
+  });
+}
+window._phase191RenderLocTrend = _phase191RenderLocTrend;
+
+function _phase191RefreshStats(){
+  _phase191RenderMonthBar();
+  var d = _phase191CollectMonth(window._LP_STATS_MONTH.y, window._LP_STATS_MONTH.m);
+  _phase191RenderCounters(d);
+  _phase191RenderTrend();
+  _phase191RenderLocTrend();
+}
+window._phase191RefreshStats = _phase191RefreshStats;
+
+// Drill-down modal — used by counter clicks AND chart-dot clicks.
+// Shows: per-channel breakdown table + donut + (page 2) per-day line chart.
+function _phase191OpenDrillModal(opts){
+  var existing = document.getElementById('phase191-drill-modal');
+  if(existing) existing.remove();
+  var m = document.createElement('div');
+  m.id = 'phase191-drill-modal';
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.7);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;font-family:DM Sans,sans-serif';
+  var bodyId = 'phase191-drill-body';
+  m.innerHTML = ''
+    + '<div style="background:#fff;border-radius:14px;max-width:760px;width:100%;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.5);overflow:hidden">'
+    +   '<div style="background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;padding:16px 22px;display:flex;align-items:center;justify-content:space-between;gap:10px">'
+    +     '<div><div style="font-size:11px;opacity:.8;text-transform:uppercase;letter-spacing:.06em">' + (opts.kicker || 'Drill-down') + '</div><div style="font-size:17px;font-weight:800">' + (opts.title || '') + '</div></div>'
+    +     '<button type="button" onclick="document.getElementById(\'phase191-drill-modal\').remove()" style="background:rgba(255,255,255,.18);border:none;color:#fff;font-size:20px;width:32px;height:32px;border-radius:8px;cursor:pointer">×</button>'
+    +   '</div>'
+    +   '<div style="display:flex;gap:0;border-bottom:1px solid var(--border);padding:0 22px;background:#f8fafc">'
+    +     '<button type="button" id="phase191-drill-page-channels" onclick="_phase191SwitchDrillPage(\'channels\')" style="padding:10px 16px;font-size:12px;font-weight:700;color:#7030A0;background:transparent;border:none;border-bottom:3px solid #7030A0;cursor:pointer;font-family:DM Sans,sans-serif">📊 Channels</button>'
+    +     '<button type="button" id="phase191-drill-page-perday" onclick="_phase191SwitchDrillPage(\'perday\')" style="padding:10px 16px;font-size:12px;font-weight:700;color:var(--muted);background:transparent;border:none;border-bottom:3px solid transparent;cursor:pointer;font-family:DM Sans,sans-serif">📅 Per-day trend</button>'
+    +   '</div>'
+    +   '<div id="' + bodyId + '" style="padding:18px 22px;overflow-y:auto;flex:1"></div>'
+    + '</div>';
+  document.body.appendChild(m);
+  window._PHASE191_DRILL_CTX = opts;
+  _phase191SwitchDrillPage('channels');
+}
+window._phase191OpenDrillModal = _phase191OpenDrillModal;
+
+function _phase191SwitchDrillPage(which){
+  var body = document.getElementById('phase191-drill-body');
+  var opts = window._PHASE191_DRILL_CTX || {};
+  ['channels','perday'].forEach(function(p){
+    var b = document.getElementById('phase191-drill-page-' + p);
+    if(b){
+      b.style.color = (p === which) ? '#7030A0' : 'var(--muted)';
+      b.style.borderBottomColor = (p === which) ? '#7030A0' : 'transparent';
+    }
+  });
+  if(!body) return;
+  if(which === 'channels'){
+    body.innerHTML = _phase191BuildBreakdownHtml(opts);
+  } else {
+    body.innerHTML = '<svg id="phase191-perday-svg" width="100%" height="240" style="display:block"></svg>';
+    _phase191DrawPerDay(opts);
+  }
+}
+window._phase191SwitchDrillPage = _phase191SwitchDrillPage;
+
+function _phase191BuildBreakdownHtml(opts){
+  // opts: { y, m, facilityKey?, channelKey? }
+  var byChannel = {}, byFacility = {}, total = 0;
+  if(typeof REFERRAL_LOG !== 'undefined' && Array.isArray(REFERRAL_LOG)){
+    REFERRAL_LOG.forEach(function(e){
+      if(!e || !e.entryDate) return;
+      var p = String(e.entryDate).split('-');
+      if(p.length < 3) return;
+      if(parseInt(p[0], 10) !== opts.y || (parseInt(p[1], 10) - 1) !== opts.m) return;
+      if(opts.facilityKey && e.destinationFacility !== opts.facilityKey) return;
+      if(opts.channelKey && e.channel !== opts.channelKey) return;
+      var n = parseInt(e.patientCount, 10) || 1;
+      byChannel[e.channel || 'unknown'] = (byChannel[e.channel || 'unknown'] || 0) + n;
+      byFacility[e.destinationFacility || 'unknown'] = (byFacility[e.destinationFacility || 'unknown'] || 0) + n;
+      total += n;
+    });
+  }
+  function esc(s){ return String(s == null ? '' : s).replace(/</g, '&lt;'); }
+  function pct(n){ return total ? Math.round((n / total) * 100) : 0; }
+  // Build donut
+  var donut = _phase191DonutSvg(Object.keys(byChannel).map(function(k, i){
+    var def = (typeof REFERRAL_CHANNELS !== 'undefined') ? REFERRAL_CHANNELS.find(function(c){ return c.key === k; }) : null;
+    var palette = ['#16a34a','#0891b2','#7c3aed','#d97706','#dc2626','#1F3864','#0ea5e9','#a855f7'];
+    return { label: def ? def.label : k, value: byChannel[k], color: palette[i % palette.length] };
+  }));
+  var html = '<div style="font-size:11px;color:var(--muted);margin-bottom:10px"><strong style="color:var(--text)">Data source:</strong> REFERRAL_LOG entries with entryDate in '
+    + _phase191MonthLabel(opts.y, opts.m) + (opts.facilityKey ? ' · facility=' + esc(opts.facilityKey) : '') + (opts.channelKey ? ' · channel=' + esc(opts.channelKey) : '') + '</div>'
+    + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px">'
+    + '<div>'
+    +   '<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">By channel</div>'
+    +   '<table style="width:100%;font-size:12px;border-collapse:collapse">';
+  Object.keys(byChannel).sort(function(a,b){ return byChannel[b]-byChannel[a]; }).forEach(function(k){
+    var def = (typeof REFERRAL_CHANNELS !== 'undefined') ? REFERRAL_CHANNELS.find(function(c){ return c.key === k; }) : null;
+    html += '<tr style="border-bottom:1px solid var(--border)"><td style="padding:6px 4px">' + (def ? def.icon + ' ' + esc(def.label) : esc(k)) + '</td><td style="padding:6px 4px;text-align:right;font-weight:700;color:#1F3864">' + byChannel[k] + '</td><td style="padding:6px 4px;text-align:right;color:var(--muted);font-size:11px">' + pct(byChannel[k]) + '%</td></tr>';
+  });
+  html += '</table></div>'
+    + '<div>'
+    +   '<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">By location</div>'
+    +   '<table style="width:100%;font-size:12px;border-collapse:collapse">';
+  Object.keys(byFacility).sort(function(a,b){ return byFacility[b]-byFacility[a]; }).forEach(function(k){
+    var def = (typeof REFERRAL_FACILITIES !== 'undefined') ? REFERRAL_FACILITIES.find(function(f){ return f.key === k; }) : null;
+    html += '<tr style="border-bottom:1px solid var(--border)"><td style="padding:6px 4px">🏥 ' + esc(def ? def.label : k) + '</td><td style="padding:6px 4px;text-align:right;font-weight:700;color:#1F3864">' + byFacility[k] + '</td><td style="padding:6px 4px;text-align:right;color:var(--muted);font-size:11px">' + pct(byFacility[k]) + '%</td></tr>';
+  });
+  html += '</table></div>'
+    + '<div style="grid-column:1/-1"><div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:8px 0">Donut</div>' + donut + '</div>'
+    + '</div>'
+    + '<div style="text-align:center;font-size:18px;font-weight:800;color:#1F3864;margin-top:14px">Total: ' + total + '</div>';
+  return html;
+}
+
+function _phase191DonutSvg(segments){
+  var total = segments.reduce(function(s, x){ return s + x.value; }, 0);
+  if(!total) return '<div style="font-size:11px;color:var(--muted);font-style:italic;padding:14px 0">No data</div>';
+  var cx = 110, cy = 110, R = 80, r = 50;
+  var start = -Math.PI / 2;
+  var parts = ['<svg width="380" height="220" viewBox="0 0 380 220" style="display:block" font-family="DM Sans,sans-serif"><g>'];
+  segments.forEach(function(seg){
+    if(!seg.value) return;
+    var sweep = (seg.value / total) * 2 * Math.PI;
+    var end = start + sweep;
+    var x1 = cx + Math.cos(start) * R, y1 = cy + Math.sin(start) * R;
+    var x2 = cx + Math.cos(end)   * R, y2 = cy + Math.sin(end)   * R;
+    var x3 = cx + Math.cos(end)   * r, y3 = cy + Math.sin(end)   * r;
+    var x4 = cx + Math.cos(start) * r, y4 = cy + Math.sin(start) * r;
+    var large = sweep > Math.PI ? 1 : 0;
+    var d = 'M ' + x1 + ' ' + y1 + ' A ' + R + ' ' + R + ' 0 ' + large + ' 1 ' + x2 + ' ' + y2 + ' L ' + x3 + ' ' + y3 + ' A ' + r + ' ' + r + ' 0 ' + large + ' 0 ' + x4 + ' ' + y4 + ' Z';
+    parts.push('<path d="' + d + '" fill="' + seg.color + '"><title>' + String(seg.label).replace(/</g,'&lt;') + ': ' + seg.value + '</title></path>');
+    start = end;
+  });
+  parts.push('<text x="' + cx + '" y="' + (cy - 4) + '" text-anchor="middle" font-size="22" font-weight="800" fill="#1F3864">' + total + '</text>');
+  parts.push('<text x="' + cx + '" y="' + (cy + 16) + '" text-anchor="middle" font-size="10" fill="#64748b">total</text>');
+  var ly = 30;
+  segments.forEach(function(seg, i){
+    if(!seg.value) return;
+    parts.push('<rect x="220" y="' + (ly + i * 22) + '" width="12" height="12" fill="' + seg.color + '" rx="2"/>');
+    parts.push('<text x="238" y="' + (ly + i * 22 + 10) + '" font-size="10" fill="#0f172a" font-weight="600">' + String(seg.label).replace(/</g,'&lt;').slice(0, 22) + '</text>');
+    parts.push('<text x="238" y="' + (ly + i * 22 + 22) + '" font-size="9" fill="#64748b">' + seg.value + ' · ' + Math.round((seg.value/total)*100) + '%</text>');
+  });
+  parts.push('</g></svg>');
+  return parts.join('');
+}
+
+function _phase191DrawPerDay(opts){
+  var svg = document.getElementById('phase191-perday-svg');
+  if(!svg) return;
+  var y = opts.y, m = opts.m;
+  var daysInMonth = new Date(y, m + 1, 0).getDate();
+  var perDay = new Array(daysInMonth).fill(0);
+  if(typeof REFERRAL_LOG !== 'undefined' && Array.isArray(REFERRAL_LOG)){
+    REFERRAL_LOG.forEach(function(e){
+      if(!e || !e.entryDate) return;
+      var p = String(e.entryDate).split('-');
+      if(p.length < 3) return;
+      if(parseInt(p[0], 10) !== y || (parseInt(p[1], 10) - 1) !== m) return;
+      if(opts.facilityKey && e.destinationFacility !== opts.facilityKey) return;
+      if(opts.channelKey && e.channel !== opts.channelKey) return;
+      var day = parseInt(p[2], 10);
+      if(day >= 1 && day <= daysInMonth) perDay[day - 1] += parseInt(e.patientCount, 10) || 1;
+    });
+  }
+  var total = perDay.reduce(function(s, v){ return s + v; }, 0);
+  if(!total){ svg.innerHTML = '<text x="50%" y="50%" text-anchor="middle" fill="#94a3b8" font-size="11" font-family="DM Sans,sans-serif">No data for this month</text>'; svg.setAttribute('viewBox', '0 0 600 240'); return; }
+  var w = 600, h = 240, padL = 36, padR = 18, padT = 20, padB = 36;
+  var max = Math.max.apply(null, perDay);
+  var stepX = (w - padL - padR) / Math.max(1, daysInMonth - 1);
+  var parts = ['<g font-family="DM Sans,sans-serif">'];
+  [0, 0.5, 1].forEach(function(f){
+    var yL = padT + (h - padT - padB) * (1 - f);
+    parts.push('<line x1="' + padL + '" y1="' + yL + '" x2="' + (w - padR) + '" y2="' + yL + '" stroke="#e2e8f0"/>');
+    parts.push('<text x="' + (padL - 4) + '" y="' + (yL + 4) + '" text-anchor="end" font-size="9" fill="#94a3b8">' + Math.round(max * f) + '</text>');
+  });
+  var pts = perDay.map(function(v, i){
+    return { x: padL + i * stepX, y: padT + (h - padT - padB) * (1 - v / max), v: v, d: i + 1 };
+  });
+  var pathD = pts.map(function(p, i){ return (i === 0 ? 'M' : 'L') + p.x.toFixed(1) + ' ' + p.y.toFixed(1); }).join(' ');
+  parts.push('<path d="' + pathD + '" fill="none" stroke="#7030A0" stroke-width="2"/>');
+  pts.forEach(function(p){
+    if(p.v > 0) parts.push('<circle cx="' + p.x + '" cy="' + p.y + '" r="3" fill="#7030A0"><title>Day ' + p.d + ': ' + p.v + '</title></circle>');
+  });
+  parts.push('<text x="' + padL + '" y="' + (h - 6) + '" font-size="9" fill="#94a3b8">Day 1</text>');
+  parts.push('<text x="' + (w - padR) + '" y="' + (h - 6) + '" text-anchor="end" font-size="9" fill="#94a3b8">Day ' + daysInMonth + '</text>');
+  parts.push('</g>');
+  svg.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
+  svg.innerHTML = parts.join('');
+}
+
+function _phase191OpenChannelDrill(key){
+  _phase191EnsureMonth();
+  var ch = (typeof REFERRAL_CHANNELS !== 'undefined') ? REFERRAL_CHANNELS.find(function(c){ return c.key === key; }) : null;
+  _phase191OpenDrillModal({
+    y: window._LP_STATS_MONTH.y, m: window._LP_STATS_MONTH.m,
+    channelKey: key,
+    kicker: 'Channel · ' + _phase191MonthLabel(window._LP_STATS_MONTH.y, window._LP_STATS_MONTH.m),
+    title: (ch ? ch.icon + ' ' + ch.label : key)
+  });
+}
+window._phase191OpenChannelDrill = _phase191OpenChannelDrill;
+
+function _phase191OpenFacilityDrill(key){
+  _phase191EnsureMonth();
+  var fac = (typeof REFERRAL_FACILITIES !== 'undefined') ? REFERRAL_FACILITIES.find(function(f){ return f.key === key; }) : null;
+  _phase191OpenDrillModal({
+    y: window._LP_STATS_MONTH.y, m: window._LP_STATS_MONTH.m,
+    facilityKey: key,
+    kicker: 'Location · ' + _phase191MonthLabel(window._LP_STATS_MONTH.y, window._LP_STATS_MONTH.m),
+    title: '🏥 ' + (fac ? fac.label : key)
+  });
+}
+window._phase191OpenFacilityDrill = _phase191OpenFacilityDrill;
+
+function _phase191OpenMonthDrill(y, m, facilityKey){
+  var fac = facilityKey && (typeof REFERRAL_FACILITIES !== 'undefined') ? REFERRAL_FACILITIES.find(function(f){ return f.key === facilityKey; }) : null;
+  _phase191OpenDrillModal({
+    y: y, m: m, facilityKey: facilityKey,
+    kicker: facilityKey ? ('Location · ' + (fac ? fac.label : facilityKey)) : 'Month overview',
+    title: _phase191MonthLabel(y, m)
+  });
+}
+window._phase191OpenMonthDrill = _phase191OpenMonthDrill;
+
 function renderReferralLog(){
   var view = document.getElementById('referrals-view');
   if(!view) return;
@@ -65285,6 +65762,81 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
        switchReferralSubtab('list').
        ═══════════════════════════════════════════════════════════════ -->
   <div id="rl-pane-list" style="display:none">
+  <!-- ════════════════════════════════════════════════════════════════════
+       PHASE 191 (2026-05-31) — LOGGED PATIENTS PARENT WITH 2 SUB-TABS
+       Per user: "for the logged patients we need 2 subtabs inside a
+       bigger sub tab one is called Patients ... [other] is for stats."
+       Page 1 (Patients) = the existing logged-patient list + filters,
+       wrapped inside #lp-page-patients so it can be toggled.
+       Page 2 (Stats) = NEW: counters per-channel + per-facility,
+       month switcher, line chart with click-to-drill-down modal.
+       ════════════════════════════════════════════════════════════════ -->
+  <div style="display:inline-flex;background:#f1f3f9;border-radius:14px;padding:5px;gap:5px;margin-bottom:14px;box-shadow:inset 0 1px 2px rgba(15,23,42,.06)">
+    <button type="button" id="lp-tab-patients" onclick="_phase191SwitchLoggedTab('patients')" style="padding:9px 22px;font-size:13px;font-weight:700;color:#fff;cursor:pointer;border:none;background:#7030A0;border-radius:10px;font-family:'DM Sans',sans-serif">📋 Patients</button>
+    <button type="button" id="lp-tab-stats" onclick="_phase191SwitchLoggedTab('stats')" style="padding:9px 22px;font-size:13px;font-weight:700;color:var(--muted);cursor:pointer;border:none;background:transparent;border-radius:10px;font-family:'DM Sans',sans-serif">📊 Stats</button>
+  </div>
+
+  <!-- STATS sub-tab — data source: REFERRAL_LOG. -->
+  <div id="lp-page-stats" style="display:none">
+    <!-- Month switcher header — same shape as the member Phase 185 bar -->
+    <div style="background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;border-radius:14px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;box-shadow:0 4px 14px rgba(31,56,100,.15)">
+      <div style="display:flex;align-items:center;gap:14px;flex:1;min-width:240px">
+        <button type="button" id="lp-stats-prev" onclick="_phase191NavMonth(-1)" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.2);color:#fff;border-radius:8px;width:34px;height:34px;cursor:pointer;font-size:18px;font-weight:700">‹</button>
+        <div style="flex:1;text-align:center">
+          <div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;opacity:.7">Stats for</div>
+          <div id="lp-stats-month-label" style="font-size:20px;font-weight:800;line-height:1.1;margin-top:2px">—</div>
+        </div>
+        <button type="button" id="lp-stats-next" onclick="_phase191NavMonth(1)" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.2);color:#fff;border-radius:8px;width:34px;height:34px;cursor:pointer;font-size:18px;font-weight:700">›</button>
+      </div>
+      <button type="button" onclick="_phase191JumpToCurrent()" style="background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.25);color:#fff;border-radius:8px;padding:7px 14px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">Today</button>
+    </div>
+
+    <!-- Counter grid — clickable. Each opens the drill-down modal showing
+         the breakdown + donut + per-day line chart for that month. -->
+    <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Channels</div>
+    <div id="lp-stats-channel-counters" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:16px"></div>
+    <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Locations</div>
+    <div id="lp-stats-facility-counters" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:16px"></div>
+
+    <!-- Long-trend line chart — data source REFERRAL_LOG bucketed by month. -->
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--text)">📈 Logged patients — trend</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px">Click any dot to see the per-channel + per-location breakdown for that month.</div>
+        </div>
+        <select id="lp-trend-period" onchange="_phase191RenderTrend()" style="background:#fff;border:1px solid var(--border);border-radius:7px;padding:5px 9px;font-size:11px;font-family:DM Sans,sans-serif">
+          <option value="3">Last 3 months</option>
+          <option value="6" selected>Last 6 months</option>
+          <option value="12">Last 12 months</option>
+          <option value="36">Last 3 years</option>
+        </select>
+      </div>
+      <svg id="lp-trend-svg" width="100%" height="200" style="display:block;overflow:visible"></svg>
+    </div>
+
+    <!-- Per-location trend lines (bar shape) — data source same. -->
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--text)">🏥 Per-location trend</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px">Click any bar to see the per-channel breakdown for that location + month.</div>
+        </div>
+        <select id="lp-loctrend-period" onchange="_phase191RenderLocTrend()" style="background:#fff;border:1px solid var(--border);border-radius:7px;padding:5px 9px;font-size:11px;font-family:DM Sans,sans-serif">
+          <option value="3">Last 3 months</option>
+          <option value="6" selected>Last 6 months</option>
+          <option value="12">Last 12 months</option>
+          <option value="36">Last 3 years</option>
+        </select>
+      </div>
+      <svg id="lp-loctrend-svg" width="100%" height="220" style="display:block;overflow:visible"></svg>
+    </div>
+  </div>
+
+  <!-- PATIENTS sub-tab — original content (renderReferralLog). Wraps the
+       existing day-strip + segment + list + filter rows in a single host
+       so it can be hidden when the Stats sub-tab is active. -->
+  <div id="lp-page-patients">
 
   <!-- Phase 152: sticky day-strip header — 7-day horizontal picker
        centered on today. Per-day mini-counts show volume at a glance.
@@ -65359,6 +65911,7 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
   <!-- Log entries table -->
   <div id="rl-entries" style="background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(15,23,42,.04)"></div>
 
+  </div><!-- /lp-page-patients (Phase 191) -->
   </div><!-- /rl-pane-list -->
 
   <!-- ═══════════════════════════════════════════════════════════════════
