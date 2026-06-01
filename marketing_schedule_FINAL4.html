@@ -17036,14 +17036,40 @@ try { setTimeout(_phase192SyncStatusSelect, 200); } catch(_){}
 function _phase192SwitchPage(which){
   if(!which) which = 'confirmed';
   window._RFL_PAGE = which;
+  // Phase 202 (2026-06-01) — Google call conversion page
+  if(which === 'google'){
+    var list2     = document.getElementById('pending-referrals-wrap');
+    var listEmp2  = document.getElementById('rl-outgoing-empty');
+    var chP2      = document.getElementById('rfl-page-channels');
+    var mbP2      = document.getElementById('rfl-page-members');
+    var tp2       = document.getElementById('rfl-page-trends');
+    var gp        = document.getElementById('rfl-page-google');
+    if(list2)    list2.style.display    = 'none';
+    if(listEmp2) listEmp2.style.display = 'none';
+    if(chP2)     chP2.style.display     = 'none';
+    if(mbP2)     mbP2.style.display     = 'none';
+    if(tp2)      tp2.style.display      = 'none';
+    if(gp)       gp.style.display       = '';
+    ['confirmed','rejected','trends','channels','members','google'].forEach(function(p){
+      var b = document.getElementById('rfl-page-btn-' + p);
+      if(!b) return;
+      b.style.background = (p === which) ? '#7030A0' : 'transparent';
+      b.style.color = (p === which) ? '#fff' : 'var(--muted)';
+    });
+    if(typeof _phase202RenderGoogleCalls === 'function') _phase202RenderGoogleCalls();
+    return;
+  }
   // Drive the existing Phase 189 page switcher for channels/members pages.
   if(which === 'channels' || which === 'members'){
     // Hide trends page if we're flipping away from it
     var tpHide = document.getElementById('rfl-page-trends');
     if(tpHide) tpHide.style.display = 'none';
+    // Phase 202: also hide Google page when leaving it
+    var gpHide = document.getElementById('rfl-page-google');
+    if(gpHide) gpHide.style.display = 'none';
     if(typeof _phase189SwitchReflistPage === 'function') {
       // Also paint nav buttons (Phase 192 set has 5 buttons not 3)
-      ['confirmed','rejected','trends','channels','members'].forEach(function(p){
+      ['confirmed','rejected','trends','channels','members','google'].forEach(function(p){
         var b = document.getElementById('rfl-page-btn-' + p);
         if(!b) return;
         b.style.background = (p === which) ? '#7030A0' : 'transparent';
@@ -17064,7 +17090,10 @@ function _phase192SwitchPage(which){
     if(chP1)     chP1.style.display = 'none';
     if(mbP1)     mbP1.style.display = 'none';
     if(tp)       tp.style.display = '';
-    ['confirmed','rejected','trends','channels','members'].forEach(function(p){
+    /* Phase 202: hide Google page when switching to Trends */
+    var gpHide2 = document.getElementById('rfl-page-google');
+    if(gpHide2) gpHide2.style.display = 'none';
+    ['confirmed','rejected','trends','channels','members','google'].forEach(function(p){
       var b = document.getElementById('rfl-page-btn-' + p);
       if(!b) return;
       b.style.background = (p === which) ? '#7030A0' : 'transparent';
@@ -17086,6 +17115,9 @@ function _phase192SwitchPage(which){
   if(mbPage)    mbPage.style.display    = 'none';
   if(trendsPg)  trendsPg.style.display  = 'none';
   if(listEmpty) listEmpty.style.display = 'none';
+  /* Phase 202: hide Google page when switching to Confirmed / Rejected */
+  var gpHide3 = document.getElementById('rfl-page-google');
+  if(gpHide3) gpHide3.style.display = 'none';
   // Force the right status filter for the chosen page.
   var sel = document.getElementById('pr-status-filter');
   if(sel){
@@ -17094,7 +17126,7 @@ function _phase192SwitchPage(which){
   window._PR_FILTER_LIFECYCLE = 'all';
   window._PR_FILTER_DAY = null;
   // Paint active state on the page nav (5 buttons).
-  ['confirmed','rejected','trends','channels','members'].forEach(function(p){
+  ['confirmed','rejected','trends','channels','members','google'].forEach(function(p){
     var b = document.getElementById('rfl-page-btn-' + p);
     if(!b) return;
     b.style.background = (p === which) ? '#7030A0' : 'transparent';
@@ -17345,6 +17377,281 @@ function _phase193OpenMonthDrill(y, m, facilityKey){
 window._phase193OpenMonthDrill = _phase193OpenMonthDrill;
 window._phase192SwitchPage = _phase192SwitchPage;
 
+// ════════════════════════════════════════════════════════════════════════════
+// PHASE 202 (2026-06-01) — GOOGLE CALL CONVERSION TRACKER
+// User: "for this window for the members there has to be a third source
+// google calls" → "we need a certain way to represent that … sub-tab inside
+// the referral list for google calls. The total number of calls should be
+// plugged in by one for Duaa and one for Sadia. Any referral from google
+// source made by them should appear in a list inside that sub-tab. Daily
+// confirmed referrals should be listed here and the weekly counter should
+// appear and daily log for number of calls should appear as well — it can
+// be changed manually by Duaa for Duaa counter and Ms Sadia for her
+// counter as well."
+//
+// Two tracked operators: Duaa, Ms Sadia.
+//   • Calls received  — manually entered per day per operator. Editable
+//     by self or admin; visible to everyone.
+//   • Confirmed referrals — auto-derived from PENDING_REFERRALS where
+//     r.sourceType === 'google' AND r.createdBy === <operator> AND
+//     r.status === 'approved'.
+//
+// Persistence: localStorage key 'wcg_google_calls_v1' → JSON of shape
+//   { "Duaa":     { "YYYY-MM-DD": <int>, ... },
+//     "Ms Sadia": { "YYYY-MM-DD": <int>, ... } }
+// ════════════════════════════════════════════════════════════════════════════
+var PHASE202_OPERATORS = ['Duaa', 'Ms Sadia'];
+var PHASE202_LS_KEY    = 'wcg_google_calls_v1';
+
+function _phase202Iso(d){
+  var p = function(n){ return n < 10 ? '0' + n : n; };
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+}
+function _phase202StartOfWeek(d){
+  // Monday as week start. Treat Sun(0) as +6 days back, Mon(1) as 0 back.
+  var dd = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  var dow = dd.getDay(); // 0..6
+  var back = (dow === 0) ? 6 : (dow - 1);
+  dd.setDate(dd.getDate() - back);
+  return dd;
+}
+function _phase202LoadStore(){
+  try {
+    var raw = localStorage.getItem(PHASE202_LS_KEY);
+    if(!raw) return {};
+    var parsed = JSON.parse(raw);
+    return (parsed && typeof parsed === 'object') ? parsed : {};
+  } catch(_){ return {}; }
+}
+function _phase202SaveStore(store){
+  try { localStorage.setItem(PHASE202_LS_KEY, JSON.stringify(store || {})); } catch(_){}
+}
+function _phase202GetCallCount(member, dateIso){
+  var s = _phase202LoadStore();
+  var m = s[member];
+  if(!m) return 0;
+  var v = m[dateIso];
+  return (typeof v === 'number' && isFinite(v) && v >= 0) ? v : 0;
+}
+function _phase202SetCallCount(member, dateIso, n){
+  var s = _phase202LoadStore();
+  if(!s[member]) s[member] = {};
+  var v = Math.max(0, parseInt(n, 10) || 0);
+  if(v === 0) delete s[member][dateIso]; else s[member][dateIso] = v;
+  _phase202SaveStore(s);
+}
+function _phase202CanEdit(member){
+  try {
+    if(typeof isAdmin === 'function' && isAdmin()) return true;
+  } catch(_){}
+  return !!(window.CURRENT_USER && CURRENT_USER.name === member);
+}
+function _phase202CountConfirmedReferrals(member, dateIso){
+  // PENDING_REFERRALS where sourceType==='google', createdBy===member,
+  // status==='approved', and createdAt date === dateIso.
+  if(typeof PENDING_REFERRALS === 'undefined' || !Array.isArray(PENDING_REFERRALS)) return 0;
+  var n = 0;
+  PENDING_REFERRALS.forEach(function(r){
+    if(!r || r.sourceType !== 'google' || r.createdBy !== member) return;
+    if(r.status !== 'approved') return;
+    var t = r.approvedAt || r.confirmedAt || r.createdAt;
+    if(!t) return;
+    var d = new Date(t);
+    if(isNaN(d.getTime())) return;
+    if(_phase202Iso(d) === dateIso) n++;
+  });
+  return n;
+}
+function _phase202ListConfirmedReferrals(member, dateIso){
+  // Returns array of referral records confirmed by `member` on `dateIso`.
+  if(typeof PENDING_REFERRALS === 'undefined' || !Array.isArray(PENDING_REFERRALS)) return [];
+  var out = [];
+  PENDING_REFERRALS.forEach(function(r){
+    if(!r || r.sourceType !== 'google' || r.createdBy !== member) return;
+    if(r.status !== 'approved') return;
+    var t = r.approvedAt || r.confirmedAt || r.createdAt;
+    if(!t) return;
+    var d = new Date(t);
+    if(isNaN(d.getTime())) return;
+    if(_phase202Iso(d) === dateIso) out.push(r);
+  });
+  // Newest first
+  out.sort(function(a, b){
+    var ta = new Date(a.approvedAt || a.confirmedAt || a.createdAt).getTime();
+    var tb = new Date(b.approvedAt || b.confirmedAt || b.createdAt).getTime();
+    return tb - ta;
+  });
+  return out;
+}
+
+function _phase202OnCallCountInput(member, dateIso, inputEl){
+  if(!_phase202CanEdit(member)){
+    try { window.alert("Only " + member + " or an admin can edit this counter."); } catch(_){}
+    return;
+  }
+  var raw = inputEl ? inputEl.value : '';
+  var v = Math.max(0, parseInt(raw, 10) || 0);
+  _phase202SetCallCount(member, dateIso, v);
+  if(inputEl) inputEl.value = String(v);
+  // Re-render so totals + rates update live.
+  try { _phase202RenderGoogleCalls(); } catch(_){}
+}
+window._phase202OnCallCountInput = _phase202OnCallCountInput;
+
+function _phase202BuildOperatorPanel(member){
+  var today = new Date();
+  var todayIso = _phase202Iso(today);
+  var weekStart = _phase202StartOfWeek(today);
+  // Build last-7-day rows (today first), and week-totals.
+  var days = [];
+  for(var i = 0; i < 7; i++){
+    var dd = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i);
+    days.push({ iso: _phase202Iso(dd), date: dd });
+  }
+  // Week-to-date totals = sum from Monday through today.
+  var weekCalls = 0, weekConf = 0;
+  for(var k = 0; k < 7; k++){
+    var dk = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + k);
+    if(dk > today) break;
+    var iso = _phase202Iso(dk);
+    weekCalls += _phase202GetCallCount(member, iso);
+    weekConf  += _phase202CountConfirmedReferrals(member, iso);
+  }
+  var todayCalls   = _phase202GetCallCount(member, todayIso);
+  var todayConf    = _phase202CountConfirmedReferrals(member, todayIso);
+  var canEditMine  = _phase202CanEdit(member);
+  var weekRate     = weekCalls > 0 ? Math.round((weekConf / weekCalls) * 100) : 0;
+  var todayRate    = todayCalls > 0 ? Math.round((todayConf / todayCalls) * 100) : 0;
+
+  function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+  // Daily log rows (last 7 days).
+  var rowsHtml = days.map(function(row){
+    var calls = _phase202GetCallCount(member, row.iso);
+    var conf  = _phase202CountConfirmedReferrals(member, row.iso);
+    var rate  = calls > 0 ? Math.round((conf / calls) * 100) : 0;
+    var dayLabel = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][row.date.getDay()] + ' ' + (row.date.getMonth() + 1) + '/' + row.date.getDate();
+    var inputCell;
+    if(canEditMine){
+      inputCell = '<input type="number" min="0" step="1" value="' + calls
+        + '" data-ph202-member="' + esc(member)
+        + '" data-ph202-date="' + esc(row.iso) + '"'
+        + ' onchange="_phase202OnCallCountInput(\'' + esc(member).replace(/'/g,'&#39;') + '\', \'' + esc(row.iso) + '\', this)"'
+        + ' style="width:60px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:DM Sans,sans-serif;text-align:right">';
+    } else {
+      inputCell = '<span style="font-weight:700;color:#1F3864">' + calls + '</span>';
+    }
+    var rateColor = (rate >= 30) ? '#16a34a' : (rate >= 10 ? '#f59e0b' : '#dc2626');
+    return ''
+      + '<tr style="border-bottom:1px solid var(--border)">'
+      +   '<td style="padding:6px 4px;font-size:12px;color:var(--text)">' + esc(dayLabel) + '</td>'
+      +   '<td style="padding:6px 4px;text-align:right">' + inputCell + '</td>'
+      +   '<td style="padding:6px 4px;text-align:right;font-weight:700;color:#16a34a">' + conf + '</td>'
+      +   '<td style="padding:6px 4px;text-align:right;font-size:11px;color:' + rateColor + ';font-weight:700">' + rate + '%</td>'
+      + '</tr>';
+  }).join('');
+
+  // Today's confirmed referrals list.
+  var todayReferrals = _phase202ListConfirmedReferrals(member, todayIso);
+  var refListHtml;
+  if(todayReferrals.length === 0){
+    refListHtml = '<div style="font-size:11px;color:var(--muted);font-style:italic;padding:8px 0">No confirmed Google-call referrals yet today.</div>';
+  } else {
+    refListHtml = todayReferrals.map(function(r){
+      var patient = esc(r.patientName || '(unnamed)');
+      var caller  = esc(r.sourceName || '(no caller)');
+      var fac     = esc(r.destinationFacility || '');
+      var t       = r.approvedAt || r.confirmedAt || r.createdAt;
+      var d       = t ? new Date(t) : null;
+      var timeStr = d && !isNaN(d.getTime()) ? (d.getHours() + ':' + (d.getMinutes() < 10 ? '0' : '') + d.getMinutes()) : '';
+      return ''
+        + '<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:#f0fdf4;border:1px solid #bbf7d0;border-left:3px solid #16a34a;border-radius:8px;margin-bottom:6px">'
+        +   '<div style="flex:1">'
+        +     '<div style="font-size:12px;font-weight:700;color:var(--text)">🔍 ' + patient + '</div>'
+        +     '<div style="font-size:10.5px;color:var(--muted)">Caller: ' + caller + (fac ? ' · ' + fac : '') + '</div>'
+        +   '</div>'
+        +   (timeStr ? '<div style="font-size:10px;color:var(--muted);white-space:nowrap">' + esc(timeStr) + '</div>' : '')
+        + '</div>';
+    }).join('');
+  }
+
+  var permNote = canEditMine
+    ? '<span style="font-size:10px;color:#16a34a;font-weight:700">✓ You can edit ' + (member === (window.CURRENT_USER && CURRENT_USER.name) ? 'your' : member + "'s") + ' counter</span>'
+    : '<span style="font-size:10px;color:var(--muted);font-style:italic">Read-only — only ' + esc(member) + ' or an admin can edit this counter</span>';
+
+  return ''
+    + '<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:14px">'
+    +   '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px">'
+    +     '<div>'
+    +       '<div style="font-size:15px;font-weight:800;color:var(--text)">🔍 ' + esc(member) + ' — Google calls</div>'
+    +       '<div style="margin-top:3px">' + permNote + '</div>'
+    +     '</div>'
+    +   '</div>'
+    +   '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:14px">'
+    +     '<div style="background:#eff6ff;border:1px solid #bfdbfe;border-left:3px solid #1F3864;border-radius:10px;padding:10px 12px">'
+    +       '<div style="font-size:10px;color:#1e3a8a;text-transform:uppercase;font-weight:700">Calls today</div>'
+    +       '<div style="font-size:22px;font-weight:800;color:#1F3864">' + todayCalls + '</div>'
+    +     '</div>'
+    +     '<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-left:3px solid #16a34a;border-radius:10px;padding:10px 12px">'
+    +       '<div style="font-size:10px;color:#166534;text-transform:uppercase;font-weight:700">Confirmed today</div>'
+    +       '<div style="font-size:22px;font-weight:800;color:#16a34a">' + todayConf + '</div>'
+    +       '<div style="font-size:9px;color:var(--muted)">' + todayRate + '% conversion</div>'
+    +     '</div>'
+    +     '<div style="background:#fef3c7;border:1px solid #fde68a;border-left:3px solid #f59e0b;border-radius:10px;padding:10px 12px">'
+    +       '<div style="font-size:10px;color:#92400e;text-transform:uppercase;font-weight:700">Calls this week</div>'
+    +       '<div style="font-size:22px;font-weight:800;color:#92400e">' + weekCalls + '</div>'
+    +     '</div>'
+    +     '<div style="background:#ede9fe;border:1px solid #ddd6fe;border-left:3px solid #7c3aed;border-radius:10px;padding:10px 12px">'
+    +       '<div style="font-size:10px;color:#5b21b6;text-transform:uppercase;font-weight:700">Confirmed this week</div>'
+    +       '<div style="font-size:22px;font-weight:800;color:#7c3aed">' + weekConf + '</div>'
+    +       '<div style="font-size:9px;color:var(--muted)">' + weekRate + '% conversion</div>'
+    +     '</div>'
+    +   '</div>'
+    +   '<details ' + (canEditMine ? 'open' : '') + ' style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:10px">'
+    +     '<summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--muted);list-style:none">▸ Daily log (last 7 days)' + (canEditMine ? ' — tap a number to edit' : '') + '</summary>'
+    +     '<table style="width:100%;font-size:12px;border-collapse:collapse;margin-top:10px">'
+    +       '<thead><tr style="border-bottom:2px solid var(--border)">'
+    +         '<th style="padding:6px 4px;text-align:left;font-size:10px;color:var(--muted);text-transform:uppercase">Day</th>'
+    +         '<th style="padding:6px 4px;text-align:right;font-size:10px;color:var(--muted);text-transform:uppercase">Calls</th>'
+    +         '<th style="padding:6px 4px;text-align:right;font-size:10px;color:var(--muted);text-transform:uppercase">Confirmed</th>'
+    +         '<th style="padding:6px 4px;text-align:right;font-size:10px;color:var(--muted);text-transform:uppercase">Rate</th>'
+    +       '</tr></thead>'
+    +       '<tbody>' + rowsHtml + '</tbody>'
+    +     '</table>'
+    +   '</details>'
+    +   '<div style="border-top:1px solid var(--border);padding-top:10px">'
+    +     '<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Today\'s confirmed Google-call referrals</div>'
+    +     refListHtml
+    +   '</div>'
+    + '</div>';
+}
+
+function _phase202RenderGoogleCalls(){
+  var host = document.getElementById('rfl-page-google');
+  if(!host) return;
+  var today = new Date();
+  var todayLabel = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][today.getDay()]
+    + ', ' + ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][today.getMonth()]
+    + ' ' + today.getDate() + ' ' + today.getFullYear();
+  var weekStart = _phase202StartOfWeek(today);
+  var weekLabel = (weekStart.getMonth() + 1) + '/' + weekStart.getDate() + ' – ' + (today.getMonth() + 1) + '/' + today.getDate();
+
+  var panelsHtml = PHASE202_OPERATORS.map(function(op){
+    return _phase202BuildOperatorPanel(op);
+  }).join('');
+
+  host.innerHTML = ''
+    + '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px">'
+    +   '<div>'
+    +     '<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-weight:700">Google call conversion tracker</div>'
+    +     '<div style="font-size:14px;font-weight:700;color:var(--text);margin-top:2px">' + todayLabel + ' · Week: ' + weekLabel + '</div>'
+    +   '</div>'
+    +   '<div style="font-size:10.5px;color:var(--muted);font-style:italic;max-width:280px;text-align:right">Calls = manually plugged in. Confirmed = auto-counted from Create Referral with source 🔍 Google call.</div>'
+    + '</div>'
+    + panelsHtml;
+}
+window._phase202RenderGoogleCalls = _phase202RenderGoogleCalls;
+
 // Replace the Phase 189 page-nav buttons with the new 4-button row.
 function _phase192UpgradePageNav(){
   var nav = document.getElementById('rfl-page-nav');
@@ -17355,7 +17662,9 @@ function _phase192UpgradePageNav(){
     + '<button type="button" id="rfl-page-btn-rejected" onclick="_phase192SwitchPage(\'rejected\')" style="flex:1;padding:8px 10px;font-size:11.5px;font-weight:700;color:var(--muted);background:transparent;border:none;border-radius:7px;cursor:pointer;font-family:DM Sans,sans-serif">✗ Rejected</button>'
     + '<button type="button" id="rfl-page-btn-trends" onclick="_phase192SwitchPage(\'trends\')" style="flex:1;padding:8px 10px;font-size:11.5px;font-weight:700;color:var(--muted);background:transparent;border:none;border-radius:7px;cursor:pointer;font-family:DM Sans,sans-serif">📈 Trends</button>'
     + '<button type="button" id="rfl-page-btn-channels" onclick="_phase192SwitchPage(\'channels\')" style="flex:1;padding:8px 10px;font-size:11.5px;font-weight:700;color:var(--muted);background:transparent;border:none;border-radius:7px;cursor:pointer;font-family:DM Sans,sans-serif">🔍 Channels</button>'
-    + '<button type="button" id="rfl-page-btn-members" onclick="_phase192SwitchPage(\'members\')" style="flex:1;padding:8px 10px;font-size:11.5px;font-weight:700;color:var(--muted);background:transparent;border:none;border-radius:7px;cursor:pointer;font-family:DM Sans,sans-serif">👥 Per-member</button>';
+    + '<button type="button" id="rfl-page-btn-members" onclick="_phase192SwitchPage(\'members\')" style="flex:1;padding:8px 10px;font-size:11.5px;font-weight:700;color:var(--muted);background:transparent;border:none;border-radius:7px;cursor:pointer;font-family:DM Sans,sans-serif">👥 Per-member</button>'
+    /* Phase 202 (2026-06-01): Google call conversion tracker — manual call log per marketer + auto-counted Google-source referrals. */
+    + '<button type="button" id="rfl-page-btn-google" onclick="_phase192SwitchPage(\'google\')" style="flex:1;padding:8px 10px;font-size:11.5px;font-weight:700;color:var(--muted);background:transparent;border:none;border-radius:7px;cursor:pointer;font-family:DM Sans,sans-serif">🔍 Google calls</button>';
   if(nav.dataset) nav.dataset.ph192Done = '1';
 }
 try { setTimeout(_phase192UpgradePageNav, 200); } catch(_){}
@@ -66463,6 +66772,20 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
        picks the matching page button. -->
   <div id="rfl-page-channels" style="display:none"></div>
   <div id="rfl-page-members" style="display:none"></div>
+
+  <!-- Phase 202 (2026-06-01): GOOGLE CALLS page — conversion tracker for
+       phone calls originating from Google searches. Two panels (Duaa +
+       Ms Sadia) each show:
+         • Today's call counter (editable by self/admin)
+         • This week's total calls
+         • Today + this-week confirmed Google-source referrals
+         • Conversion rate
+         • Daily log table (last 7 days)
+         • Today's confirmed Google referrals list
+       Data sources:
+         • wcg_google_calls_v1 → { member → { dateISO → callCount } }
+         • PENDING_REFERRALS filtered by sourceType==='google' + createdBy. -->
+  <div id="rfl-page-google" style="display:none"></div>
 
   <!-- Phase 193 (2026-05-31): TRENDS page — line + bar charts for
        referrals over time. Data source: PENDING_REFERRALS records
