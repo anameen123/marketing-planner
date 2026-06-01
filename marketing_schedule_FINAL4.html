@@ -29270,6 +29270,12 @@ function _rpFindCandidates(checkpoint, opts){
     // from the manual search affordance, where a warning will appear.
     var lead = (typeof getClinicLead === 'function') ? getClinicLead(name) : null;
     if(excludeDeadEnd && lead && lead.status === 'dead_end') return;
+    // Phase 199 (2026-05-31): same Mon-Sun-week double-book exclusion as
+    // the Corridor + Pick & Plan circle paths. Any pin already on the
+    // schedule this week by ANY member is hidden from candidates.
+    // Admin bypasses per user "that restriction can be bypassed by the
+    // admin only."
+    if(typeof _phase199RejectForSameWeek === 'function' && _phase199RejectForSameWeek(name)) return;
     var dist  = _rpHaversineMiles(coord, checkpoint);
     pool.push({
       name:name, bizType:bizType, coord:coord, days:days, dist:dist,
@@ -36142,6 +36148,10 @@ function _rpComputeWidthForVisits(A, B, targetN){
     var rec  = (typeof recencyBucket === 'function') ? recencyBucket(days) : null;
     // Phase 41: only green (ripe/never) + yellow accepted
     if(!rec || (rec.key !== 'ripe' && rec.key !== 'never' && rec.key !== 'yellow')) return;
+    // Phase 199 (2026-05-31): exclude pins ALREADY BOOKED this Mon-Sun week
+    // by ANY member (or self). Admin bypasses. Same rule as Pick & Plan
+    // circle so both planner modes agree on what's eligible.
+    if(typeof _phase199RejectForSameWeek === 'function' && _phase199RejectForSameWeek(name)) return;
     // Phase 124a (2026-05-29): use true RECTANGLE math (matches the
     // highlight + find phases). Distance-to-segment let "capsule" caps
     // at the endpoints inflate the count, which made compute and find
@@ -39072,16 +39082,32 @@ function _phase198IsBookedThisWeek(name){
 window._phase198IsBookedThisWeek = _phase198IsBookedThisWeek;
 
 // Composite filter for Pick & Plan circle candidates. Combines:
-//   • Phase 57: green / yellow only (no fresh red, no warm yellow already
-//     touched in last 7 days)
+//   • Phase 57:  green / yellow only (no fresh red, no warm yellow already
+//                touched in last 7 days)
 //   • Phase 198: not already on the schedule this Mon-Sun week
+//   • Phase 199: admin can bypass the same-week rule per user "that
+//                restriction can be bypassed by the admin only."
 function _phase198IsCandidateEligible(name){
   if(!name) return false;
   if(typeof _rpOptIsGreenOrYellow === 'function' && !_rpOptIsGreenOrYellow(name)) return false;
-  if(_phase198IsBookedThisWeek(name)) return false;
+  var isAdminBypass = (typeof isAdmin === 'function') && isAdmin();
+  if(!isAdminBypass && _phase198IsBookedThisWeek(name)) return false;
   return true;
 }
 window._phase198IsCandidateEligible = _phase198IsCandidateEligible;
+
+// Phase 199 (2026-05-31): same-week filter for the CORRIDOR + generic
+// find-candidates paths. Same admin-bypass rule. Returns true if the pin
+// should be REJECTED (matches the early-return idiom in those consider()
+// callbacks).
+function _phase199RejectForSameWeek(name){
+  if(!name) return false;
+  var isAdminBypass = (typeof isAdmin === 'function') && isAdmin();
+  if(isAdminBypass) return false;
+  if(typeof _phase198IsBookedThisWeek === 'function' && _phase198IsBookedThisWeek(name)) return true;
+  return false;
+}
+window._phase199RejectForSameWeek = _phase199RejectForSameWeek;
 
 // Called by the per-pin click listener (in addPin) when in Optimize mode.
 function _rpOptConsumePinClick(name, exactCoord){
