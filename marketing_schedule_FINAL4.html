@@ -53565,7 +53565,19 @@ function _phase188CollectMonth(){
   var y = window._TS_PERF_MONTH.y, m = window._TS_PERF_MONTH.m;
   var visits = 0, completed = 0, postponed = 0, canceled = 0, pending = 0;
   var spending = 0, leadsClinic = 0, leadsMva = 0;
+  /* Phase 210 (2026-06-01) — enrich perMember from a bare visit count to a
+     full per-metric breakdown so the click-to-drill-down modals can read it
+     directly. Schema: { name → { visits, completed, spending, leads,
+     referrals } }. Backward-compat: kept perMember[name] as a numeric-like
+     object — the existing Phase 188 contribution donut at line 53703 reads
+     perMember[name].visits via the new property, no callers broken. */
   var perMember = {};
+  function _ph210MemberSlot(name){
+    if(!perMember[name]){
+      perMember[name] = { visits: 0, completed: 0, spending: 0, leads: 0, referrals: 0 };
+    }
+    return perMember[name];
+  }
   if(typeof S !== 'undefined' && S && Array.isArray(S.days)){
     S.days.forEach(function(d){
       if(!d || !d.date) return;
@@ -53578,20 +53590,28 @@ function _phase188CollectMonth(){
         else if(r.status === 'Postponed') postponed++;
         else if(r.status === 'Canceled') canceled++;
         else pending++;
+        var rowSpend = 0;
         if(r.spending && r.status === 'Completed' && r.rowConfirmed && !r.spending.zeroSpending){
-          spending += (parseFloat(r.spending.total) || 0);
+          rowSpend = parseFloat(r.spending.total) || 0;
+          spending += rowSpend;
         }
+        var isLead = false;
         if(r.relationship === 'established'){
+          isLead = true;
           var bt = (typeof getBizTypeForName === 'function') ? getBizTypeForName(r.clinic) : 'clinic';
           if(bt === 'mva') leadsMva++; else leadsClinic++;
         }
         if(r.member){
-          perMember[r.member] = (perMember[r.member] || 0) + 1;
+          var slot = _ph210MemberSlot(r.member);
+          slot.visits++;
+          if(r.status === 'Completed') slot.completed++;
+          slot.spending += rowSpend;
+          if(isLead) slot.leads++;
         }
       });
     });
   }
-  // Referrals attributed in this month
+  // Referrals attributed in this month — split per credited member.
   var referrals = 0;
   if(typeof REFERRAL_LOG !== 'undefined' && Array.isArray(REFERRAL_LOG)){
     REFERRAL_LOG.forEach(function(e){
@@ -53600,6 +53620,11 @@ function _phase188CollectMonth(){
       if(parts.length < 3) return;
       if(parseInt(parts[0], 10) !== y || (parseInt(parts[1], 10) - 1) !== m) return;
       referrals++;
+      var arr = Array.isArray(e.memberNames) && e.memberNames.length ? e.memberNames : (e.memberName ? [e.memberName] : []);
+      arr.forEach(function(nm){
+        if(!nm) return;
+        _ph210MemberSlot(nm).referrals++;
+      });
     });
   }
   return {
@@ -53629,22 +53654,126 @@ function _phase188RenderMonthBar(){
 function _phase188RenderCounters(d){
   var box = document.getElementById('ts-perf-counters');
   if(!box) return;
-  function card(icon, label, value, color){
+  /* Phase 210 (2026-06-01) — user: "I don't care about the pending. When I
+     click on total visits, team spendings, patient referrals, business
+     leads, completed visits, I need to open a window for each one with
+     the breakdown of numbers with respect to each member."
+     - Pending tile is dropped entirely.
+     - The 5 named tiles each get an onclick → _phase210OpenBreakdown(metric).
+     - Completion ratio + Active members stay as static info tiles.
+     - Clickable tiles get cursor:pointer + a subtle hover lift + a
+       "click to drill ▸" caption so the affordance is discoverable. */
+  function staticCard(icon, label, value, color){
     return '<div style="background:#fff;border:1px solid var(--border);border-left:3px solid ' + color + ';border-radius:10px;padding:12px 14px;box-shadow:0 1px 3px rgba(15,23,42,.04)">'
       +    '<div style="font-size:9.5px;text-transform:uppercase;color:var(--muted);font-weight:700;letter-spacing:.05em">' + icon + ' ' + label + '</div>'
       +    '<div style="font-size:22px;font-weight:800;color:' + color + ';margin-top:4px;line-height:1.05">' + value + '</div>'
       +  '</div>';
   }
+  function clickCard(icon, label, value, color, metric){
+    return '<button type="button" onclick="_phase210OpenBreakdown(\'' + metric + '\')"'
+      +    ' title="Click for the per-member breakdown of ' + label + '"'
+      +    ' style="text-align:left;background:#fff;border:1px solid var(--border);border-left:3px solid ' + color + ';border-radius:10px;padding:12px 14px;box-shadow:0 1px 3px rgba(15,23,42,.04);cursor:pointer;font-family:DM Sans,sans-serif;transition:transform .12s,box-shadow .12s"'
+      +    ' onmouseover="this.style.transform=\'translateY(-1px)\';this.style.boxShadow=\'0 6px 14px rgba(15,23,42,.08)\'"'
+      +    ' onmouseout="this.style.transform=\'\';this.style.boxShadow=\'0 1px 3px rgba(15,23,42,.04)\'">'
+      +      '<div style="font-size:9.5px;text-transform:uppercase;color:var(--muted);font-weight:700;letter-spacing:.05em">' + icon + ' ' + label + '</div>'
+      +      '<div style="font-size:22px;font-weight:800;color:' + color + ';margin-top:4px;line-height:1.05">' + value + '</div>'
+      +      '<div style="font-size:9px;color:var(--muted);margin-top:3px;font-weight:700">click for per-member ▸</div>'
+      +    '</button>';
+  }
   box.innerHTML = ''
-    + card('✓', 'Completion ratio',   d.ratio + '%',            '#16a34a')
-    + card('📋', 'Completed visits',   String(d.completed),       '#1F3864')
-    + card('🎯', 'Business leads',     String(d.leadsTotal),      '#7c3aed')
-    + card('👥', 'Patient referrals',  String(d.referrals),       '#0891b2')
-    + card('💰', 'Team spending',      '$' + d.spending.toFixed(2), '#d97706')
-    + card('🗺',  'Total visits',       String(d.visits),          '#64748b')
-    + card('🤝', 'Active members',     String(Object.keys(d.perMember).length), '#0ea5e9')
-    + card('⏳', 'Pending',            String(d.pending),         '#f59e0b');
+    + staticCard('✓', 'Completion ratio',   d.ratio + '%',            '#16a34a')
+    + clickCard ('📋', 'Completed visits',   String(d.completed),       '#1F3864', 'completed')
+    + clickCard ('🎯', 'Business leads',     String(d.leadsTotal),      '#7c3aed', 'leads')
+    + clickCard ('👥', 'Patient referrals',  String(d.referrals),       '#0891b2', 'referrals')
+    + clickCard ('💰', 'Team spending',      '$' + d.spending.toFixed(2), '#d97706', 'spending')
+    + clickCard ('🗺',  'Total visits',       String(d.visits),          '#64748b', 'visits')
+    + staticCard('🤝', 'Active members',     String(Object.keys(d.perMember).length), '#0ea5e9');
 }
+
+/* Per-member breakdown modal — opens on click of any of the 5 clickable
+   KPI tiles. Reads fresh data from _phase188CollectMonth so the breakdown
+   matches the current Team Performance month. */
+function _phase210OpenBreakdown(metric){
+  if(typeof _phase188CollectMonth !== 'function') return;
+  var d = _phase188CollectMonth();
+  var monthLabel = '';
+  try {
+    if(window._TS_PERF_MONTH){
+      var dt = new Date(window._TS_PERF_MONTH.y, window._TS_PERF_MONTH.m, 1);
+      monthLabel = dt.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    }
+  } catch(_){}
+
+  /* Metric registry: how to label the tile + how to read the slot. */
+  var defs = {
+    completed: { icon: '📋', label: 'Completed visits',  color: '#1F3864', total: d.completed,                 read: function(s){ return s.completed || 0; }, fmt: function(v){ return String(v); } },
+    leads:     { icon: '🎯', label: 'Business leads',    color: '#7c3aed', total: d.leadsTotal,                read: function(s){ return s.leads || 0; },     fmt: function(v){ return String(v); } },
+    referrals: { icon: '👥', label: 'Patient referrals', color: '#0891b2', total: d.referrals,                 read: function(s){ return s.referrals || 0; }, fmt: function(v){ return String(v); } },
+    spending:  { icon: '💰', label: 'Team spending',     color: '#d97706', total: d.spending,                  read: function(s){ return s.spending || 0; },  fmt: function(v){ return '$' + (Math.round(v * 100) / 100).toFixed(2); } },
+    visits:    { icon: '🗺',  label: 'Total visits',      color: '#64748b', total: d.visits,                    read: function(s){ return s.visits || 0; },    fmt: function(v){ return String(v); } }
+  };
+  var def = defs[metric];
+  if(!def){ return; }
+
+  /* Build sorted rows. */
+  var rows = Object.keys(d.perMember || {}).map(function(name){
+    var slot = d.perMember[name];
+    /* Defensive: pre-Phase-210 callers may have left a numeric slot. Treat
+       it as a visits count and zero the other metrics. */
+    if(slot == null || typeof slot !== 'object'){
+      slot = { visits: (slot || 0), completed: 0, spending: 0, leads: 0, referrals: 0 };
+    }
+    return { name: name, value: def.read(slot) };
+  })
+  .filter(function(r){ return r.value > 0; })
+  .sort(function(a, b){ return b.value - a.value; });
+
+  function esc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+  function pct(v){ return def.total > 0 ? Math.round((v / def.total) * 100) : 0; }
+
+  var rowsHtml;
+  if(rows.length === 0){
+    rowsHtml = '<tr><td colspan="3" style="padding:14px 8px;font-size:12px;color:var(--muted);font-style:italic;text-align:center">No ' + esc(def.label.toLowerCase()) + ' attributed to any member' + (monthLabel ? ' in ' + esc(monthLabel) : '') + '.</td></tr>';
+  } else {
+    var maxVal = rows[0].value;
+    rowsHtml = rows.map(function(r){
+      var barWidth = maxVal > 0 ? Math.round((r.value / maxVal) * 100) : 0;
+      return '<tr style="border-bottom:1px solid var(--border)">'
+        +    '<td style="padding:9px 6px;font-size:13px;font-weight:700;color:var(--text)">👤 ' + esc(r.name) + '</td>'
+        +    '<td style="padding:9px 6px;width:160px"><div style="background:#f1f5f9;border-radius:6px;height:9px;overflow:hidden"><div style="background:' + def.color + ';height:100%;width:' + barWidth + '%;border-radius:6px"></div></div></td>'
+        +    '<td style="padding:9px 6px;text-align:right;font-weight:800;color:' + def.color + ';font-family:DM Mono,monospace;font-size:14px;white-space:nowrap">' + def.fmt(r.value) + '</td>'
+        +    '<td style="padding:9px 6px;text-align:right;font-size:11px;color:var(--muted);white-space:nowrap">' + pct(r.value) + '%</td>'
+        +  '</tr>';
+    }).join('');
+  }
+
+  var existing = document.getElementById('phase210-breakdown');
+  if(existing) existing.remove();
+  var m = document.createElement('div');
+  m.id = 'phase210-breakdown';
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.7);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;font-family:DM Sans,sans-serif';
+  m.innerHTML = ''
+    + '<div style="background:#fff;border-radius:14px;max-width:640px;width:100%;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.5);overflow:hidden">'
+    +   '<div style="background:linear-gradient(135deg,' + def.color + ',#1F3864);color:#fff;padding:16px 22px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">'
+    +     '<div>'
+    +       '<div style="font-size:11px;opacity:.85;text-transform:uppercase;letter-spacing:.06em">Team Performance · ' + esc(monthLabel || 'this month') + '</div>'
+    +       '<div style="font-size:18px;font-weight:800;margin-top:2px">' + def.icon + ' ' + esc(def.label) + ': ' + def.fmt(def.total) + '</div>'
+    +       '<div style="font-size:10px;opacity:.85;margin-top:3px">Per-member breakdown · sorted by contribution</div>'
+    +     '</div>'
+    +     '<button onclick="document.getElementById(\'phase210-breakdown\').remove()" style="background:rgba(255,255,255,.18);border:none;color:#fff;font-size:20px;width:32px;height:32px;border-radius:8px;cursor:pointer">×</button>'
+    +   '</div>'
+    +   '<div style="padding:14px 22px;overflow-y:auto;flex:1">'
+    +     '<table style="width:100%;border-collapse:collapse"><thead><tr style="border-bottom:2px solid var(--border)">'
+    +       '<th style="padding:8px 6px;text-align:left;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Member</th>'
+    +       '<th style="padding:8px 6px;text-align:left;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Share</th>'
+    +       '<th style="padding:8px 6px;text-align:right;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Value</th>'
+    +       '<th style="padding:8px 6px;text-align:right;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">%</th>'
+    +     '</tr></thead><tbody>' + rowsHtml + '</tbody></table>'
+    +   '</div>'
+    + '</div>';
+  document.body.appendChild(m);
+}
+window._phase210OpenBreakdown = _phase210OpenBreakdown;
 
 // Donut renderer — shared by both donuts. segments = [{label, value, color}]
 function _phase188DrawDonut(svg, segments){
@@ -53699,8 +53828,14 @@ function _phase188RenderStatusDonut(d){
 
 function _phase188RenderContributionsDonut(d){
   var palette = ['#1F3864', '#7c3aed', '#16a34a', '#d97706', '#0891b2', '#dc2626', '#0ea5e9', '#a855f7'];
+  /* Phase 210 (2026-06-01): d.perMember[name] is now an object { visits,
+     completed, spending, leads, referrals } not a bare visit count. The
+     "Contributions by member" donut still measures by VISITS, so read .visits
+     explicitly. */
   var entries = Object.keys(d.perMember).map(function(name, i){
-    return { label: name, value: d.perMember[name], color: palette[i % palette.length] };
+    var slot = d.perMember[name];
+    var v = (slot && typeof slot === 'object') ? (slot.visits || 0) : (slot || 0);
+    return { label: name, value: v, color: palette[i % palette.length] };
   }).sort(function(a, b){ return b.value - a.value; });
   _phase188DrawDonut(document.getElementById('ts-perf-contrib-donut'), entries);
 }
