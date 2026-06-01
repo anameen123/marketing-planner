@@ -2942,6 +2942,12 @@ button:not([disabled]):not(.no-press):active {
            for UC Plano referrals the source IS UC Plano (no external picker). -->
       <div id="cr-source-section">
       <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">📞 Source — who's sending the patient(s)?</div>
+      <!-- Phase 212 (2026-06-01): grid expanded to 2 cols × 2 rows for the
+           four source-type radios. Adding 🏘️ Community outreach as the 4th
+           option per user. On confirm/approve, an 'outreach' sourceType
+           routes the patient log to channel='outreach_event' so the
+           Community Outreach Event counter ticks (vs landing under the
+           generic 'Referral' channel like clinic/MVA do). -->
       <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin-bottom:10px">
         <label style="display:flex;align-items:center;gap:6px;background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:8px 10px;cursor:pointer;font-size:11px;font-weight:600">
           <input type="radio" name="cr-source-type" value="clinic" onchange="_crSourceTypeChanged()" style="accent-color:#3b82f6"> 🏥 Clinic
@@ -2954,6 +2960,13 @@ button:not([disabled]):not(.no-press):active {
              call. Free-text caller field (no suggestions); sourceType = 'google'. -->
         <label style="display:flex;align-items:center;gap:6px;background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:8px 10px;cursor:pointer;font-size:11px;font-weight:600">
           <input type="radio" name="cr-source-type" value="google" onchange="_crSourceTypeChanged()" style="accent-color:#16a34a"> 🔍 Google call
+        </label>
+        <!-- Phase 212 (2026-06-01) — 4th source type. The OUTREACH bank
+             feeds the autocomplete (same dataset as the Log Patient event
+             picker). Strict bank-match on save like clinic/mva so typos
+             can't create shadow events. -->
+        <label style="display:flex;align-items:center;gap:6px;background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:8px 10px;cursor:pointer;font-size:11px;font-weight:600">
+          <input type="radio" name="cr-source-type" value="outreach" onchange="_crSourceTypeChanged()" style="accent-color:#7c3aed"> 🏘️ Community outreach
         </label>
       </div>
       <div style="position:relative;margin-bottom:14px">
@@ -19531,7 +19544,8 @@ function _rlRenderCalDayDetail(iso){
     referralsHtml = '<div style="display:flex;flex-direction:column;gap:6px">';
     refsToday.forEach(function(r){
       var fac = REFERRAL_FACILITIES.find(function(f){ return f.key === r.destinationFacility; });
-      var typeIcon = r.sourceType === 'mva' ? '⚖' : r.sourceType === 'wcg_facility' ? '🏥' : r.sourceType === 'google' ? '🔍' : '🏥';
+      /* Phase 212 (2026-06-01) — 🏘️ for outreach source. */
+      var typeIcon = r.sourceType === 'mva' ? '⚖' : r.sourceType === 'wcg_facility' ? '🏥' : r.sourceType === 'google' ? '🔍' : r.sourceType === 'outreach' ? '🏘️' : '🏥';
       var _ph192 = (typeof _phase192StatusDisplay === 'function') ? _phase192StatusDisplay(r.status) : { color: '#64748b', bg: '#f8fafc' };
     var statusColor = _ph192.color;
       var statusBg = r.status === 'pending' ? '#fffbeb' : r.status === 'approved' ? '#f0fdf4' : r.status === 'incomplete' ? '#fef2f2' : '#f8fafc';
@@ -20923,10 +20937,13 @@ function _crSourceTypeChanged(){
     inp.disabled = false;
     inp.value = '';
     if(inp.dataset) inp.dataset.sourceType = type;
-    if(type === 'clinic')      inp.placeholder = 'Search clinic by name…';
-    else if(type === 'mva')    inp.placeholder = 'Search MVA attorney firm by name…';
-    else if(type === 'google') inp.placeholder = 'Caller name or phone (Google search call)';
-    else                       inp.placeholder = 'Source name';
+    if(type === 'clinic')        inp.placeholder = 'Search clinic by name…';
+    else if(type === 'mva')      inp.placeholder = 'Search MVA attorney firm by name…';
+    else if(type === 'google')   inp.placeholder = 'Caller name or phone (Google search call)';
+    /* Phase 212 (2026-06-01) — outreach autocomplete pulls from OUTREACH
+       bank (same dataset as Log Patient event picker at rl-event). */
+    else if(type === 'outreach') inp.placeholder = 'Search outreach events / organizations…';
+    else                         inp.placeholder = 'Source name';
     inp.focus();
   } else {
     inp.disabled = true;
@@ -20985,6 +21002,15 @@ function _crSuggestSources(){
     MVA_ATTORNEYS.forEach(function(m){
       if(m && m.firm && m.firm.toLowerCase().indexOf(q) >= 0){
         matches.push({ name: m.firm, city: m.city || '' });
+      }
+    });
+  } else if(typeFilter === 'outreach' && typeof OUTREACH !== 'undefined'){
+    /* Phase 212 (2026-06-01) — outreach autocomplete from the same OUTREACH
+       bank that powers the Log Patient event picker (Bank → Outreach tab).
+       OUTREACH entry shape: { name, type, city, ... } */
+    OUTREACH.forEach(function(o){
+      if(o && o.name && o.name.toLowerCase().indexOf(q) >= 0){
+        matches.push({ name: o.name, city: o.city || '' });
       }
     });
   }
@@ -21077,14 +21103,27 @@ function _crSaveReferral(){
     // Phase 201 (2026-05-31): Google-call source is free text — skip the
     // strict bank-list match. Clinic/MVA still validate against their banks
     // so typos don't create shadow entries.
+    // Phase 212 (2026-06-01): outreach validates against OUTREACH bank
+    // (same dataset Log Patient's event picker uses).
     if(sourceType !== 'google'){
-      var bankList = (sourceType === 'clinic')
-        ? (typeof CLINIC_BANK !== 'undefined' ? CLINIC_BANK : [])
-        : (typeof MVA_ATTORNEYS !== 'undefined' ? MVA_ATTORNEYS : []);
-      var nameKey = (sourceType === 'clinic') ? 'n' : 'firm';
+      var bankList, nameKey;
+      if(sourceType === 'clinic'){
+        bankList = (typeof CLINIC_BANK !== 'undefined') ? CLINIC_BANK : [];
+        nameKey = 'n';
+      } else if(sourceType === 'mva'){
+        bankList = (typeof MVA_ATTORNEYS !== 'undefined') ? MVA_ATTORNEYS : [];
+        nameKey = 'firm';
+      } else if(sourceType === 'outreach'){
+        bankList = (typeof OUTREACH !== 'undefined') ? OUTREACH : [];
+        nameKey = 'name';
+      } else {
+        bankList = [];
+        nameKey = 'name';
+      }
       var matchExists = bankList.some(function(b){ return b && (b[nameKey] || '').toLowerCase() === sourceName.toLowerCase(); });
       if(!matchExists){
-        showErr('"' + sourceName + '" isn\'t in our bank. Pick from the autocomplete suggestions (or ask admin to add the clinic first).');
+        var bankName = (sourceType === 'outreach') ? 'Outreach' : (sourceType === 'mva' ? 'MVA Attorney' : 'Clinic');
+        showErr('"' + sourceName + '" isn\'t in our ' + bankName + ' bank. Pick from the autocomplete suggestions (or ask admin to add it first).');
         return;
       }
     }
@@ -21576,7 +21615,8 @@ function renderPendingReferrals(){
   }
   list.innerHTML = items.map(function(r, i){
     var facLabel = (REFERRAL_FACILITIES.find(function(f){ return f.key === r.destinationFacility; }) || {}).label || r.destinationFacility;
-    var typeIcon = r.sourceType === 'mva' ? '⚖' : r.sourceType === 'google' ? '🔍' : '🏥';
+    /* Phase 212 (2026-06-01) — 🏘️ for outreach source. */
+    var typeIcon = r.sourceType === 'mva' ? '⚖' : r.sourceType === 'google' ? '🔍' : r.sourceType === 'outreach' ? '🏘️' : '🏥';
     var _ph192 = (typeof _phase192StatusDisplay === 'function') ? _phase192StatusDisplay(r.status) : { color: '#64748b', bg: '#f8fafc' };
     var statusColor = _ph192.color;
     var statusBg = r.status === 'pending' ? '#fffbeb' : r.status === 'approved' ? '#f0fdf4' : r.status === 'incomplete' ? '#fef2f2' : '#f8fafc';
@@ -22157,7 +22197,8 @@ function _phase166OpenPendingReferralCard(refId){
       +       '<div style="font-size:9px;font-weight:700;color:#1e40af;text-transform:uppercase;letter-spacing:.05em">📅 Created on</div>'
       +       '<div style="font-size:14px;font-weight:800;color:#1F3864;font-family:DM Mono,monospace;margin-top:3px">' + fmtDt(r.createdAt) + '</div>'
       +     '</div>'
-      +     row('Source', safe((r.sourceType === 'mva' ? '⚖ MVA · ' : r.sourceType === 'google' ? '🔍 Google call · ' : '🏥 Clinic · ') + r.sourceName))
+      /* Phase 212 (2026-06-01) — outreach label in patient detail. */
+      +     row('Source', safe((r.sourceType === 'mva' ? '⚖ MVA · ' : r.sourceType === 'google' ? '🔍 Google call · ' : r.sourceType === 'outreach' ? '🏘️ Outreach · ' : '🏥 Clinic · ') + r.sourceName))
       +     row('Destination facility', (fac ? (typeof _phase177FacilityLink === 'function' ? _phase177FacilityLink(r.destinationFacility, fac.label) : safe(fac.label)) + (fac.city ? ' · ' + safe(fac.city) : '') : safe(r.destinationFacility)))
       +     row('Patient', safe(r.patientName || '—'))
       +     row('Patient phone', fmtPhone(r.patientPhone))
@@ -22406,11 +22447,22 @@ function approvePendingReferral(id){
   // gender, complaint, payment) still need to be filled by front desk.
   setTimeout(function(){
     var chSel = document.getElementById('rl-channel');
-    if(chSel){ chSel.value = 'member_direct'; if(typeof _rlChannelChanged === 'function') _rlChannelChanged(); }
+    /* Phase 212 (2026-06-01) — outreach referrals route to channel
+       'outreach_event' (so the Community Outreach Event counter ticks),
+       NOT to 'member_direct' (which is for clinic/MVA referrals). */
+    var targetChannel = (ref.sourceType === 'outreach') ? 'outreach_event' : 'member_direct';
+    if(chSel){ chSel.value = targetChannel; if(typeof _rlChannelChanged === 'function') _rlChannelChanged(); }
     var srcTypeRadio = document.querySelector('input[name="rl-source-type"][value="' + ref.sourceType + '"]');
     if(srcTypeRadio){ srcTypeRadio.checked = true; if(typeof _rlSourceTypeChanged === 'function') _rlSourceTypeChanged(); }
     var srcInp = document.getElementById('rl-source');
     if(srcInp){ srcInp.value = ref.sourceName; if(srcInp.dataset) srcInp.dataset.sourceType = ref.sourceType; }
+    /* Phase 212 — for outreach, also prefill the event picker (rl-event)
+       which is the field that gets stored as sourceBusiness on the patient
+       log. Without this the FD would have to retype the event name. */
+    if(ref.sourceType === 'outreach'){
+      var evInp = document.getElementById('rl-event');
+      if(evInp) evInp.value = ref.sourceName;
+    }
     var mSel = document.getElementById('rl-member');
     if(mSel && ref.createdBy){
       // Make sure the option exists, then select
@@ -69126,8 +69178,10 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
              Phase 201's outgoing form. Without this, approvePendingReferral
              can't prefill the radio for sourceType='google' referrals, the
              strict bank-check fires on submit, and Google-call referrals
-             can never reach status='approved'. -->
-        <div id="rl-source-type-row" style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px">
+             can never reach status='approved'.
+             Phase 212 (2026-06-01) — also added 'outreach' radio to mirror
+             Phase 212's outgoing form. Grid widened to 4 columns. -->
+        <div id="rl-source-type-row" style="display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin-bottom:10px">
           <label style="display:flex;align-items:center;gap:6px;background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:8px 10px;cursor:pointer;font-size:11px;font-weight:600;color:var(--text)">
             <input type="radio" name="rl-source-type" value="clinic" onchange="_rlSourceTypeChanged()" style="accent-color:#3b82f6"> 🏥 Clinic
           </label>
@@ -69136,6 +69190,9 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
           </label>
           <label style="display:flex;align-items:center;gap:6px;background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:8px 10px;cursor:pointer;font-size:11px;font-weight:600;color:var(--text)">
             <input type="radio" name="rl-source-type" value="google" onchange="_rlSourceTypeChanged()" style="accent-color:#16a34a"> 🔍 Google call
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:8px 10px;cursor:pointer;font-size:11px;font-weight:600;color:var(--text)">
+            <input type="radio" name="rl-source-type" value="outreach" onchange="_rlSourceTypeChanged()" style="accent-color:#7c3aed"> 🏘️ Community outreach
           </label>
         </div>
         <label id="rl-source-name-label" style="font-size:11px;font-weight:600;color:var(--text);display:block;margin-bottom:4px">Business name <span style="color:#ef4444">*</span></label>
@@ -70843,6 +70900,65 @@ document.addEventListener('keydown', function(e){
     if(d && d.classList.contains('is-open')) toggleMemberDrawer(false);
   }
 });
+
+/* ────────────────────────────────────────────────────────────────────────
+   PHASE 212 (2026-06-01) — SEARCH-INPUT FOCUS RESTORATION
+   User: "in the bank of visits search bar, when I click on a letter, it
+   actually clicks me out of that. So I need to type c o p — when I click
+   c I need to click again on the box to click o, then click again to type
+   p — what's the bug causing this?"
+
+   The bank-search, cv-search, and canc-search inputs each fire heavy
+   render functions on every keystroke (renderBank / renderCompletedVisits
+   / renderCanceledVisits). Static analysis didn't surface a destructive
+   innerHTML wipe of the input's parent, but on some Edge/Chromium builds
+   a sufficiently large reflow can interrupt IME composition and effectively
+   blur the focused input between keystrokes.
+
+   This adds belt-and-suspenders focus restoration: after each render the
+   input keeps focus and the caret stays where the user left it. Pure
+   defensive — if the underlying repaint is fine the wrapper is a no-op.
+   ──────────────────────────────────────────────────────────────────── */
+(function _phase212WireSearchFocusRestore(){
+  function patch(inputId, renderFnName){
+    var inp = document.getElementById(inputId);
+    if(!inp) return;
+    /* Reset oninput so we own the keystroke fully (the inline handler in HTML
+       fires alongside ours which would double-render — clearing it makes our
+       wrapper authoritative). */
+    inp.oninput = null;
+    inp.addEventListener('input', function(){
+      var sel = { start: inp.selectionStart, end: inp.selectionEnd, dir: inp.selectionDirection };
+      try {
+        var fn = window[renderFnName];
+        if(typeof fn === 'function') fn();
+      } catch(_){}
+      /* Restore focus + caret on the next frame after the render's reflow
+         settles. requestAnimationFrame > setTimeout(0) because the browser
+         already promised a repaint window. */
+      window.requestAnimationFrame(function(){
+        if(document.activeElement === inp) return;  /* still focused — nothing to do */
+        try {
+          inp.focus({ preventScroll: true });
+          if(typeof inp.setSelectionRange === 'function' && sel.start != null){
+            inp.setSelectionRange(sel.start, sel.end, sel.dir || 'none');
+          }
+        } catch(_){}
+      });
+    });
+  }
+  function wireAll(){
+    patch('bank-search', 'renderBank');
+    patch('cv-search',   'renderCompletedVisits');
+    patch('canc-search', 'renderCanceledVisits');
+  }
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', wireAll);
+  } else {
+    /* DOM already ready — patch on next tick so all the inputs are present. */
+    setTimeout(wireAll, 0);
+  }
+})();
 </script>
 
 <!-- ════════════════════════════════════════════════════════════════════
