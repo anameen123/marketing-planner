@@ -18585,132 +18585,290 @@ function _phase202OnCallCountInput(member, dateIso, inputEl){
 }
 window._phase202OnCallCountInput = _phase202OnCallCountInput;
 
-function _phase202BuildOperatorPanel(member){
+/* ─── PHASE 208 (2026-06-01) — GOOGLE CALLS PAGE REWORK ──────────────────────
+   User: "We need the total for both of them up there. Those Duaa and Sadia
+   cards should be compact and expandable. Confirmed today / calls today —
+   we don't care, drop them. We need monthly: monthly ratio, monthly
+   confirmed, monthly calls, and I need to be able to move between months."
+
+   Layout:
+     1. Team Total card (top, always visible)
+        - Month switcher ◀ ▶ Today
+        - 4 tiles: Calls this week / Confirmed this week / Calls this month /
+          Confirmed this month — both confirmed tiles show ratio (conf/calls)
+     2. Per-operator <details> cards (Duaa, Ms Sadia) — collapsed by default
+        - Same 4 tiles, scoped to that member
+        - Daily log table tied to SELECTED MONTH (not arbitrary 7 days)
+        - Today's confirmed Google referrals — only when viewing current month
+   ─────────────────────────────────────────────────────────────────────────── */
+function _phase208MonthState(){
+  if(!window._PH202_MONTH_VIEW){
+    var n = new Date();
+    window._PH202_MONTH_VIEW = n.getFullYear() + '-' + String(n.getMonth() + 1).padStart(2, '0');
+  }
+  return window._PH202_MONTH_VIEW;
+}
+
+function _phase208NavMonth(delta){
+  var cur = _phase208MonthState();
+  if(delta === 0){
+    var n = new Date();
+    window._PH202_MONTH_VIEW = n.getFullYear() + '-' + String(n.getMonth() + 1).padStart(2, '0');
+  } else {
+    var parts = cur.split('-');
+    var d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1 + delta, 1);
+    window._PH202_MONTH_VIEW = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+  }
+  if(typeof _phase202RenderGoogleCalls === 'function') _phase202RenderGoogleCalls();
+}
+window._phase208NavMonth = _phase208NavMonth;
+
+/* Sum manual call counts for a date range (inclusive). startIso/endIso = YYYY-MM-DD. */
+function _phase208SumCallsForRange(member, startIso, endIso){
+  var s = _phase202LoadStore();
+  var m = s[member] || {};
+  var sum = 0;
+  Object.keys(m).forEach(function(date){
+    if(date >= startIso && date <= endIso){
+      sum += parseInt(m[date], 10) || 0;
+    }
+  });
+  return sum;
+}
+window._phase208SumCallsForRange = _phase208SumCallsForRange;
+
+/* Count CONFIRMED Google-call referrals for a member in a date range.
+   Same matching rule as Phase 202: PENDING_REFERRALS where
+   sourceType='google', createdBy=member, status='approved', and the
+   approvedAt/confirmedAt/createdAt date falls in the range. */
+function _phase208CountConfirmedForRange(member, startIso, endIso){
+  if(typeof PENDING_REFERRALS === 'undefined' || !Array.isArray(PENDING_REFERRALS)) return 0;
+  var n = 0;
+  PENDING_REFERRALS.forEach(function(r){
+    if(!r || r.sourceType !== 'google' || r.createdBy !== member) return;
+    if(r.status !== 'approved') return;
+    var t = r.approvedAt || r.confirmedAt || r.createdAt;
+    if(!t) return;
+    var d = new Date(t);
+    if(isNaN(d.getTime())) return;
+    var iso = _phase202Iso(d);
+    if(iso >= startIso && iso <= endIso) n++;
+  });
+  return n;
+}
+window._phase208CountConfirmedForRange = _phase208CountConfirmedForRange;
+
+/* Compute { calls, conf, ratio } for a member in a specific month (YYYY-MM)
+   and for the current week-to-date. Returns both. */
+function _phase208ComputeStats(member){
   var today = new Date();
   var todayIso = _phase202Iso(today);
   var weekStart = _phase202StartOfWeek(today);
-  // Build last-7-day rows (today first), and week-totals.
-  var days = [];
-  for(var i = 0; i < 7; i++){
-    var dd = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i);
-    days.push({ iso: _phase202Iso(dd), date: dd });
-  }
-  // Week-to-date totals = sum from Monday through today.
-  var weekCalls = 0, weekConf = 0;
-  for(var k = 0; k < 7; k++){
-    var dk = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + k);
-    if(dk > today) break;
-    var iso = _phase202Iso(dk);
-    weekCalls += _phase202GetCallCount(member, iso);
-    weekConf  += _phase202CountConfirmedReferrals(member, iso);
-  }
-  var todayCalls   = _phase202GetCallCount(member, todayIso);
-  var todayConf    = _phase202CountConfirmedReferrals(member, todayIso);
-  var canEditMine  = _phase202CanEdit(member);
-  var weekRate     = weekCalls > 0 ? Math.round((weekConf / weekCalls) * 100) : 0;
-  var todayRate    = todayCalls > 0 ? Math.round((todayConf / todayCalls) * 100) : 0;
+  var weekStartIso = _phase202Iso(weekStart);
+  var monthKey = _phase208MonthState();
+  var parts = monthKey.split('-');
+  var moDate = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, 1);
+  var monthStartIso = _phase202Iso(moDate);
+  var moEndDate = new Date(moDate.getFullYear(), moDate.getMonth() + 1, 0);
+  var monthEndIso = _phase202Iso(moEndDate);
+  var weekCalls  = _phase208SumCallsForRange(member, weekStartIso, todayIso);
+  var weekConf   = _phase208CountConfirmedForRange(member, weekStartIso, todayIso);
+  var monthCalls = _phase208SumCallsForRange(member, monthStartIso, monthEndIso);
+  var monthConf  = _phase208CountConfirmedForRange(member, monthStartIso, monthEndIso);
+  return {
+    week:  { calls: weekCalls,  conf: weekConf,  ratio: weekCalls  > 0 ? Math.round(weekConf  / weekCalls  * 100) : 0 },
+    month: { calls: monthCalls, conf: monthConf, ratio: monthCalls > 0 ? Math.round(monthConf / monthCalls * 100) : 0 },
+    monthKey: monthKey,
+    monthStartIso: monthStartIso,
+    monthEndIso: monthEndIso
+  };
+}
+window._phase208ComputeStats = _phase208ComputeStats;
 
+/* Build the 4-tile row used by Team Total + each operator card.
+   stats = { week:{calls,conf,ratio}, month:{...} }, monthLabel = e.g. "June 2026" */
+function _phase208TileRow(stats, monthLabel){
+  return ''
+    + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px">'
+    +   '<div style="background:#fef3c7;border:1px solid #fde68a;border-left:3px solid #f59e0b;border-radius:10px;padding:10px 12px">'
+    +     '<div style="font-size:10px;color:#92400e;text-transform:uppercase;font-weight:700">📞 Calls this week</div>'
+    +     '<div style="font-size:22px;font-weight:800;color:#92400e">' + stats.week.calls + '</div>'
+    +   '</div>'
+    +   '<div style="background:#ede9fe;border:1px solid #ddd6fe;border-left:3px solid #7c3aed;border-radius:10px;padding:10px 12px">'
+    +     '<div style="font-size:10px;color:#5b21b6;text-transform:uppercase;font-weight:700">✓ Confirmed this week</div>'
+    +     '<div style="font-size:22px;font-weight:800;color:#7c3aed">' + stats.week.conf + '</div>'
+    +     '<div style="font-size:9px;color:var(--muted)">' + stats.week.ratio + '% ratio (conf/calls)</div>'
+    +   '</div>'
+    +   '<div style="background:#eff6ff;border:1px solid #bfdbfe;border-left:3px solid #1F3864;border-radius:10px;padding:10px 12px">'
+    +     '<div style="font-size:10px;color:#1e3a8a;text-transform:uppercase;font-weight:700">📅 Calls in ' + monthLabel + '</div>'
+    +     '<div style="font-size:22px;font-weight:800;color:#1F3864">' + stats.month.calls + '</div>'
+    +   '</div>'
+    +   '<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-left:3px solid #16a34a;border-radius:10px;padding:10px 12px">'
+    +     '<div style="font-size:10px;color:#166534;text-transform:uppercase;font-weight:700">✓ Confirmed in ' + monthLabel + '</div>'
+    +     '<div style="font-size:22px;font-weight:800;color:#16a34a">' + stats.month.conf + '</div>'
+    +     '<div style="font-size:9px;color:var(--muted)">' + stats.month.ratio + '% ratio (conf/calls)</div>'
+    +   '</div>'
+    + '</div>';
+}
+
+/* Build the Team Total panel — combined stats across all PHASE202_OPERATORS. */
+function _phase208BuildTeamTotal(monthLabel){
+  /* Combine each member's stats into one aggregate. */
+  var combined = {
+    week:  { calls: 0, conf: 0, ratio: 0 },
+    month: { calls: 0, conf: 0, ratio: 0 }
+  };
+  PHASE202_OPERATORS.forEach(function(op){
+    var s = _phase208ComputeStats(op);
+    combined.week.calls  += s.week.calls;
+    combined.week.conf   += s.week.conf;
+    combined.month.calls += s.month.calls;
+    combined.month.conf  += s.month.conf;
+  });
+  combined.week.ratio  = combined.week.calls  > 0 ? Math.round(combined.week.conf  / combined.week.calls  * 100) : 0;
+  combined.month.ratio = combined.month.calls > 0 ? Math.round(combined.month.conf / combined.month.calls * 100) : 0;
+
+  var todayKey = (function(){ var n = new Date(); return n.getFullYear() + '-' + String(n.getMonth() + 1).padStart(2, '0'); })();
+  var isCurrent = (_phase208MonthState() === todayKey);
+
+  return ''
+    + '<div style="background:linear-gradient(135deg,#1e3a8a,#1F3864);color:#fff;border-radius:14px;padding:16px 18px;margin-bottom:14px;box-shadow:0 4px 12px rgba(31,56,100,.2)">'
+    +   '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px">'
+    +     '<div>'
+    +       '<div style="font-size:11px;opacity:.85;text-transform:uppercase;letter-spacing:.05em;font-weight:700">👥 TEAM TOTAL — Duaa + Ms Sadia combined</div>'
+    +       '<div style="font-size:13px;opacity:.85;margin-top:2px">All Google-call activity across both operators</div>'
+    +     '</div>'
+    +     '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'
+    +       '<button onclick="_phase208NavMonth(-1)" title="Previous month" style="background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:6px;padding:5px 11px;font-size:12px;font-weight:700;cursor:pointer">◀</button>'
+    +       '<div style="background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;font-size:13px;font-weight:800;font-family:DM Sans,sans-serif">📅 ' + monthLabel + (isCurrent ? ' <span style="font-size:9px;background:#16a34a;color:#fff;padding:1px 6px;border-radius:6px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;vertical-align:middle;margin-left:4px">current</span>' : '') + '</div>'
+    +       '<button onclick="_phase208NavMonth(1)" title="Next month" style="background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:6px;padding:5px 11px;font-size:12px;font-weight:700;cursor:pointer">▶</button>'
+    +       '<button onclick="_phase208NavMonth(0)" title="Jump to current month" style="background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:6px;padding:5px 11px;font-size:10px;font-weight:700;cursor:pointer">📅 Today</button>'
+    +     '</div>'
+    +   '</div>'
+    +   '<div style="background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:8px;margin-top:2px">'
+    +     _phase208TileRow(combined, monthLabel)
+    +       .replace(/margin-bottom:12px/, 'margin-bottom:0')
+    +   '</div>'
+    + '</div>';
+}
+
+/* Replaces the prior Phase 202 panel — collapsible <details>, tiles
+   for week + selected-month only (no "today" tiles), daily log keyed
+   to the SELECTED month. */
+function _phase202BuildOperatorPanel(member){
   function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  var stats = _phase208ComputeStats(member);
+  var monthKey = stats.monthKey;
+  var parts = monthKey.split('-');
+  var moDate = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, 1);
+  var monthLabel = moDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  var monthShort = moDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+  var canEditMine = _phase202CanEdit(member);
+  var todayKey = (function(){ var n = new Date(); return n.getFullYear() + '-' + String(n.getMonth() + 1).padStart(2, '0'); })();
+  var isCurrent = (monthKey === todayKey);
 
-  // Daily log rows (last 7 days).
-  var rowsHtml = days.map(function(row){
+  /* Daily log rows for the SELECTED MONTH (today's the last row when
+     current month; otherwise all days of that month). */
+  var moEndDate = new Date(moDate.getFullYear(), moDate.getMonth() + 1, 0);
+  var lastDayOfRange = isCurrent
+    ? new Date().getDate()
+    : moEndDate.getDate();
+  var dayRows = [];
+  for(var dnum = lastDayOfRange; dnum >= 1; dnum--){
+    var dd = new Date(moDate.getFullYear(), moDate.getMonth(), dnum);
+    dayRows.push({ iso: _phase202Iso(dd), date: dd });
+  }
+  var rowsHtml = dayRows.map(function(row){
     var calls = _phase202GetCallCount(member, row.iso);
     var conf  = _phase202CountConfirmedReferrals(member, row.iso);
-    var rate  = calls > 0 ? Math.round((conf / calls) * 100) : 0;
+    var ratio = calls > 0 ? Math.round((conf / calls) * 100) : 0;
     var dayLabel = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][row.date.getDay()] + ' ' + (row.date.getMonth() + 1) + '/' + row.date.getDate();
     var inputCell;
     if(canEditMine){
       inputCell = '<input type="number" min="0" step="1" value="' + calls
-        + '" data-ph202-member="' + esc(member)
-        + '" data-ph202-date="' + esc(row.iso) + '"'
-        + ' onchange="_phase202OnCallCountInput(\'' + esc(member).replace(/'/g,'&#39;') + '\', \'' + esc(row.iso) + '\', this)"'
+        + '" onchange="_phase202OnCallCountInput(\'' + esc(member).replace(/'/g,'&#39;') + '\', \'' + esc(row.iso) + '\', this)"'
         + ' style="width:60px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:DM Sans,sans-serif;text-align:right">';
     } else {
       inputCell = '<span style="font-weight:700;color:#1F3864">' + calls + '</span>';
     }
-    var rateColor = (rate >= 30) ? '#16a34a' : (rate >= 10 ? '#f59e0b' : '#dc2626');
+    var ratioColor = (ratio >= 30) ? '#16a34a' : (ratio >= 10 ? '#f59e0b' : '#dc2626');
     return ''
       + '<tr style="border-bottom:1px solid var(--border)">'
       +   '<td style="padding:6px 4px;font-size:12px;color:var(--text)">' + esc(dayLabel) + '</td>'
       +   '<td style="padding:6px 4px;text-align:right">' + inputCell + '</td>'
       +   '<td style="padding:6px 4px;text-align:right;font-weight:700;color:#16a34a">' + conf + '</td>'
-      +   '<td style="padding:6px 4px;text-align:right;font-size:11px;color:' + rateColor + ';font-weight:700">' + rate + '%</td>'
+      +   '<td style="padding:6px 4px;text-align:right;font-size:11px;color:' + ratioColor + ';font-weight:700">' + ratio + '%</td>'
       + '</tr>';
   }).join('');
 
-  // Today's confirmed referrals list.
-  var todayReferrals = _phase202ListConfirmedReferrals(member, todayIso);
-  var refListHtml;
-  if(todayReferrals.length === 0){
-    refListHtml = '<div style="font-size:11px;color:var(--muted);font-style:italic;padding:8px 0">No confirmed Google-call referrals yet today.</div>';
-  } else {
-    refListHtml = todayReferrals.map(function(r){
-      var patient = esc(r.patientName || '(unnamed)');
-      var caller  = esc(r.sourceName || '(no caller)');
-      var fac     = esc(r.destinationFacility || '');
-      var t       = r.approvedAt || r.confirmedAt || r.createdAt;
-      var d       = t ? new Date(t) : null;
-      var timeStr = d && !isNaN(d.getTime()) ? (d.getHours() + ':' + (d.getMinutes() < 10 ? '0' : '') + d.getMinutes()) : '';
-      return ''
-        + '<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:#f0fdf4;border:1px solid #bbf7d0;border-left:3px solid #16a34a;border-radius:8px;margin-bottom:6px">'
-        +   '<div style="flex:1">'
-        +     '<div style="font-size:12px;font-weight:700;color:var(--text)">🔍 ' + patient + '</div>'
-        +     '<div style="font-size:10.5px;color:var(--muted)">Caller: ' + caller + (fac ? ' · ' + fac : '') + '</div>'
-        +   '</div>'
-        +   (timeStr ? '<div style="font-size:10px;color:var(--muted);white-space:nowrap">' + esc(timeStr) + '</div>' : '')
-        + '</div>';
-    }).join('');
+  /* Today's confirmed Google referrals — only render when viewing current
+     month (no point listing "today" entries on a past-month view). */
+  var todaySection = '';
+  if(isCurrent){
+    var todayIso = _phase202Iso(new Date());
+    var todayReferrals = _phase202ListConfirmedReferrals(member, todayIso);
+    var refListHtml;
+    if(todayReferrals.length === 0){
+      refListHtml = '<div style="font-size:11px;color:var(--muted);font-style:italic;padding:8px 0">No confirmed Google-call referrals yet today.</div>';
+    } else {
+      refListHtml = todayReferrals.map(function(r){
+        var patient = esc(r.patientName || '(unnamed)');
+        var caller  = esc(r.sourceName || '(no caller)');
+        var fac     = esc(r.destinationFacility || '');
+        var t       = r.approvedAt || r.confirmedAt || r.createdAt;
+        var d       = t ? new Date(t) : null;
+        var timeStr = d && !isNaN(d.getTime()) ? (d.getHours() + ':' + (d.getMinutes() < 10 ? '0' : '') + d.getMinutes()) : '';
+        return ''
+          + '<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:#f0fdf4;border:1px solid #bbf7d0;border-left:3px solid #16a34a;border-radius:8px;margin-bottom:6px">'
+          +   '<div style="flex:1">'
+          +     '<div style="font-size:12px;font-weight:700;color:var(--text)">🔍 ' + patient + '</div>'
+          +     '<div style="font-size:10.5px;color:var(--muted)">Caller: ' + caller + (fac ? ' · ' + fac : '') + '</div>'
+          +   '</div>'
+          +   (timeStr ? '<div style="font-size:10px;color:var(--muted);white-space:nowrap">' + esc(timeStr) + '</div>' : '')
+          + '</div>';
+      }).join('');
+    }
+    todaySection = ''
+      + '<div style="border-top:1px solid var(--border);padding-top:10px;margin-top:10px">'
+      +   '<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Today\'s confirmed Google-call referrals</div>'
+      +   refListHtml
+      + '</div>';
   }
 
   var permNote = canEditMine
     ? '<span style="font-size:10px;color:#16a34a;font-weight:700">✓ You can edit ' + (member === (window.CURRENT_USER && CURRENT_USER.name) ? 'your' : member + "'s") + ' counter</span>'
     : '<span style="font-size:10px;color:var(--muted);font-style:italic">Read-only — only ' + esc(member) + ' or an admin can edit this counter</span>';
 
+  /* Compact summary in the <summary> bar (always visible). */
+  var summaryStats = ''
+    + '<span style="font-size:11px;color:var(--muted);margin-left:8px">Wk: <b style="color:#7c3aed">' + stats.week.conf + '/' + stats.week.calls + '</b> (' + stats.week.ratio + '%) · ' + monthShort + ': <b style="color:#16a34a">' + stats.month.conf + '/' + stats.month.calls + '</b> (' + stats.month.ratio + '%)</span>';
+
   return ''
-    + '<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:14px">'
-    +   '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px">'
-    +     '<div>'
-    +       '<div style="font-size:15px;font-weight:800;color:var(--text)">🔍 ' + esc(member) + ' — Google calls</div>'
-    +       '<div style="margin-top:3px">' + permNote + '</div>'
+    + '<details style="background:var(--card);border:1px solid var(--border);border-radius:12px;margin-bottom:12px">'
+    +   '<summary style="cursor:pointer;padding:14px 16px;list-style:none;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">'
+    +     '<div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px">'
+    +       '<span style="font-size:14px;font-weight:800;color:var(--text)">▸ 🔍 ' + esc(member) + ' — Google calls</span>'
+    +       summaryStats
     +     '</div>'
+    +     '<div>' + permNote + '</div>'
+    +   '</summary>'
+    +   '<div style="padding:4px 16px 16px">'
+    +     _phase208TileRow(stats, monthLabel)
+    +     '<details style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:6px">'
+    +       '<summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--muted);list-style:none">▸ Daily log for ' + monthLabel + (canEditMine ? ' — tap a number to edit' : '') + ' (' + dayRows.length + ' day' + (dayRows.length === 1 ? '' : 's') + ')</summary>'
+    +       '<table style="width:100%;font-size:12px;border-collapse:collapse;margin-top:10px">'
+    +         '<thead><tr style="border-bottom:2px solid var(--border)">'
+    +           '<th style="padding:6px 4px;text-align:left;font-size:10px;color:var(--muted);text-transform:uppercase">Day</th>'
+    +           '<th style="padding:6px 4px;text-align:right;font-size:10px;color:var(--muted);text-transform:uppercase">Calls</th>'
+    +           '<th style="padding:6px 4px;text-align:right;font-size:10px;color:var(--muted);text-transform:uppercase">Confirmed</th>'
+    +           '<th style="padding:6px 4px;text-align:right;font-size:10px;color:var(--muted);text-transform:uppercase">Ratio</th>'
+    +         '</tr></thead>'
+    +         '<tbody>' + rowsHtml + '</tbody>'
+    +       '</table>'
+    +     '</details>'
+    +     todaySection
     +   '</div>'
-    +   '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:14px">'
-    +     '<div style="background:#eff6ff;border:1px solid #bfdbfe;border-left:3px solid #1F3864;border-radius:10px;padding:10px 12px">'
-    +       '<div style="font-size:10px;color:#1e3a8a;text-transform:uppercase;font-weight:700">Calls today</div>'
-    +       '<div style="font-size:22px;font-weight:800;color:#1F3864">' + todayCalls + '</div>'
-    +     '</div>'
-    +     '<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-left:3px solid #16a34a;border-radius:10px;padding:10px 12px">'
-    +       '<div style="font-size:10px;color:#166534;text-transform:uppercase;font-weight:700">Confirmed today</div>'
-    +       '<div style="font-size:22px;font-weight:800;color:#16a34a">' + todayConf + '</div>'
-    +       '<div style="font-size:9px;color:var(--muted)">' + todayRate + '% conversion</div>'
-    +     '</div>'
-    +     '<div style="background:#fef3c7;border:1px solid #fde68a;border-left:3px solid #f59e0b;border-radius:10px;padding:10px 12px">'
-    +       '<div style="font-size:10px;color:#92400e;text-transform:uppercase;font-weight:700">Calls this week</div>'
-    +       '<div style="font-size:22px;font-weight:800;color:#92400e">' + weekCalls + '</div>'
-    +     '</div>'
-    +     '<div style="background:#ede9fe;border:1px solid #ddd6fe;border-left:3px solid #7c3aed;border-radius:10px;padding:10px 12px">'
-    +       '<div style="font-size:10px;color:#5b21b6;text-transform:uppercase;font-weight:700">Confirmed this week</div>'
-    +       '<div style="font-size:22px;font-weight:800;color:#7c3aed">' + weekConf + '</div>'
-    +       '<div style="font-size:9px;color:var(--muted)">' + weekRate + '% conversion</div>'
-    +     '</div>'
-    +   '</div>'
-    +   '<details ' + (canEditMine ? 'open' : '') + ' style="border-top:1px solid var(--border);padding-top:10px;margin-bottom:10px">'
-    +     '<summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--muted);list-style:none">▸ Daily log (last 7 days)' + (canEditMine ? ' — tap a number to edit' : '') + '</summary>'
-    +     '<table style="width:100%;font-size:12px;border-collapse:collapse;margin-top:10px">'
-    +       '<thead><tr style="border-bottom:2px solid var(--border)">'
-    +         '<th style="padding:6px 4px;text-align:left;font-size:10px;color:var(--muted);text-transform:uppercase">Day</th>'
-    +         '<th style="padding:6px 4px;text-align:right;font-size:10px;color:var(--muted);text-transform:uppercase">Calls</th>'
-    +         '<th style="padding:6px 4px;text-align:right;font-size:10px;color:var(--muted);text-transform:uppercase">Confirmed</th>'
-    +         '<th style="padding:6px 4px;text-align:right;font-size:10px;color:var(--muted);text-transform:uppercase">Rate</th>'
-    +       '</tr></thead>'
-    +       '<tbody>' + rowsHtml + '</tbody>'
-    +     '</table>'
-    +   '</details>'
-    +   '<div style="border-top:1px solid var(--border);padding-top:10px">'
-    +     '<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Today\'s confirmed Google-call referrals</div>'
-    +     refListHtml
-    +   '</div>'
-    + '</div>';
+    + '</details>';
 }
 
 function _phase202RenderGoogleCalls(){
@@ -18720,9 +18878,13 @@ function _phase202RenderGoogleCalls(){
   var todayLabel = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][today.getDay()]
     + ', ' + ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][today.getMonth()]
     + ' ' + today.getDate() + ' ' + today.getFullYear();
-  var weekStart = _phase202StartOfWeek(today);
-  var weekLabel = (weekStart.getMonth() + 1) + '/' + weekStart.getDate() + ' – ' + (today.getMonth() + 1) + '/' + today.getDate();
 
+  var monthKey = _phase208MonthState();
+  var mParts = monthKey.split('-');
+  var moDate = new Date(parseInt(mParts[0], 10), parseInt(mParts[1], 10) - 1, 1);
+  var monthLabel = moDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
+  var teamHtml = _phase208BuildTeamTotal(monthLabel);
   var panelsHtml = PHASE202_OPERATORS.map(function(op){
     return _phase202BuildOperatorPanel(op);
   }).join('');
@@ -18730,11 +18892,12 @@ function _phase202RenderGoogleCalls(){
   host.innerHTML = ''
     + '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px">'
     +   '<div>'
-    +     '<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-weight:700">Google call conversion tracker</div>'
-    +     '<div style="font-size:14px;font-weight:700;color:var(--text);margin-top:2px">' + todayLabel + ' · Week: ' + weekLabel + '</div>'
+    +     '<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-weight:700">🔍 Google call conversion tracker</div>'
+    +     '<div style="font-size:14px;font-weight:700;color:var(--text);margin-top:2px">' + todayLabel + '</div>'
     +   '</div>'
-    +   '<div style="font-size:10.5px;color:var(--muted);font-style:italic;max-width:280px;text-align:right">Calls = manually plugged in. Confirmed = auto-counted from Create Referral with source 🔍 Google call.</div>'
+    +   '<div style="font-size:10.5px;color:var(--muted);font-style:italic;max-width:320px;text-align:right">Calls = manually plugged in by Duaa / Ms Sadia. Confirmed = auto-counted when a Google-source referral gets confirmed in the Log Patient flow. Ratio = confirmed ÷ calls.</div>'
     + '</div>'
+    + teamHtml
     + panelsHtml;
 }
 window._phase202RenderGoogleCalls = _phase202RenderGoogleCalls;
@@ -55437,11 +55600,13 @@ function loadMemberProfile(name){
   var ms = getMemberStats();
   var s = ms[name] || {total:0,comp:0,post:0,canc:0,pend:0,leads:0};
   var SCOPE_ALL = '<div class="ps-scope" style="font-size:8px;font-weight:700;color:rgba(255,255,255,.6);text-transform:uppercase;letter-spacing:.08em;margin-top:1px">ALL-TIME</div>';
+  /* Phase 209 (2026-06-01): per user — "remove the postponed and canceled
+     counter" from this strip. Total / Completed / Leads remain. The data
+     is still tracked elsewhere (Side Activities, day-view rows, raw
+     getMemberStats); just removed from this 5-card all-time strip. */
   document.getElementById('profile-stats').innerHTML =
       '<div class="ps" title="All-time total: every visit ever assigned to '+name+'"><div class="ps-n">'+s.total+'</div><div class="ps-l">Total</div>'+SCOPE_ALL+'</div>'+
       '<div class="ps" title="All-time: visits marked Completed"><div class="ps-n" style="color:#86efac">'+s.comp+'</div><div class="ps-l">Completed</div>'+SCOPE_ALL+'</div>'+
-      '<div class="ps" title="All-time: visits marked Postponed (rescheduled)"><div class="ps-n" style="color:#fcd34d">'+s.post+'</div><div class="ps-l">Postponed</div>'+SCOPE_ALL+'</div>'+
-      '<div class="ps" title="All-time: visits marked Canceled"><div class="ps-n" style="color:#fca5a5">'+s.canc+'</div><div class="ps-l">Canceled</div>'+SCOPE_ALL+'</div>'+
       '<div class="ps" title="All-time: completed visits where the lead became Established"><div class="ps-n" style="color:#c4b5fd">'+s.leads+'</div><div class="ps-l">Leads</div>'+SCOPE_ALL+'</div>';
 
   document.getElementById('profile-card').style.display='block';
