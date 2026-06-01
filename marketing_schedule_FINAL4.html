@@ -14060,7 +14060,22 @@ window.getLoggedCountForFacilityDate = getLoggedCountForFacilityDate;
 // This matches the front-desk's mental model: did they bother filling out
 // the survey, or did they just tap "+1 patient"?
 function getReferralBreakdownForFacilityDate(facilityKey, dateIso){
-  var out = { total: 0, referral: 0, noSurvey: 0 };
+  // Phase 190 (2026-05-31) — semantic fix per user: "the referred only are
+  // the patients who come from referrals other channels are not counted as
+  // referrals." Until now `out.referral` was conflated with "surveyed"
+  // (non-anonymous) — wrong. A patient logged via the Community Outreach
+  // Event channel is NOT a referral, even though they were surveyed.
+  // New shape:
+  //   total          — all patient counts (unchanged)
+  //   actualReferral — channel === 'member_direct' only (the only real
+  //                    referral channel; clinic / MVA → ER)
+  //   surveyed       — all non-anonymous entries (the data-discipline
+  //                    metric; used for the survey-capture % only)
+  //   otherChannel   — surveyed entries from a non-referral channel
+  //   noSurvey       — anonymous tap-counted (unchanged)
+  // `out.referral` is preserved as an alias for `actualReferral` so any
+  // display code that prints "Referrals" now shows the TRUE count.
+  var out = { total: 0, referral: 0, actualReferral: 0, surveyed: 0, otherChannel: 0, noSurvey: 0 };
   REFERRAL_LOG.forEach(function(e){
     if(!e) return;
     if(e.destinationFacility !== facilityKey) return;
@@ -14071,9 +14086,16 @@ function getReferralBreakdownForFacilityDate(facilityKey, dateIso){
     if(e.isAnonymous){
       out.noSurvey += n;
     } else {
-      out.referral += n;
+      out.surveyed += n;
+      if(e.channel === 'member_direct'){
+        out.actualReferral += n;
+      } else {
+        out.otherChannel += n;
+      }
     }
   });
+  // Alias: the legacy field name now means the TRUE referral count.
+  out.referral = out.actualReferral;
   return out;
 }
 window.getReferralBreakdownForFacilityDate = getReferralBreakdownForFacilityDate;
@@ -16890,16 +16912,22 @@ function _rlRenderCalDayDetail(iso){
   // now described by three numbers: total patients · referrals (with survey
   // info) · no-survey tap-ins. Replaces the broken capture-rate UI that
   // always said "Shift totals needed" since Shift Total was removed.
-  var dayTotal = 0, dayRef = 0, dayNoSurv = 0;
+  // Phase 190: now tracking 4 dimensions per day so the labels mean what
+  // they say. dayRef = TRUE referrals (channel === 'member_direct').
+  // daySurveyed = data-quality metric (non-anonymous), drives the
+  // "survey-captured %" badge.
+  var dayTotal = 0, dayRef = 0, daySurveyed = 0, dayOther = 0, dayNoSurv = 0;
   var perFacBreakdown = {};
   REFERRAL_FACILITIES.forEach(function(f){
     var brk = getReferralBreakdownForFacilityDate(f.key, iso);
     perFacBreakdown[f.key] = brk;
-    dayTotal  += brk.total;
-    dayRef    += brk.referral;
-    dayNoSurv += brk.noSurvey;
+    dayTotal    += brk.total;
+    dayRef      += brk.actualReferral;
+    daySurveyed += brk.surveyed;
+    dayOther    += brk.otherChannel;
+    dayNoSurv   += brk.noSurvey;
   });
-  var surveyRate = (dayTotal > 0) ? Math.round((dayRef / dayTotal) * 100) : null;
+  var surveyRate = (dayTotal > 0) ? Math.round((daySurveyed / dayTotal) * 100) : null;
   var totalRateColor = (dayTotal === 0) ? '#94a3b8'
                      : surveyRate >= 90 ? '#16a34a'
                      : surveyRate >= 70 ? '#d97706'
@@ -16913,8 +16941,9 @@ function _rlRenderCalDayDetail(iso){
       +   '<div style="font-size:10px;font-weight:700;color:' + totalRateColor + ';text-transform:uppercase;letter-spacing:.05em">📊 Patients today (all facilities)</div>'
       +   '<div style="display:flex;align-items:baseline;gap:14px;margin-top:4px;flex-wrap:wrap">'
       +     '<div><div style="font-size:32px;font-weight:800;font-family:DM Mono,monospace;color:#1F3864;line-height:1">' + dayTotal + '</div><div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-top:2px">Total</div></div>'
-      +     '<div><div style="font-size:22px;font-weight:800;font-family:DM Mono,monospace;color:#166534;line-height:1">' + dayRef + '</div><div style="font-size:9px;color:#166534;text-transform:uppercase;letter-spacing:.05em;margin-top:2px">📋 Referrals</div></div>'
-      +     '<div><div style="font-size:22px;font-weight:800;font-family:DM Mono,monospace;color:#d97706;line-height:1">' + dayNoSurv + '</div><div style="font-size:9px;color:#d97706;text-transform:uppercase;letter-spacing:.05em;margin-top:2px">⚪ No-survey</div></div>'
+      +     '<div title="True referrals — patients sent here by a clinic or MVA attorney (channel = Referral). Other channels (community outreach, walk-in, etc.) are NOT counted as referrals."><div style="font-size:22px;font-weight:800;font-family:DM Mono,monospace;color:#166534;line-height:1">' + dayRef + '</div><div style="font-size:9px;color:#166534;text-transform:uppercase;letter-spacing:.05em;margin-top:2px">📋 Referrals</div></div>'
+      +     '<div title="Other channels — patients logged with full survey from community outreach, walk-in, friend/family, neighborhood, insurance directory, or other. NOT referrals."><div style="font-size:22px;font-weight:800;font-family:DM Mono,monospace;color:#0891b2;line-height:1">' + dayOther + '</div><div style="font-size:9px;color:#0891b2;text-transform:uppercase;letter-spacing:.05em;margin-top:2px">🏘 Other</div></div>'
+      +     '<div title="Anonymous tap-counted patients (no survey info captured)."><div style="font-size:22px;font-weight:800;font-family:DM Mono,monospace;color:#d97706;line-height:1">' + dayNoSurv + '</div><div style="font-size:9px;color:#d97706;text-transform:uppercase;letter-spacing:.05em;margin-top:2px">⚪ No-survey</div></div>'
       +   '</div>'
       + '</div>'
       + (dayTotal > 0
@@ -16932,10 +16961,14 @@ function _rlRenderCalDayDetail(iso){
   REFERRAL_FACILITIES.forEach(function(f){
     var brk = perFacBreakdown[f.key];
     var color, msg;
+    // Phase 190: the "x surveyed · y tap-counted" message is about survey
+    // discipline, not actual referrals — use brk.surveyed (= surveyed total
+    // across all channels) instead of brk.referral (which now means true
+    // referrals only).
     if(brk.total === 0){              color='#94a3b8'; msg='No patients logged'; }
     else if(brk.noSurvey === 0){      color='#16a34a'; msg='✓ All ' + brk.total + ' with full survey info'; }
-    else if(brk.referral === 0){      color='#d97706'; msg='⚠ All ' + brk.total + ' tap-counted, no survey data'; }
-    else {                            color='#3b82f6'; msg=brk.referral + ' surveyed · ' + brk.noSurvey + ' tap-counted'; }
+    else if(brk.surveyed === 0){      color='#d97706'; msg='⚠ All ' + brk.total + ' tap-counted, no survey data'; }
+    else {                            color='#3b82f6'; msg=brk.surveyed + ' surveyed · ' + brk.noSurvey + ' tap-counted'; }
 
     reconHtml += '<div style="background:#f8fafc;border:1px solid var(--border);border-left:3px solid ' + color + ';border-radius:8px;padding:10px 12px">'
               + '<div style="font-size:11px;font-weight:700;color:var(--text)">🏥 ' + esc(f.label) + '</div>'
