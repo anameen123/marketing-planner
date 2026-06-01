@@ -2967,14 +2967,31 @@ button:not([disabled]):not(.no-press):active {
       <!-- Section 4: expected arrival — smart auto-suggest based on
            source→destination distance (per user 2026-05-26 follow-up plan).
            Sets the trigger for the late-patient popup later: ETA + 10 min. -->
-      <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">📅 Expected arrival</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
-        <input type="date" id="cr-expected-date" style="border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box">
-        <input type="time" id="cr-expected-time" style="border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box">
+      <!-- Phase 203 (2026-06-01): explicit ETA mode toggle per user. Either
+           pick a real arrival TIME (then the late-popup fires at expectedAt
+           + 10 min) OR mark UNAVAILABLE (popup fires at createdAt + 40 min,
+           routed to both creator + destination front desk). -->
+      <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">📅 Expected arrival <span style="color:#dc2626">*</span></div>
+      <div id="cr-eta-mode-row" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px">
+        <label style="display:flex;align-items:center;gap:6px;background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:8px 10px;cursor:pointer;font-size:11px;font-weight:600">
+          <input type="radio" name="cr-eta-mode" value="time" checked onchange="_crEtaModeChanged()" style="accent-color:#1F3864"> ⏰ Specific time
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:8px 10px;cursor:pointer;font-size:11px;font-weight:600">
+          <input type="radio" name="cr-eta-mode" value="unavailable" onchange="_crEtaModeChanged()" style="accent-color:#f59e0b"> 🤷 Unavailable
+        </label>
       </div>
-      <div id="cr-eta-suggest" style="display:none;margin-bottom:14px;background:#faf5ff;border:1px solid #d8b4fe;border-radius:6px;padding:7px 10px;font-size:11px;color:#6b21a8;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
-        <span id="cr-eta-suggest-text">💡 Auto-suggest computing…</span>
-        <button type="button" onclick="_crApplyAutoETA()" style="background:#7c3aed;color:#fff;border:none;border-radius:5px;padding:4px 11px;font-size:10px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">Use this ETA</button>
+      <div id="cr-eta-time-panel" style="display:block">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+          <input type="date" id="cr-expected-date" style="border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box">
+          <input type="time" id="cr-expected-time" style="border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;box-sizing:border-box">
+        </div>
+        <div id="cr-eta-suggest" style="display:none;margin-bottom:14px;background:#faf5ff;border:1px solid #d8b4fe;border-radius:6px;padding:7px 10px;font-size:11px;color:#6b21a8;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
+          <span id="cr-eta-suggest-text">💡 Auto-suggest computing…</span>
+          <button type="button" onclick="_crApplyAutoETA()" style="background:#7c3aed;color:#fff;border:none;border-radius:5px;padding:4px 11px;font-size:10px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">Use this ETA</button>
+        </div>
+      </div>
+      <div id="cr-eta-unavail-note" style="display:none;margin-bottom:14px;background:#fef3c7;border:1px solid #fcd34d;border-radius:6px;padding:8px 11px;font-size:11px;color:#92400e;line-height:1.45">
+        🤷 <b>ETA Unavailable.</b> The follow-up popup will fire <b>40 minutes</b> after this referral is created — to both you and the destination front desk. Either side acting (call/arrived/no-show/note) dismisses it for both.
       </div>
 
       <!-- Section 4b: Pre-contact / ride offer — conditional on creator + phones.
@@ -14250,6 +14267,14 @@ window._crIsReferralExpired = _crIsReferralExpired;
 // falls back to createdAt + 15 min if neither was set.
 function _crEffectiveETA(ref){
   if(!ref) return null;
+  /* Phase 203 (2026-06-01): "ETA Unavailable" path — no real time was set
+     so the trigger becomes createdAt + 40 min. Returning that here lets
+     the existing trigger math (in _crIsReferralLate) special-case the
+     0-min buffer for the unavailable branch. */
+  if(ref.etaUnavailable && ref.createdAt){
+    var tu = new Date(ref.createdAt);
+    if(!isNaN(tu.getTime())) return new Date(tu.getTime() + 40 * 60 * 1000);
+  }
   if(ref.expectedAt){
     var t = new Date(ref.expectedAt);
     if(!isNaN(t.getTime())) return t;
@@ -14272,26 +14297,41 @@ window._crEffectiveETA = _crEffectiveETA;
 // not already shown + not auto-expired yet.
 // Buffer is 10 min on original ETA, OR 5 min if ETA was just updated post-call
 // (followUpEtaUpdatedAt set). Per locked decision #3.
+// Phase 203: when ref.etaUnavailable, _crEffectiveETA already returns
+//   createdAt + 40 min — no extra buffer (the 40 min IS the buffer).
 function _crIsReferralLate(ref){
   if(!ref || ref.status !== 'pending') return false;
   var eta = _crEffectiveETA(ref);
   if(!eta) return false;
-  var bufferMin = ref.followUpEtaUpdatedAt ? 5 : 10;
+  var bufferMin;
+  if(ref.etaUnavailable){
+    bufferMin = 0;  // _crEffectiveETA already added the 40-min window
+  } else {
+    bufferMin = ref.followUpEtaUpdatedAt ? 5 : 10;
+  }
   var triggerAt = eta.getTime() + bufferMin * 60 * 1000;
   return Date.now() > triggerAt;
 }
 window._crIsReferralLate = _crIsReferralLate;
 
-// Owner routing per locked decision: UC Plano creator → destination FD;
-// Member creator → the member. Admin sees all (in addition).
+// Owner routing.
+// Phase 203 (2026-06-01) — user: "that window will appear to the front
+// desk AND the one who created this referral (either a member or UC
+// Plano)." Both sides now get the popup; one acting dismisses for both
+// (see _crCollectLateOwnedReferrals + followUpResolvedAt below).
+//
+// True if CURRENT_USER is:
+//   (a) the creator (marketing member, OR UC Plano FD staffer who created it), OR
+//   (b) front-desk staff at the destination facility (Frisco / Castle Hills / Plano UC), OR
+//   (c) admin (sees everything).
 function _crCurrentUserIsOwner(ref){
   if(!ref || !CURRENT_USER) return false;
-  if(ref.creatorRole === 'uc_plano_fd'){
-    return CURRENT_USER.role === 'front_desk' && CURRENT_USER.facilityKey === ref.destinationFacility;
-  }
-  if(ref.creatorRole === 'marketing'){
-    return CURRENT_USER.name === ref.createdBy;
-  }
+  // Admin path
+  if(typeof isAdmin === 'function' && isAdmin()) return true;
+  // (a) Creator path — works for marketing members AND UC Plano FD staff.
+  if(ref.createdBy && CURRENT_USER.name === ref.createdBy) return true;
+  // (b) Destination front desk path.
+  if(CURRENT_USER.role === 'front_desk' && CURRENT_USER.facilityKey === ref.destinationFacility) return true;
   return false;
 }
 window._crCurrentUserIsOwner = _crCurrentUserIsOwner;
@@ -14340,11 +14380,18 @@ function _crCollectLateOwnedReferrals(){
   return PENDING_REFERRALS.filter(function(r){
     if(!_crIsReferralLate(r)) return false;
     if(!_crCurrentUserIsOwner(r)) return false;
-    // Don't re-show after this user dismissed it (per locked decision: fires
-    // once). User can still see + act from the Pending panel row badge.
-    var shownForETA = r.followUpShownAt;
+    /* Phase 203 (2026-06-01) — shared dismissal: when EITHER side
+       (creator or destination FD) takes any action on this referral
+       in the current ETA cycle, _crLogFollowUpAction stamps
+       followUpResolvedAt + followUpResolvedForETA. The other side
+       stops seeing the popup. An ETA update (_crFollowUpUpdateETA)
+       clears the resolved flag so the fresh cycle can re-fire. */
     var etaIso = (_crEffectiveETA(r) || {toISOString:function(){return '';}}).toISOString();
-    // If ETA changed since last shown, reset show flag
+    if(r.followUpResolvedAt && r.followUpResolvedForETA === etaIso) return false;
+    // Don't re-show after THIS user already dismissed it (per locked decision:
+    // fires once per user per ETA cycle). User can still see + act from the
+    // Pending panel row badge.
+    var shownForETA = r.followUpShownAt;
     if(shownForETA && r.followUpShownForETA === etaIso) return false;
     return true;
   });
@@ -14397,6 +14444,11 @@ function _crRenderFollowUpModal(refs){
     var nowStr = fmtTime(new Date().toISOString());
     var fac = (REFERRAL_FACILITIES || []).find(function(f){ return f.key === r.destinationFacility; });
     var lateMin = eta ? Math.round((Date.now() - eta.getTime()) / 60000) : '?';
+    /* Phase 203: cosmetic — for Unavailable referrals the "Expected" row
+       reads "ETA Unavailable · 40-min trigger fired" instead of a fake time. */
+    var etaLineHtml = r.etaUnavailable
+      ? '🤷 ETA was Unavailable · 40-min trigger fired · Now ' + nowStr
+      : 'Expected ' + etaStr + ' · Now ' + nowStr;
     var ridePart = '';
     if(r.creatorRole === 'uc_plano_fd' && r.rideRequested){
       // Phase 23: UC Plano asks but doesn't book. Show the real booking
@@ -14431,7 +14483,7 @@ function _crRenderFollowUpModal(refs){
       + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;margin-bottom:8px">'
       +   '<div style="flex:1;min-width:0">'
       +     '<div style="font-size:14px;font-weight:800;color:#7c2d12">⏰ ' + esc(r.patientName || 'Patient') + ' is ' + lateMin + ' min late</div>'
-      +     '<div style="font-size:11px;color:#7c2d12;margin-top:2px">Expected ' + etaStr + ' · Now ' + nowStr + '</div>'
+      +     '<div style="font-size:11px;color:#7c2d12;margin-top:2px">' + etaLineHtml + '</div>'
       +     '<div style="font-size:11px;color:#1F3864;margin-top:3px">Source: ' + esc(r.sourceName) + (fac ? ' → ' + esc(fac.label) : '') + '</div>'
       +     '<div style="font-size:11px;color:#1F3864">Created by: ' + esc(r.createdBy) + '</div>'
       +     ridePart
@@ -14523,6 +14575,16 @@ function _crLogFollowUpAction(refId, action, note){
     action: action,
     note: note || ''
   });
+  /* Phase 203 (2026-06-01) — shared dismissal: any action by either side
+     resolves this ETA cycle for everyone. The "eta_updated" action is the
+     ONE exception — _crFollowUpUpdateETA itself clears the resolved flag
+     after stamping a new ETA, so the fresh cycle can re-fire. */
+  if(action !== 'eta_updated'){
+    var etaIso = (_crEffectiveETA(ref) || {toISOString:function(){return '';}}).toISOString();
+    ref.followUpResolvedAt = new Date().toISOString();
+    ref.followUpResolvedBy = (CURRENT_USER && CURRENT_USER.name) || '?';
+    ref.followUpResolvedForETA = etaIso;
+  }
   if(typeof _savePendingReferrals === 'function') _savePendingReferrals();
 }
 window._crLogFollowUpAction = _crLogFollowUpAction;
@@ -14622,10 +14684,17 @@ function _crFollowUpUpdateETA(refId){
   // If the new time is BEFORE now, assume next day
   if(newEta.getTime() < Date.now() - 60000) newEta = new Date(newEta.getTime() + 24*60*60*1000);
   ref.expectedAt = newEta.toISOString();
+  /* Phase 203: setting a real ETA replaces an Unavailable referral too. */
+  ref.etaUnavailable = false;
   ref.followUpEtaUpdatedAt = new Date().toISOString();
   // Reset the popup-shown flag so the NEW ETA + 5 min trigger can fire again
   ref.followUpShownAt = null;
   ref.followUpShownForETA = null;
+  /* Phase 203 — clear the shared-dismiss flag so the fresh cycle re-fires
+     for both sides when (new ETA + 5 min) elapses. */
+  ref.followUpResolvedAt = null;
+  ref.followUpResolvedBy = null;
+  ref.followUpResolvedForETA = null;
   _crLogFollowUpAction(refId, 'eta_updated', 'New ETA: ' + newEta.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}));
   if(typeof renderPendingReferrals === 'function') renderPendingReferrals();
   if(typeof showToast === 'function') showToast('✓ New ETA: ' + newEta.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}) + ' — timer reset (+5 min buffer)');
@@ -19250,6 +19319,17 @@ function openCreateReferralForm(){
   ['cr-ride-section','cr-precontact-patient','cr-precontact-clinic','cr-eta-suggest','cr-phone-err-hint','cr-phone-ok-hint'].forEach(function(id){
     var el = document.getElementById(id); if(el) el.style.display = 'none';
   });
+  /* Phase 203 (2026-06-01): default the ETA mode toggle back to "time"
+     each time the form opens, restore the date+time panel, hide the
+     Unavailable note. */
+  var _ph203TimeRadio   = document.querySelector('input[name="cr-eta-mode"][value="time"]');
+  if(_ph203TimeRadio) _ph203TimeRadio.checked = true;
+  var _ph203UnavRadio   = document.querySelector('input[name="cr-eta-mode"][value="unavailable"]');
+  if(_ph203UnavRadio) _ph203UnavRadio.checked = false;
+  var _ph203TimePanel   = document.getElementById('cr-eta-time-panel');
+  if(_ph203TimePanel) _ph203TimePanel.style.display = 'block';
+  var _ph203UnavNote    = document.getElementById('cr-eta-unavail-note');
+  if(_ph203UnavNote) _ph203UnavNote.style.display = 'none';
   window._CR_AUTO_ETA = null;
   // Clear error
   var errEl = document.getElementById('cr-form-err');
@@ -19631,6 +19711,32 @@ function _crSourceTypeChanged(){
 }
 window._crSourceTypeChanged = _crSourceTypeChanged;
 
+// Phase 203 (2026-06-01) — toggle handler for the new ETA mode radio
+// (Specific time vs Unavailable). User: "ETA … either can be UNAVAILABLE
+// OR TIME SHOULD BE FILLED … if UNAVAILABLE was selected then that window
+// will appear after 40 minutes to the front desk and the one who created
+// this referral." See _crEffectiveETA + _crIsReferralLate + _crCurrentUserIsOwner
+// for the runtime side of this toggle.
+function _crEtaModeChanged(){
+  var picked = document.querySelector('input[name="cr-eta-mode"]:checked');
+  var mode = picked ? picked.value : 'time';
+  var timePanel = document.getElementById('cr-eta-time-panel');
+  var unavNote  = document.getElementById('cr-eta-unavail-note');
+  if(mode === 'unavailable'){
+    if(timePanel) timePanel.style.display = 'none';
+    if(unavNote)  unavNote.style.display  = 'block';
+    // Clear date+time so they don't accidentally submit a stale value.
+    var dEl = document.getElementById('cr-expected-date'); if(dEl) dEl.value = '';
+    var tEl = document.getElementById('cr-expected-time'); if(tEl) tEl.value = '';
+    // Hide the auto-suggest banner — no ETA to suggest against.
+    var sg = document.getElementById('cr-eta-suggest'); if(sg) sg.style.display = 'none';
+  } else {
+    if(timePanel) timePanel.style.display = 'block';
+    if(unavNote)  unavNote.style.display  = 'none';
+  }
+}
+window._crEtaModeChanged = _crEtaModeChanged;
+
 // Autocomplete using the existing CLINIC_BANK / MVA_ATTORNEYS arrays.
 function _crSuggestSources(){
   var inp = document.getElementById('cr-source');
@@ -19760,10 +19866,19 @@ function _crSaveReferral(){
   }
   var destRadio = document.querySelector('input[name="cr-dest"]:checked');
   if(!destRadio){ showErr('Pick the destination facility.'); return; }
+  // Phase 203 (2026-06-01) — ETA mode: 'time' requires both date+time;
+  // 'unavailable' stores no ETA and the late-popup uses createdAt+40min.
+  var etaModeRadio = document.querySelector('input[name="cr-eta-mode"]:checked');
+  var etaMode = etaModeRadio ? etaModeRadio.value : 'time';
+  var etaUnavailable = (etaMode === 'unavailable');
   var dateEl = document.getElementById('cr-expected-date');
   var timeEl = document.getElementById('cr-expected-time');
-  if(!dateEl || !dateEl.value){ showErr('Pick the expected arrival date.'); return; }
-  var expectedAt = dateEl.value + 'T' + ((timeEl && timeEl.value) || '12:00') + ':00';
+  var expectedAt = null;
+  if(!etaUnavailable){
+    if(!dateEl || !dateEl.value){ showErr('Pick the expected arrival date — or switch ETA to 🤷 Unavailable.'); return; }
+    if(!timeEl || !timeEl.value){ showErr('Pick the expected arrival time (HH:MM) — or switch ETA to 🤷 Unavailable.'); return; }
+    expectedAt = dateEl.value + 'T' + timeEl.value + ':00';
+  }
   // Phase 112a (2026-05-29): chief complaint (stored in r.notes for now, key
   // unchanged for back-compat) is REQUIRED — the destination clinic uses it
   // to triage the patient on arrival. Min 3 chars so "x" doesn't pass.
@@ -19889,6 +20004,9 @@ function _crSaveReferral(){
     sourceName: sourceName,
     destinationFacility: destRadio.value,
     expectedAt: expectedAt,
+    /* Phase 203 (2026-06-01): when true, expectedAt is null and the
+       late-popup uses createdAt + 40 min instead of expectedAt + 10 min. */
+    etaUnavailable: etaUnavailable,
     status: 'pending',
     notes: notes.trim(),
     linkedPatientLogId: null,
@@ -20789,7 +20907,7 @@ function _phase166OpenPendingReferralCard(refId){
       +     row('Patient', safe(r.patientName || '—'))
       +     row('Patient phone', fmtPhone(r.patientPhone))
       +     row('Source clinic phone', fmtPhone(r.sourceClinicPhone))
-      +     row('Expected arrival', fmtDt(r.expectedAt))
+      +     row('Expected arrival', r.etaUnavailable ? '🤷 Unavailable (popup fires at created + 40 min)' : fmtDt(r.expectedAt))
       +     row('Created by', creatorLbl)
       +     (r.createdByAccount && r.createdByAccount !== r.createdBy ? row('Logged-in account', safe(r.createdByAccount)) : '')
       +     row('Chief complaint', r.notes ? '<span style="color:#7f1d1d">' + safe(r.notes) + '</span>' : '<span style="color:#dc2626;font-style:italic">⚠ Not recorded</span>')
@@ -21216,6 +21334,18 @@ function _prPrefillEditForm(ref){
         if(tEl) tEl.value = String(dt.getHours()).padStart(2,'0') + ':' + String(dt.getMinutes()).padStart(2,'0');
       }
     }
+    /* Phase 203 (2026-06-01): restore the ETA-mode radio + panel
+       visibility when editing an existing referral. */
+    var _ph203EditTimeRadio = document.querySelector('input[name="cr-eta-mode"][value="time"]');
+    var _ph203EditUnavRadio = document.querySelector('input[name="cr-eta-mode"][value="unavailable"]');
+    if(ref.etaUnavailable){
+      if(_ph203EditUnavRadio) _ph203EditUnavRadio.checked = true;
+      if(_ph203EditTimeRadio) _ph203EditTimeRadio.checked = false;
+    } else {
+      if(_ph203EditTimeRadio) _ph203EditTimeRadio.checked = true;
+      if(_ph203EditUnavRadio) _ph203EditUnavRadio.checked = false;
+    }
+    if(typeof _crEtaModeChanged === 'function') _crEtaModeChanged();
     // Chief complaint (stored in r.notes)
     var nEl = document.getElementById('cr-notes'); if(nEl) nEl.value = ref.notes || '';
     // Ride radio (if applicable)
