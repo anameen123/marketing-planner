@@ -18130,6 +18130,341 @@ window._phase205OpenMonthDrill = _phase205OpenMonthDrill;
 window._phase192SwitchPage = _phase192SwitchPage;
 
 // ════════════════════════════════════════════════════════════════════════════
+// PHASE 207 (2026-06-01) — MONTH SWITCHER FOR CONFIRMED/REJECTED LISTS
+// + LIVE WEEK/MONTH COUNTERS FOR TRENDS
+// User: "I can switch between the months up there to see the values total
+// of each month. And for the days for the current month, once the month
+// ends, the data for that month will be fixed. With live counter for the
+// week and month — when I click on them, it will show the contribution of
+// each channel or each member or each location."
+//
+// Status-stamp date convention (which timestamp drives the month filter):
+//   • Confirmed page → r.approvedAt
+//   • Rejected page  → r.declinedAt || r.incompletedAt || r.retractedAt
+// (createdAt is what Phase 167's day-strip uses for the Outgoing list;
+// this is different because the user wants to see WHEN it was confirmed
+// or rejected, not when it was originally created.)
+// ════════════════════════════════════════════════════════════════════════════
+function _phase207IsoMonth(d){
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+}
+function _phase207StatusStampDate(ref, pageMode){
+  if(!ref) return null;
+  var iso;
+  if(pageMode === 'confirmed'){
+    iso = ref.approvedAt;
+  } else if(pageMode === 'rejected'){
+    iso = ref.declinedAt || ref.incompletedAt || ref.retractedAt;
+  } else {
+    iso = ref.createdAt;
+  }
+  if(!iso) return null;
+  var d = new Date(iso);
+  return isNaN(d.getTime()) ? null : d;
+}
+window._phase207StatusStampDate = _phase207StatusStampDate;
+
+function _phase207CurrentPageMode(){
+  var page = window._RFL_PAGE || 'confirmed';
+  if(page === 'confirmed') return 'confirmed';
+  if(page === 'rejected')  return 'rejected';
+  return null;
+}
+
+function _phase207RenderMonthSwitcher(){
+  var host = document.getElementById('pr-month-switcher');
+  if(!host) return;
+  var mode = _phase207CurrentPageMode();
+  if(!mode){ host.style.display = 'none'; return; }
+  host.style.display = '';
+
+  if(!window._PR_MONTH_VIEW){
+    var n = new Date();
+    window._PR_MONTH_VIEW = _phase207IsoMonth(n);
+  }
+  var viewMonth = window._PR_MONTH_VIEW;
+  var parts = viewMonth.split('-');
+  var viewDate = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, 1);
+  var monthLabel = viewDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
+  /* Count items whose status-stamp falls in the viewed month. */
+  var monthCount = 0;
+  if(Array.isArray(PENDING_REFERRALS)){
+    PENDING_REFERRALS.forEach(function(r){
+      if(mode === 'confirmed' && r.status !== 'approved') return;
+      if(mode === 'rejected'){
+        if(r.status !== 'declined' && r.status !== 'incomplete' && r.status !== 'retracted') return;
+      }
+      var d = _phase207StatusStampDate(r, mode);
+      if(!d) return;
+      if(_phase207IsoMonth(d) === viewMonth) monthCount++;
+    });
+  }
+
+  var todayIsoM = _phase207IsoMonth(new Date());
+  var isCurrentMonth = (viewMonth === todayIsoM);
+  var actionLabel = (mode === 'confirmed') ? 'Confirmed' : 'Rejected';
+  var accentColor = (mode === 'confirmed') ? '#16a34a' : '#dc2626';
+  var accentBg    = (mode === 'confirmed') ? '#f0fdf4' : '#fef2f2';
+  var accentBord  = (mode === 'confirmed') ? '#bbf7d0' : '#fecaca';
+
+  host.innerHTML = ''
+    + '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;background:' + accentBg + ';border:1px solid ' + accentBord + ';border-left:3px solid ' + accentColor + ';border-radius:10px;padding:10px 14px">'
+    +   '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">'
+    +     '<button onclick="_phase207NavMonth(-1)" title="Previous month" style="background:#fff;border:1px solid var(--border);border-radius:6px;padding:5px 11px;font-size:12px;font-weight:700;cursor:pointer;color:#1F3864">◀</button>'
+    +     '<div>'
+    +       '<div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-weight:700">' + actionLabel + ' in</div>'
+    +       '<div style="font-size:16px;font-weight:800;color:' + accentColor + ';line-height:1.1">📅 ' + monthLabel + (isCurrentMonth ? ' <span style="font-size:9px;background:' + accentColor + ';color:#fff;padding:2px 6px;border-radius:8px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;vertical-align:middle">current</span>' : '') + '</div>'
+    +     '</div>'
+    +     '<button onclick="_phase207NavMonth(1)" title="Next month" style="background:#fff;border:1px solid var(--border);border-radius:6px;padding:5px 11px;font-size:12px;font-weight:700;cursor:pointer;color:#1F3864">▶</button>'
+    +     '<button onclick="_phase207NavMonth(0)" title="Jump to current month" style="background:#fff;border:1px solid var(--border);border-radius:6px;padding:5px 11px;font-size:10px;font-weight:700;cursor:pointer;color:var(--muted)">📅 Today</button>'
+    +   '</div>'
+    +   '<div style="text-align:right">'
+    +     '<div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-weight:700">Total this month</div>'
+    +     '<div style="font-size:24px;font-weight:800;color:' + accentColor + ';font-family:DM Mono,monospace">' + monthCount + '</div>'
+    +     (isCurrentMonth ? '<div style="font-size:9px;color:var(--muted);font-style:italic">Still in progress — tap day chips below to drill in</div>' : '<div style="font-size:9px;color:var(--muted);font-style:italic">Fixed final total for this month</div>')
+    +   '</div>'
+    + '</div>';
+}
+window._phase207RenderMonthSwitcher = _phase207RenderMonthSwitcher;
+
+function _phase207NavMonth(delta){
+  var cur = window._PR_MONTH_VIEW;
+  if(!cur || delta === 0){
+    cur = _phase207IsoMonth(new Date());
+  } else {
+    var parts = cur.split('-');
+    var d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1 + delta, 1);
+    cur = _phase207IsoMonth(d);
+  }
+  window._PR_MONTH_VIEW = cur;
+  window._PR_FILTER_DAY = null;
+  /* Re-anchor the day-strip on the first day of the viewed month so the
+     ±3-day window centers around month-of-interest, not always today. */
+  var today = new Date(); today.setHours(0, 0, 0, 0);
+  var anchor = new Date(cur + '-01T12:00:00');
+  if(!isNaN(anchor.getTime())){
+    window._PR_DAY_STRIP_OFFSET = Math.round((anchor.getTime() - today.getTime()) / 86400000);
+  }
+  if(typeof renderPendingReferrals === 'function') renderPendingReferrals();
+}
+window._phase207NavMonth = _phase207NavMonth;
+
+/* Hook into renderPendingReferrals — runs the month switcher render + month
+   filter on every list render. Lazy-installs because renderPendingReferrals
+   may not exist yet at script-eval time. */
+(function(){
+  if(window._phase207MonthHookInstalled) return;
+  function tryInstall(){
+    if(typeof window.renderPendingReferrals !== 'function') return false;
+    var original = window.renderPendingReferrals;
+    window.renderPendingReferrals = function(){
+      var r = original.apply(this, arguments);
+      try { _phase207RenderMonthSwitcher(); } catch(_){}
+      try { _phase207ApplyMonthFilterToList(); } catch(_){}
+      return r;
+    };
+    window._phase207MonthHookInstalled = true;
+    return true;
+  }
+  if(!tryInstall()){
+    var tries = 0;
+    var t = setInterval(function(){
+      tries++;
+      if(tryInstall() || tries > 40) clearInterval(t);
+    }, 250);
+  }
+})();
+
+/* DOM filter — hides rows whose status-stamp date doesn't match
+   window._PR_MONTH_VIEW. Sits on top of the existing render path so we
+   don't have to fork renderPendingReferrals. */
+function _phase207ApplyMonthFilterToList(){
+  var mode = _phase207CurrentPageMode();
+  if(!mode) return;
+  var viewMonth = window._PR_MONTH_VIEW;
+  if(!viewMonth) return;
+  if(!Array.isArray(PENDING_REFERRALS)) return;
+  var wrap = document.getElementById('pending-referrals-wrap');
+  if(!wrap) return;
+  var nodes = wrap.querySelectorAll('[data-refid]');
+  Array.prototype.forEach.call(nodes, function(node){
+    var id = node.getAttribute('data-refid');
+    var ref = PENDING_REFERRALS.find(function(r){ return r.id === id; });
+    if(!ref){ node.style.display = ''; return; }
+    var d = _phase207StatusStampDate(ref, mode);
+    var visible = d && _phase207IsoMonth(d) === viewMonth;
+    node.style.display = visible ? '' : 'none';
+  });
+}
+window._phase207ApplyMonthFilterToList = _phase207ApplyMonthFilterToList;
+
+// ── PHASE 207 (cont.) — LIVE WEEK/MONTH COUNTERS ABOVE TRENDS ───────────────
+// Source: REFERRAL_LOG (confirmed only, same as Phase 205).
+function _phase207WeekStart(d){
+  var dd = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  var dow = dd.getDay();
+  var back = (dow === 0) ? 6 : (dow - 1);
+  dd.setDate(dd.getDate() - back);
+  return dd;
+}
+function _phase207EntryDate(e){
+  var d = e && (e.entryDate || (e.ts || '').slice(0, 10));
+  if(!d || d.length < 10) return null;
+  var t = new Date(d.slice(0,4) + '-' + d.slice(5,7) + '-' + d.slice(8,10) + 'T12:00:00');
+  return isNaN(t.getTime()) ? null : t;
+}
+function _phase207CollectCountersForPeriod(startDate, endDate){
+  var out = { total: 0, entries: [], byChannel: {}, byMember: {}, byLocation: {} };
+  if(!Array.isArray(REFERRAL_LOG)) return out;
+  REFERRAL_LOG.forEach(function(e){
+    var d = _phase207EntryDate(e);
+    if(!d) return;
+    if(d < startDate || d > endDate) return;
+    var add = parseInt(e.patientCount, 10) || 1;
+    out.total += add;
+    out.entries.push(e);
+    var ch = e.sourceChannel || 'business';
+    out.byChannel[ch] = (out.byChannel[ch] || 0) + add;
+    var loc = e.destinationFacility || '?';
+    out.byLocation[loc] = (out.byLocation[loc] || 0) + add;
+    var ms = Array.isArray(e.memberNames) && e.memberNames.length ? e.memberNames : (e.memberName ? [e.memberName] : []);
+    if(ms.length === 0) ms = ['(unattributed)'];
+    ms.forEach(function(m){ out.byMember[m] = (out.byMember[m] || 0) + add; });
+  });
+  return out;
+}
+window._phase207CollectCountersForPeriod = _phase207CollectCountersForPeriod;
+
+function _phase207RenderTrendsCounters(){
+  var hostParent = document.getElementById('ph205-chart-summary');
+  if(!hostParent || !hostParent.parentElement) return;
+  var slot = document.getElementById('ph207-trend-counters');
+  if(!slot){
+    slot = document.createElement('div');
+    slot.id = 'ph207-trend-counters';
+    slot.style.cssText = 'margin-bottom:14px';
+    hostParent.parentElement.insertBefore(slot, hostParent);
+  }
+  var now = new Date();
+  var thisWeekStart = _phase207WeekStart(now);
+  var thisWeekEnd   = new Date(now);
+  var lastWeekStart = new Date(thisWeekStart); lastWeekStart.setDate(lastWeekStart.getDate() - 7);
+  var lastWeekEnd   = new Date(thisWeekStart); lastWeekEnd.setDate(lastWeekEnd.getDate() - 1); lastWeekEnd.setHours(23,59,59,999);
+  var thisMoStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  var thisMoEnd   = new Date(now);
+  var lastMoStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  var lastMoEnd   = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+
+  var tw = _phase207CollectCountersForPeriod(thisWeekStart, thisWeekEnd);
+  var lw = _phase207CollectCountersForPeriod(lastWeekStart, lastWeekEnd);
+  var tm = _phase207CollectCountersForPeriod(thisMoStart, thisMoEnd);
+  var lm = _phase207CollectCountersForPeriod(lastMoStart, lastMoEnd);
+  window._PH207_COUNTERS = { thisWeek: tw, lastWeek: lw, thisMonth: tm, lastMonth: lm,
+    labels: {
+      thisWeek:  'This week (' + (thisWeekStart.getMonth()+1) + '/' + thisWeekStart.getDate() + ' – today)',
+      lastWeek:  'Last week (' + (lastWeekStart.getMonth()+1) + '/' + lastWeekStart.getDate() + ' – ' + (lastWeekEnd.getMonth()+1) + '/' + lastWeekEnd.getDate() + ')',
+      thisMonth: 'This month (' + thisMoStart.toLocaleDateString('en-US',{month:'long'}) + ')',
+      lastMonth: 'Last month (' + lastMoStart.toLocaleDateString('en-US',{month:'long'}) + ')'
+    }
+  };
+  function tile(key, label, value, accent){
+    return '<button type="button" onclick="_phase207OpenCounterDrill(\'' + key + '\')" '
+      + 'title="Click for per-channel / per-member / per-location breakdown" '
+      + 'style="text-align:left;background:#fff;border:1px solid var(--border);border-left:3px solid ' + accent + ';border-radius:10px;padding:9px 11px;cursor:pointer;font-family:DM Sans,sans-serif;transition:transform .12s,box-shadow .12s" '
+      + 'onmouseover="this.style.transform=\'translateY(-1px)\';this.style.boxShadow=\'0 4px 10px rgba(0,0,0,.07)\'" '
+      + 'onmouseout="this.style.transform=\'\';this.style.boxShadow=\'\'">'
+      +   '<div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-weight:700">' + label + '</div>'
+      +   '<div style="font-size:22px;font-weight:800;color:' + accent + ';font-family:DM Mono,monospace;line-height:1.1">' + value + '</div>'
+      +   '<div style="font-size:9px;color:var(--muted);margin-top:2px">click to drill ▸</div>'
+      + '</button>';
+  }
+  slot.innerHTML = ''
+    + '<div style="font-size:10.5px;color:var(--muted);font-style:italic;margin-bottom:6px">Live counters — confirmed patients in each window. Click any tile for the breakdown.</div>'
+    + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px">'
+    +   tile('thisWeek',  'This week',  tw.total, '#1F3864')
+    +   tile('lastWeek',  'Last week',  lw.total, '#64748b')
+    +   tile('thisMonth', 'This month', tm.total, '#16a34a')
+    +   tile('lastMonth', 'Last month', lm.total, '#94a3b8')
+    + '</div>';
+}
+window._phase207RenderTrendsCounters = _phase207RenderTrendsCounters;
+
+function _phase207OpenCounterDrill(key){
+  var pack = window._PH207_COUNTERS && window._PH207_COUNTERS[key];
+  if(!pack) return;
+  var label = (window._PH207_COUNTERS.labels && window._PH207_COUNTERS.labels[key]) || key;
+  function esc(x){ return String(x == null ? '' : x).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+  function pct(n, t){ return t ? Math.round((n / t) * 100) : 0; }
+  function chLabelP(k){
+    var c = (typeof REFERRAL_CHANNELS !== 'undefined') ? REFERRAL_CHANNELS.find(function(x){ return x.key === k; }) : null;
+    return c ? (c.icon + ' ' + c.label) : k;
+  }
+  function locLabelP(k){
+    var f = (typeof REFERRAL_FACILITIES !== 'undefined') ? REFERRAL_FACILITIES.find(function(x){ return x.key === k; }) : null;
+    return f ? ('🏥 ' + (f.label || f.short)) : k;
+  }
+  function rowsHtml(map, labelFn){
+    var keys = Object.keys(map).sort(function(a, b){ return map[b] - map[a]; });
+    if(keys.length === 0) return '<tr><td colspan="3" style="padding:8px 4px;color:var(--muted);font-style:italic;font-size:11px">No data</td></tr>';
+    return keys.map(function(k){
+      return '<tr style="border-bottom:1px solid var(--border)">'
+        +   '<td style="padding:6px 4px;font-size:12px">' + esc(labelFn(k)) + '</td>'
+        +   '<td style="padding:6px 4px;text-align:right;font-weight:800;color:#1F3864">' + map[k] + '</td>'
+        +   '<td style="padding:6px 4px;text-align:right;font-size:11px;color:var(--muted)">' + pct(map[k], pack.total) + '%</td>'
+        + '</tr>';
+    }).join('');
+  }
+  var existing = document.getElementById('phase207-drill');
+  if(existing) existing.remove();
+  var m = document.createElement('div');
+  m.id = 'phase207-drill';
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.7);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;font-family:DM Sans,sans-serif';
+  m.innerHTML = ''
+    + '<div style="background:#fff;border-radius:14px;max-width:820px;width:100%;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.5);overflow:hidden">'
+    +   '<div style="background:linear-gradient(135deg,#16a34a,#1F3864);color:#fff;padding:16px 22px;display:flex;align-items:center;justify-content:space-between">'
+    +     '<div>'
+    +       '<div style="font-size:11px;opacity:.85;text-transform:uppercase;letter-spacing:.06em">Confirmed · ' + esc(label) + '</div>'
+    +       '<div style="font-size:22px;font-weight:800">' + pack.total + ' patient' + (pack.total === 1 ? '' : 's') + '</div>'
+    +     '</div>'
+    +     '<button onclick="document.getElementById(\'phase207-drill\').remove()" style="background:rgba(255,255,255,.18);border:none;color:#fff;font-size:20px;width:32px;height:32px;border-radius:8px;cursor:pointer">×</button>'
+    +   '</div>'
+    +   '<div style="padding:18px 22px;overflow-y:auto;flex:1">'
+    +     '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px">'
+    +       '<div><div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">By channel</div><table style="width:100%;border-collapse:collapse">' + rowsHtml(pack.byChannel, chLabelP) + '</table></div>'
+    +       '<div><div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">By location</div><table style="width:100%;border-collapse:collapse">' + rowsHtml(pack.byLocation, locLabelP) + '</table></div>'
+    +       '<div><div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">By member</div><table style="width:100%;border-collapse:collapse">' + rowsHtml(pack.byMember, function(k){ return '👤 ' + k; }) + '</table></div>'
+    +     '</div>'
+    +   '</div>'
+    + '</div>';
+  document.body.appendChild(m);
+}
+window._phase207OpenCounterDrill = _phase207OpenCounterDrill;
+
+/* Hook Phase 205 trends render to also paint the live counters. */
+(function(){
+  if(window._phase207TrendsHookInstalled) return;
+  function tryInstall(){
+    if(typeof window._phase205RenderTrends !== 'function') return false;
+    var original = window._phase205RenderTrends;
+    window._phase205RenderTrends = function(){
+      var r = original.apply(this, arguments);
+      try { _phase207RenderTrendsCounters(); } catch(_){}
+      return r;
+    };
+    window._phase207TrendsHookInstalled = true;
+    return true;
+  }
+  if(!tryInstall()){
+    var tries = 0;
+    var t = setInterval(function(){
+      tries++;
+      if(tryInstall() || tries > 40) clearInterval(t);
+    }, 250);
+  }
+})();
+
+// ════════════════════════════════════════════════════════════════════════════
 // PHASE 202 (2026-06-01) — GOOGLE CALL CONVERSION TRACKER
 // User: "for this window for the members there has to be a third source
 // google calls" → "we need a certain way to represent that … sub-tab inside
@@ -67758,6 +68093,15 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
         <option value="all" selected>All statuses</option>
         <option value="pending">⏳ Pending</option>
         <option value="approved">✓ Confirmed</option>
+        <!-- Phase 207 (2026-06-01) BUG FIX — user: "I can literally see the
+             pending that confirmed in the rejected subtab. It's very stupid."
+             Root cause: _phase192SwitchPage set sel.value = 'rejected' but
+             there was no <option value="rejected">, so the browser silently
+             reverted the value to '', which made the filter fall back to
+             'all' (showing everything). Adding the virtual 'rejected' option
+             so the assignment sticks; the filter logic in renderPendingReferrals
+             already maps 'rejected' → declined/incomplete/retracted. -->
+        <option value="rejected">✗ Rejected (declined / incomplete / retracted)</option>
         <option value="declined">✗ Unconfirmed</option>
         <option value="incomplete">⏰ Incomplete</option>
         <option value="retracted">↩ Retracted</option>
@@ -67767,6 +68111,14 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
          _crRenderMonthlySummary() on every renderPendingReferrals(). Shows
          this-month totals + success / unsuccessful ratios. Read-only. -->
     <div id="pr-monthly-summary" style="margin-bottom:10px"></div>
+    <!-- Phase 207 (2026-06-01) — month switcher for Confirmed/Rejected lists.
+         User: "We can see the months, last month, this month, first month,
+         previous month, whatever. I can switch between the months up there
+         to see the values total of each month. And for the days for the
+         current month, once the month ends, the data for that month will be
+         fixed." Populated by _phase207RenderMonthSwitcher() — only visible on
+         the Confirmed and Rejected pages. -->
+    <div id="pr-month-switcher" style="display:none;margin-bottom:8px"></div>
     <!-- Phase 167 (2026-05-30): sticky 7-day strip nav, mirrors the
          Logged Patients sub-tab pattern (Phase 152). Lets the rep jump
          to any day's referrals + see per-day creation counts at a glance.
