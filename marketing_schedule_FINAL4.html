@@ -16410,6 +16410,125 @@ function switchReferralSubtab(which){
 }
 window.switchReferralSubtab = switchReferralSubtab;
 
+// ════════════════════════════════════════════════════════════════════════════
+// PHASE 189 (2026-05-31) — 3-PAGE REFERRALS SUB-TAB
+// Per user: "those are referrals should be moved to the referrals page now
+// but for that we need to create a subtab called referrals that will have
+// 3 pages one for the list and those in the screenshot"
+//   Page 1: List (existing pending-referrals-wrap rendered by
+//           renderPendingReferrals in 'reflist' mode)
+//   Page 2: Source channels (the rl-channels-details widget, moved out
+//           of Logged Patients)
+//   Page 3: Per-member totals (the rl-members-details widget, also moved
+//           out of Logged Patients)
+//
+// We relocate the widgets at runtime rather than rewriting the original
+// HTML — safer, and we don't lose their behavior or the render functions
+// that target them by ID.
+// ════════════════════════════════════════════════════════════════════════════
+
+// Remember the original parents so we can restore on Patients & Referrals
+// → Logged Patients tab switches (if the user ever goes back to the old
+// in-page location). The Reflist sub-tab is the only owner once relocated.
+var _PHASE189_ORIG_CHANNELS_PARENT = null;
+var _PHASE189_ORIG_MEMBERS_PARENT  = null;
+var _PHASE189_REFLIST_PAGE = 'list';   // 'list' | 'channels' | 'members'
+
+function _phase189RelocateWidgets(){
+  var chHost = document.getElementById('rfl-page-channels');
+  var mbHost = document.getElementById('rfl-page-members');
+  var chDet  = document.getElementById('rl-channels-details');
+  var mbDet  = document.getElementById('rl-members-details');
+  if(chDet && chHost && chDet.parentElement !== chHost){
+    if(!_PHASE189_ORIG_CHANNELS_PARENT) _PHASE189_ORIG_CHANNELS_PARENT = chDet.parentElement;
+    chHost.appendChild(chDet);
+    // Force-open since the page itself is the chrome — the inner <details>
+    // toggle is now redundant.
+    try { chDet.open = true; } catch(_){}
+    try {
+      var sum = chDet.querySelector('summary .rl-chev');
+      if(sum) sum.style.display = 'none';
+      var hintSpan = chDet.querySelector('summary span[style*="click to expand"]');
+      if(hintSpan) hintSpan.style.display = 'none';
+    } catch(_){}
+  }
+  if(mbDet && mbHost && mbDet.parentElement !== mbHost){
+    if(!_PHASE189_ORIG_MEMBERS_PARENT) _PHASE189_ORIG_MEMBERS_PARENT = mbDet.parentElement;
+    mbHost.appendChild(mbDet);
+    try { mbDet.open = true; } catch(_){}
+    try {
+      var sum2 = mbDet.querySelector('summary .rl-chev');
+      if(sum2) sum2.style.display = 'none';
+      var hintSpan2 = mbDet.querySelector('summary span[style*="click to expand"]');
+      if(hintSpan2) hintSpan2.style.display = 'none';
+    } catch(_){}
+  }
+}
+window._phase189RelocateWidgets = _phase189RelocateWidgets;
+
+function _phase189SwitchReflistPage(which){
+  if(!which) which = 'list';
+  _PHASE189_REFLIST_PAGE = which;
+  // Move widgets every time, just in case the DOM was re-rendered.
+  _phase189RelocateWidgets();
+  // Show / hide page bodies
+  var list      = document.getElementById('pending-referrals-wrap');
+  var listEmpty = document.getElementById('rl-outgoing-empty');
+  var chPage    = document.getElementById('rfl-page-channels');
+  var mbPage    = document.getElementById('rfl-page-members');
+  if(list)      list.style.display      = (which === 'list')     ? '' : 'none';
+  if(listEmpty) listEmpty.style.display = (which === 'list')     ? listEmpty.style.display : 'none';
+  if(chPage)    chPage.style.display    = (which === 'channels') ? '' : 'none';
+  if(mbPage)    mbPage.style.display    = (which === 'members')  ? '' : 'none';
+  // Paint active state on the page nav
+  ['list','channels','members'].forEach(function(p){
+    var b = document.getElementById('rfl-page-btn-' + p);
+    if(!b) return;
+    if(p === which){
+      b.style.background = '#7030A0';
+      b.style.color = '#fff';
+    } else {
+      b.style.background = 'transparent';
+      b.style.color = 'var(--muted)';
+    }
+  });
+  // Trigger the matching renderers so the widgets actually have content.
+  if(which === 'channels' && typeof renderChannelCounters === 'function') {
+    try { renderChannelCounters(); } catch(_){}
+  }
+  if(which === 'members' && typeof renderMemberCounters === 'function') {
+    try { renderMemberCounters(); } catch(_){}
+  }
+}
+window._phase189SwitchReflistPage = _phase189SwitchReflistPage;
+
+// Hook switchReferralSubtab to show/hide the page nav appropriately and to
+// land users on the List page when they enter Referrals.
+(function(){
+  var orig = window.switchReferralSubtab;
+  if(typeof orig !== 'function') return;
+  window.switchReferralSubtab = function(which){
+    try { orig.apply(this, arguments); } catch(_){}
+    var nav = document.getElementById('rfl-page-nav');
+    if(which === 'reflist'){
+      _phase189RelocateWidgets();
+      if(nav) nav.style.display = 'flex';
+      _phase189SwitchReflistPage(_PHASE189_REFLIST_PAGE || 'list');
+    } else {
+      if(nav) nav.style.display = 'none';
+      // When user leaves Reflist mode, restore the page state to 'list' so
+      // the existing renderPendingReferrals body becomes visible again on
+      // next visit.
+      var list = document.getElementById('pending-referrals-wrap');
+      if(list && which === 'outgoing') list.style.display = '';
+      var chPage = document.getElementById('rfl-page-channels');
+      var mbPage = document.getElementById('rfl-page-members');
+      if(chPage) chPage.style.display = 'none';
+      if(mbPage) mbPage.style.display = 'none';
+    }
+  };
+})();
+
 // ═══════════════════════════════════════════════════════════════════════
 // REFERRAL CALENDAR VIEW + RECONCILIATION
 // ═══════════════════════════════════════════════════════════════════════
@@ -65021,7 +65140,7 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
     <button id="rl-subtab-outgoing" onclick="switchReferralSubtab('outgoing')"
             style="padding:11px 22px;font-size:13px;font-weight:600;color:var(--purple);cursor:pointer;border:none;background:none;border-bottom:3px solid var(--purple);font-family:'DM Sans',sans-serif;margin-bottom:-2px" title="Today's active referrals — resolved items disappear from here automatically">📥 Outgoing (today)</button>
     <button id="rl-subtab-reflist" onclick="switchReferralSubtab('reflist')"
-            style="padding:11px 22px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;border:none;background:none;border-bottom:3px solid transparent;font-family:'DM Sans',sans-serif;margin-bottom:-2px" title="Full historical list of every referral — confirmed, unconfirmed, expired, retracted">📋 Referral list</button>
+            style="padding:11px 22px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;border:none;background:none;border-bottom:3px solid transparent;font-family:'DM Sans',sans-serif;margin-bottom:-2px" title="3-page referrals view: full historical list + source channels + per-member totals">📋 Referrals</button>
     <button id="rl-subtab-calendar" onclick="switchReferralSubtab('calendar')"
             style="padding:11px 22px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;border:none;background:none;border-bottom:3px solid transparent;font-family:'DM Sans',sans-serif;margin-bottom:-2px">📅 Calendar (by day)</button>
     <button id="rl-subtab-list" onclick="switchReferralSubtab('list')"
@@ -65034,6 +65153,17 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
        Front desk users see only referrals destined for their facility.
        ═══════════════════════════════════════════════════════════════ -->
   <div id="rl-pane-outgoing">
+  <!-- Phase 189 (2026-05-31): 3-page navigation INSIDE the Referrals
+       sub-tab. Only visible in reflist mode (window._PR_MODE === 'reflist').
+       Page 1 = the historical list (existing pending-referrals-wrap).
+       Page 2 = Referrals by source channel (relocated from Logged Patients).
+       Page 3 = Per-member referral totals (relocated from Logged Patients).
+       _phase189SwitchReflistPage(which) toggles which page is visible. -->
+  <div id="rfl-page-nav" style="background:#f8fafc;border:1px solid var(--border);border-radius:10px;padding:5px;gap:4px;margin-bottom:14px;display:none">
+    <button type="button" id="rfl-page-btn-list" onclick="_phase189SwitchReflistPage('list')" style="flex:1;padding:8px 14px;font-size:12px;font-weight:700;color:#fff;background:#7030A0;border:none;border-radius:7px;cursor:pointer;font-family:DM Sans,sans-serif">📋 List</button>
+    <button type="button" id="rfl-page-btn-channels" onclick="_phase189SwitchReflistPage('channels')" style="flex:1;padding:8px 14px;font-size:12px;font-weight:700;color:var(--muted);background:transparent;border:none;border-radius:7px;cursor:pointer;font-family:DM Sans,sans-serif">🔍 Source channels</button>
+    <button type="button" id="rfl-page-btn-members" onclick="_phase189SwitchReflistPage('members')" style="flex:1;padding:8px 14px;font-size:12px;font-weight:700;color:var(--muted);background:transparent;border:none;border-radius:7px;cursor:pointer;font-family:DM Sans,sans-serif">👥 Per-member totals</button>
+  </div>
   <!-- Phase 11b: Pending Referrals panel (the two-stage flow). Marketing
        members + admin see ALL pending; front-desk users see only the ones
        destined for their facility. Renders via renderPendingReferrals(). -->
@@ -65105,6 +65235,12 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
     Click <b>📥 Create Referral</b> above to start one.<br>
     <span style="font-size:10px;color:#94a3b8;display:block;margin-top:6px">Once created, you'll see Pending / Confirmed / Unconfirmed rows + monthly counters here.</span>
   </div>
+  <!-- Phase 189: page containers for the Source channels + Per-member totals
+       widgets. Populated at runtime by JS (the widget DOM nodes are moved
+       here from rl-pane-list). Hidden by default; shown only when the user
+       picks the matching page button. -->
+  <div id="rfl-page-channels" style="display:none"></div>
+  <div id="rfl-page-members" style="display:none"></div>
   </div><!-- /rl-pane-outgoing -->
 
   <!-- ═══════════════════════════════════════════════════════════════════
