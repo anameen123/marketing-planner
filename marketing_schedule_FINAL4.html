@@ -49687,6 +49687,18 @@ function _phase185CollectMonth(){
   var spending = 0, leadsClinic = 0, leadsMva = 0;
   var byArea = {};
   var perDay = {};
+  // Phase 185 fix (2026-05-31): match by ASSIGNED member (r.member or
+  // coMembers) regardless of confirmation status. The earlier getRowMembers
+  // path filtered out unconfirmed rows, which made the counters show 0 for
+  // any member who hadn't tapped Confirm yet — making the Performance
+  // panel look empty even when work was actively assigned.
+  function rowOwnedBy(r, name){
+    if(!name) return true;   // no scope filter
+    if(!r) return false;
+    if(r.member === name) return true;
+    if(Array.isArray(r.coMembers) && r.coMembers.indexOf(name) >= 0) return true;
+    return false;
+  }
   if(typeof S !== 'undefined' && S && Array.isArray(S.days)){
     S.days.forEach(function(d){
       if(!d || !d.date) return;
@@ -49694,13 +49706,7 @@ function _phase185CollectMonth(){
       if(dt.getFullYear() !== y || dt.getMonth() !== m) return;
       (d.rows || []).forEach(function(r){
         if(!r || !r.clinic) return;
-        // Member scope: only count rows belonging to currentMember (else use all if currentMember missing)
-        var matches = true;
-        if(typeof currentMember !== 'undefined' && currentMember){
-          var members = (typeof getRowMembers === 'function') ? getRowMembers(r) : [r.member];
-          matches = members.indexOf(currentMember) >= 0;
-        }
-        if(!matches) return;
+        if(!rowOwnedBy(r, (typeof currentMember !== 'undefined' && currentMember) ? currentMember : null)) return;
         visits++;
         if(r.status === 'Completed'){ completed++; perDay[d.date] = (perDay[d.date] || 0) + 1; }
         else if(r.status === 'Postponed') postponed++;
@@ -49953,6 +49959,67 @@ function _phase185RenderSideActivities(){
 }
 window._phase185RenderSideActivities = _phase185RenderSideActivities;
 
+// Phase 185 (2026-05-31 fix): scan every day in S.days to find which
+// months have at least one row owned by currentMember. Returns sorted ISO
+// 'YYYY-MM' keys, most recent last. Used by the empty-state banner to
+// suggest a jump to the closest month that actually has data.
+function _phase185MonthsWithData(){
+  if(typeof S === 'undefined' || !S || !Array.isArray(S.days)) return [];
+  var name = (typeof currentMember !== 'undefined' && currentMember) ? currentMember : null;
+  var seen = {};
+  S.days.forEach(function(d){
+    if(!d || !d.date || !Array.isArray(d.rows) || !d.rows.length) return;
+    var hit = false;
+    d.rows.forEach(function(r){
+      if(!r || !r.clinic) return;
+      if(!name){ hit = true; return; }
+      if(r.member === name) hit = true;
+      else if(Array.isArray(r.coMembers) && r.coMembers.indexOf(name) >= 0) hit = true;
+    });
+    if(hit){
+      var parts = d.date.split('-');
+      if(parts.length >= 2) seen[parts[0] + '-' + parts[1]] = true;
+    }
+  });
+  return Object.keys(seen).sort();
+}
+window._phase185MonthsWithData = _phase185MonthsWithData;
+
+function _phase185RenderEmptyHint(d){
+  // Find or insert an empty-state banner at the top of the Performance panel.
+  var panel = document.getElementById('panel-performance');
+  if(!panel) return;
+  var bar = document.getElementById('perf-month-bar');
+  var existing = document.getElementById('perf-empty-banner');
+  // Only show banner when there's literally zero of everything for this scope.
+  var hasAny = d.visits || d.referrals || d.leadsTotal || d.spending;
+  if(hasAny){
+    if(existing) existing.remove();
+    return;
+  }
+  // Build the banner. If there's data in other months, offer a jump button.
+  var monthsWith = _phase185MonthsWithData();
+  _phase185EnsureMonth();
+  var ym = window._PERF_MONTH.y + '-' + (window._PERF_MONTH.m + 1 < 10 ? '0' + (window._PERF_MONTH.m + 1) : (window._PERF_MONTH.m + 1));
+  var others = monthsWith.filter(function(k){ return k !== ym; });
+  var memberLabel = (typeof currentMember !== 'undefined' && currentMember) ? currentMember : 'this member';
+  var monthLabel = _phase185MonthLabel(window._PERF_MONTH.y, window._PERF_MONTH.m);
+  var html = '<div id="perf-empty-banner" style="background:linear-gradient(135deg,#fef3c7,#fde68a);border:1px solid #fcd34d;border-left:3px solid #f59e0b;border-radius:10px;padding:12px 16px;margin-bottom:14px;font-size:12px;color:#78350f;line-height:1.5">'
+    + '<div style="font-weight:700;margin-bottom:4px">📭 No activity in ' + monthLabel + (memberLabel !== 'this member' ? ' for ' + memberLabel.replace(/</g,'&lt;') : '') + '</div>';
+  if(others.length){
+    var pick = others[others.length - 1];   // most recent other month
+    var pp = pick.split('-');
+    var py = parseInt(pp[0], 10), pm = parseInt(pp[1], 10) - 1;
+    html += '<div>Last month with data: <strong>' + _phase185MonthLabel(py, pm) + '</strong>. <button type="button" onclick="window._PERF_MONTH={y:' + py + ',m:' + pm + '};_phase185RefreshPerf()" style="background:#f59e0b;color:#fff;border:none;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;margin-left:6px">Jump to ' + _phase185MonthLabel(py, pm) + '</button></div>';
+  } else {
+    html += '<div>Tracking starts fresh from June 2026. Once visits get assigned/confirmed, the counters and charts here come alive.</div>';
+  }
+  html += '</div>';
+  if(existing) existing.outerHTML = html;
+  else if(bar) bar.insertAdjacentHTML('afterend', html);
+  else panel.insertAdjacentHTML('afterbegin', html);
+}
+
 function _phase185RefreshPerf(){
   _phase185RenderMonthBar();
   _phase185RenderCounters();
@@ -49961,8 +50028,11 @@ function _phase185RefreshPerf(){
   _phase185RenderLeadsChart(d);
   _phase185RenderReferralsChart(d);
   _phase185RenderSideActivities();
+  _phase185RenderEmptyHint(d);
   // Also let the legacy Monthly Completion Ratio block re-render itself
   try { if(typeof renderMonthlyCompletion === 'function') renderMonthlyCompletion(); } catch(_){}
+  // Debug breadcrumb so the console shows what scope was used.
+  try { console.info('[185]', { month: _phase185MonthLabel(window._PERF_MONTH.y, window._PERF_MONTH.m), member: (typeof currentMember !== 'undefined') ? currentMember : '(none)', totals: d }); } catch(_){}
 }
 window._phase185RefreshPerf = _phase185RefreshPerf;
 
