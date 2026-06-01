@@ -18802,14 +18802,39 @@ function openCreateReferralForm(){
   }
   var modal = document.getElementById('create-referral-modal');
   if(!modal) return;
-  // Populate the marketing-member dropdown from MEMBERS (the 4 marketing names)
+  // Phase 196 (2026-05-31): per user "a member can only create referrals
+  // where they are the creator. They cannot pick another member as the
+  // creator." Compute role flags up front so we can lock fields below.
+  var _ph196IsAdmin    = (typeof isAdmin === 'function') && isAdmin();
+  var _ph196IsMember   = CURRENT_USER && CURRENT_USER.role === 'member';
+  var _ph196IsUcPlanoFD = CURRENT_USER && CURRENT_USER.role === 'front_desk' && CURRENT_USER.facilityKey === 'plano_uc';
+
+  // Populate the marketing-member dropdown.
+  // - Admin: full member list (admin override)
+  // - Marketing member: ONLY their own name (no choice possible)
+  // - UC Plano FD: full list, but the UC Plano radio path is the default
   var memSel = document.getElementById('cr-creator-member');
   if(memSel){
-    var memHtml = '<option value="">— Pick a marketing member —</option>';
-    if(typeof MEMBERS !== 'undefined' && Array.isArray(MEMBERS)){
-      MEMBERS.forEach(function(m){ memHtml += '<option value="' + m + '">' + m + '</option>'; });
+    var memHtml;
+    if(_ph196IsMember && !_ph196IsAdmin){
+      // Lock to self — single option only
+      memHtml = '<option value="' + (CURRENT_USER.name || '') + '" selected>' + (CURRENT_USER.name || '') + '</option>';
+      memSel.innerHTML = memHtml;
+      memSel.disabled = true;
+      memSel.title = 'Locked to your own name — only admin can create referrals on behalf of another member.';
+      memSel.style.background = '#f1f5f9';
+      memSel.style.cursor = 'not-allowed';
+    } else {
+      memHtml = '<option value="">— Pick a marketing member —</option>';
+      if(typeof MEMBERS !== 'undefined' && Array.isArray(MEMBERS)){
+        MEMBERS.forEach(function(m){ memHtml += '<option value="' + m + '">' + m + '</option>'; });
+      }
+      memSel.innerHTML = memHtml;
+      memSel.disabled = false;
+      memSel.title = '';
+      memSel.style.background = '';
+      memSel.style.cursor = '';
     }
-    memSel.innerHTML = memHtml;
   }
   // Reset the UC Plano staff-name field
   var ucName = document.getElementById('cr-creator-ucplano-name');
@@ -18818,10 +18843,10 @@ function openCreateReferralForm(){
   document.querySelectorAll('input[name="cr-creator-type"]').forEach(function(r){ r.checked = false; });
   var preselectType = '';
   if(CURRENT_USER){
-    if(CURRENT_USER.role === 'member'){
+    if(_ph196IsMember){
       preselectType = 'member';
       if(memSel && CURRENT_USER.name) memSel.value = CURRENT_USER.name;
-    } else if(CURRENT_USER.role === 'front_desk' && CURRENT_USER.facilityKey === 'plano_uc'){
+    } else if(_ph196IsUcPlanoFD){
       preselectType = 'uc_plano_fd';
     }
     // admin → no pre-select (must pick which member or UC Plano)
@@ -18829,6 +18854,36 @@ function openCreateReferralForm(){
   if(preselectType){
     var r = document.querySelector('input[name="cr-creator-type"][value="' + preselectType + '"]');
     if(r) r.checked = true;
+  }
+  // Phase 196: lock the creator-type radio so a marketing member can't
+  // switch to "UC Plano front desk" (or vice versa for UC Plano FD).
+  // Admin has free choice.
+  if(!_ph196IsAdmin){
+    document.querySelectorAll('input[name="cr-creator-type"]').forEach(function(rb){
+      if(_ph196IsMember){
+        rb.disabled = (rb.value !== 'member');
+      } else if(_ph196IsUcPlanoFD){
+        rb.disabled = (rb.value !== 'uc_plano_fd');
+      }
+      // Visual cue on the parent label
+      if(rb.parentElement){
+        rb.parentElement.style.opacity = rb.disabled ? '.45' : '1';
+        rb.parentElement.style.cursor  = rb.disabled ? 'not-allowed' : 'pointer';
+        rb.parentElement.title = rb.disabled
+          ? 'Only admin can create referrals on behalf of someone in another role.'
+          : '';
+      }
+    });
+  } else {
+    // Admin — reset any prior lock state
+    document.querySelectorAll('input[name="cr-creator-type"]').forEach(function(rb){
+      rb.disabled = false;
+      if(rb.parentElement){
+        rb.parentElement.style.opacity = '1';
+        rb.parentElement.style.cursor = 'pointer';
+        rb.parentElement.title = '';
+      }
+    });
   }
   // Render the two panels' visibility based on initial selection
   _crCreatorTypeChanged();
