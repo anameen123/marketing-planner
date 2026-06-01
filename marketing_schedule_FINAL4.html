@@ -12198,7 +12198,11 @@ function renderProfileView(){
     // Phase 182 (2026-05-31) — Admin-only ElevenLabs settings panel for the
     // voice-annotated presentations. Stores API key + selected voice locally;
     // tied to the 🎙 Voice deck / 🎙 Huddle deck buttons on the Reports tab.
-    + ((u.role === 'admin')
+    // Phase 195 (2026-05-31): hardened gate. Hide for anyone who isn't a
+    // real admin, AND hide when an admin is previewing as a member (so the
+    // admin sees what the member sees). User: "remove all of them for the
+    // members."
+    + ((u.role === 'admin' && !imp)
         ? '<div style="background:linear-gradient(135deg,#f5f3ff,#ede9fe);border:1px solid #c4b5fd;border-left:3px solid #7c3aed;border-radius:12px;padding:18px 24px;margin-bottom:16px;box-shadow:0 2px 8px rgba(124,58,237,.08)">'
           +   '<div style="font-size:13px;font-weight:700;color:#5b21b6;margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em">🎙 ElevenLabs voice presentations (admin)</div>'
           +   '<div style="font-size:11.5px;color:#4c1d95;line-height:1.55;margin-bottom:12px">'
@@ -12215,7 +12219,7 @@ function renderProfileView(){
     // CSV download for manual SharePoint upload when SharePoint isn't the
     // active backend. Survives Reset Test Data because reports live in their
     // own key (wcg_monthly_reports_v1).
-    + ((u.role === 'admin')
+    + ((u.role === 'admin' && !imp)
         ? (function(){
             // Build a "previous 12 months" picker so admin can re-export any
             // month they need to. Includes the current month at the top for
@@ -12264,7 +12268,7 @@ function renderProfileView(){
     // Phase 179 (2026-05-30, rev 2) — Admin-only "Reset Test Data" panel.
     // Wipes schedule visits + saved routes + all referrals (logged, pending,
     // business-tied). Preserves businesses, lead status, settings.
-    + ((u.role === 'admin')
+    + ((u.role === 'admin' && !imp)
         ? '<div style="background:#fffbeb;border:1px solid #fde68a;border-left:3px solid #f59e0b;border-radius:12px;padding:18px 24px;margin-bottom:16px;box-shadow:0 2px 8px rgba(245,158,11,.08)">'
           +   '<div style="font-size:13px;font-weight:700;color:#92400e;margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em">⚠ Reset test data (admin)</div>'
           +   '<div style="font-size:11.5px;color:#78350f;line-height:1.55;margin-bottom:12px">'
