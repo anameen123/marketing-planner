@@ -2749,13 +2749,10 @@ button:not([disabled]):not(.no-press):active {
       <!-- Live monthly counter grid — team-wide -->
       <div id="ts-perf-counters" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:16px"></div>
 
-      <!-- TWO donuts side-by-side: status breakdown + per-member contributions -->
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin-bottom:16px">
-        <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px">
-          <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:8px">🍩 Status breakdown</div>
-          <div style="font-size:10px;color:var(--muted);margin-bottom:8px">Completed / Pending / Postponed / Canceled for the selected month</div>
-          <svg id="ts-perf-status-donut" width="100%" height="220" style="display:block;overflow:visible"></svg>
-        </div>
+      <!-- Phase 227 (2026-06-02): status breakdown donut removed per user.
+           "We don't need that chart. We don't care about the cancelled and
+           postponed." Contributions donut promoted to full width. -->
+      <div style="display:grid;grid-template-columns:1fr;gap:14px;margin-bottom:16px">
         <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px">
           <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:8px">👥 Contributions by member</div>
           <div style="font-size:10px;color:var(--muted);margin-bottom:8px">Visit count per marketing member, this month</div>
@@ -2815,10 +2812,10 @@ button:not([disabled]):not(.no-press):active {
       <!-- Phase 187 (2026-05-31): TEAM-WIDE line + bar charts of monthly
            completion ratio. Phase 194 wrap in <details> (compact +
            expandable per user). -->
-      <details style="background:var(--card);border:1px solid var(--border);border-radius:12px;margin-bottom:14px">
+      <details open style="background:var(--card);border:1px solid var(--border);border-radius:12px;margin-bottom:14px">
         <summary style="cursor:pointer;padding:14px 16px;list-style:none;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap" onclick="setTimeout(_phase187RenderTeamCharts, 30)">
           <div>
-            <div style="font-size:13px;font-weight:700;color:var(--text)">▸ 📈 Monthly Completion Ratio — Team (Line)</div>
+            <div style="font-size:13px;font-weight:700;color:var(--text)">▾ 📈 Monthly Completion Ratio — Team (Line)</div>
             <div style="font-size:10px;color:var(--muted);margin-top:2px">Click any dot to see that month's per-member breakdown. Last point = live current month.</div>
           </div>
           <select id="team-line-period" onchange="event.stopPropagation();_phase187RenderTeamCharts()" onclick="event.stopPropagation()" style="background:#fff;border:1px solid var(--border);border-radius:7px;padding:5px 9px;font-size:11px;font-family:DM Sans,sans-serif">
@@ -2831,10 +2828,10 @@ button:not([disabled]):not(.no-press):active {
         </summary>
         <div style="padding:0 16px 16px"><svg id="team-line-svg" width="100%" height="180" style="display:block;overflow:visible"></svg></div>
       </details>
-      <details style="background:var(--card);border:1px solid var(--border);border-radius:12px">
+      <details open style="background:var(--card);border:1px solid var(--border);border-radius:12px">
         <summary style="cursor:pointer;padding:14px 16px;list-style:none;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap" onclick="setTimeout(_phase187RenderTeamCharts, 30)">
           <div>
-            <div style="font-size:13px;font-weight:700;color:var(--text)">▸ 📊 Monthly Completion Ratio — Team (Bar)</div>
+            <div style="font-size:13px;font-weight:700;color:var(--text)">▾ 📊 Monthly Completion Ratio — Team (Bar)</div>
             <div style="font-size:10px;color:var(--muted);margin-top:2px">Same data, bar shape · click any bar for the per-member breakdown.</div>
           </div>
           <select id="team-bar-period" onchange="event.stopPropagation();_phase187RenderTeamCharts()" onclick="event.stopPropagation()" style="background:#fff;border:1px solid var(--border);border-radius:7px;padding:5px 9px;font-size:11px;font-family:DM Sans,sans-serif">
@@ -4437,7 +4434,15 @@ button:not([disabled]):not(.no-press):active {
             <input type="number" id="rp-opt-circle-fit-count" value="5" min="1" max="50" step="1" oninput="_rpOptOnFitCountChange()" style="flex:1;border:1px solid #93c5fd;border-radius:6px;padding:6px 9px;font-size:12px;background:#fff;text-align:center">
             <span id="rp-opt-circle-fit-radius-display" style="font-size:11px;font-weight:700;color:#1e3a8a;background:#fff;border:1px solid #93c5fd;border-radius:14px;padding:3px 10px;font-family:DM Mono,monospace">±?</span>
           </div>
-          <button id="rp-opt-circle-confirm-btn" type="button" onclick="_rpOptConfirmCircle()" disabled style="display:none;width:100%;margin-top:8px;background:linear-gradient(135deg,#15803d,#16a34a);color:#fff;border:none;border-radius:6px;padding:8px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">✓ Confirm selection</button>
+          <!-- Phase 227 (2026-06-02): "Confirm selection" button REMOVED.
+               Candidates now auto-commit to _RP_OPT_TARGETS as the circle
+               resizes — they stay LIGHT BLUE (suggested) until the route
+               is generated, at which point they turn dark blue. User
+               explicitly asked to remove the confirm step. The button
+               element is kept as a hidden placeholder so any stray
+               getElementById lookups continue to find a node and don't
+               throw. -->
+          <button id="rp-opt-circle-confirm-btn" type="button" style="display:none" hidden aria-hidden="true"></button>
         </div>
         <!-- Status panel — shows preview pin + Confirm / Cancel like Corridor -->
         <div id="rp-opt-pick-status" style="display:none;margin-bottom:10px"></div>
@@ -44320,26 +44325,33 @@ function _rpOptRecomputeCircleTargets(){
   if(typeof CLINIC_BANK !== 'undefined') CLINIC_BANK.forEach(function(o){ if(o && o.n) consider(o.n, 'clinic'); });
   if(typeof MVA_ATTORNEYS !== 'undefined') MVA_ATTORNEYS.forEach(function(o){ if(o && o.firm) consider(o.firm, 'mva'); });
   if(typeof OUTREACH !== 'undefined') OUTREACH.forEach(function(o){ if(o && o.name) consider(o.name, 'outreach'); });
-  // Stage ALL hits (no cap) and light them ALL up
+  // Phase 227 (2026-06-02): auto-commit candidates as the circle resizes.
+  // Previously this only populated _RP_OPT_CIRCLE_STAGED and the user had
+  // to press "Confirm selection" to copy them into _RP_OPT_TARGETS. The
+  // user asked to remove that step — candidates appear and disappear
+  // dynamically with the circle radius. Pins stay LIGHT BLUE (suggested);
+  // they only flip to dark blue once the route is generated.
   window._RP_OPT_CIRCLE_STAGED = hits;
   hits.forEach(function(t){
     if(typeof _rpSetPinState === 'function') _rpSetPinState(t.name, 'suggested');
   });
-  // Count chip + Confirm button enable
+  /* Auto-commit: sort by distance asc + cap at 10 (same logic Confirm
+     used). _RP_OPT_TARGETS is now always in sync with what's in the
+     circle. */
+  var autoPicks = hits.slice().sort(function(a, b){ return a.dist - b.dist; }).slice(0, 10);
+  window._RP_OPT_TARGETS = autoPicks.map(function(p){
+    return { name: p.name, coord: p.coord, bizType: p.bizType };
+  });
+  // Count chip
   var countEl = document.getElementById('rp-opt-circle-count');
   if(countEl){
-    var capMsg = hits.length > 10 ? ' (top 10 closest will be picked)' : '';
+    var capMsg = hits.length > 10 ? ' (closest 10 picked)' : '';
     countEl.textContent = hits.length + ' in' + capMsg;
   }
+  // Hidden placeholder button (kept for back-compat) — never displayed.
   var confirmBtn = document.getElementById('rp-opt-circle-confirm-btn');
-  if(confirmBtn){
-    confirmBtn.style.display = 'block';
-    confirmBtn.disabled = (hits.length === 0);
-    confirmBtn.style.opacity = hits.length === 0 ? '0.55' : '1';
-    confirmBtn.style.cursor  = hits.length === 0 ? 'not-allowed' : 'pointer';
-    confirmBtn.textContent = '✓ Confirm selection (' + Math.min(10, hits.length) + ' stop' + (hits.length===1?'':'s') + ')';
-  }
-  // Start picker stays empty until confirm
+  if(confirmBtn) confirmBtn.style.display = 'none';
+  // Start picker + target list reflect the auto-committed targets.
   _rpOptRenderTargetList();
   _rpOptRenderStartPicker();
   // Phase 198: keep the N input + fit-radius span in sync with the live
@@ -44348,41 +44360,15 @@ function _rpOptRecomputeCircleTargets(){
 }
 window._rpOptRecomputeCircleTargets = _rpOptRecomputeCircleTargets;
 
-// Phase 53b: commit the staged circle picks into _RP_OPT_TARGETS so the
-// start picker + Optimize button activate. Caps at 10 closest if the
-// circle contains more than that.
+// Phase 227 (2026-06-02): kept as a no-op for back-compat with any console
+// callers or legacy event wiring. Candidates now auto-commit inside
+// _rpOptRecomputeCircleTargets as the circle resizes — the user removed
+// the manual confirm step. Light-blue pins stay light blue until route
+// generation flips them to dark blue.
 function _rpOptConfirmCircle(){
-  var staged = window._RP_OPT_CIRCLE_STAGED || [];
-  if(staged.length === 0){
-    if(typeof showToast === 'function') showToast('No pins inside the circle yet — set a center first.');
-    return;
-  }
-  // Sort by distance asc + cap at 10
-  var picks = staged.slice().sort(function(a, b){ return a.dist - b.dist; }).slice(0, 10);
-  window._RP_OPT_TARGETS = picks.map(function(p){
-    return { name: p.name, coord: p.coord, bizType: p.bizType };
-  });
-  // Phase 55: at Confirm-selection time, targets become 'picked' (DARK blue)
-  // per user — "once I confirm the list all the pins will turn into dark blue".
-  // Non-picked staged pins reset to default.
-  var picked = {};
-  picks.forEach(function(p){ picked[p.name] = true; });
-  staged.forEach(function(s){
-    if(typeof _rpSetPinState === 'function'){
-      _rpSetPinState(s.name, picked[s.name] ? 'picked' : 'reset');
-    }
-  });
-  // Update the step indicator so the user knows what comes next.
-  var stepEl = document.getElementById('rp-opt-circle-step');
-  if(stepEl) stepEl.innerHTML = '✓ Targets locked in. <b>Step 3.</b> Pick your starting point — click a row in the list OR click the pin on the map. The chosen one becomes the green <b>S</b> flag.';
+  /* Auto-commit already happens on every circle resize. Just re-render. */
   _rpOptRenderTargetList();
   _rpOptRenderStartPicker();
-  if(typeof showToast === 'function'){
-    var msg = '✓ ' + picks.length + ' stop' + (picks.length===1?'':'s') + ' locked in.';
-    if(staged.length > picks.length) msg += ' (' + (staged.length - picks.length) + ' skipped — kept the closest 10)';
-    msg += ' Pick which one is your start.';
-    showToast(msg);
-  }
 }
 window._rpOptConfirmCircle = _rpOptConfirmCircle;
 
@@ -54938,13 +54924,10 @@ function _phase188DrawDonut(svg, segments){
 }
 
 function _phase188RenderStatusDonut(d){
-  var segments = [
-    { label: 'Completed', value: d.completed, color: '#16a34a' },
-    { label: 'Pending',   value: d.pending,   color: '#f59e0b' },
-    { label: 'Postponed', value: d.postponed, color: '#7c3aed' },
-    { label: 'Canceled',  value: d.canceled,  color: '#dc2626' }
-  ];
-  _phase188DrawDonut(document.getElementById('ts-perf-status-donut'), segments);
+  /* Phase 227 (2026-06-02): status breakdown donut REMOVED per user. The
+     target SVG no longer exists in the DOM; this function is kept as a
+     no-op so legacy callers don't throw. */
+  return;
 }
 
 function _phase188RenderContributionsDonut(d){
