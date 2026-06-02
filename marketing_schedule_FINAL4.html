@@ -22340,11 +22340,45 @@ function _crRenderMonthlySummary(){
       + '<div style="margin-top:3px;font-size:9px;color:#94a3b8;font-style:italic">Ratio is over ' + b.closed + ' closed referral' + (b.closed === 1 ? '' : 's') + (b.pending > 0 ? ' (excludes ' + b.pending + ' pending)' : '') + '</div>'
       + '</div>';
   }
+  /* Phase 230 (2026-06-02) — wrap the two month cards in a collapsible
+     <details> block per user: "make it compact and expandable".
+     Default state is COLLAPSED — the summary line shows the headline
+     numbers ("June 2026: 1 · 0 ok / 1 no   May (frozen): 2 · 0 ok / 2 no")
+     so users still see the totals at a glance without opening it.
+     Once expanded, the two full cards reveal. We persist the open/closed
+     state on window so it survives re-renders within the session. */
+  var compactStr = function(label, b){
+    return label + ': ' + b.total
+      + (b.total ? ' · ' + b.ok + ' ok / ' + b.no + ' no'
+                 + (b.pending ? ' (' + b.pending + ' pending)' : '')
+                 : '');
+  };
+  var summaryLine = '🗓 ' + compactStr(monthLabel, cur) + '  ·  ' + compactStr(prevLabel + ' (frozen)', prev);
+  /* React to user open/close so subsequent re-renders preserve state. */
+  var openAttr = window._ph230MonthlySummaryOpen ? ' open' : '';
   host.innerHTML = ''
-    + '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:stretch">'
-    +   statCard('This month', monthLabel + (isFD ? ' · ' + ((REFERRAL_FACILITIES.find(function(f){return f.key === CURRENT_USER.facilityKey;}) || {}).label || CURRENT_USER.facilityKey) : ''), cur, '#7c3aed')
-    +   statCard('Last month', prevLabel + ' (frozen)', prev, '#64748b')
-    + '</div>';
+    + '<details' + openAttr + ' id="pr-monthly-summary-details" '
+    +   'ontoggle="window._ph230MonthlySummaryOpen = this.open" '
+    +   'style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:0">'
+    +   '<summary style="cursor:pointer;padding:10px 14px;list-style:none;display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-family:DM Sans,sans-serif">'
+    +     '<span id="pr-monthly-summary-caret" style="font-size:11px;color:#7c3aed;font-weight:800">' + (window._ph230MonthlySummaryOpen ? '▾' : '▸') + '</span>'
+    +     '<span style="font-size:11px;font-weight:800;color:#7c3aed;text-transform:uppercase;letter-spacing:.05em">Monthly summary</span>'
+    +     '<span style="font-size:11px;color:#475569;font-weight:600">' + summaryLine + '</span>'
+    +     '<span style="margin-left:auto;font-size:10px;color:var(--muted);font-style:italic">' + (window._ph230MonthlySummaryOpen ? 'click to collapse' : 'click for details') + '</span>'
+    +   '</summary>'
+    +   '<div style="padding:0 12px 12px;display:flex;flex-wrap:wrap;gap:8px;align-items:stretch">'
+    +     statCard('This month', monthLabel + (isFD ? ' · ' + ((REFERRAL_FACILITIES.find(function(f){return f.key === CURRENT_USER.facilityKey;}) || {}).label || CURRENT_USER.facilityKey) : ''), cur, '#7c3aed')
+    +     statCard('Last month', prevLabel + ' (frozen)', prev, '#64748b')
+    +   '</div>'
+    + '</details>';
+  /* Swap caret + hint when toggled — saves a full re-render. */
+  var det = document.getElementById('pr-monthly-summary-details');
+  if(det){
+    det.addEventListener('toggle', function(){
+      var caret = document.getElementById('pr-monthly-summary-caret');
+      if(caret) caret.textContent = det.open ? '▾' : '▸';
+    });
+  }
 }
 window._crRenderMonthlySummary = _crRenderMonthlySummary;
 
