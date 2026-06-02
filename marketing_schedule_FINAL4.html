@@ -41365,6 +41365,71 @@ function _phase252WhoBookedThisWeek(name){
 }
 window._phase252WhoBookedThisWeek = _phase252WhoBookedThisWeek;
 
+/* Phase 262 (2026-06-02) — OK.docx #3: replace the cross-member
+   week-lock toast with a centered, non-clickable popup window that
+   auto-dismisses in 2 seconds. Per user: "I need to change this format
+   to appear in front of him in a window that he just can't click. He
+   cannot do anything about that. It's gonna disappear in two seconds."
+   Implementation:
+     - Builds (or reuses) a fixed-position overlay with a small modal card.
+     - Backdrop is faint + ALSO non-interactive (pointer-events: none),
+       so a member can keep working in the underlying UI if the popup
+       happens to overlap something they want to click.
+     - No buttons, no X, no close handler — purely informational.
+     - Auto-removes after 2 s. Stacked rapid collisions debounce on the
+       same DOM node (we just reset the timer and update the message). */
+function _phase262ShowWeekLockPopup(targetName, blockerName, dayLabel){
+  try {
+    var id = 'ph262-weeklock-popup';
+    var pop = document.getElementById(id);
+    if(!pop){
+      pop = document.createElement('div');
+      pop.id = id;
+      pop.style.cssText = 'position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:2147483600;pointer-events:none;background:rgba(15,23,42,.18);opacity:0;transition:opacity .12s ease-out;font-family:DM Sans,sans-serif';
+      pop.innerHTML = ''
+        + '<div id="ph262-weeklock-card" style="background:#fff;border-radius:14px;box-shadow:0 18px 60px rgba(15,23,42,.32);padding:22px 26px;max-width:380px;width:88vw;text-align:center;border:1.5px solid #fca5a5;transform:scale(.96);transition:transform .14s ease-out">'
+        +   '<div style="font-size:30px;line-height:1;margin-bottom:8px">&#128274;</div>'
+        +   '<div style="font-size:13px;font-weight:800;color:#991b1b;letter-spacing:.02em;margin-bottom:6px">Already booked this week</div>'
+        +   '<div id="ph262-weeklock-body" style="font-size:12px;color:#1f2937;line-height:1.45"></div>'
+        +   '<div style="font-size:9px;color:#9ca3af;margin-top:10px;letter-spacing:.06em;text-transform:uppercase">auto-closes</div>'
+        + '</div>';
+      document.body.appendChild(pop);
+    }
+    var body = pop.querySelector('#ph262-weeklock-body');
+    if(body){
+      body.innerHTML = '<strong style="color:#7c2d12">"' + String(targetName||'').replace(/</g,'&lt;') + '"</strong>'
+        + ' was already locked for this week by '
+        + '<strong>' + String(blockerName||'').replace(/</g,'&lt;') + '</strong>'
+        + (dayLabel ? ' on <strong>' + String(dayLabel).replace(/</g,'&lt;') + '</strong>' : '')
+        + '. Pick a different target.';
+    }
+    /* Force a reflow before re-applying opacity so the transition fires
+       reliably even when the popup is being reused for a rapid second
+       collision. */
+    pop.style.display = 'flex';
+    void pop.offsetWidth;
+    pop.style.opacity = '1';
+    var card = pop.querySelector('#ph262-weeklock-card');
+    if(card) card.style.transform = 'scale(1)';
+    /* Reset any pending auto-dismiss so the new 2-s timer starts now. */
+    if(_phase262ShowWeekLockPopup._timer){
+      try { clearTimeout(_phase262ShowWeekLockPopup._timer); } catch(_){}
+    }
+    _phase262ShowWeekLockPopup._timer = setTimeout(function(){
+      pop.style.opacity = '0';
+      if(card) card.style.transform = 'scale(.96)';
+      setTimeout(function(){
+        if(pop && pop.parentNode){ pop.style.display = 'none'; }
+      }, 160);
+    }, 2000);
+  } catch(_){
+    if(typeof showToast === 'function'){
+      showToast('"' + targetName + '" is already booked this week by ' + blockerName + (dayLabel ? ' (' + dayLabel + ')' : '') + '.');
+    }
+  }
+}
+window._phase262ShowWeekLockPopup = _phase262ShowWeekLockPopup;
+
 // Composite filter for Pick & Plan circle candidates. Combines:
 //   • Phase 57:  green / yellow only (no fresh red, no warm yellow already
 //                touched in last 7 days)
@@ -41431,13 +41496,20 @@ function _rpOptConsumePinClick(name, exactCoord){
     return false;
   }
   // Phase 252 (2026-06-02) — OK.docx #3: cross-member week-lock.
-  // Surfaces a named-blocker toast instead of the silent filter. Admin
-  // bypass kept per Phase 199 admin-override semantics.
+  // Phase 262 (2026-06-02) — per user: stop using the small bottom toast
+  // for the cross-member week-lock collision. Show a CENTERED, NON-CLICKABLE
+  // popup window in front of the user so they can't miss it; auto-dismiss
+  // after 2 seconds so they don't need to interact with it. Admin bypass
+  // kept per Phase 199 admin-override semantics.
   var _ph252IsAdmin = (typeof isAdmin === 'function') && isAdmin();
   if(!_ph252IsAdmin){
     var blocker = (typeof _phase252WhoBookedThisWeek === 'function') ? _phase252WhoBookedThisWeek(name) : null;
     if(blocker){
-      if(typeof showToast === 'function') showToast('"' + name + '" is already booked this week by ' + blocker.member + ' (' + blocker.dayLabel + '). Pick a different target.');
+      if(typeof _phase262ShowWeekLockPopup === 'function'){
+        _phase262ShowWeekLockPopup(name, blocker.member, blocker.dayLabel);
+      } else if(typeof showToast === 'function'){
+        showToast('"' + name + '" is already booked this week by ' + blocker.member + ' (' + blocker.dayLabel + '). Pick a different target.');
+      }
       return false;
     }
   }
