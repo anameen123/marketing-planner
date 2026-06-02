@@ -53610,6 +53610,40 @@ function _ph229CollectLeads(range, biz){
   return { buckets: buckets, levels: levels };
 }
 
+/* Phase 250 (2026-06-02) — OK.docx #32: daily buckets for the current
+   month, split by source. Same per-member scoping rules as
+   _ph229CollectRefs. */
+function _ph250CollectRefsDaily(){
+  var now = new Date();
+  var y = now.getFullYear(), mo = now.getMonth();
+  var daysInMonth = new Date(y, mo+1, 0).getDate();
+  var monthKey = y + '-' + String(mo+1).padStart(2, '0');
+  var buckets = [];
+  for(var d = 1; d <= daysInMonth; d++){
+    var iso = monthKey + '-' + String(d).padStart(2, '0');
+    buckets.push({ key: iso, label: String(d), total: 0, bySource: {} });
+  }
+  var bMap = {}; buckets.forEach(function(b){ bMap[b.key] = b; });
+  var memberName = (typeof currentMember !== 'undefined' && currentMember) ? currentMember : '';
+  if(typeof REFERRAL_LOG !== 'undefined' && Array.isArray(REFERRAL_LOG)){
+    REFERRAL_LOG.forEach(function(e){
+      if(!e || !e.entryDate) return;
+      var iso = String(e.entryDate).slice(0, 10);
+      if(!bMap[iso]) return;  /* outside current month */
+      if(memberName){
+        var arr = Array.isArray(e.memberNames) ? e.memberNames : (e.memberName ? [e.memberName] : []);
+        if(arr.indexOf(memberName) < 0) return;
+      }
+      var src = e.sourceType === 'mva' ? 'mva'
+              : e.sourceType === 'google' ? 'google'
+              : e.sourceType === 'outreach' ? 'outreach'
+              : 'clinic';
+      bMap[iso].total++;
+      bMap[iso].bySource[src] = (bMap[iso].bySource[src] || 0) + 1;
+    });
+  }
+  return { buckets: buckets, sources: _PH229_SOURCES.map(function(s){ return s.key; }) };
+}
 /* Aggregate referrals for the current member into monthly buckets keyed
    by source. Returns { buckets:[{key,label,total,bySource:{...}}], sources:[...] } */
 function _ph229CollectRefs(range){
@@ -53873,11 +53907,21 @@ function _phase185RenderReferralsChart(){
   var svg = document.getElementById('perf-referrals-svg');
   if(!svg) return;
   var s = window._ph229Refs;
-  var data = _ph229CollectRefs(s.range);
+  /* Phase 250 (2026-06-02) — OK.docx #32: when range=1, switch to
+     per-day buckets so we get the daily referral trend for the chosen
+     month, still split by source. */
+  var data = (s.range === 1) ? _ph250CollectRefsDaily() : _ph229CollectRefs(s.range);
   data.buckets.forEach(function(b){ b.byKey = b.bySource; });
   var grandTotal = data.buckets.reduce(function(t, b){ return t + b.total; }, 0);
   var lblEl = document.getElementById('perf-referrals-total');
-  if(lblEl) lblEl.textContent = grandTotal + ' referral(s) · last ' + s.range + ' month' + (s.range === 1 ? '' : 's');
+  if(lblEl){
+    if(s.range === 1){
+      var monthName = new Date().toLocaleDateString('en-US', { month:'long' });
+      lblEl.textContent = grandTotal + ' referral(s) · ' + monthName + ' · per day';
+    } else {
+      lblEl.textContent = grandTotal + ' referral(s) · last ' + s.range + ' months';
+    }
+  }
   var segs = _PH229_SOURCES.map(function(src){ return { key:src.key, color:src.color, label:src.label }; });
   var displaySegs = (s.chartType === 'line')
     ? segs.filter(function(seg){ return !s.hiddenSources[seg.key]; })
@@ -53892,7 +53936,13 @@ function _phase185RenderReferralsChart(){
     }
   });
   var parts = ['<g font-family="DM Sans,sans-serif">'];
-  var labels = data.buckets.map(function(b){
+  /* Phase 250 — daily mode (range=1) has 28-31 labels; only show every
+     5th day-number to avoid overlap. Monthly modes use short month name. */
+  var labels = data.buckets.map(function(b, idx){
+    if(s.range === 1){
+      var dayNum = parseInt(b.label, 10);
+      return (dayNum % 5 === 0 || dayNum === 1) ? b.label : '';
+    }
     return s.range >= 6 ? b.label.slice(0,3) : b.label;
   });
   var effMax = _ph229DrawAxes(parts, w, h, padL, padR, padT, padB, maxY, labels);
@@ -53909,6 +53959,7 @@ function _phase185RenderReferralsChart(){
 }
 window._phase185RenderLeadsChart     = _phase185RenderLeadsChart;
 window._phase185RenderReferralsChart = _phase185RenderReferralsChart;
+window._ph250CollectRefsDaily        = _ph250CollectRefsDaily;
 
 // ── Side activities (NEW Phase 185) ────────────────────────────────────────
 // Stored per-member in wcg_side_activities_v1: { memberName: { 'YYYY-MM-DD': [ { id, title, notes, ts } ] } }
