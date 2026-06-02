@@ -374,9 +374,10 @@ textarea.rnotes:focus{border-color:var(--purple);outline:none}
 .profile-name{font-size:18px;font-weight:700;margin-bottom:3px}
 .profile-role{font-size:11px;opacity:.55;text-transform:uppercase;letter-spacing:.07em}
 /* Phase 211 (2026-06-01) — was repeat(5,1fr) when the strip had 5 tiles;
-   Phase 209 dropped Postponed + Canceled, so it's now Total / Completed /
-   Leads only. 3 columns prevents 2 empty grid tracks rendering to the right. */
-.profile-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+   Phase 209 dropped Postponed + Canceled, so it became Total / Completed / Leads.
+   Phase 216 (2026-06-01) — user wants Completion Ratio in the blue card too;
+   strip is now Total / Completed / Completion / Leads → 4 columns. */
+.profile-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
 .ps{text-align:center;background:rgba(255,255,255,.08);border-radius:10px;padding:10px 8px}
 .ps-n{font-size:20px;font-weight:700;font-family:'DM Mono',monospace;line-height:1}
 .ps-l{font-size:9px;opacity:.55;margin-top:3px;text-transform:uppercase;letter-spacing:.07em}
@@ -398,12 +399,14 @@ textarea.rnotes:focus{border-color:var(--purple);outline:none}
    for emphasis and aligned to the available horizontal space. */
 .profile-card-compact .profile-stats{
   flex:1;
-  /* Phase 211 (2026-06-01): was repeat(5,minmax(70px,1fr)) — now 3 to
-     match the post-Phase-209 strip. min-width shrunk because 3 tiles
-     need less horizontal room than 5 did. */
-  grid-template-columns:repeat(3,minmax(70px,1fr));
+  /* Phase 211 (2026-06-01): was repeat(5,minmax(70px,1fr)) — shrunk to 3
+     after Phase 209 dropped Postponed + Canceled.
+     Phase 216 (2026-06-01): bumped to 4 after re-adding Completion Ratio
+     in the blue card per user. min-width grows back up a bit to keep
+     each tile readable. */
+  grid-template-columns:repeat(4,minmax(64px,1fr));
   gap:7px;
-  min-width:220px;
+  min-width:280px;
 }
 .profile-card-compact .ps{
   padding:9px 6px;
@@ -55885,10 +55888,17 @@ function loadMemberProfile(name){
   /* Phase 209 (2026-06-01): per user — "remove the postponed and canceled
      counter" from this strip. Total / Completed / Leads remain. The data
      is still tracked elsewhere (Side Activities, day-view rows, raw
-     getMemberStats); just removed from this 5-card all-time strip. */
+     getMemberStats); just removed from this 5-card all-time strip.
+     Phase 216 (2026-06-01): per user — "the completion rate of all time
+     should be up in the blue card for all members." Added the 4th tile
+     (Completion Ratio) so the all-time KPI is visible without scrolling
+     down to KPI Performance. Amber color matches the lower-section
+     Completion Ratio tile so it's recognizable as the same metric. */
+  var _ph216Ratio = s.total > 0 ? Math.round((s.comp / s.total) * 100) : 0;
   document.getElementById('profile-stats').innerHTML =
       '<div class="ps" title="All-time total: every visit ever assigned to '+name+'"><div class="ps-n">'+s.total+'</div><div class="ps-l">Total</div>'+SCOPE_ALL+'</div>'+
       '<div class="ps" title="All-time: visits marked Completed"><div class="ps-n" style="color:#86efac">'+s.comp+'</div><div class="ps-l">Completed</div>'+SCOPE_ALL+'</div>'+
+      '<div class="ps" title="All-time completion ratio = Completed ÷ Total"><div class="ps-n" style="color:#fcd34d">'+_ph216Ratio+'%</div><div class="ps-l">Completion</div>'+SCOPE_ALL+'</div>'+
       '<div class="ps" title="All-time: completed visits where the lead became Established"><div class="ps-n" style="color:#c4b5fd">'+s.leads+'</div><div class="ps-l">Leads</div>'+SCOPE_ALL+'</div>';
 
   document.getElementById('profile-card').style.display='block';
