@@ -58831,12 +58831,124 @@ function _phase245RenderICCOTX(){
     /* History sub-tab — same Phase 234 calendar but list aggregates all locations. */
     html += _phase245HistoryPaneHtml(entries);
   }
+  /* Phase 266 (2026-06-02) — OK.docx #20: "below all of this OK? But
+     for the two ERs Frisco and Castle Hills only — without UC Plano."
+     A second self-contained rollup section is appended under ICCOTX
+     when the user is on the Overview sub-tab. Same shape: header
+     band, 4 expandable counter cards, stacked-bar/multi-line chart,
+     donut. UC Plano is excluded everywhere in this block. */
+  if(_phase233CurrentSubTab() === 'overview'){
+    html += _phase266Build2ERBlock(entries);
+  }
   host.innerHTML = html;
   if(_phase233CurrentSubTab() === 'overview'){
-    setTimeout(function(){ try { _phase245DrawChart(entries); _phase245DrawDonut(entries); } catch(e){ console.warn('[245] draw failed', e); } }, 30);
+    setTimeout(function(){
+      try { _phase245DrawChart(entries); _phase245DrawDonut(entries); } catch(e){ console.warn('[245] draw failed', e); }
+      try { _phase266Draw2ERCharts(entries); } catch(e){ console.warn('[266] draw failed', e); }
+    }, 30);
   }
 }
 window._phase245RenderICCOTX = _phase245RenderICCOTX;
+
+/* ── Phase 266 (2026-06-02) — OK.docx #20: 2-ER-only overview ─────────
+   Sits under the ICCOTX rollup on the same page. Mirrors the ICCOTX
+   layout (purple → blue header, counter cards, bar/donut charts) but
+   filters to ONLY Frisco ER + Castle Hills ER (NO Urgent Care Plano,
+   NO Richardson). Reuses the existing Phase 176 counter helpers + Phase
+   245 chart helpers by handing them the filtered entry list. */
+var _PH266_FACILITIES = ['frisco_er','castle_hills_er'];
+
+function _phase266Get2EREntries(allEntries){
+  if(!Array.isArray(allEntries)) return [];
+  return allEntries.filter(function(e){
+    return e && _PH266_FACILITIES.indexOf(e.destinationFacility) >= 0;
+  });
+}
+
+function _phase266Build2ERBlock(allEntries){
+  var entries = _phase266Get2EREntries(allEntries);
+  var counters = (typeof _phase176Counters === 'function') ? _phase176Counters(entries) : { day:0, week:0, month:0, total:0 };
+  var perFac = {};
+  _PH266_FACILITIES.forEach(function(k){
+    perFac[k] = (typeof _phase176Counters === 'function')
+      ? _phase176Counters(entries.filter(function(e){ return e.destinationFacility === k; })).total
+      : 0;
+  });
+  /* Use a synthetic facility key 'ers_only' for the counter cards so the
+     drill modal can recognize the 2-ER scope. (The drill modal already
+     special-cases 'iccotx'; we keep 'ers_only' as a sibling concept and
+     route it through the same code paths via _phase246GetEntriesForScope
+     below.) */
+  var scopeKey = 'ers_only';
+  var html = ''
+    + '<div style="margin-top:24px;border-top:2px dashed var(--border);padding-top:18px">'
+    +   '<div style="background:linear-gradient(135deg,#16a34a,#1F3864);color:#fff;border-radius:14px;padding:18px 22px;margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">'
+    +     '<div>'
+    +       '<div style="font-size:18px;font-weight:800">🏥 ERs only · Frisco + Castle Hills</div>'
+    +       '<div style="font-size:12px;opacity:.95;margin-top:5px;font-weight:600">'
+    +         '🏥 Frisco ER · ' + perFac.frisco_er + '  ·  '
+    +         '🏥 Castle Hills ER · ' + perFac.castle_hills_er
+    +       '</div>'
+    +       '<div style="font-size:11px;opacity:.85;margin-top:3px">' + counters.total + ' patient' + (counters.total === 1 ? '' : 's') + ' across both ERs — UC Plano excluded</div>'
+    +     '</div>'
+    +     '<div style="font-size:10px;opacity:.85;text-transform:uppercase;letter-spacing:.05em">ER-only rollup · expandable cards</div>'
+    +   '</div>'
+    +   '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:18px">'
+    +     ((typeof _phase176CounterCard === 'function') ? _phase176CounterCard('Today',     counters.day,   '#15803d', '🗓', 'day',   scopeKey) : '')
+    +     ((typeof _phase176WeekCounterCard === 'function') ? _phase176WeekCounterCard(counters, scopeKey) : '')
+    +     ((typeof _phase176CounterCard === 'function') ? _phase176CounterCard('This month', counters.month, '#7030A0', '📆', 'month', scopeKey) : '')
+    +     ((typeof _phase176CounterCard === 'function') ? _phase176CounterCard('All-time',  counters.total, '#1F3864', '∑',  'total', scopeKey) : '')
+    +   '</div>'
+    /* Stacked bar / multi-line chart — palette restricted to the two ERs. */
+    +   '<div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:18px;box-shadow:0 1px 3px rgba(15,23,42,.04)">'
+    +     '<div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:10px">📊 Patients logged across the 2 ERs · breakdown by location</div>'
+    +     '<svg id="phase266-chart-svg" width="100%" height="240" style="display:block;overflow:visible"></svg>'
+    +     '<div style="display:flex;gap:14px;margin-top:10px;flex-wrap:wrap;justify-content:center;font-size:11px;font-weight:700">'
+    +       '<span style="display:inline-flex;align-items:center;gap:5px"><span style="width:11px;height:11px;background:' + _PH245_PALETTE.frisco_er + ';border-radius:2px"></span>Frisco ER</span>'
+    +       '<span style="display:inline-flex;align-items:center;gap:5px"><span style="width:11px;height:11px;background:' + _PH245_PALETTE.castle_hills_er + ';border-radius:2px"></span>Castle Hills ER</span>'
+    +     '</div>'
+    +   '</div>'
+    /* Donut split for the two ERs. */
+    +   '<div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:18px;box-shadow:0 1px 3px rgba(15,23,42,.04)">'
+    +     '<div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:8px">🍩 ER share · ' + counters.total + ' total patients all-time</div>'
+    +     '<svg id="phase266-donut-svg" width="100%" height="220" style="display:block;overflow:visible"></svg>'
+    +   '</div>'
+    + '</div>';
+  return html;
+}
+window._phase266Build2ERBlock = _phase266Build2ERBlock;
+
+function _phase266Draw2ERCharts(allEntries){
+  var entries = _phase266Get2EREntries(allEntries);
+  /* Reuse the Phase 245 chart/donut drawers but point them at the
+     2-ER SVG IDs and the 2-ER facility list. They both read DOM by ID
+     and palette by facility key, so a thin pre/post swap is enough. */
+  var savedFacs    = _PH245_FACILITIES;
+  /* Temporarily restrict the global facility list so the chart drawer
+     only renders 2 series, then restore. */
+  _PH245_FACILITIES = _PH266_FACILITIES.slice();
+  try {
+    var origChartSvg = document.getElementById('phase245-chart-svg');
+    var origDonutSvg = document.getElementById('phase245-donut-svg');
+    var ph266ChartSvg = document.getElementById('phase266-chart-svg');
+    var ph266DonutSvg = document.getElementById('phase266-donut-svg');
+    /* Rename the 2-ER svgs to the IDs the drawer expects, then rename
+       back. Cheaper than refactoring the drawers to take a target id. */
+    if(origChartSvg) origChartSvg.id = '__ph245-chart-saved';
+    if(origDonutSvg) origDonutSvg.id = '__ph245-donut-saved';
+    if(ph266ChartSvg) ph266ChartSvg.id = 'phase245-chart-svg';
+    if(ph266DonutSvg) ph266DonutSvg.id = 'phase245-donut-svg';
+    if(typeof _phase245DrawChart === 'function') _phase245DrawChart(entries);
+    if(typeof _phase245DrawDonut === 'function') _phase245DrawDonut(entries);
+    if(ph266ChartSvg) ph266ChartSvg.id = 'phase266-chart-svg';
+    if(ph266DonutSvg) ph266DonutSvg.id = 'phase266-donut-svg';
+    if(origChartSvg) origChartSvg.id = 'phase245-chart-svg';
+    if(origDonutSvg) origDonutSvg.id = 'phase245-donut-svg';
+  } finally {
+    _PH245_FACILITIES = savedFacs;
+  }
+}
+window._phase266Draw2ERCharts = _phase266Draw2ERCharts;
 /* Multi-series stacked bar / line — one series per facility. */
 function _phase245DrawChart(entries){
   var svg = document.getElementById('phase245-chart-svg');
@@ -59602,6 +59714,11 @@ window._phase176RenderFacility = _phase176RenderFacility;
 window._phase246WeekDayFilter = window._phase246WeekDayFilter || '';
 function _phase246GetEntriesForScope(facKey){
   if(facKey === 'iccotx') return _phase245GetAllEntries();
+  /* Phase 266 (2026-06-02) — OK.docx #20: 2-ER rollup scope. */
+  if(facKey === 'ers_only'){
+    var all = _phase245GetAllEntries();
+    return (typeof _phase266Get2EREntries === 'function') ? _phase266Get2EREntries(all) : all;
+  }
   return _phase176GetEntriesForFacility(facKey);
 }
 function _phase246FilterByScope(entries, scope){
@@ -59637,6 +59754,8 @@ function _phase246FilterByScope(entries, scope){
 }
 function _phase246FacilityLabel(facKey){
   if(facKey === 'iccotx') return 'ICCOTX (all locations)';
+  /* Phase 266 (2026-06-02) — OK.docx #20: 2-ER rollup label. */
+  if(facKey === 'ers_only') return 'ERs only · Frisco + Castle Hills';
   var meta = (typeof _phase176FacilityMeta === 'function') ? _phase176FacilityMeta(facKey) : null;
   return (meta && meta.label) || facKey;
 }
