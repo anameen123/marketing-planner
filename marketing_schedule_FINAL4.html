@@ -2188,7 +2188,7 @@ button:not([disabled]):not(.no-press):active {
       <button class="home-quick-card" onclick="switchTab('finances')" style="background:#fff;border:1px solid #dbeafe;border-radius:12px;padding:16px 18px;text-align:left;cursor:pointer;font-family:inherit;display:flex;flex-direction:column;gap:6px;transition:box-shadow .15s,transform .15s;box-shadow:0 1px 6px rgba(30,64,175,.05)" onmouseover="this.style.boxShadow='0 6px 18px rgba(30,64,175,.14)';this.style.transform='translateY(-1px)'" onmouseout="this.style.boxShadow='0 1px 6px rgba(30,64,175,.05)';this.style.transform=''">
         <span style="font-size:24px">💰</span>
         <span style="font-size:14px;font-weight:700;color:#1e293b">View Finances</span>
-        <span style="font-size:11px;color:#64748b;line-height:1.4">Spending log, rankings, tier settings.</span>
+        <span style="font-size:11px;color:#64748b;line-height:1.4">Spending log and tier settings.</span>
       </button>
     </div>
 
@@ -2218,7 +2218,7 @@ button:not([disabled]):not(.no-press):active {
            Clicking it opens the same Ctrl+K palette. -->
       <div onclick="_openMasterSearch()" style="background:#fff;border:2px solid #c4b5fd;border-radius:12px;padding:12px 18px;margin-bottom:14px;cursor:pointer;display:flex;align-items:center;gap:12px;box-shadow:0 2px 10px rgba(112,48,160,.12);transition:all .15s" onmouseover="this.style.borderColor='#7030A0';this.style.boxShadow='0 4px 16px rgba(112,48,160,.22)'" onmouseout="this.style.borderColor='#c4b5fd';this.style.boxShadow='0 2px 10px rgba(112,48,160,.12)'">
         <span style="font-size:22px">🔍</span>
-        <div style="flex:1;color:#64748b;font-size:13px">Search anything — clinics, MVAs, patients, referrals, spending, sections… <span style="color:#1F3864;font-weight:600">try "finances/rankings" or "bloomfield"</span></div>
+        <div style="flex:1;color:#64748b;font-size:13px">Search anything — clinics, MVAs, patients, referrals, spending, sections… <span style="color:#1F3864;font-weight:600">try "finances" or "bloomfield"</span></div>
         <span style="background:#7030A0;color:#fff;font-size:10px;font-weight:700;padding:4px 9px;border-radius:5px;letter-spacing:.04em">Ctrl + K</span>
       </div>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
@@ -3588,21 +3588,24 @@ button:not([disabled]):not(.no-press):active {
 </div><!-- /bank-view -->
 
 <!-- ══════════════════════════════════════════════════════════════════════
-     💰 FINANCES VIEW — spending log + business rankings + tier settings
+     💰 FINANCES VIEW — spending log + tier settings (Phase 254: rankings removed)
      ══════════════════════════════════════════════════════════════════════ -->
 <div id="finances-view" style="display:none;padding:28px 20px;max-width:1200px;width:100%;margin:0 auto">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px">
     <div>
       <div style="font-size:18px;font-weight:700;color:var(--text)">💰 Finances</div>
-      <div style="font-size:11px;color:var(--muted);margin-top:3px">Visit spending log + 3-month business rankings (tier-based caps)</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:3px">Visit spending log + tier-based spending caps</div>
     </div>
     <div id="finances-period-badge" style="background:var(--navy);color:#fff;font-size:11px;font-weight:700;padding:6px 12px;border-radius:8px;letter-spacing:.04em"></div>
   </div>
 
-  <!-- Sub-tab nav: Spending Log | Rankings | Tier Settings -->
+  <!-- Phase 254 (2026-06-02) — Rankings sub-tab REMOVED per user: "remove
+       the ranking list from the web app completely we don't need that."
+       Only Spending Log + Tier Settings remain. The rankings render
+       functions stay defined so any incidental caller doesn't throw —
+       they just no-op into the now-hidden host. -->
   <div style="display:inline-flex;background:#f1f3f9;border-radius:14px;padding:5px;gap:4px;margin-bottom:18px;box-shadow:inset 0 1px 2px rgba(15,23,42,.06)">
     <button id="finances-subtab-log"      onclick="switchFinancesTab('log')"      style="padding:10px 18px;font-size:13px;font-weight:700;color:#fff;cursor:pointer;border:none;background:var(--purple);border-radius:10px;font-family:'DM Sans',sans-serif;display:inline-flex;align-items:center;gap:6px;box-shadow:0 2px 8px rgba(112,48,160,.28);transition:all .15s">📒 Spending Log</button>
-    <button id="finances-subtab-rankings" onclick="switchFinancesTab('rankings')" style="padding:10px 18px;font-size:13px;font-weight:700;color:var(--muted);cursor:pointer;border:none;background:transparent;border-radius:10px;font-family:'DM Sans',sans-serif;display:inline-flex;align-items:center;gap:6px;transition:all .15s">🏆 Rankings</button>
     <button id="finances-subtab-tiers"    onclick="switchFinancesTab('tiers')"    style="padding:10px 18px;font-size:13px;font-weight:700;color:var(--muted);cursor:pointer;border:none;background:transparent;border-radius:10px;font-family:'DM Sans',sans-serif;display:inline-flex;align-items:center;gap:6px;transition:all .15s">⚙️ Tier Settings</button>
   </div>
 
@@ -3648,20 +3651,12 @@ button:not([disabled]):not(.no-press):active {
     <div id="fin-log-body" style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;min-height:120px"></div>
   </div>
 
-  <!-- SUB-TAB 2: Rankings — nested sub-tabs inside (Clinics / MVA Attorneys
-       / Outreach-coming-soon). Only ONE ranking list shows at a time. -->
-  <div id="finances-sub-rankings" style="display:none">
-    <div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:11px;color:#78350f;line-height:1.4">
-      <strong>How rankings work:</strong> each business has a patient-referral count that builds up during a 3-month period. At the end of the period the count snapshots into history and the tier for the NEXT period is locked in. Spending caps stay fixed for the entire current period.
-    </div>
-    <!-- Nested sub-tab buttons: pick which ranking list to view -->
-    <div style="display:flex;gap:6px;background:#f4f5f9;border:1px solid var(--border);border-radius:11px;padding:5px;margin-bottom:14px;width:fit-content;flex-wrap:wrap">
-      <button id="rankings-subtab-clinic"   onclick="switchRankingsSub('clinic')"   style="padding:8px 14px;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;border:none;background:transparent;border-radius:8px;font-family:'DM Sans',sans-serif;display:inline-flex;align-items:center;gap:6px;transition:all .15s">🏥 Clinics</button>
-      <button id="rankings-subtab-mva"      onclick="switchRankingsSub('mva')"      style="padding:8px 14px;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;border:none;background:transparent;border-radius:8px;font-family:'DM Sans',sans-serif;display:inline-flex;align-items:center;gap:6px;transition:all .15s">⚖ MVA Attorneys</button>
-      <button id="rankings-subtab-outreach" onclick="switchRankingsSub('outreach')" title="Scheduled (tier-ranked) + Random + Holiday counters" style="padding:8px 14px;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;border:none;background:transparent;border-radius:8px;font-family:'DM Sans',sans-serif;display:inline-flex;align-items:center;gap:6px;transition:all .15s">🏘 Community Outreach</button>
-      <button id="rankings-subtab-history"  onclick="switchRankingsSub('history')"  title="Locked-in final standings from past quarters" style="padding:8px 14px;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;border:none;background:transparent;border-radius:8px;font-family:'DM Sans',sans-serif;display:inline-flex;align-items:center;gap:6px;transition:all .15s">📌 Quarterly Rankings</button>
-    </div>
-    <div id="fin-rankings-body" style="display:flex;flex-direction:column;gap:14px"></div>
+  <!-- Phase 254 — Rankings panel REMOVED. Empty placeholder div kept so
+       any leftover getElementById('finances-sub-rankings') / 'fin-rankings-body'
+       caller silently no-ops instead of throwing. Both stay display:none
+       so they never take screen space. -->
+  <div id="finances-sub-rankings" style="display:none" hidden aria-hidden="true">
+    <div id="fin-rankings-body" hidden></div>
   </div>
 
   <!-- SUB-TAB 3: Tier Settings — admin-only editable -->
@@ -56958,7 +56953,7 @@ var DASHBOARD_SECTIONS = [
   { label: 'Team / Members',       icon: '👥', tab: 'members',   keywords: ['stats', 'staff', 'org', 'tree', 'profile'] },
   { label: 'Bank of Targets',      icon: '🏢', tab: 'bank',      keywords: ['businesses', 'targets', 'clinics', 'mva', 'outreach'] },
   { label: 'Referrals',            icon: '📋', tab: 'referrals', keywords: ['patient', 'pending', 'approved', 'log patient', 'create referral'] },
-  { label: 'Finances',             icon: '💰', tab: 'finances',  keywords: ['budget', 'money', 'spending', 'rankings'] },
+  { label: 'Finances',             icon: '💰', tab: 'finances',  keywords: ['budget', 'money', 'spending'] },
   { label: 'Reports',              icon: '📋', tab: 'reports',   keywords: ['analytics', 'progress report', 'pdf', 'print'] },
   { label: 'Activity Feed',        icon: '📡', tab: 'feed',      keywords: ['log', 'history', 'changes', 'audit'] },
   { label: 'Profile',              icon: '🪪', tab: 'profile',   keywords: ['account', 'settings', 'password', 'kpi', 'me'] },
@@ -56975,14 +56970,9 @@ var DASHBOARD_SECTIONS = [
   { label: 'Bank → Clinics',           icon: '🏥', tab: 'bank', after: "if(typeof switchClinicTab==='function')switchClinicTab('overall');if(typeof switchOverallTab==='function')switchOverallTab('bank')", keywords: ['clinic', 'targets', 'all clinics'] },
   { label: 'Bank → MVA Attorneys',     icon: '⚖',  tab: 'bank', after: "if(typeof switchClinicTab==='function')switchClinicTab('overall');if(typeof switchOverallTab==='function')switchOverallTab('mva')",  keywords: ['mva', 'attorney', 'law', 'lawyer'] },
   { label: 'Bank → Community Outreach',icon: '🏘', tab: 'bank', after: "if(typeof switchClinicTab==='function')switchClinicTab('overall');if(typeof switchOverallTab==='function')switchOverallTab('outreach')", keywords: ['outreach', 'mosque', 'event', 'community'] },
-  // ── Finances sub-tabs ────────────────────────────────────────────
+  // ── Finances sub-tabs (Phase 254: Rankings removed) ────────────
   { label: 'Finances → Spending Log',  icon: '📒', tab: 'finances', after: "if(typeof switchFinancesTab==='function')switchFinancesTab('log')",      keywords: ['spending', 'expenses', 'budget', 'log', 'spending log'] },
-  { label: 'Finances → Rankings',      icon: '🏆', tab: 'finances', after: "if(typeof switchFinancesTab==='function')switchFinancesTab('rankings')", keywords: ['ranking', 'leaderboard', 'clinic rank', 'member rank', 'mva rank', 'spending rank'] },
   { label: 'Finances → Tier Settings', icon: '⚙', tab: 'finances', after: "if(typeof switchFinancesTab==='function')switchFinancesTab('tiers')",    keywords: ['tier', 'settings', 'thresholds', 'config'] },
-  // ── Finances → Rankings nested sub-rankings ──────────────────────
-  { label: 'Rankings → Clinics',       icon: '🏥', tab: 'finances', after: "if(typeof switchFinancesTab==='function')switchFinancesTab('rankings');if(typeof switchRankingsSub==='function')setTimeout(function(){switchRankingsSub('clinics')},120)", keywords: ['rank clinic', 'clinic leaderboard', 'top clinics'] },
-  { label: 'Rankings → MVA Attorneys', icon: '⚖',  tab: 'finances', after: "if(typeof switchFinancesTab==='function')switchFinancesTab('rankings');if(typeof switchRankingsSub==='function')setTimeout(function(){switchRankingsSub('mva')},120)",    keywords: ['rank mva', 'mva leaderboard', 'top attorneys'] },
-  { label: 'Rankings → Outreach',      icon: '🏘', tab: 'finances', after: "if(typeof switchFinancesTab==='function')switchFinancesTab('rankings');if(typeof switchRankingsSub==='function')setTimeout(function(){switchRankingsSub('outreach')},120)", keywords: ['rank outreach', 'outreach leaderboard'] },
   // ── Profile sub-tabs ─────────────────────────────────────────────
   { label: 'Profile → Overview',     icon: '📊', tab: 'profile', after: "if(typeof switchProfileTab==='function')switchProfileTab('overview')",    keywords: ['profile overview', 'me overview', 'my profile'] },
   { label: 'Profile → Performance',  icon: '🏆', tab: 'profile', after: "if(typeof switchProfileTab==='function')switchProfileTab('performance')", keywords: ['my performance', 'kpi', 'my stats', 'completion ratio', 'visit rate'] },
@@ -60731,15 +60721,18 @@ function renderFinances(){
 window.renderFinances = renderFinances;
 
 function switchFinancesTab(name){
+  /* Phase 254 — Rankings sub-tab removed. Any request to switch to
+     'rankings' now silently redirects to 'log' so old links / search
+     index entries pointing at rankings still land somewhere useful. */
+  if(name === 'rankings') name = 'log';
   FINANCES_TAB = name;
-  var sublogs   = ['log','rankings','tiers'];
+  var sublogs   = ['log','tiers'];
   sublogs.forEach(function(s){
     var sub = document.getElementById('finances-sub-'+s);
     if(sub) sub.style.display = (s === name) ? 'block' : 'none';
   });
   _paintFinancesSubtabs();
-  if(name === 'rankings') renderFinancesRankings();
-  else if(name === 'tiers') renderFinancesTiers();
+  if(name === 'tiers') renderFinancesTiers();
   else renderFinancesLog();
 }
 window.switchFinancesTab = switchFinancesTab;
