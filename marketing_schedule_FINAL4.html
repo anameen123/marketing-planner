@@ -6104,19 +6104,36 @@ var OUTREACH = [
   {id:'co43',name:'Network of Community Ministries (Richardson)',type:'nonprofit',city:'Richardson',phone:'972-234-8880',address:'741 S Sherman St, Richardson TX 75081',contact:'TBD',status:'Not Visited',notes:'Food pantry, social services, large client base.',agent:''},
   {id:'co44',name:'Frisco Square Community Events',type:'business',city:'Frisco',phone:'TBD',address:'Frisco Square Blvd, Frisco TX',contact:'TBD',status:'Not Visited',notes:'Mixed-use downtown hub. High foot traffic events.',agent:''},
   {id:'co45',name:'Legacy West Plano',type:'business',city:'Plano',phone:'TBD',address:'7700 Windrose Ave, Plano TX 75024',contact:'TBD',status:'Not Visited',notes:'Major business/retail district. Corporate campuses.',agent:''},
-  {id:'co46',name:'The Star in Frisco (Dallas Cowboys HQ)',type:'business',city:'Frisco',phone:'214-919-8900',address:'One Cowboys Way, Frisco TX 75034',contact:'TBD',status:'Not Visited',notes:'Events, community programs. Massive foot traffic.',agent:''}
+  {id:'co46',name:'The Star in Frisco (Dallas Cowboys HQ)',type:'business',city:'Frisco',phone:'214-919-8900',address:'One Cowboys Way, Frisco TX 75034',contact:'TBD',status:'Not Visited',notes:'Events, community programs. Massive foot traffic.',agent:''},
+  /* Phase 253 (2026-06-02) — CPR class outreach events. User: "We
+     actually hold CPR class once a month. There are two locations.
+     We need two cards (one per location) for tracking purposes —
+     when a referral or logged patient picks community outreach as
+     the source, they pick which CPR class card. One card with two
+     addresses wouldn't let us tell which location generated the
+     patient." Both held AT the corresponding ICCOTX ER facility.
+     noMapPin: true means these don't render on the route-planner
+     map (they're added to the schedule manually only — outreach
+     pins are already barred from corridor / pick-and-plan per
+     Phase 241 so no route-planner constraint conflict). */
+  {id:'co_cpr_frisco',name:'CPR Class · Frisco ER',type:'cpr',city:'Frisco',phone:'',address:'12600 Rolater Rd, Suite 120, Frisco, TX 75035',contact:'',status:'Not Visited',notes:'Monthly community CPR class held at Frisco ER. Add to schedule manually.',agent:'',recurring:'monthly',noMapPin:true},
+  {id:'co_cpr_carrollton',name:'CPR Class · Castle Hills ER',type:'cpr',city:'Carrollton',phone:'',address:'4228 N. Josey Lane, Carrollton, TX 75010',contact:'',status:'Not Visited',notes:'Monthly community CPR class held at Castle Hills ER (Carrollton). Add to schedule manually.',agent:'',recurring:'monthly',noMapPin:true}
 ];
 
 var OUTREACH_STATUSES = ['Not Visited','Visited','Contacted','Interested','Meeting Set','Partnered','Not Interested'];
 var OUTREACH_TYPES = {
   chamber:'Chamber',mosque:'Mosque',temple:'Temple',church:'Church',
   synagogue:'Synagogue',school:'School',fire:'Fire Dept',police:'Police',
-  hoa:'HOA',nonprofit:'Nonprofit',business:'Business',other:'Other'
+  hoa:'HOA',nonprofit:'Nonprofit',business:'Business',
+  cpr:'CPR Class',  /* Phase 253 — monthly CPR events held at ICCOTX ERs */
+  other:'Other'
 };
 var OUTREACH_TYPE_COLORS = {
   chamber:'#1F3864',mosque:'#065f46',temple:'#b45309',church:'#0369a1',
   synagogue:'#92400e',school:'#5b21b6',fire:'#dc2626',police:'#1e40af',
-  hoa:'#374151',nonprofit:'#7030A0',business:'#166534',other:'#6c757d'
+  hoa:'#374151',nonprofit:'#7030A0',business:'#166534',
+  cpr:'#be185d',  /* Phase 253 — pink/rose for CPR/medical-education */
+  other:'#6c757d'
 };
 
 // ── COMMUNITY-OUTREACH CATEGORIES ─────────────────────────────────────────
@@ -31069,7 +31086,14 @@ function renderAllBusinessPins(){
     MVA_ATTORNEYS.forEach(function(m){ if(m && m.firm) addPin(m.firm, 'mva', _BIZ_LAYER_MVA); });
   }
   if(typeof OUTREACH !== 'undefined' && _BIZ_LAYER_VISIBLE.outreach){
-    OUTREACH.forEach(function(o){ if(o && o.name) addPin(o.name, 'outreach', _BIZ_LAYER_OUTREACH); });
+    /* Phase 253 (2026-06-02) — entries with noMapPin:true are excluded
+       from the map (CPR class cards specifically). They still appear
+       in the OUTREACH bank, dropdowns, and schedule manually. */
+    OUTREACH.forEach(function(o){
+      if(!o || !o.name) return;
+      if(o.noMapPin) return;
+      addPin(o.name, 'outreach', _BIZ_LAYER_OUTREACH);
+    });
   }
 }
 window.renderAllBusinessPins = renderAllBusinessPins;
