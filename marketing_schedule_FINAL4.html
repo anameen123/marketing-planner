@@ -559,24 +559,18 @@ textarea.rnotes:focus{border-color:var(--purple);outline:none}
 /* Add Event Modal */
 .evt-input{width:100%;border:1px solid var(--border);border-radius:8px;padding:8px 11px;font-size:12px;font-family:'DM Sans',sans-serif;outline:none;color:var(--text)}
 .evt-input:focus{border-color:var(--purple);box-shadow:0 0 0 3px rgba(112,48,160,.1)}
-/* ── MARQUEE AUTO-SCROLL (Coming Events + Observances) ────────────────
-   Continuous vertical loop, no scrollbar visible. Pauses on hover so the
-   user can read. The list is rendered TWICE inside .marquee-list and we
-   animate translateY(0) → -50%, which lands the second copy exactly where
-   the first one started — a seamless tape loop. Animation duration is set
-   per render based on item count so long lists scroll proportionally. */
-@keyframes marqueeScrollUp{
-  from { transform: translateY(0); }
-  to   { transform: translateY(-50%); }
-}
+/* Phase 260 (2026-06-02): the previous "marquee auto-scroll" tape-loop
+   approach was the source of two user-reported bugs:
+     (1) both lists silently drifted UP until they appeared empty
+         (translateY 0 → -50% animation on a duplicated list);
+     (2) wheel scroll didn't work on Observances because the parent
+         had `overflow:hidden !important` to hide the tape-loop edges.
+   Per user 2026-06-02: stop auto-scrolling, restore real scrolling. We
+   keep the .marquee-list selector as a non-animated identity so any
+   leftover renderer using the class still lays out correctly (display
+   flex+column with no transform). */
 .marquee-list{
   display:flex; flex-direction:column;
-  animation: marqueeScrollUp 30s linear infinite;
-  will-change: transform;
-}
-#events-list:hover .marquee-list,
-#observances-list:hover .marquee-list{
-  animation-play-state: paused;
 }
 /* Temporary highlight applied to a day-table row when admin clicks "Edit" on
    a spending entry in the Finances log — pulses a few times then fades out
@@ -616,9 +610,12 @@ textarea.rnotes:focus{border-color:var(--purple);outline:none}
 }
 
 /* ── COMING EVENTS — orange theme + clickable reminder UI ────────────── */
+/* Phase 260 (2026-06-02): swapped `overflow:hidden !important` back to
+   real wheel-scrollable overflow so the user can actually scroll the
+   list with the mouse wheel or touchpad. The previous setting was paired
+   with the now-removed marquee tape loop. */
 #events-list, #observances-list{
-  /* Hide the native scrollbar — the marquee handles vertical motion. */
-  overflow:hidden !important; position:relative;
+  overflow-y:auto !important; overflow-x:hidden; position:relative;
 }
 #events-list .event-item{
   background:#fff7ed;border:1px solid #fed7aa;border-left:4px solid #f97316;
@@ -50199,12 +50196,10 @@ function renderEvents(){
         +'</div>';
   }).join('');
 
-  // Wrap in marquee container — duplicate items so the scroll loops seamlessly.
-  // Animation duration scales with the number of items (more items → longer).
-  var dur = Math.max(20, Math.min(80, upcoming.length * 5));
-  el.innerHTML = '<div class="marquee-list" style="animation-duration:'+dur+'s">'
-               + itemsHtml + itemsHtml
-               + '</div>';
+  // Phase 260 (2026-06-02): plain list — no marquee tape loop, no
+  // duplicated items. The parent #events-list is now overflow-y:auto so
+  // wheel scroll works naturally.
+  el.innerHTML = itemsHtml;
 
   // NEXT UP scroll
   var evtFirstUpcoming=document.getElementById('evt-next-up');
@@ -51639,11 +51634,10 @@ function renderObservances(){
       + '</div>';
   }).join('');
 
-  // Wrap in marquee container — duplicate items so the scroll loops seamlessly.
-  var dur = Math.max(20, Math.min(80, visible.length * 5));
-  el.innerHTML = '<div class="marquee-list" style="animation-duration:'+dur+'s">'
-               + itemsHtml + itemsHtml
-               + '</div>';
+  // Phase 260 (2026-06-02): plain list — no marquee, no duplicated items.
+  // The parent #observances-list is now overflow-y:auto so wheel scroll
+  // works exactly like Coming Events above it.
+  el.innerHTML = itemsHtml;
 
   var nb=document.getElementById('obs-next-up');
   if(nb&&visible.length>0){
@@ -51790,43 +51784,13 @@ window.openConfirmDialog=openConfirmDialog;
 window.closeConfirmDialog=closeConfirmDialog;
 window.executeConfirm=executeConfirm;
 
-// ── SELF-SCROLLING TICKER (events + observances) ─────────────────────────
-// Slowly scrolls each panel downward through its 30-day items, then loops
-// back to the top. Pauses while the user hovers, so they can read or use
-// the edge-hover scroll without fighting it.
-(function(){
-  function makeAutoScroller(elId){
-    return function(){
-      var el = document.getElementById(elId);
-      if(!el) return;
-      var paused = false;
-      el.addEventListener('mouseenter', function(){ paused = true;  });
-      el.addEventListener('mouseleave', function(){ paused = false; });
-      setInterval(function(){
-        if(paused) return;
-        var maxScroll = el.scrollHeight - el.clientHeight;
-        if(maxScroll <= 0) return;        // list fits — no scroll needed
-        el.scrollTop += 1;                // 1 px per tick
-        if(el.scrollTop >= maxScroll){
-          paused = true;
-          setTimeout(function(){
-            el.scrollTop = 0;
-            paused = false;
-          }, 2500);                       // 2.5-sec pause at the bottom before looping
-        }
-      }, 100);                            // ~10 px/sec
-    };
-  }
-  function start(){
-    makeAutoScroller('events-list')();
-    makeAutoScroller('observances-list')();
-  }
-  if(document.readyState === 'loading'){
-    document.addEventListener('DOMContentLoaded', start);
-  } else {
-    start();
-  }
-})();
+// Phase 260 (2026-06-02): self-scrolling ticker for events + observances
+// is disabled. The user explicitly asked that the lists STOP creeping
+// upward on their own. Both lists are now plain overflow-y:auto and
+// scroll only when the user spins the wheel / drags / uses the hover-edge
+// helper below. The original makeAutoScroller setInterval(1px/100ms) was
+// the second source of the unwanted upward drift (the CSS marquee was
+// the first; both are gone now).
 
 // ── HOVER-EDGE AUTO-SCROLL ───────────────────────────────────────────────
 // Attaches to a scrollable list. When the cursor enters the top or bottom
