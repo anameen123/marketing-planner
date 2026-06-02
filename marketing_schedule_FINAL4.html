@@ -57974,34 +57974,163 @@ function _phase176RenderFacility(facKey){
     +   _phase176CounterCard('This month', counters.month, '#7030A0', '📆')
     +   _phase176CounterCard('All-time',  counters.total, '#1F3864', '∑')
     + '</div>'
-    // Chart card
-    + '<div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:18px;box-shadow:0 1px 3px rgba(15,23,42,.04)">'
-    +   '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px">'
-    +     '<div style="font-size:13px;font-weight:700;color:var(--text)">📊 Patients logged at ' + safeName + '</div>'
-    +     '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">'
-    +       _phase176WindowChip('1m', '1 month')
-    +       _phase176WindowChip('3m', '3 months')
-    +       _phase176WindowChip('6m', '6 months')
-    +       _phase176WindowChip('1y', '1 year')
-    +       '<span style="width:1px;height:18px;background:var(--border);margin:0 4px"></span>'
-    +       _phase176TypeChip('bar', '▮▮ Bar')
-    +       _phase176TypeChip('line', '╱╲ Line')
-    +     '</div>'
-    +   '</div>'
-    +   '<svg id="phase176-chart-svg" width="100%" height="220" style="display:block;overflow:visible"></svg>'
-    + '</div>'
-    // Recent patient list
-    + '<div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px;box-shadow:0 1px 3px rgba(15,23,42,.04)">'
-    +   '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'
-    +     '<div style="font-size:13px;font-weight:700;color:var(--text)">📋 Recent patients · ' + safeName + '</div>'
-    +     '<div style="font-size:10px;color:var(--muted)">Newest first · click a row to open the patient card</div>'
-    +   '</div>'
-    +   _phase176RecentList(entries)
-    + '</div>';
+    // Phase 233 — sub-tab strip: Overview (chart) vs History (filterable patient list).
+    + _phase233SubTabStrip(facKey)
+    // Phase 233 — overview pane (chart card)
+    + (_phase233CurrentSubTab() === 'overview'
+        ? ('<div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:18px;box-shadow:0 1px 3px rgba(15,23,42,.04)">'
+            +   '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px">'
+            +     '<div style="font-size:13px;font-weight:700;color:var(--text)">📊 Patients logged at ' + safeName + '</div>'
+            +     '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">'
+            +       _phase176WindowChip('1m', '1 month')
+            +       _phase176WindowChip('3m', '3 months')
+            +       _phase176WindowChip('6m', '6 months')
+            +       _phase176WindowChip('1y', '1 year')
+            +       '<span style="width:1px;height:18px;background:var(--border);margin:0 4px"></span>'
+            +       _phase176TypeChip('bar', '▮▮ Bar')
+            +       _phase176TypeChip('line', '╱╲ Line')
+            +     '</div>'
+            +   '</div>'
+            +   '<svg id="phase176-chart-svg" width="100%" height="220" style="display:block;overflow:visible"></svg>'
+            + '</div>')
+        : '')
+    // Phase 233 — history pane (date filter + filtered patient list)
+    + (_phase233CurrentSubTab() === 'history'
+        ? _phase233HistoryPaneHtml(entries, safeName, facKey)
+        : '');
   host.innerHTML = html;
-  // Draw the chart after the DOM is settled
-  setTimeout(function(){ try { _phase176DrawChart(entries); } catch(e){ console.warn('[176] chart draw failed:', e); } }, 30);
+  // Draw the chart only when overview tab is showing.
+  if(_phase233CurrentSubTab() === 'overview'){
+    setTimeout(function(){ try { _phase176DrawChart(entries); } catch(e){ console.warn('[176] chart draw failed:', e); } }, 30);
+  }
 }
+
+/* Phase 233 (2026-06-02) — Overview / History sub-tab system for the
+   Locations facility pages. User: "for this recent patients put it in
+   a separate tab inside each location and call it history. Add date
+   filter as well for it." Each facility tab now hosts two sub-tabs:
+
+     📊 Overview — the existing chart card + window/range chips
+     📋 History  — the recent-patients table + date-range filter
+
+   Sub-tab + filter state lives on window so re-renders preserve it. */
+window._phase233FacSubTab    = window._phase233FacSubTab    || 'overview';
+window._phase233FacHistFrom  = window._phase233FacHistFrom  || '';
+window._phase233FacHistTo    = window._phase233FacHistTo    || '';
+function _phase233CurrentSubTab(){
+  return window._phase233FacSubTab === 'history' ? 'history' : 'overview';
+}
+function _phase233SubTabStrip(facKey){
+  var cur = _phase233CurrentSubTab();
+  function tab(key, label, icon){
+    var active = (cur === key);
+    var bg = active ? '#1F3864' : '#fff';
+    var fg = active ? '#fff' : '#475569';
+    var bd = active ? '#1F3864' : 'var(--border)';
+    return '<button type="button" onclick="_phase233SetSubTab(\'' + key + '\')" style="background:' + bg + ';color:' + fg + ';border:1px solid ' + bd + ';border-radius:8px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">' + icon + ' ' + label + '</button>';
+  }
+  return '<div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap">'
+    + tab('overview', 'Overview', '📊')
+    + tab('history',  'History',  '📋')
+    + '</div>';
+}
+function _phase233SetSubTab(key){
+  if(key !== 'overview' && key !== 'history') return;
+  window._phase233FacSubTab = key;
+  if(typeof _phase176RenderFacility === 'function'){
+    _phase176RenderFacility(window._phase176LastFacility);
+  }
+}
+function _phase233SetHistDateRange(which, val){
+  /* which = 'from' | 'to' | 'clear' */
+  if(which === 'clear'){
+    window._phase233FacHistFrom = '';
+    window._phase233FacHistTo   = '';
+  } else if(which === 'from'){
+    window._phase233FacHistFrom = val || '';
+  } else if(which === 'to'){
+    window._phase233FacHistTo = val || '';
+  }
+  if(typeof _phase176RenderFacility === 'function'){
+    _phase176RenderFacility(window._phase176LastFacility);
+  }
+}
+function _phase233HistoryPaneHtml(entries, safeName, facKey){
+  /* Apply the date filter to the entries before rendering. */
+  var from = window._phase233FacHistFrom;
+  var to   = window._phase233FacHistTo;
+  var filtered = entries.filter(function(e){
+    var iso = e.entryDate || (e.ts ? String(e.ts).slice(0, 10) : '');
+    if(!iso) return false;
+    if(from && iso < from) return false;
+    if(to   && iso > to)   return false;
+    return true;
+  });
+  var matchCount = filtered.length;
+  var summary = (from || to)
+    ? ('Showing ' + matchCount + ' of ' + entries.length + ' · ' + (from || '…') + ' → ' + (to || '…'))
+    : (matchCount + ' total · all dates');
+  var clearBtn = (from || to)
+    ? '<button onclick="_phase233SetHistDateRange(\'clear\')" style="background:#fff;border:1px solid var(--border);border-radius:6px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;color:#64748b">× Clear filter</button>'
+    : '';
+  return '<div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px;box-shadow:0 1px 3px rgba(15,23,42,.04)">'
+    +   '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:10px">'
+    +     '<div>'
+    +       '<div style="font-size:13px;font-weight:700;color:var(--text)">📋 History · ' + safeName + '</div>'
+    +       '<div style="font-size:10px;color:var(--muted);margin-top:2px">Newest first · click a row to open the patient card</div>'
+    +     '</div>'
+    +     '<div style="font-size:10.5px;font-weight:700;color:#475569">' + summary + '</div>'
+    +   '</div>'
+    +   '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px 12px;background:#f8fafc;border:1px solid var(--border);border-radius:8px;margin-bottom:12px">'
+    +     '<div style="font-size:10.5px;font-weight:800;color:#1F3864;text-transform:uppercase;letter-spacing:.04em">📅 Date range</div>'
+    +     '<label style="font-size:10.5px;color:#475569;font-weight:700">From</label>'
+    +     '<input type="date" value="' + (from || '') + '" onchange="_phase233SetHistDateRange(\'from\', this.value)" style="border:1px solid var(--border);border-radius:6px;padding:5px 9px;font-size:11.5px;font-family:DM Sans,sans-serif">'
+    +     '<label style="font-size:10.5px;color:#475569;font-weight:700">To</label>'
+    +     '<input type="date" value="' + (to || '') + '" onchange="_phase233SetHistDateRange(\'to\', this.value)" style="border:1px solid var(--border);border-radius:6px;padding:5px 9px;font-size:11.5px;font-family:DM Sans,sans-serif">'
+    +     clearBtn
+    +   '</div>'
+    +   _phase233FullList(filtered)
+    + '</div>';
+}
+/* Phase 233 — history list. Same row layout as _phase176RecentList but
+   shows the FULL filtered set (no 15-row cap) and a clearer empty state. */
+function _phase233FullList(entries){
+  if(!entries || entries.length === 0){
+    return '<div style="padding:24px 12px;text-align:center;color:var(--muted);font-style:italic;font-size:12px">No patients match the selected date range. Adjust the From / To dates above.</div>';
+  }
+  var sorted = entries.slice().sort(function(a, b){
+    var aT = a.ts || a.entryDate || '';
+    var bT = b.ts || b.entryDate || '';
+    return bT.localeCompare(aT);
+  });
+  function esc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
+  var rows = sorted.map(function(e, i){
+    var when = e.entryDate || (e.ts ? String(e.ts).slice(0,10) : '—');
+    var time = e.entryTime || (e.ts ? new Date(e.ts).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}) : '');
+    var src = e.sourceBusiness || e.sourceChannel || '—';
+    var member = e.memberName || (e.noMarketingRep ? '🚫 None' : '—');
+    var safeId = String(e.id).replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    var bg = (i % 2 === 0) ? '#fff' : '#fafbfc';
+    return '<tr onclick="if(typeof openReferralCard === \'function\') openReferralCard(\'' + safeId + '\')" style="background:' + bg + ';border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s" onmouseover="this.style.background=\'#f1f5f9\'" onmouseout="this.style.background=\'' + bg + '\'">'
+      + '<td style="padding:8px 10px;font-family:DM Mono,monospace;font-size:11px;color:#1F3864;white-space:nowrap">' + esc(when) + '</td>'
+      + '<td style="padding:8px 10px;font-size:11px;color:var(--muted);white-space:nowrap">' + esc(time) + '</td>'
+      + '<td style="padding:8px 10px;font-size:12px;color:var(--text);max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(src).replace(/"/g,'&quot;') + '">' + esc(src) + '</td>'
+      + '<td style="padding:8px 10px;font-size:11px;color:var(--muted)">' + esc(member) + '</td>'
+      + '</tr>';
+  }).join('');
+  return '<div style="overflow:auto;max-height:560px;border:1px solid var(--border);border-radius:8px"><table style="width:100%;border-collapse:collapse;font-family:DM Sans,sans-serif">'
+    + '<thead><tr style="background:#1F3864;border-bottom:2px solid #1F3864;position:sticky;top:0;z-index:1">'
+    +   '<th style="padding:8px 10px;text-align:left;font-size:10px;font-weight:700;color:#fff;text-transform:uppercase;letter-spacing:.04em">Date</th>'
+    +   '<th style="padding:8px 10px;text-align:left;font-size:10px;font-weight:700;color:#fff;text-transform:uppercase;letter-spacing:.04em">Time</th>'
+    +   '<th style="padding:8px 10px;text-align:left;font-size:10px;font-weight:700;color:#fff;text-transform:uppercase;letter-spacing:.04em">Source</th>'
+    +   '<th style="padding:8px 10px;text-align:left;font-size:10px;font-weight:700;color:#fff;text-transform:uppercase;letter-spacing:.04em">Marketer</th>'
+    + '</tr></thead>'
+    + '<tbody>' + rows + '</tbody>'
+    + '</table></div>';
+}
+window._phase233SetSubTab          = _phase233SetSubTab;
+window._phase233SetHistDateRange   = _phase233SetHistDateRange;
+window._phase233CurrentSubTab      = _phase233CurrentSubTab;
 window._phase176RenderFacility = _phase176RenderFacility;
 
 function _phase176CounterCard(label, value, color, icon){
