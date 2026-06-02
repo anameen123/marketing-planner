@@ -54135,28 +54135,19 @@ function _phase226ResolveAddTarget(){
   return _phase220MemberCtx();
 }
 /* Build the admin-only filter chip strip. Hidden for non-admin. */
-/* Phase 226 + 236 (2026-06-02) — admin filter is now a checkbox list per
-   user: "it should be in a checkbox next to each member's name, or one
-   to select all and show all of their activities."
+/* Phase 226 + 236 + 239 (2026-06-02) — admin filter as a compact
+   COLLAPSED dropdown per user: "it should be a dropdown list not full
+   filter only for the card." The chip strip used to take up a fat
+   horizontal band even when closed. Now the card shows a single thin
+   summary line and the checkbox list only reveals when clicked.
 
-   Layout:
-     ☑ Select all          ← top row, master toggle
-     ─────────────────
-     ☐ Sarah Connor
-     ☑ Mike Rodriguez
-     ☑ Maria Garcia
-     ...
-
-   "Select all" is checked when no member-specific filter is active
-   (i.e. _phase226GetFilter() returns []). Checking individual members
-   removes the all-mode and switches to a curated list. Unchecking
-   the last individual checkbox falls back to "Select all". */
+   Uses <details>/<summary> so state survives without JS: open is the
+   user's explicit action, closed is default. The summary line keeps
+   the headline ("showing 2 of 5") visible at a glance. */
 function _phase226BuildFilterChipsHtml(prefix){
   if(!_phase223IsAdmin()) return '';
   var selected = _phase226GetFilter();
   var members  = _phase226AllKnownMembers();
-  /* Augment roster with team MEMBERS so admin can pre-pick someone
-     who hasn't logged anything yet. */
   try {
     if(typeof MEMBERS !== 'undefined' && Array.isArray(MEMBERS)){
       MEMBERS.forEach(function(m){
@@ -54167,33 +54158,35 @@ function _phase226BuildFilterChipsHtml(prefix){
   } catch(_){}
   var allActive = selected.length === 0;
   var summary = allActive
-    ? 'showing ALL ' + members.length + ' members'
-    : 'showing ' + selected.length + ' of ' + members.length;
-  var cbStyle = function(checked, color){
-    return 'display:flex;align-items:center;gap:8px;padding:6px 10px;background:'
-      + (checked ? '#fff' : 'rgba(255,255,255,.55)')
-      + ';border:1px solid ' + (checked ? color : '#fde68a')
-      + ';border-radius:7px;cursor:pointer;font-size:11.5px;font-weight:'
+    ? 'ALL ' + members.length + ' members'
+    : selected.length + ' of ' + members.length + ': ' + selected.slice(0, 3).join(', ') + (selected.length > 3 ? '…' : '');
+  var safeSummary = String(summary).replace(/</g, '&lt;');
+  var cbRowStyle = function(checked, color){
+    return 'display:flex;align-items:center;gap:7px;padding:5px 9px;background:'
+      + (checked ? '#fff' : 'transparent')
+      + ';border:1px solid ' + (checked ? color : 'transparent')
+      + ';border-radius:6px;cursor:pointer;font-size:11.5px;font-weight:'
       + (checked ? '800' : '600')
-      + ';color:#1F3864;font-family:DM Sans,sans-serif;user-select:none;transition:background .12s';
+      + ';color:#1F3864;font-family:DM Sans,sans-serif;user-select:none';
   };
-  var html = '<div style="margin-bottom:10px;padding:10px 12px;background:#fef3c7;border:1px solid #fcd34d;border-radius:10px;font-family:DM Sans,sans-serif">'
-    + '<div style="font-size:10.5px;font-weight:800;color:#92400e;margin-bottom:8px;letter-spacing:.04em;display:flex;align-items:center;gap:6px;flex-wrap:wrap">'
-    +   '<span>👑 ADMIN FILTER · side activities</span>'
-    +   '<span style="color:#a16207;font-weight:700">· ' + summary + '</span>'
-    + '</div>';
-  /* Master "Select all" checkbox. */
-  html += '<label style="' + cbStyle(allActive, '#1F3864') + ';margin-bottom:6px">'
-    +   '<input type="checkbox" ' + (allActive ? 'checked' : '') + ' onchange="_phase226ToggleFilter(\'\', \'\')" style="width:16px;height:16px;cursor:pointer;accent-color:#1F3864">'
+  var html = '<details style="margin-bottom:10px;background:#fef3c7;border:1px solid #fcd34d;border-radius:10px;font-family:DM Sans,sans-serif">'
+    + '<summary style="cursor:pointer;padding:9px 12px;list-style:none;display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
+    +   '<span style="font-size:10.5px;font-weight:800;color:#92400e;letter-spacing:.04em">👑 ADMIN FILTER · side activities</span>'
+    +   '<span style="font-size:10.5px;color:#a16207;font-weight:700">· showing ' + safeSummary + '</span>'
+    +   '<span style="margin-left:auto;font-size:10px;color:#a16207;font-style:italic">click to change</span>'
+    + '</summary>'
+    + '<div style="padding:0 12px 12px">'
+    + '<label style="' + cbRowStyle(allActive, '#1F3864') + ';margin-bottom:5px;border-color:' + (allActive ? '#1F3864' : '#fde68a') + ';background:' + (allActive ? '#fff' : 'rgba(255,255,255,.55)') + '">'
+    +   '<input type="checkbox" ' + (allActive ? 'checked' : '') + ' onchange="_phase226ToggleFilter(\'\', \'\')" style="width:15px;height:15px;cursor:pointer;accent-color:#1F3864">'
     +   '<span>Select all members</span>'
     + '</label>';
   if(members.length){
-    html += '<div style="height:1px;background:#fde68a;margin:6px 0"></div>'
-      + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:5px">';
+    html += '<div style="height:1px;background:#fde68a;margin:5px 0"></div>'
+      + '<div style="display:flex;flex-direction:column;gap:3px">';
     members.forEach(function(m){
       var active = selected.indexOf(m) !== -1;
       var esc = String(m).replace(/'/g, "\\'").replace(/</g, '&lt;');
-      html += '<label style="' + cbStyle(active, '#7c3aed') + '">'
+      html += '<label style="' + cbRowStyle(active, '#7c3aed') + ';background:' + (active ? '#fff' : 'transparent') + '">'
         +   '<input type="checkbox" ' + (active ? 'checked' : '') + ' onchange="_phase226ToggleFilter(\'' + esc + '\', \'\')" style="width:15px;height:15px;cursor:pointer;accent-color:#7c3aed">'
         +   '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc + '</span>'
         + '</label>';
@@ -54202,7 +54195,7 @@ function _phase226BuildFilterChipsHtml(prefix){
   } else {
     html += '<div style="font-size:10.5px;color:#92400e;font-style:italic;padding:4px 2px">No members yet — they\'ll appear here once they log their first activity.</div>';
   }
-  html += '</div>';
+  html += '</div></details>';
   return html;
 }
 function _phase226ToggleFilter(member, prefix){
