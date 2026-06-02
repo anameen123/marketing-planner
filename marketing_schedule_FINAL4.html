@@ -53237,23 +53237,65 @@ function _phase185RenderCounters(){
 window._phase185RenderCounters = _phase185RenderCounters;
 
 // Simple SVG renderers — keep it scrappy, no library. Visits per area = bar chart.
+/* Phase 228 (2026-06-02) — Visits-per-area is now a DONUT chart per user
+   ("we need a donut for the breakdown for the areas"). Honors the
+   monthly switcher because d comes from _phase185CurrentMonthData
+   which already scopes to _PERF_MONTH.y/m. Top 10 areas; rest rolled
+   into "Other". */
 function _phase185RenderAreaChart(d){
   var svg = document.getElementById('perf-area-svg');
   if(!svg) return;
   var entries = Object.keys(d.byArea).map(function(k){ return { area: k, count: d.byArea[k] }; })
-                                     .sort(function(a, b){ return b.count - a.count; })
-                                     .slice(0, 10);
-  if(!entries.length){ svg.innerHTML = '<text x="50%" y="50%" text-anchor="middle" fill="#94a3b8" font-size="11" font-family="DM Sans,sans-serif">No visits this month</text>'; return; }
-  var w = 600, h = 180, pad = 70;
-  var max = Math.max.apply(null, entries.map(function(e){ return e.count; }));
-  var barH = (h - pad) / entries.length - 4;
+                                     .sort(function(a, b){ return b.count - a.count; });
+  if(!entries.length){
+    svg.setAttribute('viewBox', '0 0 600 220');
+    svg.innerHTML = '<text x="50%" y="50%" text-anchor="middle" fill="#94a3b8" font-size="11" font-family="DM Sans,sans-serif">No visits this month</text>';
+    return;
+  }
+  /* Cap top 10; aggregate the tail into "Other". */
+  var top = entries.slice(0, 10);
+  var tail = entries.slice(10);
+  if(tail.length){
+    var otherSum = tail.reduce(function(a, b){ return a + b.count; }, 0);
+    if(otherSum > 0) top.push({ area: 'Other (' + tail.length + ')', count: otherSum });
+  }
+  var palette = ['#1F3864', '#7c3aed', '#16a34a', '#d97706', '#0891b2', '#dc2626', '#0ea5e9', '#a855f7', '#65a30d', '#f59e0b', '#94a3b8'];
+  var total = top.reduce(function(a, b){ return a + b.count; }, 0);
+  /* Geometry: donut on the left, legend on the right. */
+  var w = 600, h = 220, cx = 110, cy = 110, rO = 95, rI = 55;
+  function pol(cx, cy, r, deg){ var rad = (deg - 90) * Math.PI / 180; return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) }; }
+  function arc(startDeg, endDeg, color){
+    if(endDeg - startDeg >= 359.999) endDeg = startDeg + 359.999;
+    var p1 = pol(cx, cy, rO, startDeg), p2 = pol(cx, cy, rO, endDeg);
+    var p3 = pol(cx, cy, rI, endDeg),   p4 = pol(cx, cy, rI, startDeg);
+    var large = (endDeg - startDeg) > 180 ? 1 : 0;
+    var dPath = 'M' + p1.x + ',' + p1.y
+             + ' A' + rO + ',' + rO + ' 0 ' + large + ' 1 ' + p2.x + ',' + p2.y
+             + ' L' + p3.x + ',' + p3.y
+             + ' A' + rI + ',' + rI + ' 0 ' + large + ' 0 ' + p4.x + ',' + p4.y
+             + ' Z';
+    return '<path d="' + dPath + '" fill="' + color + '" stroke="#fff" stroke-width="1.5"/>';
+  }
   var parts = ['<g font-family="DM Sans,sans-serif">'];
-  entries.forEach(function(e, i){
-    var y = 10 + i * (barH + 4);
-    var bw = ((w - pad - 20) * (e.count / max));
-    parts.push('<rect x="' + pad + '" y="' + y + '" width="' + bw + '" height="' + barH + '" fill="#1F3864" rx="3"/>');
-    parts.push('<text x="' + (pad - 8) + '" y="' + (y + barH/2 + 4) + '" text-anchor="end" font-size="10" fill="#0f172a">' + (e.area.length > 14 ? e.area.slice(0,12) + '…' : e.area) + '</text>');
-    parts.push('<text x="' + (pad + bw + 6) + '" y="' + (y + barH/2 + 4) + '" font-size="10" font-weight="700" fill="#1F3864">' + e.count + '</text>');
+  var deg = 0;
+  top.forEach(function(e, i){
+    var slice = (e.count / total) * 360;
+    parts.push(arc(deg, deg + slice, palette[i % palette.length]));
+    deg += slice;
+  });
+  /* Center caption: total visits this month. */
+  parts.push('<text x="' + cx + '" y="' + (cy - 4) + '" text-anchor="middle" font-size="22" font-weight="800" fill="#1F3864">' + total + '</text>');
+  parts.push('<text x="' + cx + '" y="' + (cy + 14) + '" text-anchor="middle" font-size="9" fill="#64748b" text-transform="uppercase" letter-spacing="0.05em">visit(s)</text>');
+  /* Legend on the right. */
+  var legendX = cx + rO + 30;
+  top.forEach(function(e, i){
+    var ly = 16 + i * 17;
+    if(ly > h - 12) return;  /* clip if too many */
+    var pct = total > 0 ? Math.round((e.count / total) * 100) : 0;
+    parts.push('<rect x="' + legendX + '" y="' + (ly - 9) + '" width="11" height="11" rx="2" fill="' + palette[i % palette.length] + '"/>');
+    var labelTxt = e.area.length > 22 ? e.area.slice(0, 20) + '…' : e.area;
+    parts.push('<text x="' + (legendX + 17) + '" y="' + ly + '" font-size="11" fill="#0f172a">' + labelTxt + '</text>');
+    parts.push('<text x="' + (w - 12) + '" y="' + ly + '" text-anchor="end" font-size="11" font-weight="700" fill="#1F3864" font-family="DM Mono,monospace">' + e.count + ' · ' + pct + '%</text>');
   });
   parts.push('</g>');
   svg.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
