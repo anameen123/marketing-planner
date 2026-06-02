@@ -2620,6 +2620,20 @@ button:not([disabled]):not(.no-press):active {
       </div>
     </details>
 
+    <!-- Phase 251 (2026-06-02) — OK.docx #30: daily completed visits
+         per member for the selected month. Shows each day of the
+         current month as a bar/dot; user can spot the days they're
+         improving on vs the weekend dips. -->
+    <details class="perf-chart-block" open style="margin-bottom:12px">
+      <summary style="cursor:pointer;font-size:13px;font-weight:700;color:var(--text);padding:8px 0;list-style:none;display:flex;align-items:center;gap:6px">
+        <span style="font-size:11px">▾</span> 📅 Daily completed visits · this month <span id="perf-daily-visits-total" style="font-size:11px;color:var(--muted);font-weight:500;margin-left:auto"></span>
+      </summary>
+      <div style="font-size:10px;color:var(--muted);margin:6px 0;font-style:italic">Day-by-day completed-visits trend for the current calendar month. Weekends will usually drop to 0; the chart highlights the days you're picking up the pace.</div>
+      <div style="background:#fafbfc;border-radius:8px;padding:10px;border:1px solid var(--border);margin-top:8px">
+        <svg id="perf-daily-visits-svg" width="100%" height="220" style="display:block;overflow:visible"></svg>
+      </div>
+    </details>
+
     <!-- Side activities calendar — Phase 185 (NEW). Members log manual
          activities by day; admin sees everyone's. Compact + expandable.
          Renderer set up below; storage in wcg_side_activities_v1 -->
@@ -53961,6 +53975,85 @@ window._phase185RenderLeadsChart     = _phase185RenderLeadsChart;
 window._phase185RenderReferralsChart = _phase185RenderReferralsChart;
 window._ph250CollectRefsDaily        = _ph250CollectRefsDaily;
 
+/* ── Phase 251 (2026-06-02) — OK.docx #30: daily completed-visits chart
+   for the current member, this calendar month. Scans S.days for the
+   month's rows where status === 'Completed' AND the member matches
+   currentMember. Buckets per day. */
+function _phase251RenderDailyVisitsChart(){
+  var svg = document.getElementById('perf-daily-visits-svg');
+  if(!svg) return;
+  var memberName = (typeof currentMember !== 'undefined' && currentMember) ? currentMember : null;
+  var now = new Date();
+  var y = now.getFullYear(), mo = now.getMonth();
+  var daysInMonth = new Date(y, mo+1, 0).getDate();
+  var perDay = [];
+  for(var d = 1; d <= daysInMonth; d++){ perDay.push({ day: d, count: 0 }); }
+  if(typeof S !== 'undefined' && S && Array.isArray(S.days)){
+    S.days.forEach(function(day){
+      if(!day || !day.date) return;
+      var iso = day.date;
+      if(iso.slice(0, 4) != y || parseInt(iso.slice(5, 7), 10) - 1 !== mo) return;
+      var dom = parseInt(iso.slice(8, 10), 10);
+      if(!dom) return;
+      (day.rows || []).forEach(function(r){
+        if(!r || !r.clinic || r.status !== 'Completed') return;
+        if(memberName){
+          var inRow = (r.member === memberName);
+          if(!inRow && Array.isArray(r.coMembers) && r.coMembers.indexOf(memberName) >= 0) inRow = true;
+          if(!inRow) return;
+        }
+        perDay[dom - 1].count++;
+      });
+    });
+  }
+  var grand = perDay.reduce(function(s, p){ return s + p.count; }, 0);
+  var lblEl = document.getElementById('perf-daily-visits-total');
+  if(lblEl){
+    var monthName = new Date(y, mo, 1).toLocaleDateString('en-US', { month:'long' });
+    lblEl.textContent = grand + ' completed · ' + monthName;
+  }
+  var w = 600, h = 220, padL = 36, padR = 14, padT = 24, padB = 30;
+  var innerW = w - padL - padR, innerH = h - padT - padB;
+  var maxV = Math.max.apply(null, perDay.map(function(p){ return p.count; }).concat([5]));
+  var parts = ['<g font-family="DM Sans,sans-serif">'];
+  /* Grid + Y axis. */
+  for(var t = 0; t <= 4; t++){
+    var v = Math.round((t / 4) * maxV);
+    var yPx = padT + innerH - (t / 4) * innerH;
+    parts.push('<line x1="' + padL + '" y1="' + yPx + '" x2="' + (w - padR) + '" y2="' + yPx + '" stroke="#e2e8f0" stroke-width="1"/>');
+    parts.push('<text x="' + (padL - 6) + '" y="' + (yPx + 3) + '" text-anchor="end" font-size="9" fill="#94a3b8" font-family="DM Mono,monospace">' + v + '</text>');
+  }
+  var stepX = innerW / daysInMonth;
+  /* Bars — purple gradient. */
+  perDay.forEach(function(p, i){
+    var x = padL + i * stepX + stepX * 0.18;
+    var barW = stepX * 0.64;
+    var barH = (p.count / maxV) * innerH;
+    var yPx = padT + innerH - barH;
+    if(p.count > 0){
+      parts.push('<rect x="' + x + '" y="' + yPx + '" width="' + barW + '" height="' + barH + '" fill="#7c3aed" rx="2"><title>Day ' + p.day + ': ' + p.count + '</title></rect>');
+      if(p.count >= maxV * 0.7){
+        parts.push('<text x="' + (x + barW/2) + '" y="' + (yPx - 4) + '" text-anchor="middle" font-size="9" font-weight="700" fill="#7c3aed">' + p.count + '</text>');
+      }
+    }
+    /* X-axis label: every 5th day. */
+    if(p.day % 5 === 0 || p.day === 1 || p.day === daysInMonth){
+      parts.push('<text x="' + (x + barW/2) + '" y="' + (h - padB + 14) + '" text-anchor="middle" font-size="9" fill="#94a3b8" font-family="DM Mono,monospace">' + p.day + '</text>');
+    }
+  });
+  /* Today marker. */
+  if(now.getMonth() === mo && now.getFullYear() === y){
+    var todayDom = now.getDate();
+    var tx = padL + (todayDom - 1) * stepX + stepX * 0.5;
+    parts.push('<line x1="' + tx + '" y1="' + padT + '" x2="' + tx + '" y2="' + (h - padB) + '" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="3,3"/>');
+    parts.push('<text x="' + tx + '" y="' + (padT - 6) + '" text-anchor="middle" font-size="9" font-weight="700" fill="#f59e0b">TODAY</text>');
+  }
+  parts.push('</g>');
+  svg.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
+  svg.innerHTML = parts.join('');
+}
+window._phase251RenderDailyVisitsChart = _phase251RenderDailyVisitsChart;
+
 // ── Side activities (NEW Phase 185) ────────────────────────────────────────
 // Stored per-member in wcg_side_activities_v1: { memberName: { 'YYYY-MM-DD': [ { id, title, notes, ts } ] } }
 var _SA_KEY = 'wcg_side_activities_v1';
@@ -55235,6 +55328,8 @@ function _phase185RefreshPerf(){
   _phase185RenderAreaChart(d);
   _phase185RenderLeadsChart(d);
   _phase185RenderReferralsChart(d);
+  /* Phase 251 — daily completed visits chart for this month. */
+  try { _phase251RenderDailyVisitsChart(); } catch(_){}
   _phase185RenderSideActivities();
   _phase185RenderEmptyHint(d);
   // Also let the legacy Monthly Completion Ratio block re-render itself
