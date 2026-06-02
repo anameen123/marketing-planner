@@ -53566,6 +53566,140 @@ window._phase225ModeIsPlanning      = _phase225ModeIsPlanning;
 window._phase225CanEditPlanAware    = _phase225CanEditPlanAware;
 window._phase225CanAddOrPlanOn      = _phase225CanAddOrPlanOn;
 
+/* Phase 226 (2026-06-02) — per-member access + admin filter.
+   User: "each member can add or edit or delete (take action on those
+   activities of himself or herself). No one have access to the others.
+   For the admin I will have access and filter to show for all or for
+   each of them or for more than one inside the same filter on the
+   side activities."
+
+   Rules:
+   - Non-admin: can only see/act on their own activities. Defensive
+     checks added on save/edit/delete reject any cross-member attempt
+     even if the DOM was tampered with.
+   - Admin: sees all activities. Multi-select filter chip strip above
+     both side-activity surfaces lets admin pick: ALL / one member /
+     multiple members. Filter persists in localStorage so it survives
+     reloads. */
+function _phase226FilterStorageKey(){ return 'wcg_side_activities_filter_v1'; }
+function _phase226GetFilter(){
+  try {
+    var raw = localStorage.getItem(_phase226FilterStorageKey());
+    if(!raw) return [];
+    var arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
+  } catch(_){ return []; }
+}
+function _phase226SetFilter(arr){
+  try { localStorage.setItem(_phase226FilterStorageKey(), JSON.stringify(arr || [])); } catch(_){}
+}
+/* All known members with at least one stored activity. Used to build
+   the filter chip strip — only members who actually appear in storage
+   show up so the chips stay relevant. */
+function _phase226AllKnownMembers(){
+  try {
+    var all = _phase185LoadSideActivities();
+    return Object.keys(all || {}).sort();
+  } catch(_){ return []; }
+}
+/* Visible members for the current viewer:
+     - non-admin → [self]
+     - admin with empty filter → all known members
+     - admin with filter → filter contents */
+function _phase226VisibleMembers(){
+  if(_phase223IsAdmin()){
+    var f = _phase226GetFilter();
+    if(!f.length) return _phase226AllKnownMembers();
+    return f;
+  }
+  var n = (typeof CURRENT_USER !== 'undefined' && CURRENT_USER && CURRENT_USER.name) || null;
+  return n ? [n] : [];
+}
+/* Strict per-member access gate. Returns true iff the current user is
+   allowed to add/edit/delete an activity for memberName. Admin always
+   passes; non-admin only passes for their own name. */
+function _phase226CanActOn(memberName){
+  if(_phase223IsAdmin()) return true;
+  if(typeof CURRENT_USER === 'undefined' || !CURRENT_USER) return false;
+  return CURRENT_USER.name === memberName;
+}
+/* Determine the target member when the admin clicks "+ Add". If the
+   filter has exactly one member selected, target that. Else fall
+   back to the admin's own bucket so the modal doesn't reject — admin
+   can switch the filter to single-select to add for someone else. */
+function _phase226ResolveAddTarget(){
+  if(_phase223IsAdmin()){
+    var f = _phase226GetFilter();
+    if(f.length === 1) return f[0];
+  }
+  /* Fall through to the existing context helper. */
+  return _phase220MemberCtx();
+}
+/* Build the admin-only filter chip strip. Hidden for non-admin. */
+function _phase226BuildFilterChipsHtml(prefix){
+  if(!_phase223IsAdmin()) return '';
+  var selected = _phase226GetFilter();
+  var members  = _phase226AllKnownMembers();
+  var allActive = selected.length === 0;
+  var safePrefix = String(prefix || 'dv').replace(/[^a-z0-9]/gi, '');
+  var html = '<div style="margin-bottom:10px;padding:8px 11px;background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;font-family:DM Sans,sans-serif">'
+    + '<div style="font-size:10.5px;font-weight:800;color:#92400e;margin-bottom:6px;letter-spacing:.04em">👑 ADMIN FILTER · side activities · ' + (allActive ? 'showing ALL members' : 'showing ' + selected.length + ' selected') + '</div>'
+    + '<div style="display:flex;flex-wrap:wrap;gap:4px">';
+  html += '<button onclick="_phase226ToggleFilter(\'\', \'' + safePrefix + '\')" style="background:' + (allActive ? '#1F3864' : '#fff') + ';color:' + (allActive ? '#fff' : '#1F3864') + ';border:1px solid #1F3864;border-radius:99px;padding:3px 12px;font-size:10.5px;font-weight:700;cursor:pointer">All members</button>';
+  members.forEach(function(m){
+    var active = selected.indexOf(m) !== -1;
+    var esc = String(m).replace(/'/g, "\\'").replace(/</g, '&lt;');
+    html += '<button onclick="_phase226ToggleFilter(\'' + esc + '\', \'' + safePrefix + '\')" style="background:' + (active ? '#7c3aed' : '#fff') + ';color:' + (active ? '#fff' : '#1F3864') + ';border:1px solid #7c3aed;border-radius:99px;padding:3px 10px;font-size:10.5px;font-weight:700;cursor:pointer">' + esc + '</button>';
+  });
+  html += '</div></div>';
+  return html;
+}
+function _phase226ToggleFilter(member, prefix){
+  var sel = _phase226GetFilter();
+  if(!member){
+    sel = [];                        /* "All" → clear */
+  } else {
+    var i = sel.indexOf(member);
+    if(i >= 0) sel.splice(i, 1);
+    else sel.push(member);
+  }
+  _phase226SetFilter(sel);
+  /* Re-render whichever surface triggered this. */
+  try {
+    if(typeof _phase220RenderDayViewPanel === 'function' && typeof S !== 'undefined' && S.currentDay != null){
+      _phase220RenderDayViewPanel(S.currentDay);
+    }
+  } catch(_){}
+  try {
+    if(typeof _phase185RenderSideActivities === 'function') _phase185RenderSideActivities();
+  } catch(_){}
+}
+/* Collect activities across visible members for a given dateIso.
+   Each row gets a synthetic `_owner` field so the renderer can show
+   who owns it (useful when admin is viewing multi). */
+function _phase226CollectActsForDay(dateIso){
+  var all = _phase185LoadSideActivities();
+  var members = _phase226VisibleMembers();
+  var out = [];
+  members.forEach(function(m){
+    var bucket = (all && all[m]) || {};
+    var acts = bucket[dateIso] || [];
+    acts.forEach(function(a){
+      out.push(Object.assign({}, a, { _owner: m }));
+    });
+  });
+  return out;
+}
+window._phase226GetFilter             = _phase226GetFilter;
+window._phase226SetFilter             = _phase226SetFilter;
+window._phase226ToggleFilter          = _phase226ToggleFilter;
+window._phase226VisibleMembers        = _phase226VisibleMembers;
+window._phase226CanActOn              = _phase226CanActOn;
+window._phase226ResolveAddTarget      = _phase226ResolveAddTarget;
+window._phase226BuildFilterChipsHtml  = _phase226BuildFilterChipsHtml;
+window._phase226CollectActsForDay     = _phase226CollectActsForDay;
+window._phase226AllKnownMembers       = _phase226AllKnownMembers;
+
 /* Format an HH:MM 24h string into "h:MM AM/PM" for display. */
 function _phase220FmtTime(hhmm){
   if(!hhmm) return '';
@@ -53752,6 +53886,21 @@ function _phase220SaveModal(){
       alert('Start and end times are required to mark this activity completed.');
       return;
     }
+    /* Phase 226 — same-day rule: end time must be strictly AFTER start
+       time. HTML <input type="time"> values are 24h "HH:MM" so a plain
+       string compare works for same-day ordering. */
+    if(end <= start){
+      alert('End time must be after start time (same day).');
+      return;
+    }
+  }
+  /* Phase 226 — defensive per-member gate: only act on activities
+     belonging to the current user (or admin). Catches any DOM
+     tampering / console call from a member targeting someone else's
+     bucket. */
+  if(!_phase226CanActOn(member)){
+    alert('You can only add, edit, or delete your own side activities.');
+    return;
   }
   /* Phase 221 + 222 + 223 + 225 — defensive backstops with admin bypass.
        Future dates: allowed (planning).
@@ -53823,14 +53972,39 @@ window._phase220SaveModal = _phase220SaveModal;
 /* Click an existing activity → edit it. Read the stored row first.
    Phase 222 — if the 1-day edit window has closed, refuse politely and
    stay put (no modal opens). _phase220OpenAddModal also re-checks, but
-   bailing here avoids opening the modal only to slam it shut. */
+   bailing here avoids opening the modal only to slam it shut.
+   Phase 226 — if admin is viewing multi (filter selects others), scan
+   every visible member's bucket to find the hit. Non-admin only ever
+   searches their own bucket. */
 function _phase220EditActivity(dateIso, id){
-  var member = _phase220MemberCtx();
-  if(!member) return;
   var all = _phase185LoadSideActivities();
-  var arr = (all[member] && all[member][dateIso]) || [];
-  var hit = arr.find(function(a){ return a.id === id; });
+  var members = _phase226VisibleMembers();
+  var hit = null;
+  var ownerMember = null;
+  for(var i = 0; i < members.length; i++){
+    var m = members[i];
+    var arr = (all[m] && all[m][dateIso]) || [];
+    var found = arr.find(function(a){ return a.id === id; });
+    if(found){ hit = found; ownerMember = m; break; }
+  }
+  if(!hit){
+    /* Fallback to the single-member context for back-compat with callers
+       that opened the panel under the legacy path. */
+    var ctx = _phase220MemberCtx();
+    if(ctx){
+      var bucket = (all[ctx] && all[ctx][dateIso]) || [];
+      hit = bucket.find(function(a){ return a.id === id; }) || null;
+      ownerMember = ctx;
+    }
+  }
   if(!hit) return;
+  /* Phase 226 — per-member access. Only the owner (or admin) can edit. */
+  if(!_phase226CanActOn(ownerMember)){
+    var pmMsg = 'You can only edit your own side activities.';
+    if(typeof showToast === 'function') showToast(pmMsg);
+    else alert(pmMsg);
+    return;
+  }
   /* Phase 223 + 224 — admin bypasses the lock. Non-admin blocked with toast. */
   if(!_phase223CanEditActivity(hit)){
     var msg = 'This activity is locked — it belongs to a past week and can no longer be changed.';
@@ -53838,7 +54012,14 @@ function _phase220EditActivity(dateIso, id){
     else alert(msg);
     return;
   }
+  /* Stash the resolved owner so SaveModal writes to the correct bucket. */
+  var m2 = document.getElementById('ph220-sa-modal');
+  if(m2) m2.dataset.member = ownerMember;
   _phase220OpenAddModal(dateIso, hit);
+  /* OpenAddModal also writes dataset.member from _phase220MemberCtx() —
+     overwrite it back to the resolved owner. */
+  var m3 = document.getElementById('ph220-sa-modal');
+  if(m3) m3.dataset.member = ownerMember;
 }
 window._phase220EditActivity = _phase220EditActivity;
 
@@ -53850,14 +54031,35 @@ function _phase185AddSideActivity(dateIso){
 window._phase185AddSideActivity = _phase185AddSideActivity;
 
 function _phase185DeleteSideActivity(dateIso, id){
-  /* Phase 222 — verify the 1-day edit window is still open BEFORE the
-     confirm dialog. After (activity.date + 1 day) the row is locked
-     and even delete is denied. */
-  var member = _phase220MemberCtx();
-  if(!member) return;
+  /* Phase 222 + 226 — scan visible members to find the row's owner,
+     then verify per-member access + edit window before confirming. */
   var all = _phase185LoadSideActivities();
-  var arr = (all[member] && all[member][dateIso]) || [];
-  var target = arr.find(function(a){ return a.id === id; });
+  var members = _phase226VisibleMembers();
+  var target = null;
+  var ownerMember = null;
+  for(var i = 0; i < members.length; i++){
+    var m = members[i];
+    var arr = (all[m] && all[m][dateIso]) || [];
+    var found = arr.find(function(a){ return a.id === id; });
+    if(found){ target = found; ownerMember = m; break; }
+  }
+  if(!target){
+    /* Back-compat fallback to single-member context. */
+    var ctx = _phase220MemberCtx();
+    if(ctx){
+      var bucket = (all[ctx] && all[ctx][dateIso]) || [];
+      target = bucket.find(function(a){ return a.id === id; }) || null;
+      ownerMember = ctx;
+    }
+  }
+  if(!target || !ownerMember) return;
+  /* Phase 226 — per-member access. Only owner (or admin) can delete. */
+  if(!_phase226CanActOn(ownerMember)){
+    var pmMsg = 'You can only delete your own side activities.';
+    if(typeof showToast === 'function') showToast(pmMsg);
+    else alert(pmMsg);
+    return;
+  }
   /* Phase 223 + 224 — admin always allowed to delete (even locked rows).
      Non-admin blocked once the week ends. */
   if(target && !_phase223CanEditActivity(target)){
@@ -53867,9 +54069,9 @@ function _phase185DeleteSideActivity(dateIso, id){
     return;
   }
   if(!confirm('Delete this activity?')) return;
-  if(all[member] && all[member][dateIso]){
-    all[member][dateIso] = all[member][dateIso].filter(function(a){ return a.id !== id; });
-    if(!all[member][dateIso].length) delete all[member][dateIso];
+  if(all[ownerMember] && all[ownerMember][dateIso]){
+    all[ownerMember][dateIso] = all[ownerMember][dateIso].filter(function(a){ return a.id !== id; });
+    if(!all[ownerMember][dateIso].length) delete all[ownerMember][dateIso];
   }
   _phase185SaveSideActivities(all);
   try { if(typeof _phase185RenderSideActivities === 'function') _phase185RenderSideActivities(); } catch(_){}
@@ -53900,14 +54102,18 @@ function _phase220RenderDayViewPanel(di){
   var day = S.days[di]; if(!day || !day.date){ panel.style.display = 'none'; return; }
   panel.style.display = '';
   var dateIso = day.date;
-  var member = _phase220MemberCtx();
-  if(!member){
+  /* Phase 226 — admin sees multi-member filter; non-admin sees their own.
+     The base "context member" is used for header labeling and the + Add
+     button target; the visibleMembers list drives what gets rendered. */
+  var ctxMember = _phase220MemberCtx();
+  if(!ctxMember && !_phase223IsAdmin()){
     panel.innerHTML = '<div style="font-size:13px;font-weight:700;color:var(--text)">📋 Side activities</div>'
       + '<div style="font-size:11px;color:var(--muted);margin-top:6px;font-style:italic">Sign in or open a member profile to view + add side activities for this day.</div>';
     return;
   }
-  var all = _phase185LoadSideActivities();
-  var acts = (all[member] && all[member][dateIso]) || [];
+  var acts = _phase226CollectActsForDay(dateIso);
+  var visibleMembers = _phase226VisibleMembers();
+  var isMultiView = _phase223IsAdmin() && visibleMembers.length > 1;
   function esc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
   var listHtml;
   if(acts.length === 0){
@@ -53945,9 +54151,13 @@ function _phase220RenderDayViewPanel(di){
       if(!_ph224Editable){ cardBg = '#f8fafc'; cardBorder = '#e2e8f0'; cardEdge = '#94a3b8'; }
       else if(_ph225Pending){ cardBg = '#fffbeb'; cardBorder = '#fde68a'; cardEdge = '#f59e0b'; }
       else { cardBg = '#faf5ff'; cardBorder = '#ddd6fe'; cardEdge = '#7c3aed'; }
+      /* Phase 226 — show the owner's name when admin is viewing multi. */
+      var ownerTag = (isMultiView && a._owner)
+        ? '<div style="display:inline-block;background:#1F3864;color:#fff;font-size:9px;font-weight:800;padding:1px 6px;border-radius:99px;margin-left:6px;letter-spacing:.04em;vertical-align:middle">👤 ' + esc(a._owner) + '</div>'
+        : '';
       return '<div style="background:' + cardBg + ';border:1px solid ' + cardBorder + ';border-left:3px solid ' + cardEdge + ';border-radius:8px;padding:9px 12px;margin-bottom:6px;display:flex;align-items:flex-start;gap:8px">'
         +    '<div style="flex:1;min-width:0">'
-        +      '<div style="font-size:12px;font-weight:700;color:var(--text);line-height:1.3">' + esc(a.title) + statusBadge + '</div>'
+        +      '<div style="font-size:12px;font-weight:700;color:var(--text);line-height:1.3">' + esc(a.title) + statusBadge + ownerTag + '</div>'
         +      (timeRange ? '<div style="font-size:10.5px;color:' + cardEdge + ';font-weight:700;margin-top:2px">⏱ ' + esc(timeRange) + '</div>' : (_ph225Pending ? '<div style="font-size:10.5px;color:#92400e;font-weight:700;margin-top:2px;font-style:italic">⏱ time to be added on confirm</div>' : ''))
         +      (a.notes ? '<div style="font-size:11px;color:var(--muted);margin-top:3px;line-height:1.4">' + esc(a.notes) + '</div>' : '')
         +      overrideChip
@@ -53970,10 +54180,21 @@ function _phase220RenderDayViewPanel(di){
   } else {
     addBtnHtml = '<button onclick="_phase220OpenAddModal(\'' + dateIso + '\', null)" style="background:linear-gradient(135deg,#7c3aed,#1F3864);color:#fff;border:none;border-radius:7px;padding:7px 14px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">+ Add activity</button>';
   }
+  /* Phase 226 — admin filter chip strip above the header. */
+  var filterChipsHtml = _phase226BuildFilterChipsHtml('dv');
+  var headerLabel;
+  if(isMultiView){
+    headerLabel = '📋 Side activities · ' + visibleMembers.length + ' members';
+  } else if(visibleMembers.length === 1){
+    headerLabel = '📋 Side activities · ' + esc(visibleMembers[0]);
+  } else {
+    headerLabel = '📋 Side activities';
+  }
   panel.innerHTML = ''
+    + filterChipsHtml
     + '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px">'
     +   '<div>'
-    +     '<div style="font-size:13px;font-weight:700;color:var(--text)">📋 Side activities · ' + esc(member) + '</div>'
+    +     '<div style="font-size:13px;font-weight:700;color:var(--text)">' + headerLabel + '</div>'
     +     '<div style="font-size:10.5px;color:var(--muted);margin-top:2px">Synced with the Performance-tab calendar · ' + acts.length + ' on this day</div>'
     +   '</div>'
     +   addBtnHtml
@@ -54011,9 +54232,44 @@ function _phase185RenderSideActivities(){
   var firstDow = new Date(y, mo, 1).getDay();
   var daysInMonth = new Date(y, mo+1, 0).getDate();
   var all = _phase185LoadSideActivities();
-  var mine = (typeof currentMember !== 'undefined' && currentMember && all[currentMember]) ? all[currentMember] : {};
+  /* Phase 226 — admin merges across visible members; non-admin and
+     non-dashboard contexts continue to use currentMember (the profile
+     being viewed). For admin on a member's profile, currentMember IS
+     that profile's owner — we keep that scoping; admin gets the
+     filter chips on the dashboard surface instead. */
+  var _ph226IsAdmin = _phase223IsAdmin();
+  var _ph226Filter  = _phase226GetFilter();
+  var visibleMembersPerf;
+  if(typeof currentMember !== 'undefined' && currentMember){
+    visibleMembersPerf = [currentMember];
+  } else if(_ph226IsAdmin){
+    visibleMembersPerf = _ph226Filter.length ? _ph226Filter : _phase226AllKnownMembers();
+  } else {
+    visibleMembersPerf = [];
+  }
+  /* Merge buckets across visible members for the calendar. Each row
+     gets a synthetic `_owner` field so badges can tag who owns it. */
+  function _ph226Merged(){
+    var out = {};
+    visibleMembersPerf.forEach(function(m){
+      var b = all[m] || {};
+      Object.keys(b).forEach(function(d){
+        if(!out[d]) out[d] = [];
+        (b[d] || []).forEach(function(a){
+          out[d].push(Object.assign({}, a, { _owner: m }));
+        });
+      });
+    });
+    return out;
+  }
+  var mine = _ph226Merged();
+  var isMultiViewPerf = _ph226IsAdmin && visibleMembersPerf.length > 1 && !currentMember;
   var pad = function(n){ return n < 10 ? '0' + n : '' + n; };
-  var html = '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;font-family:DM Sans,sans-serif;font-size:11px">';
+  /* Phase 226 — filter chips above the grid. Hidden when currentMember
+     is set (we're on a single member's profile — the filter would be
+     confusing context noise). */
+  var filterChipsHtmlPerf = (!currentMember) ? _phase226BuildFilterChipsHtml('perf') : '';
+  var html = filterChipsHtmlPerf + '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;font-family:DM Sans,sans-serif;font-size:11px">';
   ['S','M','T','W','T','F','S'].forEach(function(d){
     html += '<div style="text-align:center;font-weight:700;color:var(--muted);padding:4px 0;font-size:10px;text-transform:uppercase;letter-spacing:.05em">' + d + '</div>';
   });
@@ -54058,7 +54314,9 @@ function _phase185RenderSideActivities(){
         ? ' · ✏ admin: ' + String(a._adminOverride.by).replace(/"/g, '&quot;')
         : '';
       var statusTip = _ph225BadgePending ? ' · ⏳ pending' : '';
-      var tooltip = tooltipBase + statusTip + overrideTip + (_ph225BadgeEditable ? (_ph225BadgePending ? ' (click to confirm/edit)' : ' (click to edit)') : ' · 🔒 locked');
+      /* Phase 226 — show owner in tooltip when admin is viewing multi. */
+      var ownerTip = (isMultiViewPerf && a._owner) ? ' · 👤 ' + String(a._owner).replace(/"/g, '&quot;') : '';
+      var tooltip = tooltipBase + ownerTip + statusTip + overrideTip + (_ph225BadgeEditable ? (_ph225BadgePending ? ' (click to confirm/edit)' : ' (click to edit)') : ' · 🔒 locked');
       /* Phase 225 — amber for pending, purple for completed, slate for locked. */
       var badgeBg;
       if(!_ph225BadgeEditable) badgeBg = '#94a3b8';
