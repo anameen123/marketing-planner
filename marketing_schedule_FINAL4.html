@@ -58281,14 +58281,52 @@ function _phase234TodayIso(){
   var d = new Date(); var p = function(n){ return n < 10 ? '0' + n : n; };
   return d.getFullYear() + '-' + p(d.getMonth()+1) + '-' + p(d.getDate());
 }
+/* Phase 242 (2026-06-02) — third mode: "Day". Locks the filter to
+   exactly one day with ◀ / ▶ arrows to step forward/back. Default
+   picked day is today. User: "add an arrow to switch between days
+   to move between days from day to the next one." */
+window._phase234DayPicked = window._phase234DayPicked || _phase234TodayIso();
 function _phase234SetMode(mode){
-  if(mode !== 'range' && mode !== 'specific') return;
+  if(mode !== 'range' && mode !== 'specific' && mode !== 'day') return;
   window._phase234FilterMode = mode;
-  /* Reset the other mode's selection so they don't shadow each other. */
-  if(mode === 'range'){ window._phase234SpecificDates = []; }
-  else                { window._phase234RangeStart = ''; window._phase234RangeEnd = ''; }
+  /* Reset other modes' selections so they don't shadow each other. */
+  if(mode === 'range'){
+    window._phase234SpecificDates = [];
+  } else if(mode === 'specific'){
+    window._phase234RangeStart = ''; window._phase234RangeEnd = '';
+  } else if(mode === 'day'){
+    window._phase234RangeStart = ''; window._phase234RangeEnd = '';
+    window._phase234SpecificDates = [];
+    /* Default to today; jump calendar view to today's month. */
+    if(!window._phase234DayPicked) window._phase234DayPicked = _phase234TodayIso();
+    var parts = window._phase234DayPicked.split('-');
+    window._phase234CalMonth = parts[0] + '-' + parts[1];
+  }
   if(typeof _phase176RenderFacility === 'function') _phase176RenderFacility(window._phase176LastFacility);
 }
+/* Step the day-mode selection ±1 day. Calendar view auto-flips months
+   when the new day crosses a month boundary. */
+function _phase234StepDay(delta){
+  if(window._phase234FilterMode !== 'day') _phase234SetMode('day');
+  var iso = window._phase234DayPicked || _phase234TodayIso();
+  var parts = iso.split('-');
+  var d = new Date(parseInt(parts[0],10), parseInt(parts[1],10) - 1, parseInt(parts[2],10));
+  d.setDate(d.getDate() + delta);
+  var p = function(n){ return n < 10 ? '0' + n : n; };
+  window._phase234DayPicked = d.getFullYear() + '-' + p(d.getMonth()+1) + '-' + p(d.getDate());
+  /* Re-anchor the calendar view to the picked day's month. */
+  window._phase234CalMonth = d.getFullYear() + '-' + p(d.getMonth()+1);
+  if(typeof _phase176RenderFacility === 'function') _phase176RenderFacility(window._phase176LastFacility);
+}
+function _phase234JumpToToday(){
+  window._phase234DayPicked = _phase234TodayIso();
+  var parts = window._phase234DayPicked.split('-');
+  window._phase234CalMonth = parts[0] + '-' + parts[1];
+  if(window._phase234FilterMode !== 'day') window._phase234FilterMode = 'day';
+  if(typeof _phase176RenderFacility === 'function') _phase176RenderFacility(window._phase176LastFacility);
+}
+window._phase234StepDay      = _phase234StepDay;
+window._phase234JumpToToday  = _phase234JumpToToday;
 function _phase234ChangeMonth(delta){
   var parts = String(window._phase234CalMonth).split('-');
   var d = new Date(parseInt(parts[0],10), parseInt(parts[1],10) - 1, 1);
@@ -58309,6 +58347,9 @@ function _phase234ClickCell(iso){
       if(iso < s){ window._phase234RangeEnd = s; window._phase234RangeStart = iso; }
       else       { window._phase234RangeEnd = iso; }
     }
+  } else if(window._phase234FilterMode === 'day'){
+    /* Day mode: clicking just snaps the picked day to whatever was clicked. */
+    window._phase234DayPicked = iso;
   } else {
     /* Specific mode: toggle in/out. */
     var arr = window._phase234SpecificDates || [];
@@ -58323,6 +58364,8 @@ function _phase234Clear(){
   window._phase234RangeStart    = '';
   window._phase234RangeEnd      = '';
   window._phase234SpecificDates = [];
+  /* Day mode doesn't really "clear" — reset to today. */
+  if(window._phase234FilterMode === 'day') window._phase234DayPicked = _phase234TodayIso();
   if(typeof _phase176RenderFacility === 'function') _phase176RenderFacility(window._phase176LastFacility);
 }
 function _phase234MatchesFilter(iso){
@@ -58332,6 +58375,10 @@ function _phase234MatchesFilter(iso){
     if(!s && !e) return true;       /* no filter set yet */
     if(s && !e)  return iso === s;  /* mid-pick: show only the anchor day */
     return iso >= s && iso <= e;
+  }
+  if(window._phase234FilterMode === 'day'){
+    /* Day mode: match exactly the picked day. */
+    return iso === (window._phase234DayPicked || _phase234TodayIso());
   }
   var arr = window._phase234SpecificDates || [];
   if(arr.length === 0) return true;
@@ -58354,7 +58401,15 @@ function _phase234BuildCalendar(){
     +     '<div style="font-size:12px;font-weight:800;color:#1F3864;min-width:140px;text-align:center">' + monthLabel + '</div>'
     +     '<button onclick="_phase234ChangeMonth(1)" style="background:#fff;border:1px solid var(--border);border-radius:6px;width:28px;height:28px;cursor:pointer;font-size:14px;color:#1F3864;font-weight:800">›</button>'
     +   '</div>'
-    +   '<div style="display:flex;gap:4px">'
+    +   '<div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">'
+    /* Phase 242 — Day-stepper arrows inline when in Day mode. ◀ / Today / ▶. */
+    +     (mode === 'day'
+        ? ('<button onclick="_phase234StepDay(-1)" title="Previous day" style="background:#fff;border:1px solid #16a34a;border-radius:6px;width:28px;height:28px;cursor:pointer;font-size:14px;color:#16a34a;font-weight:800">‹</button>'
+         + '<button onclick="_phase234JumpToToday()" title="Today" style="background:#fff;border:1px solid #16a34a;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;color:#16a34a;font-family:DM Sans,sans-serif">Today</button>'
+         + '<button onclick="_phase234StepDay(1)" title="Next day" style="background:#fff;border:1px solid #16a34a;border-radius:6px;width:28px;height:28px;cursor:pointer;font-size:14px;color:#16a34a;font-weight:800">›</button>'
+         + '<span style="width:1px;height:18px;background:var(--border);margin:0 4px"></span>')
+        : '')
+    +     '<button onclick="_phase234SetMode(\'day\')" style="background:' + (mode === 'day' ? '#16a34a' : '#fff') + ';color:' + (mode === 'day' ? '#fff' : '#475569') + ';border:1px solid #16a34a;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">📅 Day</button>'
     +     '<button onclick="_phase234SetMode(\'range\')" style="background:' + (mode === 'range' ? '#1F3864' : '#fff') + ';color:' + (mode === 'range' ? '#fff' : '#475569') + ';border:1px solid #1F3864;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">↔ Range</button>'
     +     '<button onclick="_phase234SetMode(\'specific\')" style="background:' + (mode === 'specific' ? '#7c3aed' : '#fff') + ';color:' + (mode === 'specific' ? '#fff' : '#475569') + ';border:1px solid #7c3aed;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">☑ Specific</button>'
     +   '</div>'
@@ -58379,6 +58434,10 @@ function _phase234BuildCalendar(){
       if(rs && !re && iso === rs) isAnchor = true;
       if(isAnchor){ bg = '#1F3864'; fg = '#fff'; bd = '#1F3864'; fw = '800'; }
       else if(inRange){ bg = '#dbeafe'; fg = '#1e3a8a'; bd = '#bfdbfe'; fw = '700'; }
+    } else if(mode === 'day'){
+      /* Phase 242 — green fill on the single picked day. */
+      var dp = window._phase234DayPicked || todayIso;
+      if(iso === dp){ bg = '#16a34a'; fg = '#fff'; bd = '#16a34a'; fw = '800'; }
     } else {
       if(specific.indexOf(iso) >= 0){ bg = '#7c3aed'; fg = '#fff'; bd = '#7c3aed'; fw = '800'; }
     }
@@ -58396,8 +58455,10 @@ function _phase233HistoryPaneHtml(entries, safeName, facKey){
   });
   var matchCount = filtered.length;
   var mode = window._phase234FilterMode;
+  /* Phase 242 — day mode is always filtering (one specific day). */
   var hasFilter = (mode === 'range' && (window._phase234RangeStart || window._phase234RangeEnd))
-               || (mode === 'specific' && (window._phase234SpecificDates || []).length > 0);
+               || (mode === 'specific' && (window._phase234SpecificDates || []).length > 0)
+               || (mode === 'day');
   var summary;
   if(!hasFilter){
     summary = matchCount + ' total · all dates';
@@ -58405,16 +58466,28 @@ function _phase233HistoryPaneHtml(entries, safeName, facKey){
     var rs = window._phase234RangeStart || '…';
     var re = window._phase234RangeEnd   || '…';
     summary = 'Showing ' + matchCount + ' of ' + entries.length + ' · ' + rs + ' → ' + re;
+  } else if(mode === 'day'){
+    var dp = window._phase234DayPicked || _phase234TodayIso();
+    var dpDate = new Date(dp + 'T12:00:00');
+    var nice = isNaN(dpDate.getTime()) ? dp : dpDate.toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric', year:'numeric' });
+    summary = 'Showing ' + matchCount + ' of ' + entries.length + ' · ' + nice;
   } else {
     var n = (window._phase234SpecificDates || []).length;
     summary = 'Showing ' + matchCount + ' of ' + entries.length + ' · ' + n + ' day' + (n === 1 ? '' : 's') + ' picked';
   }
-  var clearBtn = hasFilter
+  /* In day mode the ◀ / Today / ▶ stepper is the "reset", so don't show the
+     destructive Clear button there — would confuse with the Today shortcut. */
+  var clearBtn = (hasFilter && mode !== 'day')
     ? '<button onclick="_phase234Clear()" style="background:#fff;border:1px solid var(--border);border-radius:6px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;color:#991b1b">× Clear filter</button>'
     : '';
-  var hint = (mode === 'range')
-    ? 'Click a day to set <b>start</b>, click another to set <b>end</b>. Click anywhere else to reset.'
-    : 'Click any day to add or remove it from the selection.';
+  var hint;
+  if(mode === 'range'){
+    hint = 'Click a day to set <b>start</b>, click another to set <b>end</b>. Click anywhere else to reset.';
+  } else if(mode === 'day'){
+    hint = 'Use <b>◀ / ▶</b> to step one day · click <b>Today</b> to jump back · click any day to snap to it.';
+  } else {
+    hint = 'Click any day to add or remove it from the selection.';
+  }
   return '<div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px;box-shadow:0 1px 3px rgba(15,23,42,.04)">'
     +   '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:10px">'
     +     '<div>'
