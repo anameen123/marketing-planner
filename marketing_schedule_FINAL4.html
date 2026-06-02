@@ -54059,6 +54059,85 @@ function _phase185AddSideActivity(dateIso){
 }
 window._phase185AddSideActivity = _phase185AddSideActivity;
 
+/* Phase 228 (2026-06-02) — multi-select bulk delete for side activities.
+   User: "we need to to have an option to edit or delete them. And to
+   multiple ones." A Set keyed by activity id tracks the current
+   selection in the day-view panel. Per-member access from Phase 226 is
+   re-checked at delete time so a non-admin can't bulk-delete someone
+   else's activities. */
+window._phase228Selected = window._phase228Selected || {};
+function _phase228IsSelected(id){ return !!window._phase228Selected[id]; }
+function _phase228ToggleSelected(id){
+  if(window._phase228Selected[id]) delete window._phase228Selected[id];
+  else window._phase228Selected[id] = true;
+  /* Refresh just the panel — no need to re-render the calendar. */
+  try {
+    if(typeof S !== 'undefined' && S.currentDay != null && typeof _phase220RenderDayViewPanel === 'function'){
+      _phase220RenderDayViewPanel(S.currentDay);
+    }
+  } catch(_){}
+}
+function _phase228ClearSelection(){
+  window._phase228Selected = {};
+  try {
+    if(typeof S !== 'undefined' && S.currentDay != null && typeof _phase220RenderDayViewPanel === 'function'){
+      _phase220RenderDayViewPanel(S.currentDay);
+    }
+  } catch(_){}
+}
+function _phase228SelectAllInDay(dateIso){
+  var acts = _phase226CollectActsForDay(dateIso);
+  acts.forEach(function(a){
+    /* Only select rows the user can actually act on. */
+    if(_phase226CanActOn(a._owner)) window._phase228Selected[a.id] = true;
+  });
+  try {
+    if(typeof S !== 'undefined' && S.currentDay != null && typeof _phase220RenderDayViewPanel === 'function'){
+      _phase220RenderDayViewPanel(S.currentDay);
+    }
+  } catch(_){}
+}
+function _phase228BulkDelete(dateIso){
+  var ids = Object.keys(window._phase228Selected || {});
+  if(!ids.length){
+    if(typeof showToast === 'function') showToast('Nothing selected.');
+    return;
+  }
+  if(!confirm('Delete ' + ids.length + ' selected activity(ies)?')) return;
+  var all = _phase185LoadSideActivities();
+  var members = _phase226VisibleMembers();
+  var deleted = 0, blocked = 0;
+  ids.forEach(function(id){
+    /* Find owner. */
+    var owner = null, target = null;
+    for(var i = 0; i < members.length; i++){
+      var arr = (all[members[i]] && all[members[i]][dateIso]) || [];
+      var found = arr.find(function(a){ return a.id === id; });
+      if(found){ owner = members[i]; target = found; break; }
+    }
+    if(!owner || !target){ return; }
+    if(!_phase226CanActOn(owner)){ blocked++; return; }
+    if(!_phase223CanEditActivity(target)){ blocked++; return; }
+    /* Delete. */
+    all[owner][dateIso] = (all[owner][dateIso] || []).filter(function(a){ return a.id !== id; });
+    if(!all[owner][dateIso].length) delete all[owner][dateIso];
+    deleted++;
+  });
+  _phase185SaveSideActivities(all);
+  window._phase228Selected = {};
+  if(typeof showToast === 'function'){
+    var msg = '✓ Deleted ' + deleted + ' activity(ies).';
+    if(blocked) msg += ' ' + blocked + ' blocked (not yours / locked).';
+    showToast(msg);
+  }
+  try { if(typeof _phase185RenderSideActivities === 'function') _phase185RenderSideActivities(); } catch(_){}
+  try { if(typeof _phase220RenderDayViewPanel === 'function' && typeof S !== 'undefined' && S.currentDay != null) _phase220RenderDayViewPanel(S.currentDay); } catch(_){}
+}
+window._phase228ToggleSelected   = _phase228ToggleSelected;
+window._phase228ClearSelection   = _phase228ClearSelection;
+window._phase228SelectAllInDay   = _phase228SelectAllInDay;
+window._phase228BulkDelete       = _phase228BulkDelete;
+
 function _phase185DeleteSideActivity(dateIso, id){
   /* Phase 222 + 226 — scan visible members to find the row's owner,
      then verify per-member access + edit window before confirming. */
@@ -54184,7 +54263,15 @@ function _phase220RenderDayViewPanel(di){
       var ownerTag = (isMultiView && a._owner)
         ? '<div style="display:inline-block;background:#1F3864;color:#fff;font-size:9px;font-weight:800;padding:1px 6px;border-radius:99px;margin-left:6px;letter-spacing:.04em;vertical-align:middle">👤 ' + esc(a._owner) + '</div>'
         : '';
+      /* Phase 228 — multi-select checkbox. Disabled if the user can't
+         act on this row (per-member access + edit-window). */
+      var _ph228CanAct = _phase226CanActOn(a._owner) && _ph224Editable;
+      var _ph228Checked = _phase228IsSelected(a.id);
+      var checkboxHtml = _ph228CanAct
+        ? '<input type="checkbox" ' + (_ph228Checked ? 'checked ' : '') + 'onchange="_phase228ToggleSelected(\'' + a.id + '\')" style="margin-top:2px;width:16px;height:16px;cursor:pointer;accent-color:#7c3aed">'
+        : '<span style="width:16px;height:16px;display:inline-block"></span>';
       return '<div style="background:' + cardBg + ';border:1px solid ' + cardBorder + ';border-left:3px solid ' + cardEdge + ';border-radius:8px;padding:9px 12px;margin-bottom:6px;display:flex;align-items:flex-start;gap:8px">'
+        +    checkboxHtml
         +    '<div style="flex:1;min-width:0">'
         +      '<div style="font-size:12px;font-weight:700;color:var(--text);line-height:1.3">' + esc(a.title) + statusBadge + ownerTag + '</div>'
         +      (timeRange ? '<div style="font-size:10.5px;color:' + cardEdge + ';font-weight:700;margin-top:2px">⏱ ' + esc(timeRange) + '</div>' : (_ph225Pending ? '<div style="font-size:10.5px;color:#92400e;font-weight:700;margin-top:2px;font-style:italic">⏱ time to be added on confirm</div>' : ''))
@@ -54209,6 +54296,24 @@ function _phase220RenderDayViewPanel(di){
   } else {
     addBtnHtml = '<button onclick="_phase220OpenAddModal(\'' + dateIso + '\', null)" style="background:linear-gradient(135deg,#7c3aed,#1F3864);color:#fff;border:none;border-radius:7px;padding:7px 14px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">+ Add activity</button>';
   }
+  /* Phase 228 — bulk-action toolbar when one or more rows selected. */
+  var selectedIds = Object.keys(window._phase228Selected || {});
+  /* Filter selectedIds to those visible on THIS day (to avoid showing
+     stale counts from another date). */
+  var todayIds = {};
+  acts.forEach(function(a){ todayIds[a.id] = true; });
+  var selectedHere = selectedIds.filter(function(id){ return todayIds[id]; });
+  var bulkToolbarHtml = '';
+  if(acts.length > 0){
+    bulkToolbarHtml = ''
+      + '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;padding:7px 11px;background:' + (selectedHere.length ? '#fef3c7' : '#f8fafc') + ';border:1px solid ' + (selectedHere.length ? '#fcd34d' : 'var(--border)') + ';border-radius:8px">'
+      +   '<div style="font-size:10.5px;font-weight:700;color:' + (selectedHere.length ? '#92400e' : '#64748b') + '">' + (selectedHere.length ? ('☑ ' + selectedHere.length + ' selected') : 'Tip: tick rows to bulk-delete') + '</div>'
+      +   '<div style="flex:1"></div>'
+      +   '<button onclick="_phase228SelectAllInDay(\'' + dateIso + '\')" style="background:#fff;border:1px solid var(--border);color:#1F3864;font-weight:700;font-size:10.5px;padding:4px 10px;border-radius:6px;cursor:pointer">☐→☑ Select all</button>'
+      +   (selectedHere.length ? '<button onclick="_phase228ClearSelection()" style="background:#fff;border:1px solid var(--border);color:#64748b;font-weight:700;font-size:10.5px;padding:4px 10px;border-radius:6px;cursor:pointer">Clear</button>' : '')
+      +   (selectedHere.length ? '<button onclick="_phase228BulkDelete(\'' + dateIso + '\')" style="background:linear-gradient(135deg,#dc2626,#991b1b);border:none;color:#fff;font-weight:700;font-size:10.5px;padding:5px 12px;border-radius:6px;cursor:pointer">🗑 Delete ' + selectedHere.length + '</button>' : '')
+      + '</div>';
+  }
   /* Phase 226 — admin filter chip strip above the header. */
   var filterChipsHtml = _phase226BuildFilterChipsHtml('dv');
   var headerLabel;
@@ -54228,6 +54333,7 @@ function _phase220RenderDayViewPanel(di){
     +   '</div>'
     +   addBtnHtml
     + '</div>'
+    + bulkToolbarHtml
     + listHtml;
 }
 window._phase220RenderDayViewPanel = _phase220RenderDayViewPanel;
