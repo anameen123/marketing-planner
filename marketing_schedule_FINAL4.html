@@ -56708,23 +56708,37 @@ function renderCounters(){
   var totalLeads=teamLeads;
   var monthLabel=MN[OVERVIEW_MONTH]+' '+OVERVIEW_YEAR;
 
-  // ── PIE CHART BUILDER ───────────────────────────────────────────────────
-  // SVG donut showing the 3 visit-status buckets as slices:
-  //   • Completed (green)  • Canceled (red)  • Leads (purple)
-  // The center caption shows the team's monthly Completion %, so the pie
-  // both compares the three counts AND surfaces the headline metric in one
-  // glance. When all three are zero we render a neutral grey ring with a
-  // friendly "no activity yet" hint instead of a broken pie.
-  var pieCompleted = teamCompleted, pieCanceled = teamCanceled, pieLeads = teamLeads;
-  var pieTotal = pieCompleted + pieCanceled + pieLeads;
-  // SVG geometry: cx=100, cy=100, outer r=95, inner r=58 → donut thickness 37
-  var cx = 100, cy = 100, rOuter = 95, rInner = 58;
+  // ── Phase 256 (2026-06-02) — Team Overview donuts rewritten ──────────
+  // User: "We don't need the completed and canceled [combined breakdown].
+  // We need the leads, the live monthly leads — live for the current
+  // month and fixed for the previous month. But it has to be one [donut]
+  // for the completed, one [donut] for the leads. And it will show the
+  // contributions in percentage and in numbers of each one of the members."
+  //
+  // The Canceled slice is gone. Now TWO donuts side-by-side:
+  //   1. 📊 Completed — per-member contribution slices
+  //   2. 🌟 Leads     — per-member contribution slices (live this month;
+  //                     past months are frozen from data already saved)
+  // Each donut center shows the team total for that metric. The legend
+  // below lists every member with their count and percentage.
+
+  // Per-member breakdowns for the displayed month.
+  var perMemberCompleted = {};
+  var perMemberLeads     = {};
+  MEMBERS.forEach(function(m){
+    perMemberCompleted[m] = ms[m].comp  || 0;
+    perMemberLeads[m]     = ms[m].leads || 0;
+  });
+  var totalCompleted = teamCompleted;
+  var totalLeadsAll  = teamLeads;
+
+  // SVG geometry (used by both donuts)
+  var cx = 100, cy = 100, rOuter = 78, rInner = 48;
   function _polarToCart(cx, cy, r, deg){
     var rad = (deg - 90) * Math.PI / 180;
     return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
   }
   function _donutArcPath(cx, cy, rO, rI, startDeg, endDeg){
-    // Guard against full-circle issues (SVG arc can't draw a 360° slice from one path).
     if(endDeg - startDeg >= 359.999) endDeg = startDeg + 359.999;
     var p1 = _polarToCart(cx, cy, rO, startDeg);
     var p2 = _polarToCart(cx, cy, rO, endDeg);
@@ -56737,43 +56751,60 @@ function renderCounters(){
             'A', rI, rI, 0, large, 0, p4.x.toFixed(2), p4.y.toFixed(2),
             'Z'].join(' ');
   }
-  var pieSlices = '';
-  if(pieTotal > 0){
-    var buckets = [
-      { value: pieCompleted, color: '#22c55e', label: 'Completed' },
-      { value: pieCanceled,  color: '#ef4444', label: 'Canceled'  },
-      { value: pieLeads,     color: '#7c3aed', label: 'Leads'     }
-    ];
-    var startDeg = 0;
-    buckets.forEach(function(b){
-      if(b.value <= 0) return; // skip empty slices entirely (no zero-width arcs)
-      var sweep = (b.value / pieTotal) * 360;
-      var endDeg = startDeg + sweep;
-      pieSlices += '<path d="' + _donutArcPath(cx, cy, rOuter, rInner, startDeg, endDeg) + '" fill="' + b.color + '" stroke="rgba(15,23,42,.35)" stroke-width="1"><title>' + b.label + ': ' + b.value + ' (' + Math.round((b.value/pieTotal)*100) + '%)</title></path>';
-      startDeg = endDeg;
+  // Build a per-member donut with center caption + legend.
+  function _ph256BuildContributionDonut(perMember, total, centerLabel){
+    var slices = '';
+    if(total > 0){
+      var startDeg = 0;
+      MEMBERS.forEach(function(m){
+        var v = perMember[m] || 0;
+        if(v <= 0) return;
+        var sweep = (v / total) * 360;
+        var endDeg = startDeg + sweep;
+        var color = MCOLORS[m] || '#94a3b8';
+        slices += '<path d="' + _donutArcPath(cx, cy, rOuter, rInner, startDeg, endDeg) + '" fill="' + color + '" stroke="rgba(15,23,42,.35)" stroke-width="1"><title>' + m + ': ' + v + ' (' + Math.round((v/total)*100) + '%)</title></path>';
+        startDeg = endDeg;
+      });
+    } else {
+      slices = '<path d="' + _donutArcPath(cx, cy, rOuter, rInner, 0, 359.999) + '" fill="rgba(255,255,255,.08)" stroke="rgba(255,255,255,.18)" stroke-width="1"></path>';
+    }
+    var centerSvg = '<text x="100" y="96" text-anchor="middle" font-size="28" font-weight="700" fill="#fff" font-family="DM Mono,monospace">' + total + '</text>'
+                  + '<text x="100" y="115" text-anchor="middle" font-size="8.5" font-weight="700" fill="rgba(255,255,255,.55)" letter-spacing="1.2" font-family="DM Sans,sans-serif">' + centerLabel + '</text>';
+    // Per-member legend rows.
+    var legend = '<div style="display:flex;flex-direction:column;gap:5px;margin-top:8px">';
+    MEMBERS.forEach(function(m){
+      var v = perMember[m] || 0;
+      var pct = (total > 0) ? Math.round((v / total) * 100) : 0;
+      var color = MCOLORS[m] || '#94a3b8';
+      legend += '<div style="display:flex;align-items:center;gap:6px;font-size:10.5px;color:#fff;line-height:1.1">'
+        +   '<span style="width:9px;height:9px;border-radius:50%;background:' + color + ';flex-shrink:0"></span>'
+        +   '<span style="opacity:.85;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">' + m + '</span>'
+        +   '<span style="font-family:DM Mono,monospace;font-weight:700">' + v + '</span>'
+        +   '<span style="font-family:DM Mono,monospace;color:rgba(255,255,255,.5);font-size:9.5px;min-width:28px;text-align:right">' + pct + '%</span>'
+        + '</div>';
     });
-  } else {
-    // Neutral empty-state ring
-    pieSlices = '<path d="' + _donutArcPath(cx, cy, rOuter, rInner, 0, 359.999) + '" fill="rgba(255,255,255,.08)" stroke="rgba(255,255,255,.18)" stroke-width="1"></path>';
+    legend += '</div>';
+    return { slices: slices, centerSvg: centerSvg, legend: legend };
   }
-  // Center caption — completion % on top, "Completion" label underneath
-  var pieCenter = '<text x="100" y="92" text-anchor="middle" font-size="30" font-weight="700" fill="#fff" font-family="DM Mono,monospace">' + teamCompletionPct + '%</text>'
-                + '<text x="100" y="115" text-anchor="middle" font-size="9" font-weight="700" fill="rgba(255,255,255,.55)" letter-spacing="1.5" font-family="DM Sans,sans-serif">COMPLETION</text>';
-  // Build the legend (only show buckets that have a non-zero value when the
-  // pie has data; otherwise show all three with a "—" so the labels match).
-  function _legendItem(color, label, value, total){
-    var pct = (total > 0) ? Math.round((value/total)*100) + '%' : '—';
-    return '<div style="display:flex;align-items:center;gap:7px;font-size:11px;color:#fff;line-height:1.1">'
-      +   '<span style="width:11px;height:11px;border-radius:3px;background:' + color + ';flex-shrink:0"></span>'
-      +   '<span style="opacity:.82">' + label + '</span>'
-      +   '<span style="font-family:DM Mono,monospace;font-weight:700;margin-left:auto">' + value + '</span>'
-      +   '<span style="font-family:DM Mono,monospace;color:rgba(255,255,255,.45);font-size:10px;min-width:34px;text-align:right">' + pct + '</span>'
-      + '</div>';
-  }
-  var pieLegend = '<div style="display:flex;flex-direction:column;gap:8px;padding:8px 0">'
-    + _legendItem('#22c55e', 'Completed', pieCompleted, pieTotal)
-    + _legendItem('#ef4444', 'Canceled',  pieCanceled,  pieTotal)
-    + _legendItem('#7c3aed', 'Leads',     pieLeads,     pieTotal)
+  var ph256DoneDonut  = _ph256BuildContributionDonut(perMemberCompleted, totalCompleted, 'COMPLETED');
+  var ph256LeadsDonut = _ph256BuildContributionDonut(perMemberLeads,     totalLeadsAll,  'LEADS');
+  // Keep `pieSlices`, `pieCenter`, `pieLegend` defined so the original
+  // template literal below doesn't crash if it still references them.
+  // Phase 256 replaces them with composite blocks rendered through new
+  // markers in the HTML build.
+  var pieSlices = ph256DoneDonut.slices;
+  var pieCenter = ph256DoneDonut.centerSvg;
+  var pieLegend = ph256DoneDonut.legend;
+  var _ph256DonutsHtml = ''
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px">'
+    +   '<div>'
+    +     '<svg viewBox="0 0 200 200" style="width:100%;max-width:170px;display:block;margin:0 auto"><g>' + ph256DoneDonut.slices + ph256DoneDonut.centerSvg + '</g></svg>'
+    +     ph256DoneDonut.legend
+    +   '</div>'
+    +   '<div>'
+    +     '<svg viewBox="0 0 200 200" style="width:100%;max-width:170px;display:block;margin:0 auto"><g>' + ph256LeadsDonut.slices + ph256LeadsDonut.centerSvg + '</g></svg>'
+    +     ph256LeadsDonut.legend
+    +   '</div>'
     + '</div>';
 
   var html='<div class="team-summary">'
@@ -56784,31 +56815,27 @@ function renderCounters(){
     +'<span style="font-size:11px;font-weight:600;color:#fff;min-width:80px;text-align:center">'+monthLabel+'</span>'
     +'<button onclick="navOverviewMonth(1)" '+(atEnd?'disabled':'')+' style="background:rgba(255,255,255,'+(atEnd?'.05':'.15')+');border:none;color:#fff;width:22px;height:22px;border-radius:5px;cursor:'+(atEnd?'not-allowed':'pointer')+';font-size:13px;display:flex;align-items:center;justify-content:center;opacity:'+(atEnd?'.4':'1')+'">&#8250;</button>'
     +'</div></div>'
-    // ── PIE + LEGEND ROW ──────────────────────────────────────────────────
-    + '<div style="display:flex;align-items:center;gap:18px;margin-bottom:14px;flex-wrap:wrap">'
-    +   '<div style="flex-shrink:0">'
-    +     '<svg width="160" height="160" viewBox="0 0 200 200" style="display:block">'
-    +       pieSlices
-    +       pieCenter
-    +     '</svg>'
+    // ── Phase 256 — TWO DONUTS: Completed (per-member) + Leads (per-member)
+    + '<div style="font-size:9px;color:rgba(255,255,255,.55);text-transform:uppercase;letter-spacing:.08em;font-weight:700;margin-bottom:4px;text-align:center">'
+    +   'Member contributions · ' + monthLabel
+    + '</div>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">'
+    +   '<div>'
+    +     '<div style="font-size:10px;color:#86efac;text-transform:uppercase;letter-spacing:.06em;font-weight:700;text-align:center;margin-bottom:4px">📊 Completed</div>'
+    +     '<svg width="100%" viewBox="0 0 200 200" style="display:block;max-width:160px;margin:0 auto"><g>' + ph256DoneDonut.slices + ph256DoneDonut.centerSvg + '</g></svg>'
+    +     ph256DoneDonut.legend
     +   '</div>'
-    +   '<div style="flex:1;min-width:160px">'
-    +     pieLegend
-    +     (pieTotal === 0
-        ? '<div style="font-size:10px;color:#fff;opacity:.5;font-style:italic;margin-top:6px">No activity yet for ' + monthLabel + '.</div>'
-        : '')
+    +   '<div>'
+    +     '<div style="font-size:10px;color:#c4b5fd;text-transform:uppercase;letter-spacing:.06em;font-weight:700;text-align:center;margin-bottom:4px">🌟 Leads</div>'
+    +     '<svg width="100%" viewBox="0 0 200 200" style="display:block;max-width:160px;margin:0 auto"><g>' + ph256LeadsDonut.slices + ph256LeadsDonut.centerSvg + '</g></svg>'
+    +     ph256LeadsDonut.legend
     +   '</div>'
     + '</div>'
-    // ── NUMERIC STAT CARDS (kept under the chart, smaller, still clickable)
-    +'<div class="team-summary-grid" style="grid-template-columns:repeat(4,1fr)">'
+    // ── NUMERIC STAT CARDS (Phase 256: Canceled tile removed; grid 3-wide)
+    +'<div class="team-summary-grid" style="grid-template-columns:repeat(3,1fr)">'
     +'<div class="ts-stat" onclick="gotoCompletedVisits(\'Completed\')" title="Click to view all completed visits" style="cursor:pointer;border-radius:8px;padding:4px 0;transition:background .12s" onmouseover="this.style.background=\'rgba(255,255,255,.08)\'" onmouseout="this.style.background=\'transparent\'">'
       +'<div class="ts-n" style="color:#86efac">'+teamCompleted+'</div>'
       +'<div class="ts-l">Completed <span style="font-size:8px;opacity:.5">&#8599;</span></div>'
-      +'<div style="font-size:8px;opacity:.55;font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-top:2px">This month</div>'
-    +'</div>'
-    +'<div class="ts-stat" onclick="gotoCompletedVisits(\'Canceled\')" title="Click to view all canceled visits" style="cursor:pointer;border-radius:8px;padding:4px 0;transition:background .12s" onmouseover="this.style.background=\'rgba(255,255,255,.08)\'" onmouseout="this.style.background=\'transparent\'">'
-      +'<div class="ts-n" style="color:#fca5a5">'+teamCanceled+'</div>'
-      +'<div class="ts-l">Canceled <span style="font-size:8px;opacity:.5">&#8599;</span></div>'
       +'<div style="font-size:8px;opacity:.55;font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-top:2px">This month</div>'
     +'</div>'
     +'<div class="ts-stat" onclick="gotoStatusLeads()" title="Click to view all established leads" style="cursor:pointer;border-radius:8px;padding:4px 0;transition:background .12s" onmouseover="this.style.background=\'rgba(255,255,255,.08)\'" onmouseout="this.style.background=\'transparent\'">'
