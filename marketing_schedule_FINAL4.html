@@ -59125,6 +59125,197 @@ function _phase246OpenCounterDrill(scope, facKey){
 window._phase246OpenCounterDrill   = _phase246OpenCounterDrill;
 window._phase246SetWeekDayFilter   = _phase246SetWeekDayFilter;
 
+/* ── Phase 248 (2026-06-02) — OK.docx #20: reusable calendar filter ───
+   A drop-in calendar-filter widget that any list can adopt. Wraps the
+   Phase 234 logic into a namespaced module so multiple lists can each
+   have their own independent filter state.
+
+   Usage from any list-renderer:
+     1. Build the HTML via _phase248Build('myListKey', onChangeCb)
+        and inject it into the list's DOM
+     2. Filter entries via _phase248Matches('myListKey', isoString)
+     3. The widget keeps its own state on window so re-renders preserve
+        what the user picked
+
+   State per key:
+     window._phase248State[key] = {
+       mode:        'range' | 'specific' | 'day',
+       rangeStart:  'YYYY-MM-DD',
+       rangeEnd:    'YYYY-MM-DD',
+       specific:    ['YYYY-MM-DD', ...],
+       day:         'YYYY-MM-DD',
+       calMonth:    'YYYY-MM' (visible month)
+     } */
+window._phase248State = window._phase248State || {};
+window._phase248OnChange = window._phase248OnChange || {};
+function _phase248TodayIso(){
+  var d = new Date(); var p = function(n){ return n < 10 ? '0' + n : n; };
+  return d.getFullYear() + '-' + p(d.getMonth()+1) + '-' + p(d.getDate());
+}
+function _phase248Init(key){
+  if(window._phase248State[key]) return window._phase248State[key];
+  var today = _phase248TodayIso();
+  var monthKey = today.slice(0, 7);
+  window._phase248State[key] = {
+    mode: 'range', rangeStart:'', rangeEnd:'',
+    specific: [], day: today, calMonth: monthKey
+  };
+  return window._phase248State[key];
+}
+function _phase248Matches(key, iso){
+  if(!iso) return false;
+  var s = window._phase248State[key];
+  if(!s) return true;  /* not initialized = no filter */
+  if(s.mode === 'range'){
+    if(!s.rangeStart && !s.rangeEnd) return true;
+    if(s.rangeStart && !s.rangeEnd) return iso === s.rangeStart;
+    return iso >= s.rangeStart && iso <= s.rangeEnd;
+  }
+  if(s.mode === 'day') return iso === (s.day || _phase248TodayIso());
+  if(!s.specific.length) return true;
+  return s.specific.indexOf(iso) >= 0;
+}
+function _phase248Notify(key){
+  var cb = window._phase248OnChange[key];
+  if(typeof cb === 'function') cb();
+}
+function _phase248SetMode(key, mode){
+  var s = _phase248Init(key);
+  if(mode !== 'range' && mode !== 'specific' && mode !== 'day') return;
+  s.mode = mode;
+  if(mode === 'range'){ s.specific = []; }
+  else if(mode === 'specific'){ s.rangeStart = ''; s.rangeEnd = ''; }
+  else if(mode === 'day'){
+    s.rangeStart = ''; s.rangeEnd = ''; s.specific = [];
+    if(!s.day) s.day = _phase248TodayIso();
+    s.calMonth = s.day.slice(0, 7);
+  }
+  _phase248Notify(key);
+}
+function _phase248ChangeMonth(key, delta){
+  var s = _phase248Init(key);
+  var parts = String(s.calMonth).split('-');
+  var d = new Date(parseInt(parts[0],10), parseInt(parts[1],10) - 1, 1);
+  d.setMonth(d.getMonth() + delta);
+  s.calMonth = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+  _phase248Notify(key);
+}
+function _phase248ClickCell(key, iso){
+  var s = _phase248Init(key);
+  if(s.mode === 'range'){
+    if(!s.rangeStart || (s.rangeStart && s.rangeEnd)){
+      s.rangeStart = iso; s.rangeEnd = '';
+    } else {
+      if(iso < s.rangeStart){ s.rangeEnd = s.rangeStart; s.rangeStart = iso; }
+      else { s.rangeEnd = iso; }
+    }
+  } else if(s.mode === 'day'){
+    s.day = iso;
+  } else {
+    var i = s.specific.indexOf(iso);
+    if(i >= 0) s.specific.splice(i, 1);
+    else s.specific.push(iso);
+  }
+  _phase248Notify(key);
+}
+function _phase248StepDay(key, delta){
+  var s = _phase248Init(key);
+  if(s.mode !== 'day') _phase248SetMode(key, 'day');
+  var iso = s.day || _phase248TodayIso();
+  var parts = iso.split('-');
+  var d = new Date(parseInt(parts[0],10), parseInt(parts[1],10) - 1, parseInt(parts[2],10));
+  d.setDate(d.getDate() + delta);
+  var p = function(n){ return n < 10 ? '0' + n : n; };
+  s.day = d.getFullYear() + '-' + p(d.getMonth()+1) + '-' + p(d.getDate());
+  s.calMonth = d.getFullYear() + '-' + p(d.getMonth()+1);
+  _phase248Notify(key);
+}
+function _phase248JumpToToday(key){
+  var s = _phase248Init(key);
+  s.day = _phase248TodayIso();
+  s.calMonth = s.day.slice(0, 7);
+  if(s.mode !== 'day') s.mode = 'day';
+  _phase248Notify(key);
+}
+function _phase248Clear(key){
+  var s = _phase248Init(key);
+  s.rangeStart = ''; s.rangeEnd = ''; s.specific = [];
+  if(s.mode === 'day') s.day = _phase248TodayIso();
+  _phase248Notify(key);
+}
+function _phase248BuildCalendarGrid(key){
+  var s = _phase248Init(key);
+  var parts = String(s.calMonth).split('-');
+  var y = parseInt(parts[0], 10), mo = parseInt(parts[1], 10) - 1;
+  var firstDow = new Date(y, mo, 1).getDay();
+  var daysInMonth = new Date(y, mo+1, 0).getDate();
+  var monthLabel = new Date(y, mo, 1).toLocaleDateString('en-US', { month:'long', year:'numeric' });
+  var todayIso = _phase248TodayIso();
+  var html = ''
+    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:8px">'
+    +   '<div style="display:flex;align-items:center;gap:4px">'
+    +     '<button onclick="_phase248ChangeMonth(\'' + key + '\',-1)" style="background:#fff;border:1px solid var(--border);border-radius:6px;width:28px;height:28px;cursor:pointer;font-size:14px;color:#1F3864;font-weight:800">‹</button>'
+    +     '<div style="font-size:12px;font-weight:800;color:#1F3864;min-width:140px;text-align:center">' + monthLabel + '</div>'
+    +     '<button onclick="_phase248ChangeMonth(\'' + key + '\',1)" style="background:#fff;border:1px solid var(--border);border-radius:6px;width:28px;height:28px;cursor:pointer;font-size:14px;color:#1F3864;font-weight:800">›</button>'
+    +   '</div>'
+    +   '<div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">';
+  if(s.mode === 'day'){
+    html += '<button onclick="_phase248StepDay(\'' + key + '\',-1)" style="background:#fff;border:1px solid #16a34a;border-radius:6px;width:28px;height:28px;cursor:pointer;font-size:14px;color:#16a34a;font-weight:800">‹</button>'
+         + '<button onclick="_phase248JumpToToday(\'' + key + '\')" style="background:#fff;border:1px solid #16a34a;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;color:#16a34a;font-family:DM Sans,sans-serif">Today</button>'
+         + '<button onclick="_phase248StepDay(\'' + key + '\',1)" style="background:#fff;border:1px solid #16a34a;border-radius:6px;width:28px;height:28px;cursor:pointer;font-size:14px;color:#16a34a;font-weight:800">›</button>'
+         + '<span style="width:1px;height:18px;background:var(--border);margin:0 4px"></span>';
+  }
+  html += '<button onclick="_phase248SetMode(\'' + key + '\',\'day\')" style="background:' + (s.mode === 'day' ? '#16a34a' : '#fff') + ';color:' + (s.mode === 'day' ? '#fff' : '#475569') + ';border:1px solid #16a34a;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer">📅 Day</button>'
+       + '<button onclick="_phase248SetMode(\'' + key + '\',\'range\')" style="background:' + (s.mode === 'range' ? '#1F3864' : '#fff') + ';color:' + (s.mode === 'range' ? '#fff' : '#475569') + ';border:1px solid #1F3864;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer">↔ Range</button>'
+       + '<button onclick="_phase248SetMode(\'' + key + '\',\'specific\')" style="background:' + (s.mode === 'specific' ? '#7c3aed' : '#fff') + ';color:' + (s.mode === 'specific' ? '#fff' : '#475569') + ';border:1px solid #7c3aed;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer">☑ Specific</button>'
+    +   '</div>'
+    + '</div>';
+  html += '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-bottom:3px">';
+  ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].forEach(function(d){
+    html += '<div style="text-align:center;font-size:9.5px;font-weight:800;color:#94a3b8;letter-spacing:.04em;text-transform:uppercase;padding:4px 0">' + d + '</div>';
+  });
+  html += '</div><div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px">';
+  for(var i = 0; i < firstDow; i++) html += '<div></div>';
+  for(var d = 1; d <= daysInMonth; d++){
+    var iso = y + '-' + String(mo+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+    var isToday = (iso === todayIso);
+    var bg = '#fff', fg = '#1F3864', bd = 'var(--border)', fw = '600';
+    if(s.mode === 'range'){
+      var isAnchor = (iso === s.rangeStart) || (iso === s.rangeEnd);
+      var inRange = s.rangeStart && s.rangeEnd && iso >= s.rangeStart && iso <= s.rangeEnd;
+      if(s.rangeStart && !s.rangeEnd && iso === s.rangeStart) isAnchor = true;
+      if(isAnchor){ bg = '#1F3864'; fg = '#fff'; bd = '#1F3864'; fw = '800'; }
+      else if(inRange){ bg = '#dbeafe'; fg = '#1e3a8a'; bd = '#bfdbfe'; fw = '700'; }
+    } else if(s.mode === 'day'){
+      if(iso === (s.day || todayIso)){ bg = '#16a34a'; fg = '#fff'; bd = '#16a34a'; fw = '800'; }
+    } else {
+      if(s.specific.indexOf(iso) >= 0){ bg = '#7c3aed'; fg = '#fff'; bd = '#7c3aed'; fw = '800'; }
+    }
+    var outline = isToday ? 'box-shadow:0 0 0 2px #f59e0b inset;' : '';
+    html += '<button onclick="_phase248ClickCell(\'' + key + '\',\'' + iso + '\')" style="background:' + bg + ';color:' + fg + ';border:1px solid ' + bd + ';border-radius:6px;padding:7px 0;font-size:11px;font-weight:' + fw + ';cursor:pointer;font-family:DM Mono,monospace;' + outline + '">' + d + '</button>';
+  }
+  html += '</div>';
+  return html;
+}
+/* Public entrypoint: returns a complete calendar-filter card HTML.
+   Pass a unique stateKey + a callback to fire on any state change. */
+function _phase248Build(stateKey, onChange){
+  _phase248Init(stateKey);
+  window._phase248OnChange[stateKey] = onChange || function(){};
+  return '<div style="padding:12px;background:#f8fafc;border:1px solid var(--border);border-radius:8px;margin-bottom:12px">'
+    + _phase248BuildCalendarGrid(stateKey)
+    + '<div style="text-align:right;margin-top:8px"><button onclick="_phase248Clear(\'' + stateKey + '\')" style="background:#fff;border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:10.5px;font-weight:700;cursor:pointer;color:#991b1b">× Clear</button></div>'
+    + '</div>';
+}
+window._phase248Build         = _phase248Build;
+window._phase248Matches       = _phase248Matches;
+window._phase248SetMode       = _phase248SetMode;
+window._phase248ChangeMonth   = _phase248ChangeMonth;
+window._phase248ClickCell     = _phase248ClickCell;
+window._phase248StepDay       = _phase248StepDay;
+window._phase248JumpToToday   = _phase248JumpToToday;
+window._phase248Clear         = _phase248Clear;
+
 /* Phase 248 (2026-06-02) — OK.docx #33: drill modal triggered by clicking
    any month bar/dot on a facility chart. Shows that month's entries for
    the facility with the same Source / Channel / Clinic / Member / Y-N
@@ -59158,6 +59349,98 @@ function _phase248OpenFacilityMonthDrill(monthKey, facKey){
   document.body.insertAdjacentHTML('beforeend', html);
 }
 window._phase248OpenFacilityMonthDrill = _phase248OpenFacilityMonthDrill;
+
+/* Phase 249 (2026-06-02) — OK.docx #31: when 1m window is active on a
+   facility chart, bucket by DAY across the current calendar month
+   instead of by month. One bucket per day-of-month. */
+function _phase249DrawFacilityDaily(svg, entries){
+  var now = new Date();
+  var y = now.getFullYear(), mo = now.getMonth();
+  var daysInMonth = new Date(y, mo+1, 0).getDate();
+  var buckets = [];
+  for(var d = 1; d <= daysInMonth; d++){
+    var key = y + '-' + String(mo+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+    buckets.push({ key: key, label: String(d), count: 0 });
+  }
+  var bMap = {}; buckets.forEach(function(b){ bMap[b.key] = b; });
+  entries.forEach(function(e){
+    var iso = e.entryDate || (e.ts ? String(e.ts).slice(0,10) : '');
+    if(bMap[iso]) bMap[iso].count++;
+  });
+  var w = svg.clientWidth || svg.parentElement.clientWidth || 600;
+  var h = 220;
+  var pad = { l: 36, r: 12, t: 12, b: 28 };
+  var innerW = w - pad.l - pad.r;
+  var innerH = h - pad.t - pad.b;
+  var maxV = Math.max.apply(null, buckets.map(function(b){ return b.count; }).concat([1]));
+  var content = '';
+  for(var g = 0; g <= 4; g++){
+    var ty = pad.t + innerH - (g / 4) * innerH;
+    var v = Math.round((g / 4) * maxV);
+    content += '<line x1="' + pad.l + '" y1="' + ty + '" x2="' + (w - pad.r) + '" y2="' + ty + '" stroke="#e2e8f0" stroke-width="1"/>';
+    content += '<text x="' + (pad.l - 6) + '" y="' + (ty + 4) + '" text-anchor="end" font-size="10" fill="#94a3b8" font-family="DM Mono,monospace">' + v + '</text>';
+  }
+  var stepX = innerW / buckets.length;
+  var facKey = window._phase176LastFacility || 'frisco_er';
+  if(window._phase176ChartType === 'bar'){
+    buckets.forEach(function(b, idx){
+      var barH = (b.count / maxV) * innerH;
+      var x = pad.l + idx * stepX + stepX * 0.18;
+      var py = pad.t + innerH - barH;
+      var bw = stepX * 0.64;
+      content += '<rect x="' + x + '" y="' + py + '" width="' + bw + '" height="' + barH + '" fill="url(#phase176Grad)" rx="2" style="cursor:pointer" onclick="_phase249OpenDayDrill(\'' + b.key + '\',\'' + facKey + '\')"><title>' + b.key + ': ' + b.count + ' · click for that day</title></rect>';
+      if(b.count > 0 && daysInMonth <= 15){
+        content += '<text x="' + (x + bw/2) + '" y="' + (py - 3) + '" text-anchor="middle" font-size="9" font-weight="700" fill="#1F3864" font-family="DM Mono,monospace">' + b.count + '</text>';
+      }
+    });
+  } else {
+    var pts = buckets.map(function(b, idx){
+      var x = pad.l + idx * stepX + stepX / 2;
+      var py = pad.t + innerH - (b.count / maxV) * innerH;
+      return { x: x, y: py, b: b };
+    });
+    var poly = pts.map(function(p){ return p.x + ',' + p.y; }).join(' ');
+    content += '<polyline points="' + poly + '" fill="none" stroke="#7030A0" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>';
+    pts.forEach(function(p){
+      content += '<circle cx="' + p.x + '" cy="' + p.y + '" r="3.5" fill="#fff" stroke="#7030A0" stroke-width="2" style="cursor:pointer" onclick="_phase249OpenDayDrill(\'' + p.b.key + '\',\'' + facKey + '\')"><title>' + p.b.key + ': ' + p.b.count + '</title></circle>';
+    });
+  }
+  /* X-axis: show every 5th day. */
+  buckets.forEach(function(b, idx){
+    if(idx % 5 !== 0 && idx !== buckets.length - 1) return;
+    content += '<text x="' + (pad.l + idx * stepX + stepX/2) + '" y="' + (h - 8) + '" text-anchor="middle" font-size="9" fill="#94a3b8">' + b.label + '</text>';
+  });
+  svg.innerHTML = '<defs><linearGradient id="phase176Grad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#7030A0"/><stop offset="100%" stop-color="#1F3864"/></linearGradient></defs>' + content;
+}
+window._phase249DrawFacilityDaily = _phase249DrawFacilityDaily;
+/* Day-drill: clicking a daily bar/dot shows that day's patient list. */
+function _phase249OpenDayDrill(dayIso, facKey){
+  var allEntries = _phase246GetEntriesForScope(facKey);
+  var dayEntries = allEntries.filter(function(e){
+    var iso = e.entryDate || (e.ts ? String(e.ts).slice(0,10) : '');
+    return iso === dayIso;
+  });
+  var facLabel = _phase246FacilityLabel(facKey);
+  var dayLabel = '';
+  try { dayLabel = new Date(dayIso + 'T12:00:00').toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric', year:'numeric' }); } catch(_){ dayLabel = dayIso; }
+  var includeFacBadge = (facKey === 'iccotx');
+  var rowsHtml = _phase246BuildRowsHtml(dayEntries, includeFacBadge);
+  var html = '<div id="ph246-drill" style="position:fixed;inset:0;background:rgba(15,23,42,.6);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;font-family:DM Sans,sans-serif" onclick="if(event.target===this) document.getElementById(\'ph246-drill\').remove()">'
+    + '<div style="background:#fff;border-radius:14px;max-width:1100px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.5);overflow:hidden;display:flex;flex-direction:column;max-height:90vh">'
+    +   '<div style="background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;padding:14px 20px;display:flex;align-items:center;justify-content:space-between">'
+    +     '<div>'
+    +       '<div style="font-size:15px;font-weight:800">📅 ' + dayLabel + ' · ' + facLabel + '</div>'
+    +       '<div style="font-size:11px;opacity:.85;margin-top:2px">' + dayEntries.length + ' patient' + (dayEntries.length === 1 ? '' : 's')+ '</div>'
+    +     '</div>'
+    +     '<button onclick="document.getElementById(\'ph246-drill\').remove()" style="background:rgba(255,255,255,.18);border:none;color:#fff;font-size:20px;width:30px;height:30px;border-radius:7px;cursor:pointer">×</button>'
+    +   '</div>'
+    +   '<div style="padding:16px 20px;overflow:auto">' + rowsHtml + '</div>'
+    + '</div></div>';
+  var existing = document.getElementById('ph246-drill');
+  if(existing) existing.remove();
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+window._phase249OpenDayDrill = _phase249OpenDayDrill;
 
 function _phase176CounterCard(label, value, color, icon, scope, facKey){
   var clickable = (typeof scope === 'string' && typeof facKey === 'string');
@@ -59242,6 +59525,11 @@ window._phase176SetChartType = _phase176SetChartType;
 function _phase176DrawChart(entries){
   var svg = document.getElementById('phase176-chart-svg');
   if(!svg) return;
+  /* Phase 249 (2026-06-02) — OK.docx #31: when the user picks 1m, bucket
+     by DAY instead of month. Wider windows still bucket by month. */
+  if(window._phase176ChartWindow === '1m'){
+    return _phase249DrawFacilityDaily(svg, entries);
+  }
   // Bucket entries by month for the chosen window
   var monthsCount = ({ '1m':1, '3m':3, '6m':6, '1y':12 })[window._phase176ChartWindow] || 3;
   var now = new Date(); now.setDate(1); now.setHours(0,0,0,0);
