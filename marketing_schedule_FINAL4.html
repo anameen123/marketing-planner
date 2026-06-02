@@ -1716,6 +1716,12 @@ body.role-front_desk .admin-only,
 body.role-front_desk .nav-admin-only {
   display: none !important;
 }
+/* Phase 243 (2026-06-02) — strict admin-only: hidden for EVERY non-admin
+   role (member + readonly + front_desk), reveals only when body has
+   role-admin. Used for actions that should never appear to anyone
+   except admin (e.g. Add Lead on the Status page). */
+.admin-only-strict { display: none !important; }
+body.role-admin .admin-only-strict { display: inline-block !important; }
 /* Tweak the Referrals header to feel like a "home" landing — there's nothing else they can do */
 body.role-front_desk #referrals-view {
   padding-top: 20px;
@@ -70353,6 +70359,14 @@ function renderNoLeadPage(){
 window.renderNoLeadPage = renderNoLeadPage;
 
 function openAddLeadModal(){
+  /* Phase 243 (2026-06-02) — admin-only. Defensive gate so the modal
+     never opens via DOM tampering / console invocation by a non-admin. */
+  if(typeof isAdmin !== 'function' || !isAdmin()){
+    if(typeof showToast === 'function'){
+      showToast('Admin only — leads must be added by an admin.');
+    }
+    return;
+  }
   document.getElementById('lead-clinic').value='';
   document.getElementById('lead-date').value='';
   document.getElementById('lead-area').value='';
@@ -71611,7 +71625,15 @@ autoLockTargets(); // auto-lock if Monday 8PM has passed
           <option value="established_l2">🟢 L2 — Coordinator</option>
           <option value="established_l3">🟢 L3 — Doctor</option>
         </select>
-        <button onclick="openAddLeadModal()" style="background:var(--purple);border:none;color:#fff;padding:8px 16px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif">➕ Add Lead</button>
+        <!-- Phase 243 (2026-06-02) — Add Lead button is admin-only.
+             User: "in this page don't allow anyone other than the admin
+             to add leads — this click should not appear to anyone except
+             the admin." .admin-only-strict CSS hides for every non-admin
+             role; inline `display:none` is a defensive default so the
+             button stays hidden in the brief window before the body
+             role class lands. The inline onclick also gates defensively
+             against DOM tampering / programmatic invocation. -->
+        <button id="status-add-lead-btn" class="admin-only-strict" onclick="if(typeof isAdmin==='function'&&isAdmin()){openAddLeadModal();}else if(typeof showToast==='function'){showToast('Admin only — leads must be added by an admin.');}" style="background:var(--purple);border:none;color:#fff;padding:8px 16px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif">➕ Add Lead</button>
       </div>
     </div>
 
