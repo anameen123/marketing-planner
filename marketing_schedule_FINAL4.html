@@ -11501,6 +11501,32 @@ function _finishLogin(){
   // Load the patient referral log + recompute derived counters from it
   if(typeof _loadReferralLog === 'function') _loadReferralLog();
   if(typeof _loadPendingReferrals === 'function') _loadPendingReferrals();
+  /* Phase 231 (2026-06-02) — ONE-SHOT test data wipe per user:
+     "once you're done clear all the added referrals and logged patients
+     for on there it was all for testing purposes." Runs exactly once on
+     the next page load, guarded by a localStorage flag so a refresh
+     doesn't keep nuking real data. */
+  try {
+    if(!localStorage.getItem('wcg_phase231_test_wipe_v1')){
+      var _ph231WipedCount =
+        (Array.isArray(PENDING_REFERRALS) ? PENDING_REFERRALS.length : 0) +
+        (Array.isArray(REFERRAL_LOG)      ? REFERRAL_LOG.length      : 0);
+      if(Array.isArray(PENDING_REFERRALS)) PENDING_REFERRALS.length = 0;
+      if(Array.isArray(REFERRAL_LOG))      REFERRAL_LOG.length      = 0;
+      if(typeof _savePendingReferrals === 'function') _savePendingReferrals();
+      if(typeof _saveReferralLog      === 'function') _saveReferralLog();
+      /* Also clear the Google-calls counter store (Phase 202) since the
+         user said "all the added referrals and logged patients" — that
+         includes the call-converted referral source. */
+      try {
+        if(typeof DataLayer !== 'undefined' && DataLayer.save){
+          DataLayer.save('wcg_google_calls_v1', {});
+        }
+      } catch(_){}
+      localStorage.setItem('wcg_phase231_test_wipe_v1', '1');
+      console.info('[Phase 231] Test-data wipe: cleared ' + _ph231WipedCount + ' referral + log entries. Future entries will persist normally.');
+    }
+  } catch(e){ try { console.warn('[Phase 231] wipe failed', e); } catch(_){} }
   // Per user 2026-05-26: sweep expired pending referrals on boot so stale
   // ones from earlier sessions auto-flip to 'incomplete' before render.
   if(typeof _crSweepExpiredReferrals === 'function') _crSweepExpiredReferrals();
@@ -19530,11 +19556,16 @@ function _rlRenderCalDayDetail(iso){
   var entriesHtml = '';
   if(entries.length){
     entriesHtml = '<div style="display:flex;flex-direction:column;gap:6px">';
+    /* Phase 231 — admin sees a 🗑 button at the end of each row. */
+    var _ph231IsAdminView = (typeof isAdmin === 'function') && isAdmin();
     entries.forEach(function(e){
       var fac = REFERRAL_FACILITIES.find(function(f){ return f.key === e.destinationFacility; });
       var c = REFERRAL_CHANNELS.find(function(x){ return x.key === (e.sourceChannel || 'business'); });
       var srcLabel = c && c.business && e.sourceBusiness ? e.sourceBusiness : (c ? c.label : '—');
       var ageGender = (e.age != null && e.age !== '' ? e.age + 'y' : '') + (e.gender ? ' ' + (e.gender.charAt(0)) : '');
+      var delBtn = (_ph231IsAdminView && e.id)
+        ? '<button onclick="event.stopPropagation();_phase231AdminDeleteLogEntry(\'' + e.id + '\')" title="Delete (admin only)" style="background:#fff;border:1px solid #fca5a5;color:#991b1b;border-radius:5px;width:22px;height:22px;font-size:11px;font-weight:800;cursor:pointer;padding:0;line-height:1;font-family:DM Sans,sans-serif">🗑</button>'
+        : '';
       entriesHtml += '<div style="background:#fafbfc;border:1px solid var(--border);border-radius:8px;padding:8px 12px;display:flex;align-items:center;gap:12px;font-size:11px">'
                   + '<div style="font-family:DM Mono,monospace;font-weight:700;color:var(--muted);min-width:48px">' + esc(e.entryTime || '') + '</div>'
                   + '<div style="font-weight:700;color:#7030A0;min-width:32px">' + (e.patientNumber ? '#' + esc(e.patientNumber) : '') + '</div>'
@@ -19544,6 +19575,7 @@ function _rlRenderCalDayDetail(iso){
                   + '<div style="color:var(--muted)">→ ' + esc(fac ? fac.short : '—') + '</div>'
                   + '<div style="color:var(--text);font-weight:600">' + esc(e.memberName || '—') + '</div>'
                   + '<div style="color:var(--muted);font-size:10px">by ' + esc(e.filledByName || '—') + '</div>'
+                  + delBtn
                   + '</div>';
     });
     entriesHtml += '</div>';
@@ -22958,8 +22990,11 @@ window.retractPendingReferral = retractPendingReferral;
 //     don't get to nuke the creator's record)
 // ════════════════════════════════════════════════════════════════════════════
 function _prCanDeletePendingReferral(ref){
-  if(!ref || ref.status !== 'pending') return false;
+  if(!ref) return false;
+  /* Phase 231 (2026-06-02) — admin can delete ANY status, not just
+     pending. Creators still only delete their own pending. */
   if(typeof isAdmin === 'function' && isAdmin()) return true;
+  if(ref.status !== 'pending') return false;
   var myName = (CURRENT_USER && CURRENT_USER.name) || '';
   if(!myName) return false;
   if(ref.creatorRole === 'marketing'   && ref.createdBy        === myName) return true;
@@ -22968,11 +23003,46 @@ function _prCanDeletePendingReferral(ref){
 }
 window._prCanDeletePendingReferral = _prCanDeletePendingReferral;
 
+/* Phase 231 (2026-06-02) — admin-only delete for REFERRAL_LOG entries
+   (the Logged-patients list). Non-admin sees no button. */
+function _phase231AdminDeleteLogEntry(entryId){
+  if(!entryId) return;
+  if(typeof isAdmin !== 'function' || !isAdmin()){
+    if(typeof showToast === 'function') showToast('Admin only.');
+    return;
+  }
+  var idx = (REFERRAL_LOG || []).findIndex(function(e){ return e && e.id === entryId; });
+  if(idx < 0){ if(typeof showToast === 'function') showToast('Patient log entry not found.'); return; }
+  var ent = REFERRAL_LOG[idx];
+  var label = (ent.patientNumber ? '#' + ent.patientNumber + ' ' : '')
+            + (ent.chiefComplaint || '(no chief complaint)')
+            + ' · ' + (ent.entryDate || '?') + (ent.entryTime ? ' ' + ent.entryTime : '');
+  var ok = window.confirm(
+    '🗑 Delete this logged patient entry?\n\n' +
+    label + '\n\n' +
+    'This permanently removes the row from the Logged Patients list, ' +
+    'all charts, all counters, all member attributions. There is no undo.\n\n' +
+    'OK = delete · Cancel = keep it'
+  );
+  if(!ok) return;
+  REFERRAL_LOG.splice(idx, 1);
+  if(typeof _saveReferralLog === 'function') _saveReferralLog();
+  /* Refresh every UI that pulls from REFERRAL_LOG. */
+  if(typeof renderReferralLog === 'function') renderReferralLog();
+  if(typeof _phase191RenderStats === 'function') _phase191RenderStats();
+  if(typeof showToast === 'function') showToast('🗑 Logged patient entry deleted.');
+}
+window._phase231AdminDeleteLogEntry = _phase231AdminDeleteLogEntry;
+
 function _prDeletePendingReferral(refId){
   var idx = (PENDING_REFERRALS || []).findIndex(function(r){ return r.id === refId; });
   if(idx < 0){ if(typeof showToast === 'function') showToast('Referral not found.'); return; }
   var ref = PENDING_REFERRALS[idx];
-  if(ref.status !== 'pending'){
+  /* Phase 231 — admin bypasses the pending-only restriction so they can
+     clean up confirmed/rejected/incomplete rows too. Non-admin still
+     locked to their own pendings. */
+  var _ph231Admin = (typeof isAdmin === 'function') && isAdmin();
+  if(!_ph231Admin && ref.status !== 'pending'){
     if(typeof showToast === 'function') showToast('Only Pending referrals can be deleted. This one is "' + ref.status + '" — use Edit to override instead.');
     return;
   }
