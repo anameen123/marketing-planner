@@ -59125,6 +59125,40 @@ function _phase246OpenCounterDrill(scope, facKey){
 window._phase246OpenCounterDrill   = _phase246OpenCounterDrill;
 window._phase246SetWeekDayFilter   = _phase246SetWeekDayFilter;
 
+/* Phase 248 (2026-06-02) — OK.docx #33: drill modal triggered by clicking
+   any month bar/dot on a facility chart. Shows that month's entries for
+   the facility with the same Source / Channel / Clinic / Member / Y-N
+   column set Phase 246 uses. */
+function _phase248OpenFacilityMonthDrill(monthKey, facKey){
+  var allEntries = _phase246GetEntriesForScope(facKey);
+  var monthEntries = allEntries.filter(function(e){
+    var iso = e.entryDate || (e.ts ? String(e.ts).slice(0,10) : '');
+    return iso.slice(0, 7) === monthKey;
+  });
+  var facLabel = _phase246FacilityLabel(facKey);
+  var monthLabel = '';
+  try {
+    monthLabel = new Date(monthKey + '-01T12:00:00').toLocaleDateString('en-US', { month:'long', year:'numeric' });
+  } catch(_){ monthLabel = monthKey; }
+  var includeFacBadge = (facKey === 'iccotx');
+  var rowsHtml = _phase246BuildRowsHtml(monthEntries, includeFacBadge);
+  var html = '<div id="ph246-drill" style="position:fixed;inset:0;background:rgba(15,23,42,.6);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;font-family:DM Sans,sans-serif" onclick="if(event.target===this) document.getElementById(\'ph246-drill\').remove()">'
+    + '<div style="background:#fff;border-radius:14px;max-width:1100px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.5);overflow:hidden;display:flex;flex-direction:column;max-height:90vh">'
+    +   '<div style="background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;padding:14px 20px;display:flex;align-items:center;justify-content:space-between">'
+    +     '<div>'
+    +       '<div style="font-size:15px;font-weight:800">📊 ' + monthLabel + ' · ' + facLabel + '</div>'
+    +       '<div style="font-size:11px;opacity:.85;margin-top:2px">' + monthEntries.length + ' patient' + (monthEntries.length === 1 ? '' : 's') + ' · click any row to open the patient card</div>'
+    +     '</div>'
+    +     '<button onclick="document.getElementById(\'ph246-drill\').remove()" style="background:rgba(255,255,255,.18);border:none;color:#fff;font-size:20px;width:30px;height:30px;border-radius:7px;cursor:pointer">×</button>'
+    +   '</div>'
+    +   '<div style="padding:16px 20px;overflow:auto">' + rowsHtml + '</div>'
+    + '</div></div>';
+  var existing = document.getElementById('ph246-drill');
+  if(existing) existing.remove();
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+window._phase248OpenFacilityMonthDrill = _phase248OpenFacilityMonthDrill;
+
 function _phase176CounterCard(label, value, color, icon, scope, facKey){
   var clickable = (typeof scope === 'string' && typeof facKey === 'string');
   var onclick = clickable
@@ -59250,13 +59284,17 @@ function _phase176DrawChart(entries){
   // Bars or line
   var content = '';
   var stepX = innerW / buckets.length;
+  /* Phase 248 (2026-06-02) — OK.docx #33: chart drill on facility chart.
+     Bars and dots now carry an onclick that opens a per-month modal
+     showing the underlying entries with the standard column set. */
+  var facKey = window._phase176LastFacility || 'frisco_er';
   if(window._phase176ChartType === 'bar'){
     buckets.forEach(function(b, idx){
       var barH = (b.count / maxV) * innerH;
       var x = pad.l + idx * stepX + stepX * 0.18;
       var y = pad.t + innerH - barH;
       var bw = stepX * 0.64;
-      content += '<rect x="' + x + '" y="' + y + '" width="' + bw + '" height="' + barH + '" fill="url(#phase176Grad)" rx="3"/>';
+      content += '<rect x="' + x + '" y="' + y + '" width="' + bw + '" height="' + barH + '" fill="url(#phase176Grad)" rx="3" style="cursor:pointer" onclick="_phase248OpenFacilityMonthDrill(\'' + b.key + '\',\'' + facKey + '\')"><title>' + b.label + ': ' + b.count + ' · click for breakdown</title></rect>';
       if(b.count > 0){
         content += '<text x="' + (x + bw/2) + '" y="' + (y - 4) + '" text-anchor="middle" font-size="10" font-weight="700" fill="#1F3864" font-family="DM Mono,monospace">' + b.count + '</text>';
       }
@@ -59273,7 +59311,7 @@ function _phase176DrawChart(entries){
     content += '<polygon points="' + area + '" fill="url(#phase176Grad)" fill-opacity=".18"/>';
     content += '<polyline points="' + poly + '" fill="none" stroke="#7030A0" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>';
     pts.forEach(function(p, idx){
-      content += '<circle cx="' + p[0] + '" cy="' + p[1] + '" r="4" fill="#fff" stroke="#7030A0" stroke-width="2"/>';
+      content += '<circle cx="' + p[0] + '" cy="' + p[1] + '" r="5" fill="#fff" stroke="#7030A0" stroke-width="2" style="cursor:pointer" onclick="_phase248OpenFacilityMonthDrill(\'' + buckets[idx].key + '\',\'' + facKey + '\')"><title>' + buckets[idx].label + ': ' + buckets[idx].count + ' · click for breakdown</title></circle>';
       if(buckets[idx].count > 0){
         content += '<text x="' + p[0] + '" y="' + (p[1] - 8) + '" text-anchor="middle" font-size="10" font-weight="700" fill="#7030A0" font-family="DM Mono,monospace">' + buckets[idx].count + '</text>';
       }
