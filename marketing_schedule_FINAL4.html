@@ -53388,6 +53388,22 @@ function _phase220MemberCtx(){
   return null;
 }
 
+/* Phase 221 (2026-06-01) — no future-dated side activities.
+   User: "they can't add anything for the future." A side activity is a
+   record of what was DONE — by definition it can't be in the future.
+   Anyone who needs to schedule a future commitment uses the day-view
+   schedule itself (Add Visit) or the calendar. This guard is enforced
+   at the add path AND the save path so even DOM tampering can't sneak
+   a future-dated entry through. Editing an EXISTING activity for a
+   past/today date is fine; editing one that's already been mis-saved
+   for a future date is also allowed so the user can fix it. */
+function _phase221IsFutureDate(dateIso){
+  if(!dateIso || dateIso.length < 10) return false;
+  var todayIso = new Date().toISOString().slice(0, 10);
+  return dateIso > todayIso;
+}
+window._phase221IsFutureDate = _phase221IsFutureDate;
+
 /* Format an HH:MM 24h string into "h:MM AM/PM" for display. */
 function _phase220FmtTime(hhmm){
   if(!hhmm) return '';
@@ -53453,6 +53469,17 @@ window._phase220CloseModal = _phase220CloseModal;
 function _phase220OpenAddModal(dateIso, existing){
   var member = _phase220MemberCtx();
   if(!member){ alert('No member context. Sign in first or open a member profile.'); return; }
+  /* Phase 221 — block ADD path for future dates. Existing entries can
+     still be edited (existing is non-null) so the user can fix a mis-
+     dated activity. */
+  if(!existing && _phase221IsFutureDate(dateIso)){
+    if(typeof showToast === 'function'){
+      showToast('Side activities log what was done — pick today or a past date.');
+    } else {
+      alert('Side activities log what was already done — you can only add for today or a past date.');
+    }
+    return;
+  }
   _phase220EnsureModal();
   var m = document.getElementById('ph220-sa-modal');
   m.style.display = 'flex';
@@ -53487,6 +53514,13 @@ function _phase220SaveModal(){
   var notes = (document.getElementById('ph220-sa-notes').value || '').trim();
   if(!title){ alert('Title is required.'); return; }
   if(!dateIso || !member){ alert('Missing date or member context.'); return; }
+  /* Phase 221 — defensive: reject future-dated NEW saves even if someone
+     bypassed _phase220OpenAddModal (DOM tampering, console call). Edits
+     to existing entries pass through so users can correct typos. */
+  if(!editId && _phase221IsFutureDate(dateIso)){
+    alert('Side activities can only be logged for today or a past date.');
+    return;
+  }
   var all = _phase185LoadSideActivities();
   if(!all[member]) all[member] = {};
   if(!all[member][dateIso]) all[member][dateIso] = [];
@@ -53590,13 +53624,19 @@ function _phase220RenderDayViewPanel(di){
         + '</div>';
     }).join('');
   }
+  /* Phase 221 — hide + Add when the viewed day is in the future. Show
+     a small read-only note instead so it's clear WHY the button is gone. */
+  var _ph221IsFuture = _phase221IsFutureDate(dateIso);
+  var addBtnHtml = _ph221IsFuture
+    ? '<div style="font-size:10px;color:var(--muted);font-style:italic;background:#fef3c7;border:1px solid #fcd34d;padding:5px 11px;border-radius:7px">⏳ Future day — log activities after they happen</div>'
+    : '<button onclick="_phase220OpenAddModal(\'' + dateIso + '\', null)" style="background:linear-gradient(135deg,#7c3aed,#1F3864);color:#fff;border:none;border-radius:7px;padding:7px 14px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">+ Add activity</button>';
   panel.innerHTML = ''
     + '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px">'
     +   '<div>'
     +     '<div style="font-size:13px;font-weight:700;color:var(--text)">📋 Side activities · ' + esc(member) + '</div>'
     +     '<div style="font-size:10.5px;color:var(--muted);margin-top:2px">Synced with the Performance-tab calendar · ' + acts.length + ' on this day</div>'
     +   '</div>'
-    +   '<button onclick="_phase220OpenAddModal(\'' + dateIso + '\', null)" style="background:linear-gradient(135deg,#7c3aed,#1F3864);color:#fff;border:none;border-radius:7px;padding:7px 14px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">+ Add activity</button>'
+    +   addBtnHtml
     + '</div>'
     + listHtml;
 }
@@ -53644,8 +53684,20 @@ function _phase185RenderSideActivities(){
     var acts = mine[dateIso] || [];
     totalActs += acts.length;
     var hasActs = acts.length > 0;
-    html += '<div style="border:1px solid ' + (hasActs ? '#7c3aed' : 'var(--border)') + ';border-radius:6px;padding:6px 5px;min-height:44px;background:' + (hasActs ? '#faf5ff' : '#fff') + ';cursor:pointer;position:relative" onclick="_phase185AddSideActivity(\'' + dateIso + '\')" title="Click to add activity for ' + dateIso + '">'
-        +     '<div style="font-size:10px;font-weight:700;color:' + (hasActs ? '#7c3aed' : '#94a3b8') + '">' + day + '</div>';
+    /* Phase 221 — future cells are visually muted (gray bg, dim text,
+       not-allowed cursor) and don't open the add modal. Past + today
+       behave as before. Existing activities on a future cell stay
+       editable via their own click handler so a mis-saved entry can
+       still be fixed. */
+    var _ph221CellFuture = (typeof _phase221IsFutureDate === 'function') && _phase221IsFutureDate(dateIso);
+    var cellBg     = _ph221CellFuture ? '#f1f5f9' : (hasActs ? '#faf5ff' : '#fff');
+    var cellBorder = _ph221CellFuture ? '#cbd5e1' : (hasActs ? '#7c3aed' : 'var(--border)');
+    var cellCursor = _ph221CellFuture ? 'not-allowed' : 'pointer';
+    var cellTitle  = _ph221CellFuture ? 'Future day — log activities after they happen' : 'Click to add activity for ' + dateIso;
+    var cellOnclick = _ph221CellFuture ? '' : ' onclick="_phase185AddSideActivity(\'' + dateIso + '\')"';
+    var dayTxtColor = _ph221CellFuture ? '#cbd5e1' : (hasActs ? '#7c3aed' : '#94a3b8');
+    html += '<div style="border:1px solid ' + cellBorder + ';border-radius:6px;padding:6px 5px;min-height:44px;background:' + cellBg + ';cursor:' + cellCursor + ';position:relative"' + cellOnclick + ' title="' + cellTitle + '">'
+        +     '<div style="font-size:10px;font-weight:700;color:' + dayTxtColor + '">' + day + '</div>';
     acts.forEach(function(a){
       var safeT = String(a.title).replace(/</g,'&lt;').slice(0, 16);
       /* Phase 220: show start time if present so the user can tell two
