@@ -56726,6 +56726,27 @@ window.saveTarget=saveTarget;
 
 window.navOverviewMonth=navOverviewMonth;
 
+// Phase 261 (2026-06-02) — clicking a name in either Team Overview donut
+// legend (Completed / Leads) jumps the member-carousel card below to
+// that member, expands it if it was collapsed, refreshes the dashboard
+// so the new index renders, and smooth-scrolls the carousel into view
+// so the user can see the result immediately.
+function _ph261JumpToMember(name){
+  if(!name || typeof MEMBERS === 'undefined') return;
+  var idx = MEMBERS.indexOf(name);
+  if(idx < 0) return;
+  window._ph255MemberIdx  = idx;
+  window._ph255Expanded   = true;
+  if(typeof refreshLandingDashboard === 'function') refreshLandingDashboard();
+  /* Defer the scroll to the next paint so the re-rendered card is in
+     the DOM when we try to find it. */
+  setTimeout(function(){
+    var host = document.querySelector('.member-cards');
+    if(host && host.scrollIntoView) host.scrollIntoView({ behavior:'smooth', block:'start' });
+  }, 60);
+}
+window._ph261JumpToMember = _ph261JumpToMember;
+
 function renderCounters(){
   var MN=['January','February','March','April','May','June','July','August','September','October','November','December'];
   var now=new Date();
@@ -56750,6 +56771,18 @@ function renderCounters(){
   var teamCompletionPct = teamMonthlyTarget>0 ? Math.round((teamCompleted/teamMonthlyTarget)*100) : 0;
   var totalLeads=teamLeads;
   var monthLabel=MN[OVERVIEW_MONTH]+' '+OVERVIEW_YEAR;
+
+  // Phase 261 (2026-06-02) — per user: Team Overview and the member
+  // carousel below it must be independent. Team Overview can browse
+  // history via navOverviewMonth; the member carousel is permanently
+  // pinned to the CURRENT calendar month so per-member "X completed
+  // this month" pills reflect today's reality, not whatever month
+  // admin is browsing in Team Overview.
+  var _ph261Now = new Date();
+  var _ph261CarouselY = _ph261Now.getFullYear();
+  var _ph261CarouselM = _ph261Now.getMonth();
+  var _ph261CarouselMs = getMemberStatsForMonth(_ph261CarouselY, _ph261CarouselM);
+  var _ph261CarouselMonthLabel = MN[_ph261CarouselM] + ' ' + _ph261CarouselY;
 
   // ── Phase 256 (2026-06-02) — Team Overview donuts rewritten ──────────
   // User: "We don't need the completed and canceled [combined breakdown].
@@ -56814,12 +56847,17 @@ function renderCounters(){
     var centerSvg = '<text x="100" y="96" text-anchor="middle" font-size="28" font-weight="700" fill="#fff" font-family="DM Mono,monospace">' + total + '</text>'
                   + '<text x="100" y="115" text-anchor="middle" font-size="8.5" font-weight="700" fill="rgba(255,255,255,.55)" letter-spacing="1.2" font-family="DM Sans,sans-serif">' + centerLabel + '</text>';
     // Per-member legend rows.
+    // Phase 261 (2026-06-02) — per user: clicking a legend row should
+    // jump the member-carousel card below to that member (and expand it
+    // if it's currently collapsed), then scroll the carousel into view.
+    // _ph261JumpToMember handles all of that.
     var legend = '<div style="display:flex;flex-direction:column;gap:5px;margin-top:8px">';
     MEMBERS.forEach(function(m){
       var v = perMember[m] || 0;
       var pct = (total > 0) ? Math.round((v / total) * 100) : 0;
       var color = MCOLORS[m] || '#94a3b8';
-      legend += '<div style="display:flex;align-items:center;gap:6px;font-size:10.5px;color:#fff;line-height:1.1">'
+      var safeM = String(m).replace(/'/g, "\\'");
+      legend += '<div onclick="_ph261JumpToMember(\'' + safeM + '\')" title="Jump to ' + m + '\'s card below" style="display:flex;align-items:center;gap:6px;font-size:10.5px;color:#fff;line-height:1.1;cursor:pointer;padding:3px 5px;border-radius:5px;transition:background .12s" onmouseover="this.style.background=\'rgba(255,255,255,.10)\'" onmouseout="this.style.background=\'transparent\'">'
         +   '<span style="width:9px;height:9px;border-radius:50%;background:' + color + ';flex-shrink:0"></span>'
         +   '<span style="opacity:.85;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">' + m + '</span>'
         +   '<span style="font-family:DM Mono,monospace;font-weight:700">' + v + '</span>'
@@ -56913,7 +56951,12 @@ function renderCounters(){
           + '<button onclick="window._ph255MemberIdx=(window._ph255MemberIdx-1+MEMBERS.length)%MEMBERS.length;refreshLandingDashboard()" style="background:#fff;border:1px solid var(--border);border-radius:7px;width:30px;height:30px;font-size:14px;font-weight:800;color:#1F3864;cursor:pointer">‹</button>'
           + '<div style="flex:1;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;display:flex;align-items:center;justify-content:space-between">'
           +   '<span>Member ' + (window._ph255MemberIdx + 1) + ' of ' + MEMBERS.length + '</span>'
-          +   '<span style="font-weight:400;color:var(--muted);font-size:10px">' + monthLabel + '</span>'
+          /* Phase 261 (2026-06-02) — per user: the member carousel must
+             not follow the Team Overview month switcher. The two cards
+             should be independent. The carousel is always pinned to the
+             CURRENT calendar month for the per-member "this month"
+             counters, regardless of what month Team Overview is showing. */
+          +   '<span style="font-weight:400;color:var(--muted);font-size:10px">' + _ph261CarouselMonthLabel + '</span>'
           + '</div>'
           + '<button onclick="window._ph255MemberIdx=(window._ph255MemberIdx+1)%MEMBERS.length;refreshLandingDashboard()" style="background:#fff;border:1px solid var(--border);border-radius:7px;width:30px;height:30px;font-size:14px;font-weight:800;color:#1F3864;cursor:pointer">›</button>'
           + '</div>';
@@ -56927,7 +56970,10 @@ function renderCounters(){
       /* Phase 255 — show ONLY the currently-selected member. */
       var visibleMembers = [MEMBERS[window._ph255MemberIdx]];
       return visibleMembers.map(function(m){
-      var s=ms[m];                 // monthly stats (still used for the header pill "X this month")
+      /* Phase 261 — use the carousel's own (current-month) stats, NOT the
+         team-overview's `ms`. Otherwise the "X completed this month" pill
+         changes when admin navigates the Team Overview month switcher. */
+      var s=_ph261CarouselMs[m] || {comp:0,post:0,canc:0,pend:0,leads:0,total:0};
       var w=weekly[m];              // weekly stats (Completed / Canceled / Leads)
       var hc=MCOLORS[m];
       var wAssigned=getWeekAssigned(m);
@@ -56980,7 +57026,7 @@ function renderCounters(){
         +'<div class="mcard-hdr" onclick="window._ph255Expanded=!window._ph255Expanded;refreshLandingDashboard()" title="Click to ' + (_ph255Exp ? 'collapse' : 'expand') + '" style="background:'+hc+';cursor:pointer">'
           +'<span style="font-size:13px;font-weight:800;margin-right:5px;color:#fff">' + _ph255Caret + '</span>'
           +'<span class="member-link" data-member="'+m.replace(/"/g,'&quot;')+'" onclick="event.stopPropagation()" title="Open '+m+'\'s profile" style="cursor:pointer;color:#fff">'+m+'</span>'
-        +'<span class="m-visits" title="Live count: visits completed by '+m+' so far in '+monthLabel+'">'+s.comp+' completed this month</span></div>'
+        +'<span class="m-visits" title="Live count: visits completed by '+m+' so far in '+_ph261CarouselMonthLabel+'">'+s.comp+' completed this month</span></div>'
         + (_ph255Exp ? (''
         // Weekly progress bar
         +'<div style="padding:10px 12px 8px">'
