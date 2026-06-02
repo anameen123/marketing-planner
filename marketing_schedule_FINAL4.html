@@ -41271,8 +41271,21 @@ window._phase198IsBookedThisWeek = _phase198IsBookedThisWeek;
 //   • Phase 198: not already on the schedule this Mon-Sun week
 //   • Phase 199: admin can bypass the same-week rule per user "that
 //                restriction can be bypassed by the admin only."
+//   • Phase 241 (2026-06-02): community outreach pins are HARD-BLOCKED
+//                from both Pick & Plan AND Corridor — applies to admin
+//                too. User: "avoid selecting community outreach pins
+//                of course or red or orange as we agreed. Don't allow
+//                them to do it and don't do it. Even the admin can't
+//                do it. The pins for the community outreach should not
+//                be selected and can't be selected for the corridor or
+//                the pick and plan." The rule is by-design (route
+//                planning targets clinics + MVAs only) so even admin
+//                cannot override.
 function _phase198IsCandidateEligible(name){
   if(!name) return false;
+  /* Outreach: never selectable in Pick & Plan or Corridor. No admin
+     bypass — this isn't a recency-based block, it's a category rule. */
+  if(typeof getBizTypeForName === 'function' && getBizTypeForName(name) === 'outreach') return false;
   if(typeof _rpOptIsGreenOrYellow === 'function' && !_rpOptIsGreenOrYellow(name)) return false;
   var isAdminBypass = (typeof isAdmin === 'function') && isAdmin();
   if(!isAdminBypass && _phase198IsBookedThisWeek(name)) return false;
@@ -41284,8 +41297,13 @@ window._phase198IsCandidateEligible = _phase198IsCandidateEligible;
 // find-candidates paths. Same admin-bypass rule. Returns true if the pin
 // should be REJECTED (matches the early-return idiom in those consider()
 // callbacks).
+// Phase 241 (2026-06-02): also rejects outreach pins. No admin bypass —
+// category rule applies to everyone.
 function _phase199RejectForSameWeek(name){
   if(!name) return false;
+  /* Outreach is rejected from Corridor too — same category rule as
+     Pick & Plan. No admin override. */
+  if(typeof getBizTypeForName === 'function' && getBizTypeForName(name) === 'outreach') return true;
   var isAdminBypass = (typeof isAdmin === 'function') && isAdmin();
   if(isAdminBypass) return false;
   if(typeof _phase198IsBookedThisWeek === 'function' && _phase198IsBookedThisWeek(name)) return true;
@@ -41299,6 +41317,12 @@ function _rpOptConsumePinClick(name, exactCoord){
   // Already in target list? Toast and bail (re-clicking same pin shouldn't dup)
   if(window._RP_OPT_TARGETS.some(function(t){ return t.name === name; })){
     if(typeof showToast === 'function') showToast('"' + name + '" is already in your target list.');
+    return false;
+  }
+  // Phase 241 (2026-06-02): outreach pins are not pickable for routing.
+  // Hard reject even for admin — route planning is clinics + MVAs only.
+  if(typeof getBizTypeForName === 'function' && getBizTypeForName(name) === 'outreach'){
+    if(typeof showToast === 'function') showToast('"' + name + '" is a community outreach event — not eligible for route planning. Pick a clinic or MVA.');
     return false;
   }
   // Phase 57: green+yellow only
