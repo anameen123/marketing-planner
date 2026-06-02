@@ -58137,10 +58137,10 @@ function _phase245RenderICCOTX(){
     +   '<div style="font-size:10px;opacity:.85;text-transform:uppercase;letter-spacing:.05em">All numbers count confirmed referrals + direct logs</div>'
     + '</div>'
     + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:18px">'
-    +   _phase176CounterCard('Today',     counters.day,   '#15803d', '🗓')
-    +   _phase176WeekCounterCard(counters)
-    +   _phase176CounterCard('This month', counters.month, '#7030A0', '📆')
-    +   _phase176CounterCard('All-time',  counters.total, '#1F3864', '∑')
+    +   _phase176CounterCard('Today',     counters.day,   '#15803d', '🗓', 'day',   (facKey || window._phase176LastFacility || 'iccotx'))
+    +   _phase176WeekCounterCard(counters, (facKey || window._phase176LastFacility || 'iccotx'))
+    +   _phase176CounterCard('This month', counters.month, '#7030A0', '📆', 'month', (facKey || window._phase176LastFacility || 'iccotx'))
+    +   _phase176CounterCard('All-time',  counters.total, '#1F3864', '∑',  'total', (facKey || window._phase176LastFacility || 'iccotx'))
     + '</div>'
     + _phase233SubTabStrip('iccotx');
   if(_phase233CurrentSubTab() === 'overview'){
@@ -58532,10 +58532,10 @@ function _phase176RenderFacility(facKey){
     + '</div>'
     // Counter strip
     + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:18px">'
-    +   _phase176CounterCard('Today',     counters.day,   '#15803d', '🗓')
-    +   _phase176WeekCounterCard(counters)
-    +   _phase176CounterCard('This month', counters.month, '#7030A0', '📆')
-    +   _phase176CounterCard('All-time',  counters.total, '#1F3864', '∑')
+    +   _phase176CounterCard('Today',     counters.day,   '#15803d', '🗓', 'day',   (facKey || window._phase176LastFacility || 'iccotx'))
+    +   _phase176WeekCounterCard(counters, (facKey || window._phase176LastFacility || 'iccotx'))
+    +   _phase176CounterCard('This month', counters.month, '#7030A0', '📆', 'month', (facKey || window._phase176LastFacility || 'iccotx'))
+    +   _phase176CounterCard('All-time',  counters.total, '#1F3864', '∑',  'total', (facKey || window._phase176LastFacility || 'iccotx'))
     + '</div>'
     // Phase 233 — sub-tab strip: Overview (chart) vs History (filterable patient list).
     + _phase233SubTabStrip(facKey)
@@ -58914,32 +58914,260 @@ window._phase233SetHistDateRange   = _phase233SetHistDateRange;
 window._phase233CurrentSubTab      = _phase233CurrentSubTab;
 window._phase176RenderFacility = _phase176RenderFacility;
 
-function _phase176CounterCard(label, value, color, icon){
-  return '<div style="background:#fff;border:1px solid var(--border);border-left:4px solid ' + color + ';border-radius:10px;padding:14px 16px;box-shadow:0 1px 3px rgba(15,23,42,.04)">'
+/* Phase 246 (2026-06-02) — counter cards are now CLICKABLE. Each card
+   opens a drill modal showing the underlying entries with columns:
+   Source / Channel / Clinic / Member / Referral status (Y/N). The Week
+   card uses a day-by-day switcher (Phase 246 modal). Scope param picks
+   which entries to filter to: 'day' / 'week' / 'month' / 'total'. */
+/* Phase 246 (2026-06-02) — counter drill modal. Opens when ANY counter
+   card is clicked. Three behaviors per scope:
+     'day'   → patient rows for today only
+     'week'  → patient rows for the chosen week WITH a day-by-day switcher
+               tab strip inside the modal (Mon..Sun + ✕ All week)
+     'month' → patient rows for this month
+     'total' → all-time rows for the facility/rollup
+
+   facKey is the facility scope:
+     'frisco_er' | 'castle_hills_er' | 'plano_uc'   → that facility's rows
+     'iccotx'                                       → all 3 combined,
+                                                       with a Location badge
+
+   Column set (per OK.docx #21): Source / Channel / Clinic / Member /
+   Referral status (Y/N). */
+window._phase246WeekDayFilter = window._phase246WeekDayFilter || '';
+function _phase246GetEntriesForScope(facKey){
+  if(facKey === 'iccotx') return _phase245GetAllEntries();
+  return _phase176GetEntriesForFacility(facKey);
+}
+function _phase246FilterByScope(entries, scope){
+  var today = new Date(); today.setHours(0,0,0,0);
+  var todayIso = _phase176IsoDate(today);
+  if(scope === 'day'){
+    return entries.filter(function(e){
+      var iso = e.entryDate || (e.ts ? String(e.ts).slice(0,10) : '');
+      return iso === todayIso;
+    });
+  }
+  if(scope === 'week'){
+    var wr = _phase176WeekRange(window._phase176WeekOffset || 0);
+    var ws = wr.start, we = new Date(wr.end); we.setHours(23, 59, 59, 999);
+    return entries.filter(function(e){
+      var iso = e.entryDate || (e.ts ? String(e.ts).slice(0,10) : '');
+      if(!iso) return false;
+      var d = new Date(iso + 'T12:00:00');
+      if(isNaN(d.getTime())) return false;
+      return d >= ws && d <= we;
+    });
+  }
+  if(scope === 'month'){
+    var monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    return entries.filter(function(e){
+      var iso = e.entryDate || (e.ts ? String(e.ts).slice(0,10) : '');
+      if(!iso) return false;
+      var d = new Date(iso + 'T12:00:00');
+      return d >= monthStart;
+    });
+  }
+  return entries; /* total */
+}
+function _phase246FacilityLabel(facKey){
+  if(facKey === 'iccotx') return 'ICCOTX (all locations)';
+  var meta = (typeof _phase176FacilityMeta === 'function') ? _phase176FacilityMeta(facKey) : null;
+  return (meta && meta.label) || facKey;
+}
+function _phase246ScopeLabel(scope){
+  if(scope === 'day') return 'Today';
+  if(scope === 'week'){
+    var wr = _phase176WeekRange(window._phase176WeekOffset || 0);
+    return wr.label;
+  }
+  if(scope === 'month') return new Date().toLocaleDateString('en-US', { month:'long', year:'numeric' });
+  return 'All-time';
+}
+function _phase246BuildRowsHtml(entries, includeFacBadge){
+  function esc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
+  if(entries.length === 0){
+    return '<div style="padding:24px 12px;text-align:center;color:var(--muted);font-style:italic;font-size:12px">No patients in this scope.</div>';
+  }
+  var sorted = entries.slice().sort(function(a, b){
+    var aT = a.ts || a.entryDate || '';
+    var bT = b.ts || b.entryDate || '';
+    return bT.localeCompare(aT);
+  });
+  var facColors = { frisco_er:'#16a34a', castle_hills_er:'#7c3aed', plano_uc:'#d97706' };
+  var facLabels = { frisco_er:'Frisco', castle_hills_er:'Castle Hills', plano_uc:'UC Plano' };
+  var rows = sorted.map(function(e, i){
+    /* Source: clinic / MVA / outreach / google-call. */
+    var sourceType = e.sourceType === 'mva' ? '⚖ MVA'
+                  : e.sourceType === 'google' ? '🔍 Google call'
+                  : e.sourceType === 'outreach' ? '🏘️ Outreach'
+                  : '🏥 Clinic';
+    /* Channel: REFERRAL_CHANNELS lookup. */
+    var chDef = null;
+    try {
+      if(typeof REFERRAL_CHANNELS !== 'undefined') chDef = REFERRAL_CHANNELS.find(function(c){ return c.key === e.sourceChannel; });
+    } catch(_){}
+    var channel = chDef ? (chDef.icon + ' ' + chDef.label) : (e.sourceChannel || '—');
+    /* Clinic / source business. */
+    var clinic = e.sourceBusiness || e.sourceName || '—';
+    /* Member = marketing rep attributed. */
+    var member = e.memberName || (Array.isArray(e.memberNames) ? e.memberNames.join(', ') : '') || (e.noMarketingRep ? '🚫 None' : '—');
+    /* Referral status: Y if this row was created via the confirmed-referral
+       path (has a pendingReferralId or wasReferral flag). */
+    var refStatus = (e.pendingReferralId || e.wasReferral)
+      ? '<span style="background:#dcfce7;color:#15803d;font-size:9.5px;font-weight:800;padding:2px 7px;border-radius:99px">YES</span>'
+      : '<span style="background:#fee2e2;color:#991b1b;font-size:9.5px;font-weight:800;padding:2px 7px;border-radius:99px">NO</span>';
+    var bg = (i % 2 === 0) ? '#fff' : '#fafbfc';
+    var facBadge = '';
+    if(includeFacBadge){
+      var fc = facColors[e.destinationFacility] || '#64748b';
+      var fl = facLabels[e.destinationFacility] || e.destinationFacility;
+      facBadge = '<td style="padding:8px 10px;border-bottom:1px solid var(--border)"><span style="background:' + fc + ';color:#fff;font-size:9.5px;font-weight:800;padding:2px 7px;border-radius:99px">' + esc(fl) + '</span></td>';
+    }
+    var safeId = String(e.id || '').replace(/'/g, "\\'");
+    return '<tr onclick="if(typeof openReferralCard === \'function\') openReferralCard(\'' + safeId + '\'); document.getElementById(\'ph246-drill\').remove()" style="background:' + bg + ';cursor:pointer">'
+      + '<td style="padding:8px 10px;border-bottom:1px solid var(--border);font-size:11px">' + esc(sourceType) + '</td>'
+      + '<td style="padding:8px 10px;border-bottom:1px solid var(--border);font-size:11px;color:var(--muted)">' + esc(channel) + '</td>'
+      + '<td style="padding:8px 10px;border-bottom:1px solid var(--border);font-size:11px;color:var(--text);font-weight:600">' + esc(clinic) + '</td>'
+      + '<td style="padding:8px 10px;border-bottom:1px solid var(--border);font-size:11px">' + esc(member) + '</td>'
+      + '<td style="padding:8px 10px;border-bottom:1px solid var(--border);text-align:center">' + refStatus + '</td>'
+      + facBadge
+      + '</tr>';
+  }).join('');
+  return '<div style="overflow:auto;max-height:480px;border:1px solid var(--border);border-radius:8px">'
+    + '<table style="width:100%;border-collapse:collapse">'
+    + '<thead><tr style="background:#1F3864;position:sticky;top:0">'
+    +   '<th style="padding:8px 10px;text-align:left;font-size:10px;font-weight:700;color:#fff;text-transform:uppercase;letter-spacing:.04em">Source</th>'
+    +   '<th style="padding:8px 10px;text-align:left;font-size:10px;font-weight:700;color:#fff;text-transform:uppercase;letter-spacing:.04em">Channel</th>'
+    +   '<th style="padding:8px 10px;text-align:left;font-size:10px;font-weight:700;color:#fff;text-transform:uppercase;letter-spacing:.04em">Clinic</th>'
+    +   '<th style="padding:8px 10px;text-align:left;font-size:10px;font-weight:700;color:#fff;text-transform:uppercase;letter-spacing:.04em">Member</th>'
+    +   '<th style="padding:8px 10px;text-align:center;font-size:10px;font-weight:700;color:#fff;text-transform:uppercase;letter-spacing:.04em">Referral?</th>'
+    + (includeFacBadge ? '<th style="padding:8px 10px;text-align:left;font-size:10px;font-weight:700;color:#fff;text-transform:uppercase;letter-spacing:.04em">Location</th>' : '')
+    + '</tr></thead>'
+    + '<tbody>' + rows + '</tbody>'
+    + '</table>'
+    + '</div>';
+}
+function _phase246BuildWeekDayStrip(weekEntries){
+  var wr = _phase176WeekRange(window._phase176WeekOffset || 0);
+  /* Compose 7 days from wr.start to wr.start+6. */
+  var days = [];
+  for(var i = 0; i < 7; i++){
+    var d = new Date(wr.start); d.setDate(d.getDate() + i);
+    var iso = _phase176IsoDate(d);
+    var dayLabel = d.toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' });
+    var count = weekEntries.filter(function(e){
+      var ei = e.entryDate || (e.ts ? String(e.ts).slice(0,10) : '');
+      return ei === iso;
+    }).length;
+    days.push({ iso: iso, label: dayLabel, count: count });
+  }
+  var active = window._phase246WeekDayFilter;
+  var allActive = !active;
+  var btns = '<button onclick="_phase246SetWeekDayFilter(\'\')" style="background:' + (allActive ? '#1F3864' : '#fff') + ';color:' + (allActive ? '#fff' : '#1F3864') + ';border:1px solid #1F3864;border-radius:6px;padding:6px 11px;font-size:10.5px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">All week</button>';
+  days.forEach(function(d){
+    var on = (d.iso === active);
+    btns += '<button onclick="_phase246SetWeekDayFilter(\'' + d.iso + '\')" style="background:' + (on ? '#7c3aed' : '#fff') + ';color:' + (on ? '#fff' : '#475569') + ';border:1px solid ' + (on ? '#7c3aed' : 'var(--border)') + ';border-radius:6px;padding:6px 11px;font-size:10.5px;font-weight:' + (on ? '800' : '600') + ';cursor:pointer;font-family:DM Sans,sans-serif">' + d.label + ' <span style="opacity:.7">(' + d.count + ')</span></button>';
+  });
+  return '<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px;padding:8px;background:#f8fafc;border:1px solid var(--border);border-radius:8px">' + btns + '</div>';
+}
+function _phase246SetWeekDayFilter(iso){
+  window._phase246WeekDayFilter = iso || '';
+  /* Refresh whichever drill is open. */
+  var existing = document.getElementById('ph246-drill');
+  if(existing){
+    var scope = existing.dataset.scope;
+    var fk    = existing.dataset.fac;
+    _phase246OpenCounterDrill(scope, fk);
+  }
+}
+function _phase246OpenCounterDrill(scope, facKey){
+  /* Reset the week-day filter when opening the modal fresh — only kept
+     across re-renders triggered by _phase246SetWeekDayFilter itself. */
+  if(scope !== 'week') window._phase246WeekDayFilter = '';
+  var allFacEntries = _phase246GetEntriesForScope(facKey);
+  var scoped = _phase246FilterByScope(allFacEntries, scope);
+  /* If week-day filter is active and we're in week scope, narrow further. */
+  if(scope === 'week' && window._phase246WeekDayFilter){
+    var wdf = window._phase246WeekDayFilter;
+    scoped = scoped.filter(function(e){
+      var iso = e.entryDate || (e.ts ? String(e.ts).slice(0,10) : '');
+      return iso === wdf;
+    });
+  }
+  var facLabel = _phase246FacilityLabel(facKey);
+  var scopeLabel = _phase246ScopeLabel(scope);
+  var dayStrip = (scope === 'week') ? _phase246BuildWeekDayStrip(_phase246FilterByScope(allFacEntries, 'week')) : '';
+  var includeFacBadge = (facKey === 'iccotx');
+  var rowsHtml = _phase246BuildRowsHtml(scoped, includeFacBadge);
+  var html = '<div id="ph246-drill" data-scope="' + scope + '" data-fac="' + facKey + '" style="position:fixed;inset:0;background:rgba(15,23,42,.6);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;font-family:DM Sans,sans-serif" onclick="if(event.target===this) document.getElementById(\'ph246-drill\').remove()">'
+    + '<div style="background:#fff;border-radius:14px;max-width:1100px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.5);overflow:hidden;display:flex;flex-direction:column;max-height:90vh">'
+    +   '<div style="background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;padding:14px 20px;display:flex;align-items:center;justify-content:space-between">'
+    +     '<div>'
+    +       '<div style="font-size:15px;font-weight:800">📋 ' + scopeLabel + ' · ' + facLabel + '</div>'
+    +       '<div style="font-size:11px;opacity:.85;margin-top:2px">' + scoped.length + ' patient' + (scoped.length === 1 ? '' : 's') + '</div>'
+    +     '</div>'
+    +     '<button onclick="document.getElementById(\'ph246-drill\').remove()" style="background:rgba(255,255,255,.18);border:none;color:#fff;font-size:20px;width:30px;height:30px;border-radius:7px;cursor:pointer">×</button>'
+    +   '</div>'
+    +   '<div style="padding:16px 20px;overflow:auto">'
+    +     dayStrip
+    +     rowsHtml
+    +   '</div>'
+    + '</div></div>';
+  var existing = document.getElementById('ph246-drill');
+  if(existing) existing.remove();
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+window._phase246OpenCounterDrill   = _phase246OpenCounterDrill;
+window._phase246SetWeekDayFilter   = _phase246SetWeekDayFilter;
+
+function _phase176CounterCard(label, value, color, icon, scope, facKey){
+  var clickable = (typeof scope === 'string' && typeof facKey === 'string');
+  var onclick = clickable
+    ? 'onclick="_phase246OpenCounterDrill(\'' + scope + '\',\'' + facKey + '\')"'
+    : '';
+  var hint = clickable
+    ? '<div style="font-size:9px;color:#94a3b8;margin-top:6px;font-style:italic">click to expand</div>'
+    : '';
+  return '<div ' + onclick + ' style="background:#fff;border:1px solid var(--border);border-left:4px solid ' + color + ';border-radius:10px;padding:14px 16px;box-shadow:0 1px 3px rgba(15,23,42,.04);' + (clickable ? 'cursor:pointer;transition:transform .12s, box-shadow .12s" onmouseover="this.style.transform=\'translateY(-1px)\';this.style.boxShadow=\'0 4px 12px rgba(15,23,42,.08)\'" onmouseout="this.style.transform=\'\';this.style.boxShadow=\'0 1px 3px rgba(15,23,42,.04)\'"' : '"') + '>'
     + '<div style="display:flex;align-items:center;gap:6px;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-weight:700">' + icon + ' ' + label + '</div>'
     + '<div style="font-size:32px;font-weight:800;color:' + color + ';font-family:DM Mono,monospace;margin-top:4px;line-height:1">' + value + '</div>'
+    + hint
     + '</div>';
 }
 /* Phase 227 — week-counter with prev/next chevrons. Chevrons disabled
    when crossing the current-calendar-month boundary or when already
    at offset=0. */
-function _phase176WeekCounterCard(counters){
+function _phase176WeekCounterCard(counters, facKey){
   var wr = counters.weekRange;
   var color = '#1e40af';
   var prevDisabled = !wr.canPrev;
   var nextDisabled = !wr.canNext;
-  var prevBtn = '<button type="button" onclick="_phase176SetWeekOffset(1)" '
+  /* event.stopPropagation on chevrons keeps the card-level click handler
+     (Phase 246 drill) from firing when user just nav's weeks. */
+  var prevBtn = '<button type="button" onclick="event.stopPropagation();_phase176SetWeekOffset(1)" '
     + (prevDisabled ? 'disabled ' : '')
     + 'style="background:' + (prevDisabled ? '#f1f5f9' : '#fff') + ';border:1px solid var(--border);border-radius:5px;width:22px;height:22px;font-size:13px;cursor:' + (prevDisabled ? 'not-allowed' : 'pointer') + ';color:' + (prevDisabled ? '#cbd5e1' : color) + ';font-weight:800;font-family:DM Sans,sans-serif;padding:0;line-height:1">‹</button>';
-  var nextBtn = '<button type="button" onclick="_phase176SetWeekOffset(-1)" '
+  var nextBtn = '<button type="button" onclick="event.stopPropagation();_phase176SetWeekOffset(-1)" '
     + (nextDisabled ? 'disabled ' : '')
     + 'style="background:' + (nextDisabled ? '#f1f5f9' : '#fff') + ';border:1px solid var(--border);border-radius:5px;width:22px;height:22px;font-size:13px;cursor:' + (nextDisabled ? 'not-allowed' : 'pointer') + ';color:' + (nextDisabled ? '#cbd5e1' : color) + ';font-weight:800;font-family:DM Sans,sans-serif;padding:0;line-height:1">›</button>';
-  return '<div style="background:#fff;border:1px solid var(--border);border-left:4px solid ' + color + ';border-radius:10px;padding:14px 16px;box-shadow:0 1px 3px rgba(15,23,42,.04)">'
+  /* Phase 246 — whole card is clickable to open the week drill. facKey
+     can be a facility key OR 'iccotx' (rollup). When facKey is omitted
+     (legacy callers) the card stays read-only. */
+  var canClick = typeof facKey === 'string';
+  var clickAttr = canClick
+    ? 'onclick="_phase246OpenCounterDrill(\'week\',\'' + facKey + '\')" style="background:#fff;border:1px solid var(--border);border-left:4px solid ' + color + ';border-radius:10px;padding:14px 16px;box-shadow:0 1px 3px rgba(15,23,42,.04);cursor:pointer;transition:transform .12s, box-shadow .12s" onmouseover="this.style.transform=\'translateY(-1px)\';this.style.boxShadow=\'0 4px 12px rgba(15,23,42,.08)\'" onmouseout="this.style.transform=\'\';this.style.boxShadow=\'0 1px 3px rgba(15,23,42,.04)\'"'
+    : 'style="background:#fff;border:1px solid var(--border);border-left:4px solid ' + color + ';border-radius:10px;padding:14px 16px;box-shadow:0 1px 3px rgba(15,23,42,.04)"';
+  var hint = canClick
+    ? '<div style="font-size:9px;color:#94a3b8;margin-top:6px;font-style:italic">click to expand</div>'
+    : '';
+  return '<div ' + clickAttr + '>'
     + '<div style="display:flex;align-items:center;justify-content:space-between;gap:6px">'
     +   '<div style="display:flex;align-items:center;gap:6px;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-weight:700">📅 ' + String(wr.label).replace(/</g, '&lt;') + '</div>'
     +   '<div style="display:flex;gap:3px">' + prevBtn + nextBtn + '</div>'
     + '</div>'
     + '<div style="font-size:32px;font-weight:800;color:' + color + ';font-family:DM Mono,monospace;margin-top:4px;line-height:1">' + counters.week + '</div>'
+    + hint
     + '</div>';
 }
 
