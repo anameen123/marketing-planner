@@ -53463,10 +53463,18 @@ function _phase223IsAdmin(){
   return typeof isAdmin === 'function' && isAdmin();
 }
 function _phase223CanAdd(dateIso){
-  return _phase223IsAdmin() || _phase221CanAddOn(dateIso);
+  /* Phase 225: future dates now allowed as planning (non-admin too). */
+  if(_phase223IsAdmin()) return true;
+  return (typeof _phase225CanAddOrPlanOn === 'function')
+    ? _phase225CanAddOrPlanOn(dateIso)
+    : _phase221CanAddOn(dateIso);
 }
 function _phase223CanEditActivity(activity){
-  return _phase223IsAdmin() || _phase221CanEdit(activity);
+  /* Phase 225: future pending plans editable too (non-admin). */
+  if(_phase223IsAdmin()) return true;
+  return (typeof _phase225CanEditPlanAware === 'function')
+    ? _phase225CanEditPlanAware(activity)
+    : _phase221CanEdit(activity);
 }
 function _phase223AdminUserName(){
   return (typeof CURRENT_USER !== 'undefined' && CURRENT_USER && CURRENT_USER.name) || 'admin';
@@ -53474,6 +53482,83 @@ function _phase223AdminUserName(){
 window._phase223IsAdmin         = _phase223IsAdmin;
 window._phase223CanAdd          = _phase223CanAdd;
 window._phase223CanEditActivity = _phase223CanEditActivity;
+
+/* Phase 225 (2026-06-02) — plan-vs-complete flow for side activities.
+
+   New status field on each activity: 'pending' | 'completed'.
+   - 'pending'   : planned for a future day. No start/end times. Once that
+                   day comes, user clicks the row → modal opens in CONFIRM
+                   mode → adds times → status flips to 'completed'.
+   - 'completed' : the historical default. Has start/end times. What gets
+                   logged when you add for today / past-current-week.
+
+   For backward compat, any row without a `status` field is treated as
+   'completed' — that's what every Phase 220-224 row already is.
+
+   New rules layered on top of Phase 221-224:
+     ADD future date  → opens modal in 'plan' mode (no times, status=pending)
+     ADD past/today (current week) → opens modal in 'complete' mode (times required, status=completed)
+     CLICK pending row whose date is today/past in current week → 'confirm' mode (times required, flips to completed)
+     CLICK pending row whose date is still future → 'edit-plan' mode (no times, stays pending)
+     CLICK completed row in current week → 'edit' mode (existing behavior)
+
+   Edit reach is extended so future pending plans are editable any time
+   before that day — _phase225CanEditPlanAware widens _phase221CanEdit to
+   cover this case. */
+function _phase225IsPending(activity){
+  return !!(activity && activity.status === 'pending');
+}
+function _phase225StatusOf(activity){
+  if(!activity) return 'completed';
+  return activity.status === 'pending' ? 'pending' : 'completed';
+}
+/* Resolve modal mode from dateIso + existing row. */
+function _phase225ResolveMode(dateIso, existing){
+  if(existing){
+    if(_phase225IsPending(existing)){
+      var todayIso = _phase221TodayIso();
+      var actDate  = (existing.date || existing.ts || dateIso || '').slice(0, 10);
+      if(actDate > todayIso) return 'edit-plan';  /* still in future */
+      return 'confirm';                            /* time to confirm */
+    }
+    return 'edit';                                 /* completed → edit */
+  }
+  return _phase221IsFutureDate(dateIso) ? 'plan' : 'complete';
+}
+/* True when modal mode requires start + end times. */
+function _phase225ModeRequiresTime(mode){
+  return mode === 'complete' || mode === 'confirm' || mode === 'edit';
+}
+/* True when the modal-saved row should have status = 'pending'. */
+function _phase225ModeIsPlanning(mode){
+  return mode === 'plan' || mode === 'edit-plan';
+}
+/* Extended can-edit: future pending plans are editable too. */
+function _phase225CanEditPlanAware(activity){
+  if(!activity) return false;
+  if(_phase221CanEdit(activity)) return true;     /* current week */
+  /* Future-dated pending plans: user can revise before the day. */
+  if(_phase225IsPending(activity)){
+    var actDate = (activity.date || activity.ts || '').slice(0, 10);
+    if(actDate && actDate > _phase221TodayIso()) return true;
+  }
+  return false;
+}
+/* Extended can-add: future dates allowed for PLANNING. Non-admin
+   future-add is now valid (it routes through the 'plan' modal mode). */
+function _phase225CanAddOrPlanOn(dateIso){
+  if(!dateIso || dateIso.length < 10) return false;
+  if(_phase221CanAddOn(dateIso)) return true;     /* current week past/today */
+  if(_phase221IsFutureDate(dateIso)) return true; /* future → plan */
+  return false;                                    /* past-week → locked */
+}
+window._phase225IsPending           = _phase225IsPending;
+window._phase225StatusOf            = _phase225StatusOf;
+window._phase225ResolveMode         = _phase225ResolveMode;
+window._phase225ModeRequiresTime    = _phase225ModeRequiresTime;
+window._phase225ModeIsPlanning      = _phase225ModeIsPlanning;
+window._phase225CanEditPlanAware    = _phase225CanEditPlanAware;
+window._phase225CanAddOrPlanOn      = _phase225CanAddOrPlanOn;
 
 /* Format an HH:MM 24h string into "h:MM AM/PM" for display. */
 function _phase220FmtTime(hhmm){
@@ -53507,16 +53592,18 @@ function _phase220EnsureModal(){
     +     '<div>'
     +       '<div id="ph220-sa-title-label" style="font-size:15px;font-weight:800">📋 Add side activity</div>'
     +       '<div id="ph220-sa-date-label" style="font-size:11px;opacity:.85;margin-top:2px"></div>'
+    +       '<div id="ph225-sa-status-pill" style="display:none;font-size:10px;font-weight:700;background:rgba(255,255,255,.22);padding:2px 8px;border-radius:99px;margin-top:6px;display:inline-block"></div>'
     +     '</div>'
     +     '<button onclick="_phase220CloseModal()" style="background:rgba(255,255,255,.18);border:none;color:#fff;font-size:20px;width:30px;height:30px;border-radius:7px;cursor:pointer">×</button>'
     +   '</div>'
     +   '<div style="padding:16px 20px">'
+    +     '<div id="ph225-sa-plan-hint" style="display:none;background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:8px 11px;margin-bottom:12px;font-size:11.5px;color:#92400e;line-height:1.4">📅 Planning a future activity — no time required yet. When the day comes, click the activity to confirm + add times.</div>'
     +     '<label style="display:block;font-size:11px;font-weight:700;color:var(--text);margin-bottom:4px">Title <span style="color:#dc2626">*</span></label>'
     +     '<input id="ph220-sa-title" type="text" placeholder="e.g. Lions Club outreach, networking event…" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 11px;font-size:13px;font-family:inherit;box-sizing:border-box;margin-bottom:12px">'
-    +     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">'
-    +       '<div><label style="display:block;font-size:11px;font-weight:700;color:var(--text);margin-bottom:4px">⏱ Start time</label>'
+    +     '<div id="ph225-sa-time-row" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">'
+    +       '<div><label style="display:block;font-size:11px;font-weight:700;color:var(--text);margin-bottom:4px"><span id="ph225-sa-start-lbl">⏱ Start time <span style="color:#dc2626">*</span></span></label>'
     +         '<input id="ph220-sa-start" type="time" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 11px;font-size:13px;font-family:inherit;box-sizing:border-box"></div>'
-    +       '<div><label style="display:block;font-size:11px;font-weight:700;color:var(--text);margin-bottom:4px">⏱ End time</label>'
+    +       '<div><label style="display:block;font-size:11px;font-weight:700;color:var(--text);margin-bottom:4px"><span id="ph225-sa-end-lbl">⏱ End time <span style="color:#dc2626">*</span></span></label>'
     +         '<input id="ph220-sa-end" type="time" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 11px;font-size:13px;font-family:inherit;box-sizing:border-box"></div>'
     +     '</div>'
     +     '<label style="display:block;font-size:11px;font-weight:700;color:var(--text);margin-bottom:4px">Description <span style="color:#dc2626">*</span></label>'
@@ -53547,11 +53634,10 @@ function _phase220OpenAddModal(dateIso, existing){
               normal window are stamped onto the row in _phase220SaveModal
               so the UI can show a "✏ by admin" note. */
   if(!existing){
+    /* Phase 225 — _phase223CanAdd now returns true for future dates
+       (planning is allowed). Only blocked path is past-week. */
     if(!_phase223CanAdd(dateIso)){
-      var _ph224IsFuture = _phase221IsFutureDate(dateIso);
-      var addMsg = _ph224IsFuture
-        ? 'Side activities log what was done — no future dates.'
-        : 'Side activities can only be logged within the current week (Monday → today).';
+      var addMsg = 'Side activities can only be added in the current week or planned for a future date.';
       if(typeof showToast === 'function') showToast(addMsg);
       else alert(addMsg);
       return;
@@ -53567,17 +53653,69 @@ function _phase220OpenAddModal(dateIso, existing){
   _phase220EnsureModal();
   var m = document.getElementById('ph220-sa-modal');
   m.style.display = 'flex';
+  /* Phase 225 — resolve the mode and stash it on the modal so SaveModal
+     can reach it without recomputing. */
+  var _ph225Mode = _phase225ResolveMode(dateIso, existing);
   m.dataset.dateIso = dateIso || '';
   m.dataset.editId  = (existing && existing.id) || '';
   m.dataset.member  = member;
+  m.dataset.mode    = _ph225Mode;
   var titleLbl = document.getElementById('ph220-sa-title-label');
   var dateLbl  = document.getElementById('ph220-sa-date-label');
-  if(titleLbl) titleLbl.textContent = existing ? '✏ Edit side activity' : '📋 Add side activity';
+  if(titleLbl){
+    var headerByMode = {
+      'plan':       '📅 Plan a future activity',
+      'edit-plan':  '✏ Edit planned activity',
+      'confirm':    '✅ Confirm this planned activity',
+      'complete':   '📋 Add side activity',
+      'edit':       '✏ Edit side activity'
+    };
+    titleLbl.textContent = headerByMode[_ph225Mode] || '📋 Side activity';
+  }
   if(dateLbl){
     try {
       var d = new Date(dateIso + 'T00:00:00');
       dateLbl.textContent = d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }) + ' · ' + member;
     } catch(_){ dateLbl.textContent = dateIso + ' · ' + member; }
+  }
+  /* Phase 225 — drive UI bits per mode: status pill, plan hint, time-row
+     visibility, time-label asterisks, Save-button label. */
+  var pill     = document.getElementById('ph225-sa-status-pill');
+  var planHint = document.getElementById('ph225-sa-plan-hint');
+  var timeRow  = document.getElementById('ph225-sa-time-row');
+  var startLbl = document.getElementById('ph225-sa-start-lbl');
+  var endLbl   = document.getElementById('ph225-sa-end-lbl');
+  var saveBtn  = document.getElementById('ph220-sa-save-btn');
+  var planning = _phase225ModeIsPlanning(_ph225Mode);
+  var needsTime = _phase225ModeRequiresTime(_ph225Mode);
+  if(pill){
+    var pillByMode = {
+      'plan':       'Status: pending — planning',
+      'edit-plan':  'Status: pending — planning',
+      'confirm':    'Status: pending → completed on save',
+      'complete':   'Status: completed',
+      'edit':       'Status: completed'
+    };
+    pill.textContent = pillByMode[_ph225Mode] || '';
+    pill.style.display = 'inline-block';
+  }
+  if(planHint) planHint.style.display = planning ? 'block' : 'none';
+  if(timeRow)  timeRow.style.display  = planning ? 'none'  : 'grid';
+  if(startLbl) startLbl.innerHTML = needsTime
+    ? '⏱ Start time <span style="color:#dc2626">*</span>'
+    : '⏱ Start time';
+  if(endLbl)   endLbl.innerHTML   = needsTime
+    ? '⏱ End time <span style="color:#dc2626">*</span>'
+    : '⏱ End time';
+  if(saveBtn){
+    var saveByMode = {
+      'plan':       'Plan activity',
+      'edit-plan':  'Save plan',
+      'confirm':    '✓ Confirm → completed',
+      'complete':   'Save',
+      'edit':       'Save'
+    };
+    saveBtn.textContent = saveByMode[_ph225Mode] || 'Save';
   }
   document.getElementById('ph220-sa-title').value = (existing && existing.title) || '';
   document.getElementById('ph220-sa-start').value = (existing && existing.start) || '';
@@ -53592,6 +53730,7 @@ function _phase220SaveModal(){
   var dateIso = m.dataset.dateIso || '';
   var editId  = m.dataset.editId  || '';
   var member  = m.dataset.member  || _phase220MemberCtx();
+  var mode    = m.dataset.mode    || 'complete';  /* Phase 225 */
   var title = (document.getElementById('ph220-sa-title').value || '').trim();
   var start = document.getElementById('ph220-sa-start').value || '';
   var end   = document.getElementById('ph220-sa-end').value   || '';
@@ -53601,17 +53740,23 @@ function _phase220SaveModal(){
      name `notes` for backward compat, but the label says Description. */
   if(!notes){ alert('Description is required — explain what was done.'); return; }
   if(!dateIso || !member){ alert('Missing date or member context.'); return; }
-  /* Phase 221 + 222 + 223 — defensive backstops with admin bypass.
-       NON-ADMIN: ADD only today/yesterday; EDIT only inside 1-day window.
-       ADMIN: always passes; row stamped with _adminOverride marker.
-     Catches DOM tampering / console calls. */
-  var _ph223Admin     = _phase223IsAdmin();
-  var _ph223InAddWin  = _phase221CanAddOn(dateIso);
-  if(!editId && !_ph223Admin && !_ph223InAddWin){
-    var _ph224IsFut = _phase221IsFutureDate(dateIso);
-    alert(_ph224IsFut
-      ? 'Side activities log what was done — no future dates.'
-      : 'Side activities can only be logged within the current week (Monday → today).');
+  /* Phase 225 — time required only when mode is complete/confirm/edit. */
+  if(_phase225ModeRequiresTime(mode)){
+    if(!start || !end){
+      alert('Start and end times are required to mark this activity completed.');
+      return;
+    }
+  }
+  /* Phase 221 + 222 + 223 + 225 — defensive backstops with admin bypass.
+       Future dates: allowed (planning).
+       Current-week past/today: allowed (completed).
+       Past-week: blocked unless admin.
+       Edit: blocked when past-week + non-admin (pending plans on future
+             dates still pass _phase223CanEditActivity → Phase 225). */
+  var _ph223Admin       = _phase223IsAdmin();
+  var _ph225AddOrPlan   = _phase225CanAddOrPlanOn(dateIso);
+  if(!editId && !_ph223Admin && !_ph225AddOrPlan){
+    alert('Side activities can only be added in the current week or planned for a future date.');
     return;
   }
   var all = _phase185LoadSideActivities();
@@ -53643,17 +53788,20 @@ function _phase220SaveModal(){
       action: action  /* 'add_out_of_window' | 'edit_locked' */
     };
   }
+  /* Phase 225 — status: 'pending' for plan/edit-plan, 'completed' otherwise.
+     Confirm-mode flips a pending row → completed. Edit-plan keeps pending. */
+  var _ph225Status = _phase225ModeIsPlanning(mode) ? 'pending' : 'completed';
   if(editId){
     var idx = all[member][dateIso].findIndex(function(a){ return a.id === editId; });
     if(idx >= 0){
       var prevOverride = all[member][dateIso][idx]._adminOverride;
-      var newRow = { id: editId, title: title, notes: notes, start: start, end: end, ts: dateIso };
+      var newRow = { id: editId, title: title, notes: notes, start: start, end: end, ts: dateIso, status: _ph225Status };
       if(_ph223AdminEdit) newRow._adminOverride = _ph223BuildOverride('edit_locked');
       else if(prevOverride) newRow._adminOverride = prevOverride;
       all[member][dateIso][idx] = newRow;
     }
   } else {
-    var addRow = { id: 'sa-' + Math.random().toString(36).slice(2,8), title: title, notes: notes, start: start, end: end, ts: dateIso };
+    var addRow = { id: 'sa-' + Math.random().toString(36).slice(2,8), title: title, notes: notes, start: start, end: end, ts: dateIso, status: _ph225Status };
     if(_ph223AdminAdd) addRow._adminOverride = _ph223BuildOverride('add_out_of_window');
     all[member][dateIso].push(addRow);
   }
@@ -53761,23 +53909,40 @@ function _phase220RenderDayViewPanel(di){
   } else {
     listHtml = acts.map(function(a){
       var timeRange = _phase220FmtRange(a);
-      /* Phase 222 + 223 + 224 — admin-aware edit gate. Once the activity's
-         week has passed, non-admins see a 🔒 badge instead of buttons.
-         Admin always sees buttons. If the row carries an _adminOverride
-         marker, render a small "✏ by admin" chip per the standing
-         admin-override rule. */
+      /* Phase 222 + 223 + 224 + 225 — admin-aware edit gate + pending state.
+         Pending rows render with amber accents and a "Confirm" CTA when
+         the planned day has arrived. Locked (past-week) rows show 🔒.
+         Admin sees full buttons always. */
+      var _ph225Pending  = _phase225IsPending(a);
       var _ph224Editable = _phase223CanEditActivity(a);
-      var actionBtns = _ph224Editable
-        ? ('<button onclick="_phase220EditActivity(\'' + dateIso + '\',\'' + a.id + '\')" title="Edit" style="background:#fff;border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:11px;cursor:pointer;color:#1F3864;font-weight:700">✏</button>'
-           + '<button onclick="_phase185DeleteSideActivity(\'' + dateIso + '\',\'' + a.id + '\')" title="Delete" style="background:#fff;border:1px solid #fca5a5;border-radius:6px;padding:4px 8px;font-size:11px;cursor:pointer;color:#991b1b;font-weight:700">×</button>')
-        : '<span title="Locked — past week" style="background:#f1f5f9;border:1px solid #cbd5e1;border-radius:6px;padding:4px 8px;font-size:11px;color:#64748b;font-weight:700;cursor:not-allowed">🔒</span>';
+      var _ph225CanConfirm = _ph225Pending && _ph224Editable && !(_phase221IsFutureDate(a.date || a.ts || dateIso));
+      var actionBtns;
+      if(!_ph224Editable){
+        actionBtns = '<span title="Locked — past week" style="background:#f1f5f9;border:1px solid #cbd5e1;border-radius:6px;padding:4px 8px;font-size:11px;color:#64748b;font-weight:700;cursor:not-allowed">🔒</span>';
+      } else if(_ph225CanConfirm){
+        actionBtns = '<button onclick="_phase220EditActivity(\'' + dateIso + '\',\'' + a.id + '\')" title="Confirm + add times" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;border:none;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer;font-weight:800">✓ Confirm</button>'
+          + '<button onclick="_phase185DeleteSideActivity(\'' + dateIso + '\',\'' + a.id + '\')" title="Cancel plan" style="background:#fff;border:1px solid #fca5a5;border-radius:6px;padding:4px 8px;font-size:11px;cursor:pointer;color:#991b1b;font-weight:700">×</button>';
+      } else {
+        actionBtns = '<button onclick="_phase220EditActivity(\'' + dateIso + '\',\'' + a.id + '\')" title="' + (_ph225Pending ? 'Edit plan' : 'Edit') + '" style="background:#fff;border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:11px;cursor:pointer;color:#1F3864;font-weight:700">✏</button>'
+          + '<button onclick="_phase185DeleteSideActivity(\'' + dateIso + '\',\'' + a.id + '\')" title="Delete" style="background:#fff;border:1px solid #fca5a5;border-radius:6px;padding:4px 8px;font-size:11px;cursor:pointer;color:#991b1b;font-weight:700">×</button>';
+      }
       var overrideChip = (a._adminOverride && a._adminOverride.by)
         ? '<div style="font-size:9.5px;font-weight:700;color:#92400e;background:#fef3c7;border:1px solid #fcd34d;border-radius:5px;padding:2px 7px;margin-top:4px;display:inline-block">✏ ' + esc(a._adminOverride.action === 'add_out_of_window' ? 'Added' : 'Edited') + ' by admin · ' + esc(a._adminOverride.by) + (a._adminOverride.ts ? ' · ' + esc(a._adminOverride.ts) : '') + '</div>'
         : '';
-      return '<div style="background:' + (_ph224Editable ? '#faf5ff' : '#f8fafc') + ';border:1px solid ' + (_ph224Editable ? '#ddd6fe' : '#e2e8f0') + ';border-left:3px solid ' + (_ph224Editable ? '#7c3aed' : '#94a3b8') + ';border-radius:8px;padding:9px 12px;margin-bottom:6px;display:flex;align-items:flex-start;gap:8px">'
+      /* Phase 225 — pending status badge inline with title. */
+      var statusBadge = _ph225Pending
+        ? '<span style="display:inline-block;background:#fef3c7;color:#92400e;border:1px solid #fcd34d;font-size:9px;font-weight:800;padding:1px 6px;border-radius:99px;margin-left:6px;letter-spacing:.04em;vertical-align:middle">⏳ PENDING</span>'
+        : '';
+      /* Pending rows use amber tint; completed editable uses purple;
+         locked uses slate. */
+      var cardBg, cardBorder, cardEdge;
+      if(!_ph224Editable){ cardBg = '#f8fafc'; cardBorder = '#e2e8f0'; cardEdge = '#94a3b8'; }
+      else if(_ph225Pending){ cardBg = '#fffbeb'; cardBorder = '#fde68a'; cardEdge = '#f59e0b'; }
+      else { cardBg = '#faf5ff'; cardBorder = '#ddd6fe'; cardEdge = '#7c3aed'; }
+      return '<div style="background:' + cardBg + ';border:1px solid ' + cardBorder + ';border-left:3px solid ' + cardEdge + ';border-radius:8px;padding:9px 12px;margin-bottom:6px;display:flex;align-items:flex-start;gap:8px">'
         +    '<div style="flex:1;min-width:0">'
-        +      '<div style="font-size:12px;font-weight:700;color:var(--text);line-height:1.3">' + esc(a.title) + '</div>'
-        +      (timeRange ? '<div style="font-size:10.5px;color:#7c3aed;font-weight:700;margin-top:2px">⏱ ' + esc(timeRange) + '</div>' : '')
+        +      '<div style="font-size:12px;font-weight:700;color:var(--text);line-height:1.3">' + esc(a.title) + statusBadge + '</div>'
+        +      (timeRange ? '<div style="font-size:10.5px;color:' + cardEdge + ';font-weight:700;margin-top:2px">⏱ ' + esc(timeRange) + '</div>' : (_ph225Pending ? '<div style="font-size:10.5px;color:#92400e;font-weight:700;margin-top:2px;font-style:italic">⏱ time to be added on confirm</div>' : ''))
         +      (a.notes ? '<div style="font-size:11px;color:var(--muted);margin-top:3px;line-height:1.4">' + esc(a.notes) + '</div>' : '')
         +      overrideChip
         +    '</div>'
@@ -53785,17 +53950,20 @@ function _phase220RenderDayViewPanel(di){
         + '</div>';
     }).join('');
   }
-  /* Phase 221 + 222 + 224 — gate + Add button to current-week dates.
-     Future days → future note. Past-week days → locked note. Admin's
-     button always shows since admin bypasses both checks. */
-  var _ph224CanAdd = _phase223CanAdd(dateIso);
-  var _ph224IsFuture = _phase221IsFutureDate(dateIso);
-  var noAddMsg = _ph224IsFuture
-    ? '⏳ Future day — log activities after they happen'
-    : '🔒 Past week — this day is closed';
-  var addBtnHtml = _ph224CanAdd
-    ? '<button onclick="_phase220OpenAddModal(\'' + dateIso + '\', null)" style="background:linear-gradient(135deg,#7c3aed,#1F3864);color:#fff;border:none;border-radius:7px;padding:7px 14px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">+ Add activity</button>'
-    : '<div style="font-size:10px;color:var(--muted);font-style:italic;background:#fef3c7;border:1px solid #fcd34d;padding:5px 11px;border-radius:7px">' + noAddMsg + '</div>';
+  /* Phase 221 + 222 + 224 + 225 — gate + Add button.
+       Current-week past/today: "+ Add activity" (purple).
+       Future: "+ Plan activity"  (amber).
+       Past-week: locked note. */
+  var _ph225CanInteract = _phase223CanAdd(dateIso);
+  var _ph225DayFuture   = _phase221IsFutureDate(dateIso);
+  var addBtnHtml;
+  if(!_ph225CanInteract){
+    addBtnHtml = '<div style="font-size:10px;color:var(--muted);font-style:italic;background:#fef3c7;border:1px solid #fcd34d;padding:5px 11px;border-radius:7px">🔒 Past week — this day is closed</div>';
+  } else if(_ph225DayFuture){
+    addBtnHtml = '<button onclick="_phase220OpenAddModal(\'' + dateIso + '\', null)" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;border:none;border-radius:7px;padding:7px 14px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">📅 Plan activity</button>';
+  } else {
+    addBtnHtml = '<button onclick="_phase220OpenAddModal(\'' + dateIso + '\', null)" style="background:linear-gradient(135deg,#7c3aed,#1F3864);color:#fff;border:none;border-radius:7px;padding:7px 14px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">+ Add activity</button>';
+  }
   panel.innerHTML = ''
     + '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px">'
     +   '<div>'
@@ -53850,48 +54018,53 @@ function _phase185RenderSideActivities(){
     var acts = mine[dateIso] || [];
     totalActs += acts.length;
     var hasActs = acts.length > 0;
-    /* Phase 221 + 222 + 224 — cells where ADD is not allowed (outside
-       the current week or future) are visually muted and don't open
-       the add modal for non-admins. Admin always sees the cell as
-       clickable. Two muted states: future days (amber-edge "future")
-       and past-week days (gray "closed"). Activity badges on those
-       cells still render — read-only with 🔒 for non-admin, editable
-       for admin. */
-    var _ph224CellCanAdd = (typeof _phase223CanAdd === 'function') && _phase223CanAdd(dateIso);
-    var _ph224CellFuture = (typeof _phase221IsFutureDate === 'function') && _phase221IsFutureDate(dateIso);
-    var cellBg     = !_ph224CellCanAdd ? (_ph224CellFuture ? '#fffbeb' : '#f1f5f9') : (hasActs ? '#faf5ff' : '#fff');
-    var cellBorder = !_ph224CellCanAdd ? (_ph224CellFuture ? '#fcd34d' : '#cbd5e1') : (hasActs ? '#7c3aed' : 'var(--border)');
-    var cellCursor = _ph224CellCanAdd ? 'pointer' : 'not-allowed';
-    var cellTitle  = _ph224CellCanAdd
-      ? ('Click to add activity for ' + dateIso)
-      : (_ph224CellFuture ? 'Future day — log activities after they happen' : 'Past week — this day is closed');
-    var cellOnclick = _ph224CellCanAdd ? ' onclick="_phase185AddSideActivity(\'' + dateIso + '\')"' : '';
-    var dayTxtColor = !_ph224CellCanAdd ? '#cbd5e1' : (hasActs ? '#7c3aed' : '#94a3b8');
+    /* Phase 221 + 222 + 224 + 225 — cells: cells where ADD/PLAN is
+       not allowed (past week, non-admin) are visually muted. Future
+       cells are now CLICKABLE — they open the modal in plan mode.
+       Past-week cells stay locked unless admin. Activity badges
+       render with status-aware colors: amber = pending, purple =
+       completed editable, slate = locked. */
+    var _ph225CellCanInteract = (typeof _phase223CanAdd === 'function') && _phase223CanAdd(dateIso);
+    var _ph225CellFuture      = (typeof _phase221IsFutureDate === 'function') && _phase221IsFutureDate(dateIso);
+    var cellBg, cellBorder;
+    if(!_ph225CellCanInteract){ cellBg = '#f1f5f9'; cellBorder = '#cbd5e1'; }
+    else if(_ph225CellFuture){ cellBg = hasActs ? '#fffbeb' : '#fffdf5'; cellBorder = '#fcd34d'; }
+    else { cellBg = hasActs ? '#faf5ff' : '#fff'; cellBorder = hasActs ? '#7c3aed' : 'var(--border)'; }
+    var cellCursor = _ph225CellCanInteract ? 'pointer' : 'not-allowed';
+    var cellTitle  = _ph225CellCanInteract
+      ? (_ph225CellFuture ? 'Click to PLAN an activity for ' + dateIso : 'Click to add activity for ' + dateIso)
+      : 'Past week — this day is closed';
+    var cellOnclick = _ph225CellCanInteract ? ' onclick="_phase185AddSideActivity(\'' + dateIso + '\')"' : '';
+    var dayTxtColor = !_ph225CellCanInteract ? '#cbd5e1' : (_ph225CellFuture ? '#d97706' : (hasActs ? '#7c3aed' : '#94a3b8'));
     html += '<div style="border:1px solid ' + cellBorder + ';border-radius:6px;padding:6px 5px;min-height:44px;background:' + cellBg + ';cursor:' + cellCursor + ';position:relative"' + cellOnclick + ' title="' + cellTitle + '">'
         +     '<div style="font-size:10px;font-weight:700;color:' + dayTxtColor + '">' + day + '</div>';
     acts.forEach(function(a){
       var safeT = String(a.title).replace(/</g,'&lt;').slice(0, 16);
-      /* Phase 220 + 224: show start time, then either purple = editable
-         (admin or current-week row) or slate = locked. Admin-override
-         marker gets a tiny ✏ prefix so it's visible on the calendar. */
       var timeBadge = (typeof _phase220FmtTime === 'function' && a.start)
         ? '<span style="font-size:8px;background:rgba(255,255,255,.28);padding:0 4px;border-radius:3px;font-weight:700">' + _phase220FmtTime(a.start) + '</span> '
         : '';
-      var _ph224BadgeEditable = _phase223CanEditActivity(a);
+      var _ph225BadgePending  = _phase225IsPending(a);
+      var _ph225BadgeEditable = _phase223CanEditActivity(a);
       var tooltipBase = a.notes ? String(a.notes).replace(/"/g, '&quot;') : a.title;
       var range   = (typeof _phase220FmtRange === 'function') ? _phase220FmtRange(a) : '';
       if(range) tooltipBase = range + ' · ' + tooltipBase;
       var overrideTip = (a._adminOverride && a._adminOverride.by)
         ? ' · ✏ admin: ' + String(a._adminOverride.by).replace(/"/g, '&quot;')
         : '';
-      var tooltip = tooltipBase + overrideTip + (_ph224BadgeEditable ? ' (click to edit)' : ' · 🔒 locked');
-      var badgeBg     = _ph224BadgeEditable ? '#7c3aed' : '#94a3b8';
-      var badgeCursor = _ph224BadgeEditable ? 'pointer' : 'not-allowed';
-      var badgeClick  = _ph224BadgeEditable
+      var statusTip = _ph225BadgePending ? ' · ⏳ pending' : '';
+      var tooltip = tooltipBase + statusTip + overrideTip + (_ph225BadgeEditable ? (_ph225BadgePending ? ' (click to confirm/edit)' : ' (click to edit)') : ' · 🔒 locked');
+      /* Phase 225 — amber for pending, purple for completed, slate for locked. */
+      var badgeBg;
+      if(!_ph225BadgeEditable) badgeBg = '#94a3b8';
+      else if(_ph225BadgePending) badgeBg = '#f59e0b';
+      else badgeBg = '#7c3aed';
+      var badgeCursor = _ph225BadgeEditable ? 'pointer' : 'not-allowed';
+      var badgeClick  = _ph225BadgeEditable
         ? ('event.stopPropagation();_phase220EditActivity(\'' + dateIso + '\',\'' + a.id + '\')')
         : 'event.stopPropagation()';
-      var adminMark = (a._adminOverride && a._adminOverride.by) ? '<span style="font-size:8px">✏</span>' : '';
-      html += '<div style="font-size:9px;background:' + badgeBg + ';color:#fff;border-radius:4px;padding:1px 4px;margin-top:2px;line-height:1.3;display:flex;align-items:center;gap:3px;cursor:' + badgeCursor + '" onclick="' + badgeClick + '" title="' + tooltip + '">' + adminMark + timeBadge + safeT + '</div>';
+      var adminMark   = (a._adminOverride && a._adminOverride.by) ? '<span style="font-size:8px">✏</span>' : '';
+      var pendingMark = _ph225BadgePending ? '<span style="font-size:8px">⏳</span>' : '';
+      html += '<div style="font-size:9px;background:' + badgeBg + ';color:#fff;border-radius:4px;padding:1px 4px;margin-top:2px;line-height:1.3;display:flex;align-items:center;gap:3px;cursor:' + badgeCursor + '" onclick="' + badgeClick + '" title="' + tooltip + '">' + pendingMark + adminMark + timeBadge + safeT + '</div>';
     });
     html += '</div>';
   }
