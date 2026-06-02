@@ -3438,16 +3438,35 @@ button:not([disabled]):not(.no-press):active {
 
   <!-- CLINICS WITH LEADS PANEL -->
   <!-- PODCAST SCHEDULE PANEL -->
+  <!-- Phase 258 (2026-06-02): Podcast schedule rebuilt to match the master
+       Excel sheet (Physician / Specialty / Walkthrough / Recording / Status /
+       Notes). Editing locked to admin + Ms Sadia (chief marketing lead);
+       multi-select + bulk delete; download to Excel. -->
   <div id="clinic-panel-podcast" style="display:none;padding:24px 20px">
-    <div style="margin-bottom:16px">
-      <div style="font-size:16px;font-weight:700;color:var(--text)">Podcast Schedule</div>
-      <div style="font-size:11px;color:var(--muted);margin-top:3px">Doctor appointments for podcast recording — ✎ Edit any row to set date and status</div>
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:16px;flex-wrap:wrap">
+      <div>
+        <div style="font-size:16px;font-weight:700;color:var(--text)">Podcast Recording Schedule</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:3px" id="pod-permission-note">Physician walkthrough &amp; recording slots — only admin and Ms Sadia can edit</div>
+      </div>
+      <div id="pod-toolbar" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <button id="pod-bulk-del" onclick="_phase258BulkDeletePod()" style="display:none;background:#fef2f2;border:1px solid #fca5a5;color:#991b1b;font-size:11px;font-weight:700;padding:7px 14px;border-radius:8px;cursor:pointer;font-family:'DM Sans',sans-serif">🗑 Delete selected (<span id="pod-sel-count">0</span>)</button>
+        <button onclick="_phase258DownloadPodExcel()" style="background:#ecfdf5;border:1px solid #86efac;color:#166534;font-size:11px;font-weight:700;padding:7px 14px;border-radius:8px;cursor:pointer;font-family:'DM Sans',sans-serif">⬇ Download Excel</button>
+      </div>
     </div>
     <div style="background:var(--card);border-radius:12px;border:1px solid var(--border);overflow:hidden;box-shadow:0 2px 12px rgba(31,56,100,.05)">
       <div style="overflow-x:auto">
         <table style="width:100%;border-collapse:collapse;min-width:1000px">
           <thead>
-            <tr style="background:var(--navy)"><th style="padding:9px 12px;font-size:10px;font-weight:600;color:#fff;text-align:left;white-space:nowrap;border-right:1px solid rgba(255,255,255,.1);text-transform:uppercase;letter-spacing:.04em;width:80px;text-align:center"></th><th style="padding:9px 12px;font-size:10px;font-weight:600;color:#fff;text-align:left;white-space:nowrap;border-right:1px solid rgba(255,255,255,.1);text-transform:uppercase;letter-spacing:.04em">Lead ID</th><th style="padding:9px 12px;font-size:10px;font-weight:600;color:#fff;text-align:left;white-space:nowrap;border-right:1px solid rgba(255,255,255,.1);text-transform:uppercase;letter-spacing:.04em">Doctor</th><th style="padding:9px 12px;font-size:10px;font-weight:600;color:#fff;text-align:left;white-space:nowrap;border-right:1px solid rgba(255,255,255,.1);text-transform:uppercase;letter-spacing:.04em">Clinic</th><th style="padding:9px 12px;font-size:10px;font-weight:600;color:#fff;text-align:left;white-space:nowrap;border-right:1px solid rgba(255,255,255,.1);text-transform:uppercase;letter-spacing:.04em">Specialty</th><th style="padding:9px 12px;font-size:10px;font-weight:600;color:#fff;text-align:left;white-space:nowrap;border-right:1px solid rgba(255,255,255,.1);text-transform:uppercase;letter-spacing:.04em">City</th><th style="padding:9px 12px;font-size:10px;font-weight:600;color:#fff;text-align:left;white-space:nowrap;border-right:1px solid rgba(255,255,255,.1);text-transform:uppercase;letter-spacing:.04em">Agent</th><th style="padding:9px 12px;font-size:10px;font-weight:600;color:#fff;text-align:left;white-space:nowrap;border-right:1px solid rgba(255,255,255,.1);text-transform:uppercase;letter-spacing:.04em">Stage</th><th style="padding:9px 12px;font-size:10px;font-weight:600;color:#fff;text-align:left;white-space:nowrap;border-right:1px solid rgba(255,255,255,.1);text-transform:uppercase;letter-spacing:.04em">Last Visit</th><th style="padding:9px 12px;font-size:10px;font-weight:600;color:#fff;text-align:left;white-space:nowrap;border-right:1px solid rgba(255,255,255,.1);text-transform:uppercase;letter-spacing:.04em">Follow-Up By</th><th style="padding:9px 12px;font-size:10px;font-weight:600;color:#fff;text-align:left;white-space:nowrap;border-right:1px solid rgba(255,255,255,.1);text-transform:uppercase;letter-spacing:.04em;min-width:160px">Notes</th><th style="padding:9px 12px;font-size:10px;font-weight:600;color:#fff;text-align:left;white-space:nowrap;border-right:1px solid rgba(255,255,255,.1);text-transform:uppercase;letter-spacing:.04em">Podcast Status</th></tr>
+            <tr style="background:var(--navy)">
+              <th id="pod-th-sel" style="padding:9px 12px;font-size:10px;font-weight:600;color:#fff;text-align:center;white-space:nowrap;border-right:1px solid rgba(255,255,255,.1);width:36px"><input type="checkbox" id="pod-sel-all" onclick="_phase258ToggleAllPod()" title="Select all" style="cursor:pointer"></th>
+              <th id="pod-th-edit" style="padding:9px 12px;font-size:10px;font-weight:600;color:#fff;text-align:center;white-space:nowrap;border-right:1px solid rgba(255,255,255,.1);text-transform:uppercase;letter-spacing:.04em;width:90px">Actions</th>
+              <th style="padding:9px 12px;font-size:10px;font-weight:600;color:#fff;text-align:left;white-space:nowrap;border-right:1px solid rgba(255,255,255,.1);text-transform:uppercase;letter-spacing:.04em">Physician Name</th>
+              <th style="padding:9px 12px;font-size:10px;font-weight:600;color:#fff;text-align:left;white-space:nowrap;border-right:1px solid rgba(255,255,255,.1);text-transform:uppercase;letter-spacing:.04em">Specialty</th>
+              <th style="padding:9px 12px;font-size:10px;font-weight:600;color:#fff;text-align:left;white-space:nowrap;border-right:1px solid rgba(255,255,255,.1);text-transform:uppercase;letter-spacing:.04em">Walkthrough (Teams/Call) Date &amp; Time</th>
+              <th style="padding:9px 12px;font-size:10px;font-weight:600;color:#fff;text-align:left;white-space:nowrap;border-right:1px solid rgba(255,255,255,.1);text-transform:uppercase;letter-spacing:.04em">Recording Date &amp; Time</th>
+              <th style="padding:9px 12px;font-size:10px;font-weight:600;color:#fff;text-align:left;white-space:nowrap;border-right:1px solid rgba(255,255,255,.1);text-transform:uppercase;letter-spacing:.04em">Status</th>
+              <th style="padding:9px 12px;font-size:10px;font-weight:600;color:#fff;text-align:left;white-space:nowrap;text-transform:uppercase;letter-spacing:.04em;min-width:180px">Notes</th>
+            </tr>
           </thead>
           <tbody id="pod-tbody"></tbody>
         </table>
@@ -70804,193 +70823,331 @@ var LP_COLS=["Lead ID", "Doctor Name", "Clinic Name", "Specialty", "City", "Agen
 var LP_ROWS=[{"Lead ID": "L-001", "Doctor Name": "Dr. Cudjoe", "Clinic Name": "Bloomfield Medical", "Specialty": "PCP", "City": "Frisco", "Agent": "Duaa", "Stage": "Corp. Visit Set", "Last Visit": "4/16/2025", "Corp. Visit Date": "4/23/2025", "Follow-Up By": "Duaa", "Notes": "Confirmed meeting at HQ. Remind 2 days before."}, {"Lead ID": "L-002", "Doctor Name": "Dr. Udita Apte", "Clinic Name": "Meridian Primary Care", "Specialty": "PCP", "City": "McKinney", "Agent": "Duaa", "Stage": "Corp. Visit Set", "Last Visit": "4/17/2025", "Corp. Visit Date": "4/21/2025", "Follow-Up By": "Duaa", "Notes": "Ready to sign. Bring contract to meeting."}, {"Lead ID": "L-003", "Doctor Name": "Dr. Pablani", "Clinic Name": "Pioneer Medical Associates", "Specialty": "PCP", "City": "Frisco", "Agent": "Sadia", "Stage": "Interested", "Last Visit": "4/16/2025", "Corp. Visit Date": "", "Follow-Up By": "Sadia", "Notes": "Wants info on elderly telemedicine. Send brochure."}, {"Lead ID": "L-004", "Doctor Name": "Dr. Priti Ranjan", "Clinic Name": "Nest Family Medicine", "Specialty": "PCP", "City": "Plano", "Agent": "Amna", "Stage": "Interested", "Last Visit": "4/19/2025", "Corp. Visit Date": "", "Follow-Up By": "Amna", "Notes": "Interested in chronic care. Follow up this week."}, {"Lead ID": "L-005", "Doctor Name": "Dr. Salem", "Clinic Name": "Craig Ranch Pediatrics", "Specialty": "Pediatrics", "City": "McKinney", "Agent": "Duaa", "Stage": "Corp. Visit Set", "Last Visit": "4/20/2025", "Corp. Visit Date": "4/25/2025", "Follow-Up By": "Duaa", "Notes": "Large patient base. High priority."}, {"Lead ID": "L-006", "Doctor Name": "Dr. Palaniswamy", "Clinic Name": "Hebron Pediatrics", "Specialty": "Pediatrics", "City": "Carrollton", "Agent": "Zuhaab", "Stage": "Not Interested", "Last Visit": "4/18/2025", "Corp. Visit Date": "", "Follow-Up By": "", "Notes": "Not interested now. Revisit in 6 months."}, {"Lead ID": "L-007", "Doctor Name": "Dr. Johnson", "Clinic Name": "Johnson Family Medicine", "Specialty": "PCP", "City": "Frisco", "Agent": "Sadia", "Stage": "Contracted", "Last Visit": "3/15/2025", "Corp. Visit Date": "3/20/2025", "Follow-Up By": "", "Notes": "Contract signed 3/20. Onboarding in progress."}, {"Lead ID": "L-008", "Doctor Name": "Dr. Biju Lukose", "Clinic Name": "Little Lantern", "Specialty": "Primary", "City": "Carrollton", "Agent": "Duaa", "Stage": "Visited", "Last Visit": "4/16/2025", "Corp. Visit Date": "", "Follow-Up By": "Duaa", "Notes": "Front desk only. Doctor in next Tuesday."}, {"Lead ID": "L-009", "Doctor Name": "Dr. Malvika Sachdev", "Clinic Name": "North Texas Medical Clinic", "Specialty": "Internal Med", "City": "Frisco", "Agent": "Duaa", "Stage": "Not Visited", "Last Visit": "TBD", "Corp. Visit Date": "TBD", "Follow-Up By": "Duaa", "Notes": "Also Dr. Gurrapu. UTSW-affiliated. High priority target."}, {"Lead ID": "L-010", "Doctor Name": "TBD", "Clinic Name": "Frisco Primary Care, P.A.", "Specialty": "Internal Med", "City": "Frisco", "Agent": "Sadia", "Stage": "Not Visited", "Last Visit": "TBD", "Corp. Visit Date": "TBD", "Follow-Up By": "Sadia", "Notes": "Multiple board-certified internists. Call ahead for doctor name."}, {"Lead ID": "L-011", "Doctor Name": "TBD", "Clinic Name": "West Frisco Health & Wellness", "Specialty": "PCP", "City": "Frisco", "Agent": "Sadia", "Stage": "Not Visited", "Last Visit": "TBD", "Corp. Visit Date": "TBD", "Follow-Up By": "Sadia", "Notes": "Diabetes & weight loss focus. Good patient demographics."}, {"Lead ID": "L-012", "Doctor Name": "TBD", "Clinic Name": "QuickMD Care Frisco", "Specialty": "PCP", "City": "Frisco", "Agent": "Duaa", "Stage": "Not Visited", "Last Visit": "TBD", "Corp. Visit Date": "TBD", "Follow-Up By": "Duaa", "Notes": "Same-day access. Also has McKinney location."}, {"Lead ID": "L-013", "Doctor Name": "TBD", "Clinic Name": "McKinney Medical Village", "Specialty": "PCP", "City": "McKinney", "Agent": "Amna", "Stage": "Not Visited", "Last Visit": "TBD", "Corp. Visit Date": "TBD", "Follow-Up By": "Amna", "Notes": "Catalyst group. 7300 Eldorado Pkwy #200. 214-964-0304."}, {"Lead ID": "L-014", "Doctor Name": "TBD", "Clinic Name": "QuickMD Care McKinney", "Specialty": "PCP", "City": "McKinney", "Agent": "Amna", "Stage": "Not Visited", "Last Visit": "TBD", "Corp. Visit Date": "TBD", "Follow-Up By": "Amna", "Notes": "Walk-ins welcome. Coordinate with QuickMD Frisco."}, {"Lead ID": "L-015", "Doctor Name": "TBD", "Clinic Name": "Doctors of Internal Med McKinney", "Specialty": "Internal Med", "City": "McKinney", "Agent": "Duaa", "Stage": "Not Visited", "Last Visit": "TBD", "Corp. Visit Date": "TBD", "Follow-Up By": "Duaa", "Notes": "20+ yr DFW practice. 240 Adriatic Pkwy. 972-382-9292."}, {"Lead ID": "L-016", "Doctor Name": "TBD", "Clinic Name": "Woven Health Carrollton", "Specialty": "PCP", "City": "Carrollton", "Agent": "Zuhaab", "Stage": "Not Visited", "Last Visit": "TBD", "Corp. Visit Date": "TBD", "Follow-Up By": "Zuhaab", "Notes": "Direct primary care. Free care program. 469-574-2022."}, {"Lead ID": "L-017", "Doctor Name": "Dr. Tariq Mallick", "Clinic Name": "Family Care & Wellness Allen", "Specialty": "Family Med", "City": "Allen", "Agent": "Zuhaab", "Stage": "Not Visited", "Last Visit": "TBD", "Corp. Visit Date": "TBD", "Follow-Up By": "Zuhaab", "Notes": "Mayo Clinic grad. Very high reviews. Ask for Dr. Mallick directly."}, {"Lead ID": "L-018", "Doctor Name": "Dr. Sunil Modi", "Clinic Name": "Express Family Clinic Allen", "Specialty": "Family Med", "City": "Allen", "Agent": "Zuhaab", "Stage": "Not Visited", "Last Visit": "TBD", "Corp. Visit Date": "TBD", "Follow-Up By": "Zuhaab", "Notes": "Also Dr. Parihar. PCP + urgent care combo. 972-672-4121."}, {"Lead ID": "L-019", "Doctor Name": "TBD", "Clinic Name": "Family HealthCare Associates Allen", "Specialty": "PCP", "City": "Allen", "Agent": "Zuhaab", "Stage": "Not Visited", "Last Visit": "TBD", "Corp. Visit Date": "TBD", "Follow-Up By": "Zuhaab", "Notes": "Catalyst group. 1105 N Central Expy #2120. 972-727-9877."}, {"Lead ID": "L-020", "Doctor Name": "Dr. Todd Carruthers", "Clinic Name": "Allen Family Practice", "Specialty": "Family Med", "City": "Allen", "Agent": "Zuhaab", "Stage": "Not Visited", "Last Visit": "TBD", "Corp. Visit Date": "TBD", "Follow-Up By": "Zuhaab", "Notes": "Private practice since 1998. Women's health. allenfp.com."}, {"Lead ID": "L-021", "Doctor Name": "Dr. Manvinder Kainth", "Clinic Name": "Maple Primary Care", "Specialty": "Family Med", "City": "Plano", "Agent": "Amna", "Stage": "Not Visited", "Last Visit": "TBD", "Corp. Visit Date": "TBD", "Follow-Up By": "Amna", "Notes": "D Magazine Best Doctor. Independent DPC. New patients open."}, {"Lead ID": "L-022", "Doctor Name": "Dr. Heather Akins DO", "Clinic Name": "North Texas Family Medicine", "Specialty": "Family Med", "City": "Plano", "Agent": "Amna", "Stage": "Not Visited", "Last Visit": "TBD", "Corp. Visit Date": "TBD", "Follow-Up By": "Amna", "Notes": "Also Dr. Kaplan (Chief FM, Med City Plano). Small independent."}, {"Lead ID": "L-023", "Doctor Name": "TBD", "Clinic Name": "Texas Primary Care Center", "Specialty": "Internal Med", "City": "Richardson", "Agent": "TBD", "Stage": "Not Visited", "Last Visit": "TBD", "Corp. Visit Date": "TBD", "Follow-Up By": "TBD", "Notes": "3617 Shire Blvd #100. (469) 300-1243. New territory."}, {"Lead ID": "L-024", "Doctor Name": "TBD", "Clinic Name": "Catalyst Physician Group Richardson", "Specialty": "PCP", "City": "Richardson", "Agent": "TBD", "Stage": "Not Visited", "Last Visit": "TBD", "Corp. Visit Date": "TBD", "Follow-Up By": "TBD", "Notes": "3261 E. PGBH Hwy #200. Telehealth available. New territory."}, {"Lead ID": "L-025", "Doctor Name": "TBD", "Clinic Name": "Innovista Medical Center Richardson", "Specialty": "Family Med", "City": "Richardson", "Agent": "TBD", "Stage": "Not Visited", "Last Visit": "TBD", "Corp. Visit Date": "TBD", "Follow-Up By": "TBD", "Notes": "350 S Plano Rd. BCBS network. New territory."}, {"Lead ID": "L-026", "Doctor Name": "TBD", "Clinic Name": "Spring Creek Medical", "Specialty": "Family Med", "City": "Richardson", "Agent": "TBD", "Stage": "Not Visited", "Last Visit": "TBD", "Corp. Visit Date": "TBD", "Follow-Up By": "TBD", "Notes": "PCP + chiropractic. springcreekmed.com. New territory."}];
 /* hoisted */
 
-var POD_ROWS=[{"Lead ID": "L-001", "Doctor Name": "Dr. Cudjoe", "Clinic Name": "Bloomfield Medical", "Specialty": "PCP", "City": "Frisco", "Agent": "Duaa", "Stage": "Corp. Visit Set", "Last Visit": "4/16/2025", "Corp. Visit Date": "4/23/2025", "Follow-Up By": "Duaa", "Notes": "Confirmed meeting at HQ. Remind 2 days before.", "Podcast Status": "Pending Outreach"}, {"Lead ID": "L-002", "Doctor Name": "Dr. Udita Apte", "Clinic Name": "Meridian Primary Care", "Specialty": "PCP", "City": "McKinney", "Agent": "Duaa", "Stage": "Corp. Visit Set", "Last Visit": "4/17/2025", "Corp. Visit Date": "4/21/2025", "Follow-Up By": "Duaa", "Notes": "Ready to sign. Bring contract to meeting.", "Podcast Status": "Pending Outreach"}, {"Lead ID": "L-003", "Doctor Name": "Dr. Pablani", "Clinic Name": "Pioneer Medical Associates", "Specialty": "PCP", "City": "Frisco", "Agent": "Sadia", "Stage": "Interested", "Last Visit": "4/16/2025", "Corp. Visit Date": "", "Follow-Up By": "Sadia", "Notes": "Wants info on elderly telemedicine. Send brochure.", "Podcast Status": "Pending Outreach"}, {"Lead ID": "L-004", "Doctor Name": "Dr. Priti Ranjan", "Clinic Name": "Nest Family Medicine", "Specialty": "PCP", "City": "Plano", "Agent": "Amna", "Stage": "Interested", "Last Visit": "4/19/2025", "Corp. Visit Date": "", "Follow-Up By": "Amna", "Notes": "Interested in chronic care. Follow up this week.", "Podcast Status": "Pending Outreach"}, {"Lead ID": "L-005", "Doctor Name": "Dr. Salem", "Clinic Name": "Craig Ranch Pediatrics", "Specialty": "Pediatrics", "City": "McKinney", "Agent": "Duaa", "Stage": "Corp. Visit Set", "Last Visit": "4/20/2025", "Corp. Visit Date": "4/25/2025", "Follow-Up By": "Duaa", "Notes": "Large patient base. High priority.", "Podcast Status": "Pending Outreach"}, {"Lead ID": "L-006", "Doctor Name": "Dr. Palaniswamy", "Clinic Name": "Hebron Pediatrics", "Specialty": "Pediatrics", "City": "Carrollton", "Agent": "Zuhaab", "Stage": "Not Interested", "Last Visit": "4/18/2025", "Corp. Visit Date": "", "Follow-Up By": "", "Notes": "Not interested now. Revisit in 6 months.", "Podcast Status": "Pending Outreach"}, {"Lead ID": "L-007", "Doctor Name": "Dr. Johnson", "Clinic Name": "Johnson Family Medicine", "Specialty": "PCP", "City": "Frisco", "Agent": "Sadia", "Stage": "Contracted", "Last Visit": "3/15/2025", "Corp. Visit Date": "3/20/2025", "Follow-Up By": "", "Notes": "Contract signed 3/20. Onboarding in progress.", "Podcast Status": "Pending Outreach"}, {"Lead ID": "L-008", "Doctor Name": "Dr. Biju Lukose", "Clinic Name": "Little Lantern", "Specialty": "Primary", "City": "Carrollton", "Agent": "Duaa", "Stage": "Visited", "Last Visit": "4/16/2025", "Corp. Visit Date": "", "Follow-Up By": "Duaa", "Notes": "Front desk only. Doctor in next Tuesday.", "Podcast Status": "Pending Outreach"}, {"Lead ID": "L-009", "Doctor Name": "TBD", "Clinic Name": "North Texas Medical Clinic", "Specialty": "Internal Medicine", "City": "Frisco", "Agent": "Duaa", "Stage": "Not Visited", "Last Visit": "TBD", "Corp. Visit Date": "TBD", "Follow-Up By": "Duaa", "Notes": "Dr. Gurrapu & Dr. Sachdev. UTSW affiliated. High priority.", "Podcast Status": "Pending Outreach"}, {"Lead ID": "L-010", "Doctor Name": "TBD", "Clinic Name": "Frisco Primary Care, P.A.", "Specialty": "Internal Medicine", "City": "Frisco", "Agent": "Sadia", "Stage": "Not Visited", "Last Visit": "TBD", "Corp. Visit Date": "TBD", "Follow-Up By": "Sadia", "Notes": "Multiple board-certified internists on staff.", "Podcast Status": "Pending Outreach"}, {"Lead ID": "L-011", "Doctor Name": "TBD", "Clinic Name": "West Frisco Health & Wellness", "Specialty": "PCP", "City": "Frisco", "Agent": "Sadia", "Stage": "Not Visited", "Last Visit": "TBD", "Corp. Visit Date": "TBD", "Follow-Up By": "Sadia", "Notes": "Focus on diabetes & weight loss. Good patient demographics.", "Podcast Status": "Pending Outreach"}, {"Lead ID": "L-012", "Doctor Name": "TBD", "Clinic Name": "QuickMD Care Frisco", "Specialty": "PCP", "City": "Frisco", "Agent": "Duaa", "Stage": "Not Visited", "Last Visit": "TBD", "Corp. Visit Date": "TBD", "Follow-Up By": "Duaa", "Notes": "Same-day access. Also has McKinney location.", "Podcast Status": "Pending Outreach"}, {"Lead ID": "L-013", "Doctor Name": "TBD", "Clinic Name": "McKinney Medical Village", "Specialty": "PCP", "City": "McKinney", "Agent": "Amna", "Stage": "Not Visited", "Last Visit": "TBD", "Corp. Visit Date": "TBD", "Follow-Up By": "Amna", "Notes": "Catalyst group. Comprehensive medical village format.", "Podcast Status": "Pending Outreach"}, {"Lead ID": "L-014", "Doctor Name": "TBD", "Clinic Name": "QuickMD Care McKinney", "Specialty": "PCP", "City": "McKinney", "Agent": "Amna", "Stage": "Not Visited", "Last Visit": "TBD", "Corp. Visit Date": "TBD", "Follow-Up By": "Amna", "Notes": "Sister location to Frisco. Walk-ins welcome.", "Podcast Status": "Pending Outreach"}, {"Lead ID": "L-015", "Doctor Name": "TBD", "Clinic Name": "Doctors of Internal Medicine McKinney", "Specialty": "Internal Medicine", "City": "McKinney", "Agent": "Duaa", "Stage": "Not Visited", "Last Visit": "TBD", "Corp. Visit Date": "TBD", "Follow-Up By": "Duaa", "Notes": "20+ yr DFW practice. 240 Adriatic Pkwy. Same-day appts.", "Podcast Status": "Pending Outreach"}, {"Lead ID": "L-016", "Doctor Name": "TBD", "Clinic Name": "Woven Health Carrollton", "Specialty": "PCP", "City": "Carrollton", "Agent": "Zuhaab", "Stage": "Not Visited", "Last Visit": "TBD", "Corp. Visit Date": "TBD", "Follow-Up By": "Zuhaab", "Notes": "Direct primary care. Strong community ties. Free care program.", "Podcast Status": "Pending Outreach"}, {"Lead ID": "L-017", "Doctor Name": "Dr. Tariq Mallick", "Clinic Name": "Family Care & Wellness Allen", "Specialty": "Family Medicine", "City": "Allen", "Agent": "Zuhaab", "Stage": "Not Visited", "Last Visit": "TBD", "Corp. Visit Date": "TBD", "Follow-Up By": "Zuhaab", "Notes": "Mayo Clinic grad. Very high reviews. Serves wide targeted areas.", "Podcast Status": "Pending Outreach"}, {"Lead ID": "L-018", "Doctor Name": "Dr. Sunil Modi", "Clinic Name": "Express Family Clinic Allen", "Specialty": "Family Medicine", "City": "Allen", "Agent": "Zuhaab", "Stage": "Not Visited", "Last Visit": "TBD", "Corp. Visit Date": "TBD", "Follow-Up By": "Zuhaab", "Notes": "PCP + urgent care combo. Also Dr. Parihar. 972-672-4121.", "Podcast Status": "Pending Outreach"}, {"Lead ID": "L-019", "Doctor Name": "TBD", "Clinic Name": "Family HealthCare Associates Allen", "Specialty": "PCP", "City": "Allen", "Agent": "Zuhaab", "Stage": "Not Visited", "Last Visit": "TBD", "Corp. Visit Date": "TBD", "Follow-Up By": "Zuhaab", "Notes": "Catalyst group. 1105 N Central Expy #2120. 972-727-9877.", "Podcast Status": "Pending Outreach"}, {"Lead ID": "L-020", "Doctor Name": "Dr. Todd Carruthers", "Clinic Name": "Allen Family Medicine", "Specialty": "Family Medicine", "City": "Allen", "Agent": "Zuhaab", "Stage": "Not Visited", "Last Visit": "TBD", "Corp. Visit Date": "TBD", "Follow-Up By": "Zuhaab", "Notes": "Private practice since 1998. Women's health. allenfp.com.", "Podcast Status": "Pending Outreach"}, {"Lead ID": "L-021", "Doctor Name": "Dr. Manvinder Kainth", "Clinic Name": "Maple Primary Care", "Specialty": "Family Medicine", "City": "Plano", "Agent": "Amna", "Stage": "Not Visited", "Last Visit": "TBD", "Corp. Visit Date": "TBD", "Follow-Up By": "Amna", "Notes": "D Magazine Best Doctor. Independent practice. New patients welcome.", "Podcast Status": "Pending Outreach"}, {"Lead ID": "L-022", "Doctor Name": "Dr. Heather Akins DO", "Clinic Name": "North Texas Family Medicine", "Specialty": "Family Medicine", "City": "Plano", "Agent": "Amna", "Stage": "Not Visited", "Last Visit": "TBD", "Corp. Visit Date": "TBD", "Follow-Up By": "Amna", "Notes": "Small independent. Also Dr. Kaplan (Chief FM, Med City Plano).", "Podcast Status": "Pending Outreach"}, {"Lead ID": "L-023", "Doctor Name": "TBD", "Clinic Name": "Texas Primary Care Center", "Specialty": "Internal Medicine", "City": "Richardson", "Agent": "TBD", "Stage": "Not Visited", "Last Visit": "TBD", "Corp. Visit Date": "TBD", "Follow-Up By": "TBD", "Notes": "3617 Shire Blvd #100. New territory — assign agent.", "Podcast Status": "Pending Outreach"}, {"Lead ID": "L-024", "Doctor Name": "TBD", "Clinic Name": "Catalyst Physician Group Richardson", "Specialty": "PCP", "City": "Richardson", "Agent": "TBD", "Stage": "Not Visited", "Last Visit": "TBD", "Corp. Visit Date": "TBD", "Follow-Up By": "TBD", "Notes": "3261 E. PGBH Hwy #200. Telehealth available. New territory.", "Podcast Status": "Pending Outreach"}, {"Lead ID": "L-025", "Doctor Name": "TBD", "Clinic Name": "Innovista Medical Center Richardson", "Specialty": "Family Medicine", "City": "Richardson", "Agent": "TBD", "Stage": "Not Visited", "Last Visit": "TBD", "Corp. Visit Date": "TBD", "Follow-Up By": "TBD", "Notes": "350 S Plano Rd. BCBS network. New territory.", "Podcast Status": "Pending Outreach"}, {"Lead ID": "L-026", "Doctor Name": "TBD", "Clinic Name": "Spring Creek Medical", "Specialty": "Family Medicine", "City": "Richardson", "Agent": "TBD", "Stage": "Not Visited", "Last Visit": "TBD", "Corp. Visit Date": "TBD", "Follow-Up By": "TBD", "Notes": "PCP + chiro. springcreekmed.com. New territory.", "Podcast Status": "Pending Outreach"}];
+// Phase 258 (2026-06-02): replaced the legacy lead-outreach POD_ROWS with the
+// master Podcast Recording Schedule from "Podcast Recording Schedule.xlsx".
+// Columns now match the source workbook 1:1.
+var POD_ROWS=[
+  {physician:"Marouf Chaudhary",            specialty:"Cardiologist",     walkthrough:"",                   recording:"Jan 17 - 3 PM",        status:"Complete",  notes:""},
+  {physician:"Nimr Ikram",                  specialty:"Ortho",            walkthrough:"March 4 - 1:00 PM",  recording:"March 5 - 11:00 AM",   status:"Complete",  notes:""},
+  {physician:"Nabeel Syed",                 specialty:"Urologist",        walkthrough:"March 16 - 2 PM",    recording:"March 17 - 11 AM",     status:"Complete",  notes:""},
+  {physician:"Hina Rizvi",                  specialty:"PCP/Wound Care",   walkthrough:"April 1st",          recording:"April 3 - 11 AM",      status:"Complete",  notes:""},
+  {physician:"Kiran Mendha",                specialty:"PCP",              walkthrough:"",                   recording:"4/29/2026 - 11 AM",    status:"Complete",  notes:""},
+  {physician:"Sameer Tajudden Shaik Abdul", specialty:"PCP",              walkthrough:"",                   recording:"",                     status:"Waiting",   notes:""},
+  {physician:"Jaya",                        specialty:"Cardiologist",     walkthrough:"May 22nd - 5 PM",    recording:"5/24/2026 - 11 AM",    status:"Confirmed", notes:""},
+  {physician:"Samata Basani",               specialty:"Endocrinologist",  walkthrough:"",                   recording:"5/31/2026 - 3 PM",     status:"Confirmed", notes:""}
+];
+var POD_SEL={};
 /* hoisted */
 /* hoisted */
 
-var POD_STATUS_OPTS=['Pending Outreach','Invited','Confirmed','Scheduled','Recorded','Published','Declined'];
+// Phase 258 (2026-06-02): Podcast status palette now mirrors the master
+// recording-schedule sheet — Complete / Confirmed / Scheduled / Waiting /
+// Cancelled. The old lead-outreach statuses (Pending Outreach / Invited /
+// Recorded / Published / Declined) are gone with the legacy table.
+var POD_STATUS_OPTS=['Complete','Confirmed','Scheduled','Waiting','Cancelled'];
 var POD_STATUS_COLORS={
-  'Pending Outreach':'#f0f9ff:#0369a1:#bae6fd',
-  'Invited':'#fef9c3:#854d0e:#fcd34d',
+  'Complete' :'#dcfce7:#166534:#86efac',
   'Confirmed':'#f0fdf4:#166534:#86efac',
   'Scheduled':'#ede9fe:#5b21b6:#c4b5fd',
-  'Recorded':'#faf5ff:#7030A0:#c4b5fd',
-  'Published':'#dcfce7:#166534:#86efac',
-  'Declined':'#fff1f2:#9f1239:#fecdd3'
+  'Waiting'  :'#fef9c3:#854d0e:#fcd34d',
+  'Cancelled':'#fff1f2:#9f1239:#fecdd3'
 };
+
+// Phase 258: who's allowed to mutate the Podcast Recording Schedule.
+// Per user 2026-06-02: only admin and Ms Sadia (chief marketing lead).
+// Everyone else gets a read-only view — no checkboxes, no edit buttons,
+// no add row, no delete. The Download Excel button stays open to all.
+function canEditPodcast(){
+  try {
+    if(typeof isAdmin === 'function' && isAdmin()) return true;
+    if(typeof CURRENT_USER !== 'undefined' && CURRENT_USER){
+      var n = String(CURRENT_USER.name || '').toLowerCase().trim();
+      // Match "Ms Sadia" exactly and a couple of close variants the user
+      // could have typed when the account was set up.
+      if(n === 'ms sadia' || n === 'sadia' || n === 'sadia owais') return true;
+    }
+  } catch(_){}
+  return false;
+}
+window.canEditPodcast = canEditPodcast;
 
 function renderPodTable(){
   var tbody=document.getElementById('pod-tbody');
   if(!tbody)return;
   tbody.innerHTML='';
-  var POD_COLS=['Lead ID','Doctor Name','Clinic Name','Specialty','City','Agent','Stage','Last Visit','Follow-Up By','Notes','Podcast Status'];
-  var EDITABLE_COLS=['Doctor Name','Clinic Name','Specialty','City','Agent','Stage','Last Visit','Follow-Up By','Notes'];
-  var STATUS_OPTS=['Pending Outreach','Invited','Confirmed','Scheduled','Recorded','Published','Declined'];
-  var STATUS_C={
-    'Pending Outreach':'#f0f9ff:#0369a1:#bae6fd','Invited':'#fef9c3:#854d0e:#fcd34d',
-    'Confirmed':'#f0fdf4:#166534:#86efac','Scheduled':'#ede9fe:#5b21b6:#c4b5fd',
-    'Recorded':'#faf5ff:#7030A0:#c4b5fd','Published':'#dcfce7:#166534:#86efac',
-    'Declined':'#fff1f2:#9f1239:#fecdd3'
-  };
-  var STAGE_C={
-    'Corp. Visit Set':'#f0fdf4:#166534:#86efac','Interested':'#fef9c3:#854d0e:#fcd34d',
-    'Contracted':'#ede9fe:#5b21b6:#c4b5fd','Not Interested':'#fff1f2:#9f1239:#fecdd3',
-    'Visited':'#f0f9ff:#0369a1:#bae6fd','Not Visited':'#f3f4f6:#374151:#e5e7eb'
-  };
-  var tdS='padding:7px 10px;font-size:11px;border-bottom:1px solid var(--border);border-right:1px solid var(--border);vertical-align:middle';
 
-  // PERMISSION: only the original author (addedBy) OR admin can edit/delete a row.
-  // Legacy rows without addedBy stay open to everyone (no one to restrict to).
-  var isAdminUser = (typeof isAdmin === 'function' && isAdmin());
-  var currentName = (typeof CURRENT_USER !== 'undefined' && CURRENT_USER) ? CURRENT_USER.name : '';
+  var EDITABLE_COLS=[
+    {key:'physician',   label:'Physician Name',                          min:120},
+    {key:'specialty',   label:'Specialty',                               min:90},
+    {key:'walkthrough', label:'Walkthrough (Teams/Call) Date & Time',    min:140},
+    {key:'recording',   label:'Recording Date & Time',                   min:140},
+    {key:'notes',       label:'Notes',                                   min:160}
+  ];
+  var tdS='padding:7px 10px;font-size:11px;border-bottom:1px solid var(--border);border-right:1px solid var(--border);vertical-align:middle';
+  var canEdit = canEditPodcast();
+
+  // Hide the select-all checkbox and Actions header for read-only users —
+  // those columns simply collapse so nothing dangles.
+  var selAll = document.getElementById('pod-sel-all');
+  var thSel  = document.getElementById('pod-th-sel');
+  var thEdit = document.getElementById('pod-th-edit');
+  if(thSel)  thSel.style.display  = canEdit ? '' : 'none';
+  if(thEdit) thEdit.style.display = canEdit ? '' : 'none';
+  if(!canEdit){
+    // Make sure nothing is left selected when a non-editor opens the tab.
+    POD_SEL = {};
+    var note = document.getElementById('pod-permission-note');
+    if(note) note.textContent = 'Read-only view — only admin and Ms Sadia can edit the recording schedule.';
+  } else {
+    var note2 = document.getElementById('pod-permission-note');
+    if(note2) note2.textContent = 'Physician walkthrough & recording slots — only admin and Ms Sadia can edit';
+  }
 
   POD_ROWS.forEach(function(row,ri){
-    var isEditing=POD_EDIT[ri]===true;
-    var addedBy = row.addedBy || '';
-    var canEdit = !addedBy || isAdminUser || (currentName && currentName === addedBy);
-
-    // If this row isn't editable by the current user, force it out of edit mode
-    if(!canEdit && isEditing){ POD_EDIT[ri] = false; isEditing = false; }
+    var isEditing = canEdit && POD_EDIT[ri]===true;
 
     var tr=document.createElement('tr');
-    if(ri%2===1)tr.style.background='#fafbfc';
-    if(isEditing)tr.style.background='#faf5ff';
+    if(ri%2===1) tr.style.background='#fafbfc';
+    if(isEditing) tr.style.background='#faf5ff';
 
-    var td0=document.createElement('td');
-    td0.style.cssText=tdS+';text-align:center;white-space:nowrap';
-
+    // ── Select checkbox (editors only) ────────────────────────────────
     if(canEdit){
-      // Edit/Save button
+      var tdSel=document.createElement('td');
+      tdSel.style.cssText=tdS+';text-align:center;width:36px';
+      var cb=document.createElement('input');
+      cb.type='checkbox';
+      cb.checked = POD_SEL[ri]===true;
+      cb.style.cursor='pointer';
+      (function(r){cb.onclick=function(){
+        if(cb.checked) POD_SEL[r]=true; else delete POD_SEL[r];
+        _phase258UpdatePodSelUI();
+      };})(ri);
+      tdSel.appendChild(cb);
+      tr.appendChild(tdSel);
+
+      // ── Edit / Save + Delete (editors only) ───────────────────────
+      var td0=document.createElement('td');
+      td0.style.cssText=tdS+';text-align:center;white-space:nowrap';
+
       var btn=document.createElement('button');
-      btn.textContent=isEditing?'✓ Save':'✎ Edit';
-      btn.style.cssText=isEditing
-        ?'background:var(--purple);border:none;color:#fff;padding:3px 10px;border-radius:5px;font-size:10px;font-weight:600;cursor:pointer;font-family:DM Sans,sans-serif'
-        :'background:none;border:1px solid var(--border);color:var(--muted);padding:3px 10px;border-radius:5px;font-size:10px;cursor:pointer;font-family:DM Sans,sans-serif';
+      btn.textContent = isEditing ? '✓ Save' : '✎ Edit';
+      btn.style.cssText = isEditing
+        ? 'background:var(--purple);border:none;color:#fff;padding:3px 10px;border-radius:5px;font-size:10px;font-weight:600;cursor:pointer;font-family:DM Sans,sans-serif'
+        : 'background:none;border:1px solid var(--border);color:var(--muted);padding:3px 10px;border-radius:5px;font-size:10px;cursor:pointer;font-family:DM Sans,sans-serif';
       (function(r,wasEditing){btn.onclick=function(){
-        // If we're leaving edit mode (i.e. "Save") and admin is editing
-        // someone else's row, log that override to the activity feed.
-        if(wasEditing){
-          var savedRow = POD_ROWS[r];
-          if(savedRow && typeof isAdmin==='function' && isAdmin()
-             && savedRow.addedBy && CURRENT_USER && savedRow.addedBy !== CURRENT_USER.name){
-            logAdminAction('Edited podcast row',
-              savedRow['Clinic Name'] || savedRow['Doctor Name'] || 'a podcast lead',
-              savedRow.addedBy,
-              'Podcast schedule row was edited by admin.',
-              null, savedRow['Podcast Status']||'');
-          }
-        }
-        POD_EDIT[r]=!wasEditing;
+        POD_EDIT[r] = !wasEditing;
         renderPodTable();
       };})(ri, isEditing);
       td0.appendChild(btn);
 
-      // Delete button
       var delBtn=document.createElement('button');
       delBtn.textContent='✕';
-      delBtn.style.cssText='background:none;border:none;color:#ddd;padding:3px 6px;font-size:12px;cursor:pointer;margin-left:3px';
+      delBtn.style.cssText='background:none;border:none;color:#c84a4a;padding:3px 6px;font-size:12px;cursor:pointer;margin-left:3px';
       delBtn.title='Remove row';
       (function(r){delBtn.onclick=function(){
-        if(confirm('Remove this row?')){
-          var doomedRow = POD_ROWS[r];
-          // Log if admin removed someone else's row
-          if(doomedRow && typeof isAdmin==='function' && isAdmin() && doomedRow.addedBy && CURRENT_USER && doomedRow.addedBy !== CURRENT_USER.name){
-            logAdminAction('Removed podcast row',
-              doomedRow['Clinic Name'] || doomedRow['Doctor Name'] || 'a podcast lead',
-              doomedRow.addedBy,
-              'Podcast schedule row was removed by admin.',
-              (doomedRow['Clinic Name']||'')+' / '+(doomedRow['Podcast Status']||''),
-              'removed');
-          }
-          POD_ROWS.splice(r,1);delete POD_EDIT[r];renderPodTable();
+        var who = POD_ROWS[r] && POD_ROWS[r].physician ? POD_ROWS[r].physician : 'this row';
+        if(confirm('Remove ' + who + ' from the podcast schedule?')){
+          POD_ROWS.splice(r,1);
+          delete POD_EDIT[r];
+          // Rebuild POD_SEL because indices shifted after splice
+          POD_SEL = {};
+          renderPodTable();
         }
       };})(ri);
       td0.appendChild(delBtn);
-    } else {
-      // Locked — show who owns it
-      var lock = document.createElement('span');
-      lock.style.cssText='font-size:9px;color:var(--muted);font-style:italic';
-      lock.title='Only ' + addedBy + ' or admin can edit this row';
-      lock.innerHTML='&#128274; '+addedBy;
-      td0.appendChild(lock);
+      tr.appendChild(td0);
     }
-    tr.appendChild(td0);
 
-    // Lead ID (read-only)
-    var tdId=document.createElement('td');
-    tdId.style.cssText=tdS+';font-weight:700;color:var(--muted);white-space:nowrap';
-    tdId.textContent=row['Lead ID']||'—';
-    tr.appendChild(tdId);
-
-    // Editable text columns
-    EDITABLE_COLS.forEach(function(col){
+    // ── Text columns (physician / specialty / walkthrough / recording) ──
+    // (Notes is handled last so the column order matches the header.)
+    var TEXT_FIRST = EDITABLE_COLS.slice(0, 4);  // everything except Notes
+    TEXT_FIRST.forEach(function(col){
       var td=document.createElement('td');
-      td.style.cssText=tdS+(col==='Notes'?';min-width:160px':'');
-      var val=row[col]||'';
+      td.style.cssText = tdS + ';min-width:' + col.min + 'px';
+      var val = row[col.key] || '';
       if(isEditing){
         var inp=document.createElement('input');
-        inp.value=val;
-        inp.style.cssText='width:100%;min-width:'+(col==='Notes'?'150':'70')+'px;border:1px solid var(--purple);border-radius:4px;padding:3px 6px;font-size:11px;font-family:DM Sans,sans-serif;outline:none;box-sizing:border-box';
+        inp.value = val;
+        inp.style.cssText='width:100%;border:1px solid var(--purple);border-radius:4px;padding:3px 6px;font-size:11px;font-family:DM Sans,sans-serif;outline:none;box-sizing:border-box';
         (function(r,c,el){
-          el.oninput=function(){POD_ROWS[r][c]=el.value;};
-          el.onkeydown=function(e){if(e.key==='Enter'){POD_EDIT[r]=false;renderPodTable();}};
-        })(ri,col,inp);
+          el.oninput  = function(){ POD_ROWS[r][c] = el.value; };
+          el.onkeydown= function(e){ if(e.key==='Enter'){ POD_EDIT[r]=false; renderPodTable(); } };
+        })(ri, col.key, inp);
         td.appendChild(inp);
       } else {
-        if(col==='Stage'){
-          var sc=(STAGE_C[val]||'#f3f4f6:#374151:#e5e7eb').split(':');
-          td.innerHTML=val?'<span style="background:'+sc[0]+';color:'+sc[1]+';border:1px solid '+sc[2]+';font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;white-space:nowrap">'+val+'</span>':'—';
-        } else {
-          td.textContent=val||'—';
-          if(!val)td.style.color='var(--muted)';
-        }
+        td.textContent = val || '—';
+        if(!val) td.style.color = 'var(--muted)';
       }
       tr.appendChild(td);
     });
 
-    // Podcast Status dropdown
+    // ── Status dropdown ─────────────────────────────────────────────
     var tdStat=document.createElement('td');
     tdStat.style.cssText=tdS+';white-space:nowrap';
-    var statVal=row['Podcast Status']||'Pending Outreach';
+    var statVal = row.status || 'Waiting';
     if(isEditing){
       var sel=document.createElement('select');
       sel.style.cssText='border:1px solid var(--purple);border-radius:4px;padding:3px 6px;font-size:11px;font-family:DM Sans,sans-serif;outline:none;background:#fff';
-      STATUS_OPTS.forEach(function(opt){
-        var o=document.createElement('option');o.value=opt;o.textContent=opt;
-        if(opt===statVal)o.selected=true;sel.appendChild(o);
+      POD_STATUS_OPTS.forEach(function(opt){
+        var o=document.createElement('option');
+        o.value=opt; o.textContent=opt;
+        if(opt===statVal) o.selected=true;
+        sel.appendChild(o);
       });
-      (function(r,el){el.onchange=function(){POD_ROWS[r]['Podcast Status']=el.value;renderLandingPodcastReminder();};})(ri,sel);
+      (function(r,el){el.onchange=function(){
+        POD_ROWS[r].status = el.value;
+        if(typeof renderLandingPodcastReminder==='function') renderLandingPodcastReminder();
+      };})(ri, sel);
       tdStat.appendChild(sel);
     } else {
-      var sc2=(STATUS_C[statVal]||'#f3f4f6:#374151:#e5e7eb').split(':');
-      tdStat.innerHTML='<span style="background:'+sc2[0]+';color:'+sc2[1]+';border:1px solid '+sc2[2]+';font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;white-space:nowrap">'+statVal+'</span>';
+      var sc=(POD_STATUS_COLORS[statVal]||'#f3f4f6:#374151:#e5e7eb').split(':');
+      tdStat.innerHTML='<span style="background:'+sc[0]+';color:'+sc[1]+';border:1px solid '+sc[2]+';font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;white-space:nowrap">'+statVal+'</span>';
     }
     tr.appendChild(tdStat);
+
+    // ── Notes (wide column, last) ───────────────────────────────────
+    var noteCol = EDITABLE_COLS[4];
+    var tdN=document.createElement('td');
+    tdN.style.cssText = tdS.replace(/border-right:[^;]+;?/, '') + ';min-width:' + noteCol.min + 'px';
+    var nVal = row.notes || '';
+    if(isEditing){
+      var nInp=document.createElement('input');
+      nInp.value = nVal;
+      nInp.style.cssText='width:100%;border:1px solid var(--purple);border-radius:4px;padding:3px 6px;font-size:11px;font-family:DM Sans,sans-serif;outline:none;box-sizing:border-box';
+      (function(r,el){
+        el.oninput  = function(){ POD_ROWS[r].notes = el.value; };
+        el.onkeydown= function(e){ if(e.key==='Enter'){ POD_EDIT[r]=false; renderPodTable(); } };
+      })(ri, nInp);
+      tdN.appendChild(nInp);
+    } else {
+      tdN.textContent = nVal || '—';
+      if(!nVal) tdN.style.color = 'var(--muted)';
+    }
+    tr.appendChild(tdN);
 
     tbody.appendChild(tr);
   });
 
-  // Add Row button at bottom
-  var addRow=document.createElement('tr');
-  addRow.style.background='#f8f9fc';
-  var addTd=document.createElement('td');
-  addTd.colSpan=13;
-  addTd.style.cssText='padding:8px 12px;border-top:2px dashed var(--border)';
-  var addBtn=document.createElement('button');
-  addBtn.textContent='+ Add Row';
-  addBtn.style.cssText='background:none;border:1.5px dashed var(--purple);border-radius:8px;color:var(--purple);font-size:11px;font-weight:600;cursor:pointer;padding:6px 16px;font-family:DM Sans,sans-serif';
-  addBtn.onclick=function(){
-    var newId='L-'+(POD_ROWS.length+1).toString().padStart(3,'0');
-    var addedByName=(typeof CURRENT_USER!=='undefined' && CURRENT_USER) ? (CURRENT_USER.name||'') : '';
-    POD_ROWS.push({'Lead ID':newId,'Doctor Name':'','Clinic Name':'','Specialty':'','City':'','Agent':'','Stage':'Not Visited','Last Visit':'','Follow-Up By':'','Notes':'','Podcast Status':'Pending Outreach',addedBy:addedByName,addedAt:new Date().toISOString()});
-    POD_EDIT[POD_ROWS.length-1]=true;
-    renderPodTable();
-    setTimeout(function(){tbody.querySelector('tr:last-of-type input')&&tbody.querySelector('tr:last-of-type input').focus();},60);
-  };
-  addTd.appendChild(addBtn);addRow.appendChild(addTd);tbody.appendChild(addRow);
+  // ── Add Row footer (editors only) ─────────────────────────────────
+  if(canEdit){
+    var addRow=document.createElement('tr');
+    addRow.style.background='#f8f9fc';
+    var addTd=document.createElement('td');
+    // 2 control columns (select + actions) + physician + specialty +
+    // walkthrough + recording + status + notes = 8 columns total.
+    addTd.colSpan = 8;
+    addTd.style.cssText='padding:8px 12px;border-top:2px dashed var(--border);text-align:center';
+    var addBtn=document.createElement('button');
+    addBtn.textContent='+ Add Physician';
+    addBtn.style.cssText='background:none;border:1.5px dashed var(--purple);border-radius:8px;color:var(--purple);font-size:11px;font-weight:600;cursor:pointer;padding:6px 16px;font-family:DM Sans,sans-serif';
+    addBtn.onclick=function(){
+      POD_ROWS.push({physician:'',specialty:'',walkthrough:'',recording:'',status:'Waiting',notes:''});
+      POD_EDIT[POD_ROWS.length-1]=true;
+      renderPodTable();
+      setTimeout(function(){
+        var lastInp = tbody.querySelector('tr:nth-last-of-type(2) input[type="text"], tr:nth-last-of-type(2) input:not([type])');
+        if(lastInp) lastInp.focus();
+      },60);
+    };
+    addTd.appendChild(addBtn);
+    addRow.appendChild(addTd);
+    tbody.appendChild(addRow);
+  }
+
+  _phase258UpdatePodSelUI();
 }
 window.renderPodTable=renderPodTable;
 window.renderLandingPodcastReminder=renderLandingPodcastReminder;
+
+// Phase 258: Multi-select helpers ──────────────────────────────────────
+function _phase258UpdatePodSelUI(){
+  var count = 0;
+  Object.keys(POD_SEL).forEach(function(k){ if(POD_SEL[k]) count++; });
+  var bulk = document.getElementById('pod-bulk-del');
+  var cntEl= document.getElementById('pod-sel-count');
+  if(cntEl) cntEl.textContent = count;
+  if(bulk)  bulk.style.display = (count>0 && canEditPodcast()) ? '' : 'none';
+  var selAll = document.getElementById('pod-sel-all');
+  if(selAll){
+    selAll.checked = (count>0 && count===POD_ROWS.length);
+    selAll.indeterminate = (count>0 && count<POD_ROWS.length);
+  }
+}
+window._phase258UpdatePodSelUI = _phase258UpdatePodSelUI;
+
+function _phase258ToggleAllPod(){
+  if(!canEditPodcast()) return;
+  var selAll = document.getElementById('pod-sel-all');
+  if(!selAll) return;
+  if(selAll.checked){
+    POD_ROWS.forEach(function(_,i){ POD_SEL[i] = true; });
+  } else {
+    POD_SEL = {};
+  }
+  renderPodTable();
+}
+window._phase258ToggleAllPod = _phase258ToggleAllPod;
+
+function _phase258BulkDeletePod(){
+  if(!canEditPodcast()){
+    if(typeof showToast==='function') showToast('Only admin and Ms Sadia can edit the podcast schedule.');
+    return;
+  }
+  var idx = Object.keys(POD_SEL).filter(function(k){ return POD_SEL[k]; }).map(Number).sort(function(a,b){return b-a;});
+  if(!idx.length) return;
+  if(!confirm('Remove ' + idx.length + ' selected row' + (idx.length===1?'':'s') + ' from the podcast schedule?')) return;
+  idx.forEach(function(i){ POD_ROWS.splice(i,1); });
+  POD_SEL = {};
+  POD_EDIT = {};
+  renderPodTable();
+  if(typeof renderLandingPodcastReminder==='function') renderLandingPodcastReminder();
+}
+window._phase258BulkDeletePod = _phase258BulkDeletePod;
+
+function _phase258DownloadPodExcel(){
+  // Always export ALL rows in document order. If anything is selected we
+  // honor that as a sub-selection; otherwise the whole sheet ships.
+  var picked = Object.keys(POD_SEL).filter(function(k){return POD_SEL[k];}).map(Number);
+  var rows = (picked.length ? picked.sort(function(a,b){return a-b;}).map(function(i){return POD_ROWS[i];}) : POD_ROWS.slice());
+  if(!rows.length){ if(typeof showToast==='function') showToast('No rows to download.'); return; }
+  function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  var html = '<table><thead><tr>'
+    + '<th>Physician Name</th>'
+    + '<th>Specialty</th>'
+    + '<th>Walkthrough (Teams/Call) Date &amp; Time</th>'
+    + '<th>Recording Date &amp; Time</th>'
+    + '<th>Status</th>'
+    + '<th>Notes</th>'
+    + '</tr></thead><tbody>';
+  rows.forEach(function(r){
+    html += '<tr>'
+      + '<td>'+esc(r.physician)+'</td>'
+      + '<td>'+esc(r.specialty)+'</td>'
+      + '<td>'+esc(r.walkthrough)+'</td>'
+      + '<td>'+esc(r.recording)+'</td>'
+      + '<td>'+esc(r.status)+'</td>'
+      + '<td>'+esc(r.notes)+'</td>'
+      + '</tr>';
+  });
+  html += '</tbody></table>';
+  var ts = new Date();
+  var pad = function(n){return String(n).padStart(2,'0');};
+  var fname = 'Podcast_Recording_Schedule_' + ts.getFullYear() + pad(ts.getMonth()+1) + pad(ts.getDate()) + '.xls';
+  if(typeof _phase181DownloadAsExcel === 'function'){
+    _phase181DownloadAsExcel(fname, html);
+  } else {
+    // Fallback: build the same Excel-HTML envelope inline
+    var doc = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"><style>table{border-collapse:collapse}td,th{border:1px solid #999;padding:4px 8px;font-family:Calibri,sans-serif;font-size:11px}th{background:#1F3864;color:#fff;font-weight:bold;text-align:left}</style></head><body>'+html+'</body></html>';
+    var blob = new Blob([doc], {type:'application/vnd.ms-excel'});
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = fname;
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ try { document.body.removeChild(a); URL.revokeObjectURL(url); } catch(_){} }, 200);
+  }
+  if(typeof showToast==='function') showToast('Downloaded ' + rows.length + ' row' + (rows.length===1?'':'s') + ' as Excel.');
+}
+window._phase258DownloadPodExcel = _phase258DownloadPodExcel;
 
 function showPodSheet(s){switchClinicTab(s);}
 window.showPodSheet=showPodSheet;
