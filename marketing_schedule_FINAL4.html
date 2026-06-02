@@ -41600,6 +41600,90 @@ function _rpOptClearAll(){
 }
 window._rpOptClearAll = _rpOptClearAll;
 
+/* Phase 263 (2026-06-02) — OK.docx #5: live mileage + drive-time preview
+   shown ABOVE the target list, updating every time the user adds /
+   removes a target. No backend round trip — uses the same haversine ×
+   1.4 / 30 mph estimate as the post-generate summary, so the number the
+   user sees while building the route matches the one they'll see after
+   confirming. Order used for the preview is a greedy nearest-neighbor
+   from the start anchor (if one is set) — when no start is picked yet
+   we fall back to the convex pairwise hop in add-order, plus a note so
+   the user knows the preview will get sharper once they pick a start. */
+function _phase263PreviewRoute(){
+  try {
+    var targets = (window._RP_OPT_TARGETS || []).slice();
+    if(!targets.length) return { miles:0, minutes:0, mode:'empty' };
+    function getStartCoord(){
+      var name = window._RP_OPT_START_NAME;
+      if(name){
+        var t = targets.find(function(x){ return x.name === name; });
+        if(t && t.coord) return t.coord;
+        if(typeof _rpGetVisualCoord === 'function'){
+          var c = _rpGetVisualCoord(name);
+          if(c) return c;
+        }
+      }
+      if(window._RP_OPT_ANCHOR && window._RP_OPT_ANCHOR.coord) return window._RP_OPT_ANCHOR.coord;
+      return null;
+    }
+    function hav(a, b){
+      if(!a || !b) return 0;
+      var R = 3958.8, toRad = function(d){ return d * Math.PI / 180; };
+      var dLat = toRad((b.lat||0) - (a.lat||0));
+      var dLng = toRad((b.lng||0) - (a.lng||0));
+      var la1 = toRad(a.lat||0), la2 = toRad(b.lat||0);
+      var h = Math.sin(dLat/2)*Math.sin(dLat/2) + Math.cos(la1)*Math.cos(la2)*Math.sin(dLng/2)*Math.sin(dLng/2);
+      return 2 * R * Math.asin(Math.sqrt(h));
+    }
+    var start = getStartCoord();
+    var pool = targets.filter(function(t){ return t.coord; });
+    /* If start is one of the targets, drop it from the pool so we don't
+       count it twice on the front of the tour. */
+    if(window._RP_OPT_START_NAME){
+      pool = pool.filter(function(t){ return t.name !== window._RP_OPT_START_NAME; });
+    }
+    if(!pool.length){
+      return { miles:0, minutes:0, mode: start ? 'start-only' : 'empty' };
+    }
+    var totalMi = 0;
+    if(start){
+      /* Greedy nearest-neighbor tour from the start. */
+      var cur = start, remaining = pool.slice();
+      while(remaining.length){
+        var bestIdx = 0, bestMi = Infinity;
+        for(var i=0;i<remaining.length;i++){
+          var d = hav(cur, remaining[i].coord);
+          if(d < bestMi){ bestMi = d; bestIdx = i; }
+        }
+        totalMi += bestMi;
+        cur = remaining[bestIdx].coord;
+        remaining.splice(bestIdx, 1);
+      }
+    } else {
+      /* No start yet — sum hops in add-order. Still gives a real-time
+         signal of "more targets ≈ more miles". */
+      for(var k=1;k<pool.length;k++){
+        totalMi += hav(pool[k-1].coord, pool[k].coord);
+      }
+    }
+    /* Same urban detour + speed as _estimateDriveMin, applied to the
+       total so we don't lose minutes to per-leg rounding. */
+    var roadMi = totalMi * 1.4;
+    var minutes = Math.max(1, Math.round((roadMi / 30) * 60));
+    return { miles: totalMi, roadMiles: roadMi, minutes: minutes, mode: start ? 'with-start' : 'no-start' };
+  } catch(_){
+    return { miles:0, minutes:0, mode:'empty' };
+  }
+}
+window._phase263PreviewRoute = _phase263PreviewRoute;
+
+function _phase263FormatDrive(min){
+  if(!min) return '—';
+  if(min < 60) return min + ' min';
+  var h = Math.floor(min/60), m = min%60;
+  return h + 'h' + (m ? ' ' + m + 'm' : '');
+}
+
 function _rpOptRenderTargetList(){
   var box = document.getElementById('rp-opt-target-list');
   var count = document.getElementById('rp-opt-target-count');
@@ -41607,6 +41691,44 @@ function _rpOptRenderTargetList(){
   if(!box) return;
   var n = window._RP_OPT_TARGETS.length;
   if(count) count.textContent = '(' + n + ')';
+
+  /* Phase 263 — inject the live route preview into a dedicated host
+     element if the panel template provided one (#rp-opt-route-preview).
+     Otherwise we paint it as a banner at the very top of the list box so
+     the user sees it without changing existing HTML. */
+  (function(){
+    var prev = _phase263PreviewRoute();
+    var miStr = (prev.miles > 0) ? (prev.roadMiles).toFixed(1) + ' mi' : '— mi';
+    var tStr  = (prev.minutes > 0) ? _phase263FormatDrive(prev.minutes) : '— min';
+    var hint = '';
+    if(prev.mode === 'no-start') hint = 'Pick a start to sharpen the estimate';
+    else if(prev.mode === 'with-start') hint = 'Greedy nearest-neighbor preview';
+    else if(prev.mode === 'start-only') hint = 'Add a target to begin';
+    else hint = 'Add targets to see the live preview';
+    var banner = ''
+      + '<div id="ph263-route-preview" style="background:linear-gradient(135deg,#eff6ff,#dbeafe);border:1px solid #93c5fd;border-radius:8px;padding:7px 11px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:10px;font-family:DM Sans,sans-serif">'
+      +   '<div style="display:flex;align-items:center;gap:9px">'
+      +     '<span style="font-size:14px;line-height:1">🧭</span>'
+      +     '<div>'
+      +       '<div style="font-size:10px;font-weight:700;color:#1e3a8a;text-transform:uppercase;letter-spacing:.06em">Live route preview</div>'
+      +       '<div style="font-size:9px;color:#475569;font-style:italic;margin-top:1px">' + hint + '</div>'
+      +     '</div>'
+      +   '</div>'
+      +   '<div style="display:flex;align-items:baseline;gap:10px;color:#0c4a6e">'
+      +     '<span style="font-size:14px;font-weight:800;font-family:DM Mono,monospace">' + miStr + '</span>'
+      +     '<span style="font-size:11px;opacity:.6">·</span>'
+      +     '<span style="font-size:14px;font-weight:800;font-family:DM Mono,monospace">' + tStr  + '</span>'
+      +   '</div>'
+      + '</div>';
+    var host = document.getElementById('rp-opt-route-preview');
+    if(host){
+      host.innerHTML = banner;
+    } else {
+      /* Stash the banner to prepend after we build the list HTML below.
+         Closure-captured. */
+      _rpOptRenderTargetList._ph263Banner = banner;
+    }
+  })();
   if(optBtn){
     // Phase 117b (2026-05-29): start can come from the START_NAME radio
     // OR from the anchor input (facility / home-base). Either satisfies.
@@ -41629,11 +41751,17 @@ function _rpOptRenderTargetList(){
       confirm1.textContent = '✓ Confirm ' + n + ' target' + (n===1?'':'s') + ' → choose start';
     }
   }
+  /* Phase 263 — prepend the live route preview banner. If the host page
+     provides its own #rp-opt-route-preview slot we already filled it
+     above; otherwise we paint the banner at the top of the target list
+     box so the readout sits right where the user is already looking. */
+  var ph263Banner = (document.getElementById('rp-opt-route-preview') ? '' : (_rpOptRenderTargetList._ph263Banner || ''));
+
   if(n === 0){
-    box.innerHTML = '<div style="color:var(--muted);font-style:italic;text-align:center;padding:8px 0">No targets yet — click a pin on the map.</div>';
+    box.innerHTML = ph263Banner + '<div style="color:var(--muted);font-style:italic;text-align:center;padding:8px 0">No targets yet — click a pin on the map.</div>';
     return;
   }
-  box.innerHTML = window._RP_OPT_TARGETS.map(function(t, i){
+  box.innerHTML = ph263Banner + window._RP_OPT_TARGETS.map(function(t, i){
     var icon = t.bizType === 'mva' ? '⚖' : t.bizType === 'outreach' ? '🏘' : '🏥';
     var safeName = String(t.name).replace(/</g,'&lt;').replace(/'/g,"\\'");
     var displayName = String(t.name).replace(/</g,'&lt;');
