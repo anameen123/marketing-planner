@@ -4379,10 +4379,23 @@ button:not([disabled]):not(.no-press):active {
              when reached; clicking a PRIOR completed step cascades all
              later state to "pending" (current = the one being edited,
              later = locked again). -->
+        <!-- Phase 240 (2026-06-02) — wizard steps reordered per user:
+             "the first thing they need to confirm and it will be step 1
+             is the location for the center of the circle, then the other
+             step is the one that's already working [pick targets], the
+             final one is the starting point, then those are the steps
+             for the inputs. Now they select optimize the route — and
+             then optimize will create the path in the right order
+             between the targets."
+             Steps map to underlying state:
+               1 = Center confirmed (circle anchor placed)
+               2 = Pick targets   (radius / visits chosen → candidates)
+               3 = Set start      (a target or facility as anchor)
+             Optimize route is the FINAL action button, no longer a step. -->
         <div id="rp-opt-wiz-strip" style="display:flex;gap:6px;margin-bottom:12px;background:#f8fafc;border:1px solid var(--border);border-radius:10px;padding:6px;font-family:DM Sans,sans-serif">
-          <button id="rp-opt-wiz-1" type="button" onclick="_rpOptWizardEditStep(1)" title="Step 1 — Pick the clinics you want to visit" style="flex:1;background:#1e3a8a;color:#fff;border:none;border-radius:6px;padding:7px 10px;font-size:11px;font-weight:700;cursor:pointer">1. 📌 Pick targets</button>
-          <button id="rp-opt-wiz-2" type="button" onclick="_rpOptWizardEditStep(2)" disabled title="Confirm targets first" style="flex:1;background:#e2e8f0;color:#94a3b8;border:none;border-radius:6px;padding:7px 10px;font-size:11px;font-weight:700;cursor:not-allowed">2. 🚩 Set start</button>
-          <button id="rp-opt-wiz-3" type="button" onclick="_rpOptWizardEditStep(3)" disabled title="Confirm start first" style="flex:1;background:#e2e8f0;color:#94a3b8;border:none;border-radius:6px;padding:7px 10px;font-size:11px;font-weight:700;cursor:not-allowed">3. ⚡ Optimize</button>
+          <button id="rp-opt-wiz-1" type="button" onclick="_rpOptWizardEditStep(1)" title="Step 1 — Pick where the circle should be centered (click any pin on the map)" style="flex:1;background:#1e3a8a;color:#fff;border:none;border-radius:6px;padding:7px 10px;font-size:11px;font-weight:700;cursor:pointer">1. 📍 Center</button>
+          <button id="rp-opt-wiz-2" type="button" onclick="_rpOptWizardEditStep(2)" disabled title="Confirm the circle center first" style="flex:1;background:#e2e8f0;color:#94a3b8;border:none;border-radius:6px;padding:7px 10px;font-size:11px;font-weight:700;cursor:not-allowed">2. 📌 Pick targets</button>
+          <button id="rp-opt-wiz-3" type="button" onclick="_rpOptWizardEditStep(3)" disabled title="Pick your targets first" style="flex:1;background:#e2e8f0;color:#94a3b8;border:none;border-radius:6px;padding:7px 10px;font-size:11px;font-weight:700;cursor:not-allowed">3. 🚩 Set start</button>
         </div>
         <!-- Phase 117b (2026-05-29) — optional "Starting from" anchor that
              accepts a WCG facility (Frisco ER / Castle Hills ER / Richardson /
