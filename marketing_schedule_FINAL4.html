@@ -167,6 +167,20 @@ table{width:100%;border-collapse:collapse}
 #schedule-view table{min-width:1200px}
 thead th{background:var(--navy);color:#fff;padding:9px 10px;font-size:10px;font-weight:600;text-align:left;white-space:nowrap;border-right:1px solid rgba(255,255,255,.1);letter-spacing:.04em;text-transform:uppercase}
 thead th:last-child{border-right:none}
+/* Phase 244 (2026-06-02) — global contrast fix for every table header
+   site-wide. Every `thead th` gets a navy bg via the rule above, but ~93
+   places have inline `color:var(--muted)` or other dark colors that win
+   the cascade and become invisible against navy. These attribute-
+   selector rules force any inline dark-text override on a thead th
+   back to a light visible color. !important is needed because inline
+   styles normally beat class/element selectors.
+   Class-based table styles (.history-table th, etc.) are unaffected —
+   they set color via CSS, not inline, so this selector never matches. */
+thead th[style*="color:var(--muted)"],
+thead th[style*="color: var(--muted)"],
+thead th[style*="color:#64748b"],
+thead th[style*="color:#94a3b8"],
+thead th[style*="color:#1e40af"]{ color:#dbeafe !important }
 tbody tr{border-bottom:1px solid var(--border)}
 tbody tr:hover td{background:#f8f9fc}
 td{padding:6px 9px;vertical-align:middle;border-right:1px solid var(--border);background:var(--card);font-size:11px}
