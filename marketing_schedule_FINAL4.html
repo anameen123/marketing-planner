@@ -52991,6 +52991,49 @@ function switchProfileTab(tab){
         b.classList.toggle('active',t===tab);
     });
   });
+  /* Phase 217 (2026-06-01) — user: "the blue card should only appear in
+     the overview not in the performance and history." Toggle the inner
+     content of #profile-card (avatar row, per-facility patient referral
+     counters, side activities). The card itself + the "Back to Team"
+     button stay in the DOM on every tab — hiding the whole card would
+     also hide the back button (it gets inserted as a card child by
+     loadMemberProfile), stranding the user with no way back. */
+  var _ph217Show = (tab === 'overview');
+  var _ph217Card = document.getElementById('profile-card');
+  if(_ph217Card){
+    var profileRow      = _ph217Card.querySelector('.profile-row');
+    var referralCounter = document.getElementById('member-referral-counters');
+    var sideActivities  = document.getElementById('side-activities-section');
+    if(profileRow)      profileRow.style.display      = _ph217Show ? '' : 'none';
+    /* The referral-counter block has its own renderer that may hide it
+       (e.g. when there's no data). Only force it back to visible on the
+       Overview tab if it has rendered content; otherwise leave its own
+       display value alone. */
+    if(referralCounter){
+      if(_ph217Show){
+        if(referralCounter.innerHTML.trim()) referralCounter.style.display = 'block';
+      } else {
+        referralCounter.style.display = 'none';
+      }
+    }
+    if(sideActivities)  sideActivities.style.display  = _ph217Show ? '' : 'none';
+    /* On Performance / History, also remove the navy card's own padding
+       + background so the back button doesn't sit on a tall empty navy
+       strip — collapse it to a flat row. Restore on Overview. */
+    if(_ph217Show){
+      _ph217Card.style.removeProperty('background');
+      _ph217Card.style.removeProperty('padding');
+      _ph217Card.style.removeProperty('border-radius');
+      _ph217Card.style.removeProperty('box-shadow');
+      _ph217Card.style.removeProperty('color');
+    } else {
+      _ph217Card.style.background    = 'transparent';
+      _ph217Card.style.padding       = '0';
+      _ph217Card.style.borderRadius  = '0';
+      _ph217Card.style.boxShadow     = 'none';
+      _ph217Card.style.color         = 'inherit';
+    }
+  }
   if(tab==='performance'&&currentMember)renderPerfCharts();
   if(tab==='history'&&currentMember)renderHistory();
 }
