@@ -54180,6 +54180,14 @@ function _phase220EnsureModal(){
     +   '</div>'
     +   '<div style="padding:16px 20px">'
     +     '<div id="ph225-sa-plan-hint" style="display:none;background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:8px 11px;margin-bottom:12px;font-size:11.5px;color:#92400e;line-height:1.4">📅 Planning a future activity — no time required yet. When the day comes, click the activity to confirm + add times.</div>'
+    /* Phase 235 (2026-06-02) — admin-only "Assign to" picker. Shown only
+       when an admin is creating a NEW activity; non-admins are always
+       implicitly assigned to themselves. Hidden during edit (member is
+       locked to the row's existing owner). */
+    +     '<div id="ph235-sa-assign-row" style="display:none;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:9px 11px;margin-bottom:12px">'
+    +       '<label style="display:block;font-size:11px;font-weight:700;color:#1F3864;margin-bottom:4px">👑 Assign to <span style="color:#dc2626">*</span> <span style="color:#64748b;font-weight:600;font-size:10px">(admin override)</span></label>'
+    +       '<select id="ph235-sa-assign" style="width:100%;border:1px solid #bfdbfe;background:#fff;border-radius:7px;padding:7px 11px;font-size:13px;font-family:inherit;box-sizing:border-box"></select>'
+    +     '</div>'
     +     '<label style="display:block;font-size:11px;font-weight:700;color:var(--text);margin-bottom:4px">Title <span style="color:#dc2626">*</span></label>'
     +     '<input id="ph220-sa-title" type="text" placeholder="e.g. Lions Club outreach, networking event…" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 11px;font-size:13px;font-family:inherit;box-sizing:border-box;margin-bottom:12px">'
     +     '<div id="ph225-sa-time-row" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">'
@@ -54299,6 +54307,45 @@ function _phase220OpenAddModal(dateIso, existing){
     };
     saveBtn.textContent = saveByMode[_ph225Mode] || 'Save';
   }
+  /* Phase 235 (2026-06-02) — admin "Assign to" picker. Only shown when
+     creating a NEW activity AS ADMIN. Non-admin: auto-assigned to self
+     (member is already set from _phase220MemberCtx). Admin editing:
+     row's owner is locked, picker hidden. */
+  var assignRow = document.getElementById('ph235-sa-assign-row');
+  var assignSel = document.getElementById('ph235-sa-assign');
+  var _ph235IsAdmin = _phase223IsAdmin();
+  var _ph235IsNewAdd = !existing;
+  if(assignRow && assignSel){
+    if(_ph235IsAdmin && _ph235IsNewAdd){
+      /* Build options from known members + admin's own name as a fallback. */
+      var roster = [];
+      try {
+        if(typeof MEMBERS !== 'undefined' && Array.isArray(MEMBERS)){
+          MEMBERS.forEach(function(m){ if(m && roster.indexOf(m) < 0) roster.push(m); });
+        }
+      } catch(_){}
+      /* Also include any member who has stored side activities (handles
+         members not in the MEMBERS roster but who already have a bucket). */
+      try {
+        var known = _phase226AllKnownMembers();
+        known.forEach(function(m){ if(m && roster.indexOf(m) < 0) roster.push(m); });
+      } catch(_){}
+      /* Ensure admin's own name is in the list too. */
+      var adminName = (typeof CURRENT_USER !== 'undefined' && CURRENT_USER && CURRENT_USER.name) || '';
+      if(adminName && roster.indexOf(adminName) < 0) roster.unshift(adminName);
+      /* Pre-select: filter's single-target if any, else admin's own name. */
+      var preselect = (typeof _phase226ResolveAddTarget === 'function') ? _phase226ResolveAddTarget() : adminName;
+      assignSel.innerHTML = roster.map(function(m){
+        var safe = String(m).replace(/</g, '&lt;');
+        var sel = (m === preselect) ? ' selected' : '';
+        var suffix = (m === adminName) ? ' (you)' : '';
+        return '<option value="' + safe.replace(/"/g, '&quot;') + '"' + sel + '>' + safe + suffix + '</option>';
+      }).join('');
+      assignRow.style.display = 'block';
+    } else {
+      assignRow.style.display = 'none';
+    }
+  }
   document.getElementById('ph220-sa-title').value = (existing && existing.title) || '';
   document.getElementById('ph220-sa-start').value = (existing && existing.start) || '';
   document.getElementById('ph220-sa-end').value   = (existing && existing.end)   || '';
@@ -54313,6 +54360,19 @@ function _phase220SaveModal(){
   var editId  = m.dataset.editId  || '';
   var member  = m.dataset.member  || _phase220MemberCtx();
   var mode    = m.dataset.mode    || 'complete';  /* Phase 225 */
+  /* Phase 235 — when admin is adding NEW activity and the assign picker
+     is visible, the picker value overrides the default member ctx. */
+  var assignRow = document.getElementById('ph235-sa-assign-row');
+  var assignSel = document.getElementById('ph235-sa-assign');
+  if(!editId && _phase223IsAdmin() && assignRow && assignSel && assignRow.style.display !== 'none'){
+    var picked = (assignSel.value || '').trim();
+    if(!picked){
+      alert('Pick a member to assign this activity to.');
+      return;
+    }
+    member = picked;
+    m.dataset.member = picked;
+  }
   var title = (document.getElementById('ph220-sa-title').value || '').trim();
   var start = document.getElementById('ph220-sa-start').value || '';
   var end   = document.getElementById('ph220-sa-end').value   || '';
@@ -54672,8 +54732,10 @@ function _phase220RenderDayViewPanel(di){
       if(!_ph224Editable){ cardBg = '#f8fafc'; cardBorder = '#e2e8f0'; cardEdge = '#94a3b8'; }
       else if(_ph225Pending){ cardBg = '#fffbeb'; cardBorder = '#fde68a'; cardEdge = '#f59e0b'; }
       else { cardBg = '#faf5ff'; cardBorder = '#ddd6fe'; cardEdge = '#7c3aed'; }
-      /* Phase 226 — show the owner's name when admin is viewing multi. */
-      var ownerTag = (isMultiView && a._owner)
+      /* Phase 226 + 235 — show the owner's name whenever ADMIN is viewing
+         (regardless of multi-mode). Admin needs to see who each activity
+         belongs to even when only one member is in the visible set. */
+      var ownerTag = (a._owner && (isMultiView || _phase223IsAdmin()))
         ? '<div style="display:inline-block;background:#1F3864;color:#fff;font-size:9px;font-weight:800;padding:1px 6px;border-radius:99px;margin-left:6px;letter-spacing:.04em;vertical-align:middle">👤 ' + esc(a._owner) + '</div>'
         : '';
       /* Phase 228 — multi-select checkbox. Disabled if the user can't
