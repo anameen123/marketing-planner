@@ -2877,10 +2877,14 @@ button:not([disabled]):not(.no-press):active {
 
   <!-- Pane 2: Locations (Phase 175 stub — Phase 176 renders into here) -->
   <div id="tl-pane-locations" style="display:none">
-    <!-- Sub-tabs for the 3 facilities -->
+    <!-- Phase 245 (2026-06-02) — ICCOTX overall tab added as 4th tab,
+         default-active. Aggregates all 3 facilities + provides bar /
+         line / donut breakdowns by location. -->
     <div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:18px;flex-wrap:wrap">
+      <button id="loc-tab-iccotx" type="button" onclick="_phase176SwitchFacility('iccotx')"
+              style="padding:11px 22px;font-size:13px;font-weight:700;color:#7030A0;cursor:pointer;border:none;background:none;border-bottom:3px solid #7030A0;font-family:'DM Sans',sans-serif;margin-bottom:-2px;display:inline-flex;align-items:center;gap:6px">🏢 ICCOTX</button>
       <button id="loc-tab-frisco_er" type="button" onclick="_phase176SwitchFacility('frisco_er')"
-              style="padding:11px 22px;font-size:13px;font-weight:700;color:#1F3864;cursor:pointer;border:none;background:none;border-bottom:3px solid #1F3864;font-family:'DM Sans',sans-serif;margin-bottom:-2px;display:inline-flex;align-items:center;gap:6px">🏥 Frisco ER</button>
+              style="padding:11px 22px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;border:none;background:none;border-bottom:3px solid transparent;font-family:'DM Sans',sans-serif;margin-bottom:-2px;display:inline-flex;align-items:center;gap:6px">🏥 Frisco ER</button>
       <button id="loc-tab-castle_hills_er" type="button" onclick="_phase176SwitchFacility('castle_hills_er')"
               style="padding:11px 22px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;border:none;background:none;border-bottom:3px solid transparent;font-family:'DM Sans',sans-serif;margin-bottom:-2px;display:inline-flex;align-items:center;gap:6px">🏥 Castle Hills ER</button>
       <button id="loc-tab-plano_uc" type="button" onclick="_phase176SwitchFacility('plano_uc')"
@@ -58024,7 +58028,8 @@ window._phase175SwitchOuter = _phase175SwitchOuter;
 // of patients logged at that facility. Reads from REFERRAL_LOG (only
 // successful referrals + direct walk-ins captured by the front desk).
 // ════════════════════════════════════════════════════════════════════════════
-window._phase176LastFacility = window._phase176LastFacility || 'frisco_er';
+/* Phase 245 (2026-06-02) — default to ICCOTX rollup tab. */
+window._phase176LastFacility = window._phase176LastFacility || 'iccotx';
 window._phase176ChartWindow  = window._phase176ChartWindow  || '3m';   // 1m | 3m | 6m | 1y
 window._phase176ChartType    = window._phase176ChartType    || 'bar';  // bar | line
 
@@ -58045,18 +58050,25 @@ function _phase176FacilityMeta(key){
 }
 
 function _phase176SwitchFacility(facKey){
-  if(facKey !== 'frisco_er' && facKey !== 'castle_hills_er' && facKey !== 'plano_uc') facKey = 'frisco_er';
+  /* Phase 245 — 'iccotx' is the rollup, others are individual facilities. */
+  var valid = ['iccotx','frisco_er','castle_hills_er','plano_uc'];
+  if(valid.indexOf(facKey) < 0) facKey = 'iccotx';
   window._phase176LastFacility = facKey;
-  // Update tab pill states
-  ['frisco_er','castle_hills_er','plano_uc'].forEach(function(k){
+  /* Update tab pill states. ICCOTX uses purple accent; facilities navy. */
+  valid.forEach(function(k){
     var btn = document.getElementById('loc-tab-' + k);
     if(!btn) return;
     var on = (k === facKey);
-    btn.style.color = on ? '#1F3864' : 'var(--muted)';
+    var accent = (k === 'iccotx') ? '#7030A0' : '#1F3864';
+    btn.style.color = on ? accent : 'var(--muted)';
     btn.style.fontWeight = on ? '700' : '600';
-    btn.style.borderBottomColor = on ? '#1F3864' : 'transparent';
+    btn.style.borderBottomColor = on ? accent : 'transparent';
   });
-  _phase176RenderFacility(facKey);
+  if(facKey === 'iccotx'){
+    _phase245RenderICCOTX();
+  } else {
+    _phase176RenderFacility(facKey);
+  }
 }
 window._phase176SwitchFacility = _phase176SwitchFacility;
 
@@ -58065,6 +58077,336 @@ function _phase176GetEntriesForFacility(facKey){
     if(typeof REFERRAL_LOG === 'undefined' || !Array.isArray(REFERRAL_LOG)) return [];
     return REFERRAL_LOG.filter(function(e){ return e && e.destinationFacility === facKey; });
   } catch(_){ return []; }
+}
+
+/* ── Phase 245 (2026-06-02) — ICCOTX overall (the rollup) ───────────────
+   User: "I need same exact name [layout as a facility]. Call it ICCOTX.
+   It's gonna show the same data but for all of them combined, and of
+   course in the bar chart it's going to be divided into the contribution
+   for each one of these locations. And for the line chart, whenever I
+   click on the dot it will show me the contributions. And we need a
+   donut chart for those as well — in percent and numbers."
+
+   Same layout as a facility page:
+     - Purple header (no street address — it's a rollup)
+     - 4 counter cards: Today / This week (with ‹›) / This month / All-time
+     - Stacked bar chart (per-location contributions per month)
+     - Line chart (one line per location)
+     - Donut chart (per-location split for the current window)
+     - Recent patients list (all facilities, with badge showing which one)
+     - Phase 233 sub-tabs: 📊 Overview / 📋 History (per-facility filter ok)
+*/
+var _PH245_FACILITIES = ['frisco_er','castle_hills_er','plano_uc'];
+var _PH245_PALETTE = {
+  frisco_er:       '#16a34a',  /* green */
+  castle_hills_er: '#7c3aed',  /* purple */
+  plano_uc:        '#d97706'   /* amber */
+};
+function _phase245GetAllEntries(){
+  try {
+    if(typeof REFERRAL_LOG === 'undefined' || !Array.isArray(REFERRAL_LOG)) return [];
+    return REFERRAL_LOG.filter(function(e){ return e && _PH245_FACILITIES.indexOf(e.destinationFacility) >= 0; });
+  } catch(_){ return []; }
+}
+function _phase245RenderICCOTX(){
+  var host = document.getElementById('loc-facility-content');
+  if(!host) return;
+  var entries = _phase245GetAllEntries();
+  /* Counters — use Phase 176Counters with combined entries (it already
+     respects the week-offset nav from Phase 227b). */
+  var counters = _phase176Counters(entries);
+  /* Per-facility counters for the header sub-line. */
+  var perFac = {};
+  _PH245_FACILITIES.forEach(function(k){
+    perFac[k] = _phase176Counters(entries.filter(function(e){ return e.destinationFacility === k; })).total;
+  });
+  /* Sub-tab state — share with Phase 233. */
+  var html = ''
+    /* Purple gradient header — same chrome as a facility but with the
+       ICCOTX label and rollup counts. */
+    + '<div style="background:linear-gradient(135deg,#7030A0,#1F3864);color:#fff;border-radius:14px;padding:18px 22px;margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">'
+    +   '<div>'
+    +     '<div style="font-size:18px;font-weight:800">🏢 ICCOTX · All locations</div>'
+    +     '<div style="font-size:12px;opacity:.95;margin-top:5px;font-weight:600">'
+    +       '🏥 Frisco ER · ' + perFac.frisco_er + '  ·  '
+    +       '🏥 Castle Hills ER · ' + perFac.castle_hills_er + '  ·  '
+    +       '🏥 Urgent Care Plano · ' + perFac.plano_uc
+    +     '</div>'
+    +     '<div style="font-size:11px;opacity:.85;margin-top:3px">' + counters.total + ' patient' + (counters.total === 1 ? '' : 's') + ' logged all-time across all 3 locations</div>'
+    +   '</div>'
+    +   '<div style="font-size:10px;opacity:.85;text-transform:uppercase;letter-spacing:.05em">All numbers count confirmed referrals + direct logs</div>'
+    + '</div>'
+    + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:18px">'
+    +   _phase176CounterCard('Today',     counters.day,   '#15803d', '🗓')
+    +   _phase176WeekCounterCard(counters)
+    +   _phase176CounterCard('This month', counters.month, '#7030A0', '📆')
+    +   _phase176CounterCard('All-time',  counters.total, '#1F3864', '∑')
+    + '</div>'
+    + _phase233SubTabStrip('iccotx');
+  if(_phase233CurrentSubTab() === 'overview'){
+    html += ''
+      /* Stacked bar / line chart by location. */
+      + '<div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:18px;box-shadow:0 1px 3px rgba(15,23,42,.04)">'
+      +   '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px">'
+      +     '<div style="font-size:13px;font-weight:700;color:var(--text)">📊 Patients logged across ICCOTX · breakdown by location</div>'
+      +     '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">'
+      +       _phase176WindowChip('1m', '1 month')
+      +       _phase176WindowChip('3m', '3 months')
+      +       _phase176WindowChip('6m', '6 months')
+      +       _phase176WindowChip('1y', '1 year')
+      +       '<span style="width:1px;height:18px;background:var(--border);margin:0 4px"></span>'
+      +       _phase176TypeChip('bar', '▮▮ Stacked bar')
+      +       _phase176TypeChip('line', '╱╲ Multi-line')
+      +     '</div>'
+      +   '</div>'
+      +   '<svg id="phase245-chart-svg" width="100%" height="240" style="display:block;overflow:visible"></svg>'
+      +   /* Legend below the chart. */
+      +   '<div style="display:flex;gap:14px;margin-top:10px;flex-wrap:wrap;justify-content:center;font-size:11px;font-weight:700">'
+      +     '<span style="display:inline-flex;align-items:center;gap:5px"><span style="width:11px;height:11px;background:' + _PH245_PALETTE.frisco_er + ';border-radius:2px"></span>Frisco ER</span>'
+      +     '<span style="display:inline-flex;align-items:center;gap:5px"><span style="width:11px;height:11px;background:' + _PH245_PALETTE.castle_hills_er + ';border-radius:2px"></span>Castle Hills ER</span>'
+      +     '<span style="display:inline-flex;align-items:center;gap:5px"><span style="width:11px;height:11px;background:' + _PH245_PALETTE.plano_uc + ';border-radius:2px"></span>Urgent Care Plano</span>'
+      +   '</div>'
+      + '</div>'
+      /* Donut chart split by location. */
+      + '<div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:18px;box-shadow:0 1px 3px rgba(15,23,42,.04)">'
+      +   '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:8px">'
+      +     '<div style="font-size:13px;font-weight:700;color:var(--text)">🍩 Location share · ' + counters.total + ' total patients all-time</div>'
+      +   '</div>'
+      +   '<svg id="phase245-donut-svg" width="100%" height="220" style="display:block;overflow:visible"></svg>'
+      + '</div>';
+  } else {
+    /* History sub-tab — same Phase 234 calendar but list aggregates all locations. */
+    html += _phase245HistoryPaneHtml(entries);
+  }
+  host.innerHTML = html;
+  if(_phase233CurrentSubTab() === 'overview'){
+    setTimeout(function(){ try { _phase245DrawChart(entries); _phase245DrawDonut(entries); } catch(e){ console.warn('[245] draw failed', e); } }, 30);
+  }
+}
+window._phase245RenderICCOTX = _phase245RenderICCOTX;
+/* Multi-series stacked bar / line — one series per facility. */
+function _phase245DrawChart(entries){
+  var svg = document.getElementById('phase245-chart-svg');
+  if(!svg) return;
+  var monthsCount = ({ '1m':1, '3m':3, '6m':6, '1y':12 })[window._phase176ChartWindow] || 3;
+  var now = new Date(); now.setDate(1); now.setHours(0,0,0,0);
+  var buckets = [];
+  for(var i = monthsCount - 1; i >= 0; i--){
+    var d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    buckets.push({
+      key: d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0'),
+      label: d.toLocaleDateString('en-US', { month:'long' }),
+      perFac: { frisco_er:0, castle_hills_er:0, plano_uc:0 }
+    });
+  }
+  var bMap = {}; buckets.forEach(function(b){ bMap[b.key] = b; });
+  entries.forEach(function(e){
+    var iso = e.entryDate || (e.ts ? String(e.ts).slice(0,10) : '');
+    if(!iso || iso.length < 7) return;
+    var k = iso.slice(0,7);
+    if(bMap[k] && _PH245_FACILITIES.indexOf(e.destinationFacility) >= 0){
+      bMap[k].perFac[e.destinationFacility]++;
+    }
+  });
+  var w = 700, h = 240, padL = 36, padR = 14, padT = 16, padB = 32;
+  /* Compute maxY: stacked bar uses total per bucket; line uses per-fac max. */
+  var maxY = 0;
+  buckets.forEach(function(b){
+    if(window._phase176ChartType === 'line'){
+      _PH245_FACILITIES.forEach(function(k){ if(b.perFac[k] > maxY) maxY = b.perFac[k]; });
+    } else {
+      var total = b.perFac.frisco_er + b.perFac.castle_hills_er + b.perFac.plano_uc;
+      if(total > maxY) maxY = total;
+    }
+  });
+  var effMax = Math.max(maxY, 5);
+  var parts = ['<g font-family="DM Sans,sans-serif">'];
+  /* Y-axis ticks. */
+  for(var t = 0; t <= 5; t++){
+    var v = (effMax / 5) * t;
+    var yPx = h - padB - (h - padT - padB) * (v / effMax);
+    parts.push('<line x1="' + padL + '" y1="' + yPx + '" x2="' + (w - padR) + '" y2="' + yPx + '" stroke="' + (t === 0 ? '#94a3b8' : '#e2e8f0') + '" stroke-width="1"/>');
+    parts.push('<text x="' + (padL - 6) + '" y="' + (yPx + 3) + '" text-anchor="end" font-size="9" fill="#94a3b8">' + Math.round(v) + '</text>');
+  }
+  var step = (w - padL - padR) / Math.max(buckets.length, 1);
+  /* X-axis labels. */
+  buckets.forEach(function(b, i){
+    parts.push('<text x="' + (padL + step * (i + 0.5)) + '" y="' + (h - padB + 14) + '" text-anchor="middle" font-size="10" fill="#475569">' + b.label.slice(0, 3) + '</text>');
+  });
+  if(window._phase176ChartType === 'line'){
+    /* Multi-line, one per facility. Click-on-dot opens drill via Phase 245 helper. */
+    _PH245_FACILITIES.forEach(function(facKey){
+      var pts = buckets.map(function(b, i){
+        var v = b.perFac[facKey];
+        return { x: padL + step * (i + 0.5), y: h - padB - (h - padT - padB) * (v / effMax), v: v, m: b.label, k: b.key };
+      });
+      var d = pts.map(function(p, i){ return (i === 0 ? 'M' : 'L') + p.x.toFixed(1) + ',' + p.y.toFixed(1); }).join(' ');
+      parts.push('<path d="' + d + '" stroke="' + _PH245_PALETTE[facKey] + '" stroke-width="2" fill="none" stroke-linejoin="round"/>');
+      pts.forEach(function(p){
+        parts.push('<circle cx="' + p.x + '" cy="' + p.y + '" r="3.5" fill="' + _PH245_PALETTE[facKey] + '" style="cursor:pointer" onclick="_phase245OpenMonthDrill(\'' + p.k + '\')"><title>' + facKey + ' · ' + p.m + ': ' + p.v + '</title></circle>');
+      });
+    });
+  } else {
+    /* Stacked bar: bottom = Frisco, middle = Castle Hills, top = UC Plano. */
+    var barW = Math.min(step * 0.7, 50);
+    buckets.forEach(function(b, i){
+      var cx = padL + step * (i + 0.5);
+      var x = cx - barW / 2;
+      var yCursor = h - padB;
+      _PH245_FACILITIES.forEach(function(facKey){
+        var v = b.perFac[facKey];
+        if(v <= 0) return;
+        var segH = (h - padT - padB) * (v / effMax);
+        yCursor -= segH;
+        parts.push('<rect x="' + x + '" y="' + yCursor + '" width="' + barW + '" height="' + segH + '" fill="' + _PH245_PALETTE[facKey] + '" rx="2" style="cursor:pointer" onclick="_phase245OpenMonthDrill(\'' + b.key + '\')"><title>' + facKey + ' · ' + b.label + ': ' + v + '</title></rect>');
+      });
+      var total = b.perFac.frisco_er + b.perFac.castle_hills_er + b.perFac.plano_uc;
+      if(total > 0){
+        parts.push('<text x="' + cx + '" y="' + (yCursor - 4) + '" text-anchor="middle" font-size="10" font-weight="700" fill="#1F3864">' + total + '</text>');
+      }
+    });
+  }
+  parts.push('</g>');
+  svg.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
+  svg.innerHTML = parts.join('');
+}
+/* Per-location donut for all-time totals. */
+function _phase245DrawDonut(entries){
+  var svg = document.getElementById('phase245-donut-svg');
+  if(!svg) return;
+  var totals = { frisco_er:0, castle_hills_er:0, plano_uc:0 };
+  entries.forEach(function(e){ if(totals.hasOwnProperty(e.destinationFacility)) totals[e.destinationFacility]++; });
+  var grand = totals.frisco_er + totals.castle_hills_er + totals.plano_uc;
+  var w = 600, h = 220, cx = 110, cy = 110, rO = 95, rI = 55;
+  function pol(cx, cy, r, deg){ var rad = (deg - 90) * Math.PI / 180; return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) }; }
+  function arc(s, e, color){
+    if(e - s >= 359.999) e = s + 359.999;
+    var p1 = pol(cx,cy,rO,s), p2 = pol(cx,cy,rO,e), p3 = pol(cx,cy,rI,e), p4 = pol(cx,cy,rI,s);
+    var big = (e - s) > 180 ? 1 : 0;
+    return '<path d="M' + p1.x + ',' + p1.y + ' A' + rO + ',' + rO + ' 0 ' + big + ' 1 ' + p2.x + ',' + p2.y + ' L' + p3.x + ',' + p3.y + ' A' + rI + ',' + rI + ' 0 ' + big + ' 0 ' + p4.x + ',' + p4.y + ' Z" fill="' + color + '" stroke="#fff" stroke-width="1.5"/>';
+  }
+  var parts = ['<g font-family="DM Sans,sans-serif">'];
+  if(grand === 0){
+    parts.push('<circle cx="' + cx + '" cy="' + cy + '" r="' + rO + '" fill="#f1f5f9"/>');
+    parts.push('<circle cx="' + cx + '" cy="' + cy + '" r="' + rI + '" fill="#fff"/>');
+    parts.push('<text x="' + cx + '" y="' + cy + '" text-anchor="middle" font-size="11" fill="#94a3b8" font-style="italic">No data yet</text>');
+  } else {
+    var deg = 0;
+    _PH245_FACILITIES.forEach(function(k){
+      if(totals[k] <= 0) return;
+      var slice = (totals[k] / grand) * 360;
+      parts.push(arc(deg, deg + slice, _PH245_PALETTE[k]));
+      deg += slice;
+    });
+    parts.push('<text x="' + cx + '" y="' + (cy - 4) + '" text-anchor="middle" font-size="22" font-weight="800" fill="#1F3864">' + grand + '</text>');
+    parts.push('<text x="' + cx + '" y="' + (cy + 14) + '" text-anchor="middle" font-size="9" fill="#64748b" text-transform="uppercase" letter-spacing="0.05em">patient(s)</text>');
+  }
+  /* Legend on the right with counts + percentages. */
+  var legendX = cx + rO + 30;
+  var labels = { frisco_er: 'Frisco ER', castle_hills_er: 'Castle Hills ER', plano_uc: 'Urgent Care Plano' };
+  _PH245_FACILITIES.forEach(function(k, i){
+    var ly = 28 + i * 26;
+    var pct = grand > 0 ? Math.round((totals[k] / grand) * 100) : 0;
+    parts.push('<rect x="' + legendX + '" y="' + (ly - 10) + '" width="12" height="12" rx="2" fill="' + _PH245_PALETTE[k] + '"/>');
+    parts.push('<text x="' + (legendX + 18) + '" y="' + ly + '" font-size="12" fill="#0f172a">' + labels[k] + '</text>');
+    parts.push('<text x="' + (w - 12) + '" y="' + ly + '" text-anchor="end" font-size="12" font-weight="700" fill="#1F3864" font-family="DM Mono,monospace">' + totals[k] + ' · ' + pct + '%</text>');
+  });
+  parts.push('</g>');
+  svg.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
+  svg.innerHTML = parts.join('');
+}
+/* Drill modal — clicking a chart dot/bar opens this with per-location
+   breakdown for the picked month. */
+function _phase245OpenMonthDrill(monthKey){
+  var allEntries = _phase245GetAllEntries();
+  var monthEntries = allEntries.filter(function(e){
+    var iso = e.entryDate || (e.ts ? String(e.ts).slice(0,10) : '');
+    return iso.slice(0, 7) === monthKey;
+  });
+  var perFac = { frisco_er: 0, castle_hills_er: 0, plano_uc: 0 };
+  monthEntries.forEach(function(e){ if(perFac.hasOwnProperty(e.destinationFacility)) perFac[e.destinationFacility]++; });
+  var grand = perFac.frisco_er + perFac.castle_hills_er + perFac.plano_uc;
+  var labels = { frisco_er: 'Frisco ER', castle_hills_er: 'Castle Hills ER', plano_uc: 'Urgent Care Plano' };
+  var monthLabel = new Date(monthKey + '-01T12:00:00').toLocaleDateString('en-US', { month:'long', year:'numeric' });
+  var rows = _PH245_FACILITIES.map(function(k){
+    var pct = grand > 0 ? Math.round((perFac[k] / grand) * 100) : 0;
+    return '<tr><td style="padding:8px 10px;border-bottom:1px solid var(--border)"><span style="display:inline-block;width:10px;height:10px;background:' + _PH245_PALETTE[k] + ';border-radius:2px;margin-right:7px"></span>' + labels[k] + '</td>'
+      + '<td style="padding:8px 10px;border-bottom:1px solid var(--border);text-align:right;font-weight:800;color:#1F3864;font-family:DM Mono,monospace">' + perFac[k] + '</td>'
+      + '<td style="padding:8px 10px;border-bottom:1px solid var(--border);text-align:right;color:#475569">' + pct + '%</td></tr>';
+  }).join('');
+  var html = '<div id="ph245-drill-modal" style="position:fixed;inset:0;background:rgba(15,23,42,.6);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;font-family:DM Sans,sans-serif" onclick="if(event.target===this)document.getElementById(\'ph245-drill-modal\').remove()">'
+    + '<div style="background:#fff;border-radius:14px;max-width:480px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.5);overflow:hidden">'
+    +   '<div style="background:linear-gradient(135deg,#7030A0,#1F3864);color:#fff;padding:14px 20px;display:flex;align-items:center;justify-content:space-between">'
+    +     '<div>'
+    +       '<div style="font-size:15px;font-weight:800">🏢 ICCOTX · ' + monthLabel + '</div>'
+    +       '<div style="font-size:11px;opacity:.85;margin-top:2px">Per-location breakdown · ' + grand + ' total</div>'
+    +     '</div>'
+    +     '<button onclick="document.getElementById(\'ph245-drill-modal\').remove()" style="background:rgba(255,255,255,.18);border:none;color:#fff;font-size:20px;width:30px;height:30px;border-radius:7px;cursor:pointer">×</button>'
+    +   '</div>'
+    +   '<div style="padding:16px 20px">'
+    +     '<table style="width:100%;border-collapse:collapse">'
+    +       '<thead><tr><th style="padding:8px 10px;text-align:left;font-size:10px;color:#94a3b8;text-transform:uppercase;letter-spacing:.04em">Location</th><th style="padding:8px 10px;text-align:right;font-size:10px;color:#94a3b8;text-transform:uppercase;letter-spacing:.04em">Patients</th><th style="padding:8px 10px;text-align:right;font-size:10px;color:#94a3b8;text-transform:uppercase;letter-spacing:.04em">Share</th></tr></thead>'
+    +       '<tbody>' + rows + '</tbody>'
+    +     '</table>'
+    +   '</div>'
+    + '</div></div>';
+  var existing = document.getElementById('ph245-drill-modal');
+  if(existing) existing.remove();
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+window._phase245OpenMonthDrill = _phase245OpenMonthDrill;
+/* History pane for the ICCOTX rollup — reuses Phase 234 calendar but
+   the row list includes a per-row facility badge. */
+function _phase245HistoryPaneHtml(entries){
+  var filtered = entries.filter(function(e){
+    var iso = e.entryDate || (e.ts ? String(e.ts).slice(0,10) : '');
+    return _phase234MatchesFilter(iso);
+  });
+  var labels = { frisco_er: 'Frisco', castle_hills_er: 'Castle Hills', plano_uc: 'UC Plano' };
+  /* Build a list-with-badges version of the full list. */
+  function esc(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
+  var sorted = filtered.slice().sort(function(a, b){
+    var aT = a.ts || a.entryDate || '';
+    var bT = b.ts || b.entryDate || '';
+    return bT.localeCompare(aT);
+  });
+  var rowsHtml = sorted.map(function(e, i){
+    var when = e.entryDate || (e.ts ? String(e.ts).slice(0,10) : '—');
+    var time = e.entryTime || '';
+    var src = e.sourceBusiness || e.sourceChannel || '—';
+    var fac = labels[e.destinationFacility] || e.destinationFacility;
+    var facColor = _PH245_PALETTE[e.destinationFacility] || '#64748b';
+    var bg = (i % 2 === 0) ? '#fff' : '#fafbfc';
+    var safeId = String(e.id || '').replace(/'/g, "\\'");
+    return '<tr onclick="if(typeof openReferralCard === \'function\') openReferralCard(\'' + safeId + '\')" style="background:' + bg + ';border-bottom:1px solid var(--border);cursor:pointer">'
+      + '<td style="padding:8px 10px;font-family:DM Mono,monospace;font-size:11px;color:#1F3864">' + esc(when) + '</td>'
+      + '<td style="padding:8px 10px;font-size:11px;color:var(--muted)">' + esc(time) + '</td>'
+      + '<td style="padding:8px 10px;font-size:12px;color:var(--text)">' + esc(src) + '</td>'
+      + '<td style="padding:8px 10px"><span style="background:' + facColor + ';color:#fff;font-size:9.5px;font-weight:800;padding:2px 7px;border-radius:99px">' + esc(fac) + '</span></td>'
+      + '</tr>';
+  }).join('');
+  var bodyHtml = sorted.length === 0
+    ? '<div style="padding:24px 12px;text-align:center;color:var(--muted);font-style:italic;font-size:12px">No patients match the filter.</div>'
+    : '<div style="overflow:auto;max-height:560px;border:1px solid var(--border);border-radius:8px"><table style="width:100%;border-collapse:collapse">'
+      + '<thead><tr style="background:#1F3864;position:sticky;top:0">'
+      +   '<th style="padding:8px 10px;text-align:left;font-size:10px;font-weight:700;color:#fff;text-transform:uppercase;letter-spacing:.04em">Date</th>'
+      +   '<th style="padding:8px 10px;text-align:left;font-size:10px;font-weight:700;color:#fff;text-transform:uppercase;letter-spacing:.04em">Time</th>'
+      +   '<th style="padding:8px 10px;text-align:left;font-size:10px;font-weight:700;color:#fff;text-transform:uppercase;letter-spacing:.04em">Source</th>'
+      +   '<th style="padding:8px 10px;text-align:left;font-size:10px;font-weight:700;color:#fff;text-transform:uppercase;letter-spacing:.04em">Location</th>'
+      + '</tr></thead><tbody>' + rowsHtml + '</tbody></table></div>';
+  return '<div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px;box-shadow:0 1px 3px rgba(15,23,42,.04)">'
+    +   '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:10px">'
+    +     '<div>'
+    +       '<div style="font-size:13px;font-weight:700;color:var(--text)">📋 History · all locations</div>'
+    +       '<div style="font-size:10px;color:var(--muted);margin-top:2px">Use the calendar to filter · location badge shows which facility</div>'
+    +     '</div>'
+    +     '<div style="font-size:10.5px;font-weight:700;color:#475569">' + sorted.length + ' of ' + entries.length + '</div>'
+    +   '</div>'
+    +   '<div style="padding:12px;background:#f8fafc;border:1px solid var(--border);border-radius:8px;margin-bottom:12px">'
+    +     _phase234BuildCalendar()
+    +   '</div>'
+    +   bodyHtml
+    + '</div>';
 }
 
 function _phase176IsoDate(d){
