@@ -58055,24 +58055,165 @@ function _phase233SetHistDateRange(which, val){
     _phase176RenderFacility(window._phase176LastFacility);
   }
 }
+/* Phase 234 (2026-06-02) — replace the From/To date inputs with a real
+   visible calendar. User: "the filter should give a range of dates or
+   a certain of dates in a calendar format." Two modes selectable by
+   toggle:
+
+     ● Range     — first click sets start, second click sets end; the
+                   span between (inclusive) is highlighted as a band.
+                   Third click resets the range and starts over.
+     ○ Specific  — each click toggles a single day in or out of a
+                   multi-select list. Pick whichever days you want.
+
+   Month navigation via ◀ / ▶ chevrons. Today's tile gets a subtle ring.
+   All state lives on window so the calendar survives sub-tab toggles
+   and re-renders. */
+window._phase234FilterMode    = window._phase234FilterMode    || 'range';
+window._phase234RangeStart    = window._phase234RangeStart    || '';
+window._phase234RangeEnd      = window._phase234RangeEnd      || '';
+window._phase234SpecificDates = window._phase234SpecificDates || [];
+window._phase234CalMonth      = window._phase234CalMonth      || (function(){
+  var d = new Date(); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+})();
+function _phase234TodayIso(){
+  var d = new Date(); var p = function(n){ return n < 10 ? '0' + n : n; };
+  return d.getFullYear() + '-' + p(d.getMonth()+1) + '-' + p(d.getDate());
+}
+function _phase234SetMode(mode){
+  if(mode !== 'range' && mode !== 'specific') return;
+  window._phase234FilterMode = mode;
+  /* Reset the other mode's selection so they don't shadow each other. */
+  if(mode === 'range'){ window._phase234SpecificDates = []; }
+  else                { window._phase234RangeStart = ''; window._phase234RangeEnd = ''; }
+  if(typeof _phase176RenderFacility === 'function') _phase176RenderFacility(window._phase176LastFacility);
+}
+function _phase234ChangeMonth(delta){
+  var parts = String(window._phase234CalMonth).split('-');
+  var d = new Date(parseInt(parts[0],10), parseInt(parts[1],10) - 1, 1);
+  d.setMonth(d.getMonth() + delta);
+  window._phase234CalMonth = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+  if(typeof _phase176RenderFacility === 'function') _phase176RenderFacility(window._phase176LastFacility);
+}
+function _phase234ClickCell(iso){
+  if(window._phase234FilterMode === 'range'){
+    var s = window._phase234RangeStart;
+    var e = window._phase234RangeEnd;
+    if(!s || (s && e)){
+      /* Fresh start. */
+      window._phase234RangeStart = iso;
+      window._phase234RangeEnd   = '';
+    } else if(s && !e){
+      /* Closing the range — order start ≤ end. */
+      if(iso < s){ window._phase234RangeEnd = s; window._phase234RangeStart = iso; }
+      else       { window._phase234RangeEnd = iso; }
+    }
+  } else {
+    /* Specific mode: toggle in/out. */
+    var arr = window._phase234SpecificDates || [];
+    var i = arr.indexOf(iso);
+    if(i >= 0) arr.splice(i, 1);
+    else arr.push(iso);
+    window._phase234SpecificDates = arr;
+  }
+  if(typeof _phase176RenderFacility === 'function') _phase176RenderFacility(window._phase176LastFacility);
+}
+function _phase234Clear(){
+  window._phase234RangeStart    = '';
+  window._phase234RangeEnd      = '';
+  window._phase234SpecificDates = [];
+  if(typeof _phase176RenderFacility === 'function') _phase176RenderFacility(window._phase176LastFacility);
+}
+function _phase234MatchesFilter(iso){
+  if(!iso) return false;
+  if(window._phase234FilterMode === 'range'){
+    var s = window._phase234RangeStart, e = window._phase234RangeEnd;
+    if(!s && !e) return true;       /* no filter set yet */
+    if(s && !e)  return iso === s;  /* mid-pick: show only the anchor day */
+    return iso >= s && iso <= e;
+  }
+  var arr = window._phase234SpecificDates || [];
+  if(arr.length === 0) return true;
+  return arr.indexOf(iso) >= 0;
+}
+function _phase234BuildCalendar(){
+  var parts = String(window._phase234CalMonth).split('-');
+  var y = parseInt(parts[0], 10), mo = parseInt(parts[1], 10) - 1;
+  var firstDow = new Date(y, mo, 1).getDay();
+  var daysInMonth = new Date(y, mo+1, 0).getDate();
+  var monthLabel = new Date(y, mo, 1).toLocaleDateString('en-US', { month:'long', year:'numeric' });
+  var mode = window._phase234FilterMode;
+  var rs = window._phase234RangeStart, re = window._phase234RangeEnd;
+  var specific = window._phase234SpecificDates || [];
+  var todayIso = _phase234TodayIso();
+  var html = ''
+    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:8px">'
+    +   '<div style="display:flex;align-items:center;gap:4px">'
+    +     '<button onclick="_phase234ChangeMonth(-1)" style="background:#fff;border:1px solid var(--border);border-radius:6px;width:28px;height:28px;cursor:pointer;font-size:14px;color:#1F3864;font-weight:800">‹</button>'
+    +     '<div style="font-size:12px;font-weight:800;color:#1F3864;min-width:140px;text-align:center">' + monthLabel + '</div>'
+    +     '<button onclick="_phase234ChangeMonth(1)" style="background:#fff;border:1px solid var(--border);border-radius:6px;width:28px;height:28px;cursor:pointer;font-size:14px;color:#1F3864;font-weight:800">›</button>'
+    +   '</div>'
+    +   '<div style="display:flex;gap:4px">'
+    +     '<button onclick="_phase234SetMode(\'range\')" style="background:' + (mode === 'range' ? '#1F3864' : '#fff') + ';color:' + (mode === 'range' ? '#fff' : '#475569') + ';border:1px solid #1F3864;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">↔ Range</button>'
+    +     '<button onclick="_phase234SetMode(\'specific\')" style="background:' + (mode === 'specific' ? '#7c3aed' : '#fff') + ';color:' + (mode === 'specific' ? '#fff' : '#475569') + ';border:1px solid #7c3aed;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">☑ Specific</button>'
+    +   '</div>'
+    + '</div>';
+  /* Weekday header row. */
+  html += '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-bottom:3px">';
+  ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].forEach(function(d){
+    html += '<div style="text-align:center;font-size:9.5px;font-weight:800;color:#94a3b8;letter-spacing:.04em;text-transform:uppercase;padding:4px 0">' + d + '</div>';
+  });
+  html += '</div>';
+  html += '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px">';
+  for(var i = 0; i < firstDow; i++) html += '<div></div>';
+  for(var d = 1; d <= daysInMonth; d++){
+    var iso = y + '-' + String(mo+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+    var isToday = (iso === todayIso);
+    /* Compute styling per mode + state. */
+    var bg = '#fff', fg = '#1F3864', bd = 'var(--border)', fw = '600';
+    var inRange = false, isAnchor = false;
+    if(mode === 'range'){
+      isAnchor = (iso === rs) || (iso === re);
+      if(rs && re && iso >= rs && iso <= re) inRange = true;
+      if(rs && !re && iso === rs) isAnchor = true;
+      if(isAnchor){ bg = '#1F3864'; fg = '#fff'; bd = '#1F3864'; fw = '800'; }
+      else if(inRange){ bg = '#dbeafe'; fg = '#1e3a8a'; bd = '#bfdbfe'; fw = '700'; }
+    } else {
+      if(specific.indexOf(iso) >= 0){ bg = '#7c3aed'; fg = '#fff'; bd = '#7c3aed'; fw = '800'; }
+    }
+    var outline = isToday ? 'box-shadow:0 0 0 2px #f59e0b inset;' : '';
+    html += '<button onclick="_phase234ClickCell(\'' + iso + '\')" style="background:' + bg + ';color:' + fg + ';border:1px solid ' + bd + ';border-radius:6px;padding:7px 0;font-size:11px;font-weight:' + fw + ';cursor:pointer;font-family:DM Mono,monospace;' + outline + '" title="' + iso + (isToday ? ' (today)' : '') + '">' + d + '</button>';
+  }
+  html += '</div>';
+  return html;
+}
 function _phase233HistoryPaneHtml(entries, safeName, facKey){
-  /* Apply the date filter to the entries before rendering. */
-  var from = window._phase233FacHistFrom;
-  var to   = window._phase233FacHistTo;
+  /* Apply the calendar filter. */
   var filtered = entries.filter(function(e){
     var iso = e.entryDate || (e.ts ? String(e.ts).slice(0, 10) : '');
-    if(!iso) return false;
-    if(from && iso < from) return false;
-    if(to   && iso > to)   return false;
-    return true;
+    return _phase234MatchesFilter(iso);
   });
   var matchCount = filtered.length;
-  var summary = (from || to)
-    ? ('Showing ' + matchCount + ' of ' + entries.length + ' · ' + (from || '…') + ' → ' + (to || '…'))
-    : (matchCount + ' total · all dates');
-  var clearBtn = (from || to)
-    ? '<button onclick="_phase233SetHistDateRange(\'clear\')" style="background:#fff;border:1px solid var(--border);border-radius:6px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;color:#64748b">× Clear filter</button>'
+  var mode = window._phase234FilterMode;
+  var hasFilter = (mode === 'range' && (window._phase234RangeStart || window._phase234RangeEnd))
+               || (mode === 'specific' && (window._phase234SpecificDates || []).length > 0);
+  var summary;
+  if(!hasFilter){
+    summary = matchCount + ' total · all dates';
+  } else if(mode === 'range'){
+    var rs = window._phase234RangeStart || '…';
+    var re = window._phase234RangeEnd   || '…';
+    summary = 'Showing ' + matchCount + ' of ' + entries.length + ' · ' + rs + ' → ' + re;
+  } else {
+    var n = (window._phase234SpecificDates || []).length;
+    summary = 'Showing ' + matchCount + ' of ' + entries.length + ' · ' + n + ' day' + (n === 1 ? '' : 's') + ' picked';
+  }
+  var clearBtn = hasFilter
+    ? '<button onclick="_phase234Clear()" style="background:#fff;border:1px solid var(--border);border-radius:6px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;color:#991b1b">× Clear filter</button>'
     : '';
+  var hint = (mode === 'range')
+    ? 'Click a day to set <b>start</b>, click another to set <b>end</b>. Click anywhere else to reset.'
+    : 'Click any day to add or remove it from the selection.';
   return '<div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px;box-shadow:0 1px 3px rgba(15,23,42,.04)">'
     +   '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:10px">'
     +     '<div>'
@@ -58081,17 +58222,21 @@ function _phase233HistoryPaneHtml(entries, safeName, facKey){
     +     '</div>'
     +     '<div style="font-size:10.5px;font-weight:700;color:#475569">' + summary + '</div>'
     +   '</div>'
-    +   '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px 12px;background:#f8fafc;border:1px solid var(--border);border-radius:8px;margin-bottom:12px">'
-    +     '<div style="font-size:10.5px;font-weight:800;color:#1F3864;text-transform:uppercase;letter-spacing:.04em">📅 Date range</div>'
-    +     '<label style="font-size:10.5px;color:#475569;font-weight:700">From</label>'
-    +     '<input type="date" value="' + (from || '') + '" onchange="_phase233SetHistDateRange(\'from\', this.value)" style="border:1px solid var(--border);border-radius:6px;padding:5px 9px;font-size:11.5px;font-family:DM Sans,sans-serif">'
-    +     '<label style="font-size:10.5px;color:#475569;font-weight:700">To</label>'
-    +     '<input type="date" value="' + (to || '') + '" onchange="_phase233SetHistDateRange(\'to\', this.value)" style="border:1px solid var(--border);border-radius:6px;padding:5px 9px;font-size:11.5px;font-family:DM Sans,sans-serif">'
-    +     clearBtn
+    +   '<div style="padding:12px;background:#f8fafc;border:1px solid var(--border);border-radius:8px;margin-bottom:12px">'
+    +     _phase234BuildCalendar()
+    +     '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;gap:10px;flex-wrap:wrap">'
+    +       '<div style="font-size:10.5px;color:var(--muted);font-style:italic;flex:1;min-width:200px">' + hint + '</div>'
+    +       clearBtn
+    +     '</div>'
     +   '</div>'
     +   _phase233FullList(filtered)
     + '</div>';
 }
+window._phase234SetMode       = _phase234SetMode;
+window._phase234ChangeMonth   = _phase234ChangeMonth;
+window._phase234ClickCell     = _phase234ClickCell;
+window._phase234Clear         = _phase234Clear;
+window._phase234MatchesFilter = _phase234MatchesFilter;
 /* Phase 233 — history list. Same row layout as _phase176RecentList but
    shows the FULL filtered set (no 15-row cap) and a clearer empty state. */
 function _phase233FullList(entries){
