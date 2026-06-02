@@ -56827,17 +56827,36 @@ function renderCounters(){
       +'Completion = visits done &divide; targets set'
     +'</div>'
     +'</div>'
-    // Member cards — monthly
-    +'<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin:14px 0 8px;display:flex;align-items:center;justify-content:space-between">'
-    +'<span>Members</span>'
-    +'<span style="font-weight:400;color:var(--muted);font-size:10px">'+monthLabel+'</span>'
-    +'</div>'
+    // Phase 255 (2026-06-02) — single-member carousel + collapse-toggle.
+    // User: "One card in which I switch between the members. Right arrow,
+    // left arrow. Those cards should be compact and expanded for the
+    // sake of saving space. Click on the bar to expand. Click again to
+    // shrink to show only the names."
+    // Cards now render ONE-AT-A-TIME with ‹ Name › nav arrows; clicking
+    // the colored member header bar toggles expanded/compact state.
+    + (function(){
+        window._ph255MemberIdx  = window._ph255MemberIdx  || 0;
+        if(window._ph255MemberIdx >= MEMBERS.length) window._ph255MemberIdx = 0;
+        if(window._ph255MemberIdx < 0) window._ph255MemberIdx = MEMBERS.length - 1;
+        window._ph255Expanded = (typeof window._ph255Expanded === 'boolean') ? window._ph255Expanded : true;
+        var navHtml = '<div style="display:flex;align-items:center;gap:8px;margin:14px 0 8px">'
+          + '<button onclick="window._ph255MemberIdx=(window._ph255MemberIdx-1+MEMBERS.length)%MEMBERS.length;refreshLandingDashboard()" style="background:#fff;border:1px solid var(--border);border-radius:7px;width:30px;height:30px;font-size:14px;font-weight:800;color:#1F3864;cursor:pointer">‹</button>'
+          + '<div style="flex:1;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;display:flex;align-items:center;justify-content:space-between">'
+          +   '<span>Member ' + (window._ph255MemberIdx + 1) + ' of ' + MEMBERS.length + '</span>'
+          +   '<span style="font-weight:400;color:var(--muted);font-size:10px">' + monthLabel + '</span>'
+          + '</div>'
+          + '<button onclick="window._ph255MemberIdx=(window._ph255MemberIdx+1)%MEMBERS.length;refreshLandingDashboard()" style="background:#fff;border:1px solid var(--border);border-radius:7px;width:30px;height:30px;font-size:14px;font-weight:800;color:#1F3864;cursor:pointer">›</button>'
+          + '</div>';
+        return navHtml;
+    })()
     +'<div class="member-cards">'
     +(function(){
       // Per-member week stats — drives the bottom 3 stat boxes (weekly to
       // match the progress bar above them).
       var weekly = getMemberStatsForCurrentWeek();
-      return MEMBERS.map(function(m){
+      /* Phase 255 — show ONLY the currently-selected member. */
+      var visibleMembers = [MEMBERS[window._ph255MemberIdx]];
+      return visibleMembers.map(function(m){
       var s=ms[m];                 // monthly stats (still used for the header pill "X this month")
       var w=weekly[m];              // weekly stats (Completed / Canceled / Leads)
       var hc=MCOLORS[m];
@@ -56882,13 +56901,17 @@ function renderCounters(){
       var wRateBar = wDen>0 ? Math.round((wCompleted/wDen)*100) : 0;
       var barColorBar = wRateBar>=80?'#22c55e':wRateBar>=50?'#f59e0b':'#ef4444';
 
+      /* Phase 255 — header bar toggles expand/collapse. The member-name
+         link still opens the profile (event.stopPropagation prevents
+         the click from bubbling up and toggling collapse). */
+      var _ph255Exp = !!window._ph255Expanded;
+      var _ph255Caret = _ph255Exp ? '▾' : '▸';
       return '<div class="mcard">'
-        // The member-name in the card header is now click-to-profile.
-        +'<div class="mcard-hdr" style="background:'+hc+'">'
-          +'<span class="member-link" data-member="'+m.replace(/"/g,'&quot;')+'" title="Open '+m+'\'s profile" style="cursor:pointer;color:#fff">'+m+'</span>'
-        // Live month-to-date counter: number of visits this member has actually
-        // completed so far this month. Updates as soon as a visit is marked Completed.
+        +'<div class="mcard-hdr" onclick="window._ph255Expanded=!window._ph255Expanded;refreshLandingDashboard()" title="Click to ' + (_ph255Exp ? 'collapse' : 'expand') + '" style="background:'+hc+';cursor:pointer">'
+          +'<span style="font-size:13px;font-weight:800;margin-right:5px;color:#fff">' + _ph255Caret + '</span>'
+          +'<span class="member-link" data-member="'+m.replace(/"/g,'&quot;')+'" onclick="event.stopPropagation()" title="Open '+m+'\'s profile" style="cursor:pointer;color:#fff">'+m+'</span>'
         +'<span class="m-visits" title="Live count: visits completed by '+m+' so far in '+monthLabel+'">'+s.comp+' completed this month</span></div>'
+        + (_ph255Exp ? (''
         // Weekly progress bar
         +'<div style="padding:10px 12px 8px">'
         +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">'
@@ -56921,6 +56944,7 @@ function renderCounters(){
           +'</div>';
         })()
         // Calls-Converted row removed 2026-05-27 per user.
+        ) : '')   /* Phase 255 — end of expanded-only body */
         +'</div>';
     }).join('');
     })()
