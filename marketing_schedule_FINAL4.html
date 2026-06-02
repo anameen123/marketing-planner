@@ -53292,7 +53292,36 @@ function _phase185CollectMonth(){
           var bt = (typeof getBizTypeForName === 'function') ? getBizTypeForName(r.clinic) : 'clinic';
           if(bt === 'mva') leadsMva++; else leadsClinic++;
         }
-        var area = r.area || r.city || '(no area)';
+        /* Phase 237 (2026-06-02) — derive area from the BUSINESS, not just
+           the row. User: "we have more than 4 area. The area are any of
+           the clinics they have addresses right? So the visits means
+           for the community outreach or clinics or MVAs. Each of those
+           have an address. Then this graph will see how many visits our
+           marketing team for each area."
+
+           Lookup chain (first hit wins):
+             1. r.area / r.city — explicit on the row (rare).
+             2. _rpResolveCityForName(r.clinic) — covers CLINIC_BANK,
+                MVA_ATTORNEYS, OUTREACH via the existing canonical
+                helper used by the route planner.
+             3. ROUTE_COORDS lookup by label — for facility visits
+                (e.g. "Main office" → "Richardson").
+             4. Fallback "(unknown area)" only when every lookup misses. */
+        var area = r.area || r.city || '';
+        if(!area && typeof _rpResolveCityForName === 'function'){
+          area = _rpResolveCityForName(r.clinic) || '';
+        }
+        if(!area && typeof ROUTE_COORDS !== 'undefined' && ROUTE_COORDS){
+          var rcKeys = Object.keys(ROUTE_COORDS);
+          for(var rci = 0; rci < rcKeys.length; rci++){
+            var rcEntry = ROUTE_COORDS[rcKeys[rci]];
+            if(rcEntry && rcEntry.label === r.clinic && rcEntry.city){
+              area = rcEntry.city;
+              break;
+            }
+          }
+        }
+        if(!area) area = '(unknown area)';
         if(!byArea[area]) byArea[area] = 0;
         byArea[area]++;
       });
