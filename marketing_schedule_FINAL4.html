@@ -29632,10 +29632,12 @@ var ROUTE_COORDS = {
        Urgent Care of Plano is at 75023, not 75093.
      ICCOTX has no Lewisville location; "Castle Hills" is the
      community served, not the city. */
-  '_facility_frisco_er':       { lat: 33.1577, lng: -96.8094, label: 'Frisco ER',         type: 'facility', address: '12600 Rolater Rd, Suite 120, Frisco, TX 75035', addressVerified: true, city: 'Frisco' },
-  '_facility_castle_hills_er': { lat: 32.9947, lng: -96.8881, label: 'Castle Hills ER',   type: 'facility', address: '4228 N. Josey Lane, Carrollton, TX 75010',      addressVerified: true, city: 'Carrollton' },
-  '_facility_plano_uc':        { lat: 33.0464, lng: -96.7558, label: 'Urgent Care Plano', type: 'facility', address: '3909 W Parker Rd, Suite 104, Plano, TX 75023', addressVerified: true, city: 'Plano' },
-  '_facility_richardson':      { lat: 32.9893, lng: -96.7437, label: 'Main office',       type: 'facility', address: '101 W Renner Rd, Richardson, TX 75080', addressVerified: true,  city: 'Richardson' },
+  /* Phase 228d (2026-06-02) — lat/lng geocoded via Nominatim against the
+     verified street addresses. Pins now land on the actual building. */
+  '_facility_frisco_er':       { lat: 33.1381, lng: -96.7700, label: 'Frisco ER',         type: 'facility', address: '12600 Rolater Rd, Suite 120, Frisco, TX 75035', addressVerified: true, city: 'Frisco' },
+  '_facility_castle_hills_er': { lat: 33.0256, lng: -96.8848, label: 'Castle Hills ER',   type: 'facility', address: '4228 N. Josey Lane, Carrollton, TX 75010',      addressVerified: true, city: 'Carrollton' },
+  '_facility_plano_uc':        { lat: 33.0418, lng: -96.7691, label: 'Urgent Care Plano', type: 'facility', address: '3909 W Parker Rd, Suite 104, Plano, TX 75023', addressVerified: true, city: 'Plano' },
+  '_facility_richardson':      { lat: 32.9971, lng: -96.7061, label: 'Main office',       type: 'facility', address: '101 W Renner Rd, Richardson, TX 75080', addressVerified: true,  city: 'Richardson' },
   // 21 approved cities — centroid
   'Frisco':         { lat: 33.1507, lng: -96.8236 },
   'Plano':          { lat: 33.0198, lng: -96.6989 },
@@ -30914,10 +30916,13 @@ window.renderAllBusinessPins = renderAllBusinessPins;
 // from the route-planner Start (S) / End (E) markers. Distinct purple-gradient
 // fill + white border so they read as "home base" not "stop".
 var _DV_FACILITY_LAYER = null;
+/* Phase 228d (2026-06-02) — coords synced with Nominatim-geocoded
+   ROUTE_COORDS entries so the F / CH / UCP day-map labels sit on the
+   actual building footprint, not the old city-centroid approximations. */
 var WCG_FACILITY_LABELS = [
-  { key: '_facility_frisco_er',       short: 'F',   name: 'Frisco ER',           lat: 33.1577, lng: -96.8094 },
-  { key: '_facility_castle_hills_er', short: 'CH',  name: 'Castle Hills ER',     lat: 32.9947, lng: -96.8881 },
-  { key: '_facility_plano_uc',        short: 'UCP', name: 'Urgent Care Plano',   lat: 33.0464, lng: -96.7558 }
+  { key: '_facility_frisco_er',       short: 'F',   name: 'Frisco ER',           lat: 33.1381, lng: -96.7700 },
+  { key: '_facility_castle_hills_er', short: 'CH',  name: 'Castle Hills ER',     lat: 33.0256, lng: -96.8848 },
+  { key: '_facility_plano_uc',        short: 'UCP', name: 'Urgent Care Plano',   lat: 33.0418, lng: -96.7691 }
 ];
 window.WCG_FACILITY_LABELS = WCG_FACILITY_LABELS;
 function _rpDrawFacilityPins(){
