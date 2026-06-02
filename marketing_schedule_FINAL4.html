@@ -2673,6 +2673,18 @@ button:not([disabled]):not(.no-press):active {
 
     <!-- ─── SUB-TAB 1: Visit history (original) ─── -->
     <div id="hist-sub-visits">
+      <!-- Phase 265 (2026-06-02) — OK.docx #16: universal calendar
+           filter widget. Lives ABOVE the month bar so the rep can
+           narrow visits to a single day, a range, or any set of days
+           the same way they would on the logged-patients page. The
+           widget AND-combines with the existing month nav + search. -->
+      <details id="hist-visits-ph248-block" style="margin-bottom:10px;background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:6px 12px">
+        <summary style="cursor:pointer;font-size:11px;font-weight:700;color:#1F3864;list-style:none;display:flex;align-items:center;gap:6px">
+          <span style="font-size:13px">📅</span> Date filter
+          <span style="font-size:10px;color:var(--muted);font-style:italic;margin-left:6px" id="hist-visits-ph248-summary">Click to pick day / range / specific dates</span>
+        </summary>
+        <div id="hist-visits-ph248-host" style="margin-top:8px"></div>
+      </details>
       <!-- Per user 2026-05-25 #100: month nav + view toggle + monthly
            totals at the top so a member can navigate their own history
            by date instead of scrolling through pagination. -->
@@ -2726,6 +2738,16 @@ button:not([disabled]):not(.no-press):active {
 
     <!-- ─── SUB-TAB 2: Established Leads (businesses + lead type for THIS member) ─── -->
     <div id="hist-sub-leads" style="display:none">
+      <!-- Phase 265 (2026-06-02) — OK.docx #16: same universal calendar
+           filter widget on the Leads sub-tab. Filters by lead-established
+           date. -->
+      <details id="hist-leads-ph248-block" style="margin-bottom:10px;background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:6px 12px">
+        <summary style="cursor:pointer;font-size:11px;font-weight:700;color:#1F3864;list-style:none;display:flex;align-items:center;gap:6px">
+          <span style="font-size:13px">📅</span> Date filter
+          <span style="font-size:10px;color:var(--muted);font-style:italic;margin-left:6px" id="hist-leads-ph248-summary">Click to pick day / range / specific dates</span>
+        </summary>
+        <div id="hist-leads-ph248-host" style="margin-top:8px"></div>
+      </details>
       <div class="history-hdr">
         <div class="history-title">Established Leads</div>
         <div class="history-meta" id="hist-leads-meta"></div>
@@ -58507,6 +58529,19 @@ function renderHistory(){
       return hay.indexOf(searchTerm) >= 0;
     });
   }
+
+  /* Phase 265 (2026-06-02) — OK.docx #16: ALSO narrow by the universal
+     calendar-filter widget if the user has engaged it. _phase265EnsureWidget
+     mounts the widget the first time and refreshes the summary line on
+     every render. The renderer-side filter is _phase265PassesFilter,
+     which short-circuits to "pass everything" when the widget is dormant. */
+  if(typeof _phase265EnsureWidget === 'function'){
+    _phase265EnsureWidget('hist-visits', 'hist-visits-ph248-host', 'hist-visits-ph248-summary', function(){
+      memberPage = 1;
+      renderHistory();
+    });
+    visits = visits.filter(function(v){ return _phase265PassesFilter('hist-visits', v && v.date); });
+  }
   var total=visits.length;
   var totalPages=Math.max(1,Math.ceil(total/PAGE_SIZE));
   memberPage=Math.min(memberPage,totalPages);
@@ -59941,6 +59976,68 @@ function _phase248Build(stateKey, onChange){
 }
 window._phase248Build         = _phase248Build;
 window._phase248Matches       = _phase248Matches;
+
+/* Phase 265 (2026-06-02) — OK.docx #16: thin helper that initializes
+   the Phase 248 widget into a host element exactly once per (stateKey,
+   hostId) pair. If the host already contains a widget for this key, we
+   leave it alone so user-picked dates survive re-renders. Re-renders
+   that DO need to update the chrome (e.g. summary line) read state
+   directly via _phase265SummariseFilter(). */
+function _phase265EnsureWidget(stateKey, hostId, summaryElId, onChange){
+  var host = document.getElementById(hostId);
+  if(!host) return;
+  if(host.dataset.ph265Mounted === stateKey){
+    /* Already mounted — just refresh the summary chrome below. */
+  } else {
+    host.innerHTML = _phase248Build(stateKey, onChange || function(){});
+    host.dataset.ph265Mounted = stateKey;
+  }
+  if(summaryElId){
+    var sum = document.getElementById(summaryElId);
+    if(sum) sum.textContent = _phase265SummariseFilter(stateKey);
+  }
+}
+window._phase265EnsureWidget = _phase265EnsureWidget;
+
+function _phase265SummariseFilter(stateKey){
+  var s = window._phase248State && window._phase248State[stateKey];
+  if(!s) return 'Click to pick day / range / specific dates';
+  function fmt(iso){
+    try {
+      return new Date(iso + 'T00:00:00').toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
+    } catch(_){ return iso; }
+  }
+  if(s.mode === 'range'){
+    if(s.rangeStart && s.rangeEnd) return 'Range · ' + fmt(s.rangeStart) + ' – ' + fmt(s.rangeEnd);
+    if(s.rangeStart) return 'Range · pick an end date (start: ' + fmt(s.rangeStart) + ')';
+    return 'No filter (showing all dates)';
+  }
+  if(s.mode === 'day') return 'Single day · ' + fmt(s.day || '');
+  if(s.mode === 'specific'){
+    if(!s.specific || !s.specific.length) return 'No filter — pick the days you want';
+    if(s.specific.length === 1) return 'One specific day · ' + fmt(s.specific[0]);
+    return s.specific.length + ' specific days';
+  }
+  return 'No filter (showing all dates)';
+}
+window._phase265SummariseFilter = _phase265SummariseFilter;
+
+/* Returns true if the date-iso passes the widget filter, OR if the
+   widget hasn't been mounted yet (i.e. caller never engaged the filter).
+   This lets us call _phase265PassesFilter from any list renderer
+   unconditionally — when the widget is dormant nothing gets filtered. */
+function _phase265PassesFilter(stateKey, iso){
+  if(!iso) return true;
+  var s = window._phase248State && window._phase248State[stateKey];
+  if(!s) return true;
+  /* "No filter" guard — when range mode has no bounds OR specific mode
+     has no picks, treat the filter as off so the user doesn't see an
+     empty list just because they opened the widget. */
+  if(s.mode === 'range' && !s.rangeStart && !s.rangeEnd) return true;
+  if(s.mode === 'specific' && (!s.specific || !s.specific.length)) return true;
+  return _phase248Matches(stateKey, iso);
+}
+window._phase265PassesFilter = _phase265PassesFilter;
 window._phase248SetMode       = _phase248SetMode;
 window._phase248ChangeMonth   = _phase248ChangeMonth;
 window._phase248ClickCell     = _phase248ClickCell;
@@ -63368,6 +63465,15 @@ function renderEstablishedLeadsForMember(name){
   }
   // Newest first
   leads.sort(function(a,b){ return (b.date||'').localeCompare(a.date||''); });
+
+  /* Phase 265 (2026-06-02) — OK.docx #16: same universal calendar
+     filter on the Established Leads list, keyed on lead.date. */
+  if(typeof _phase265EnsureWidget === 'function'){
+    _phase265EnsureWidget('hist-leads', 'hist-leads-ph248-host', 'hist-leads-ph248-summary', function(){
+      renderEstablishedLeadsForMember(name);
+    });
+    leads = leads.filter(function(l){ return _phase265PassesFilter('hist-leads', l && l.date); });
+  }
 
   if(metaEl) metaEl.textContent = leads.length + ' established lead' + (leads.length===1?'':'s') + ' by ' + name;
   if(leads.length === 0){
