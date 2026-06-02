@@ -2816,22 +2816,26 @@ button:not([disabled]):not(.no-press):active {
       <!-- Big clickable stat cards: All-Time Leads · Visits (period) · Leads (period) -->
       <div id="stats-cards" style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:24px"></div>
 
-      <!-- Team-wide monthly completed visits — sum across all members, last 6 months -->
+      <!-- Phase 247 (2026-06-02) — OK.docx #11: combined Weekly + Monthly
+           card with a toggle. Two view modes share one card body; the
+           "Weekly" pane swaps in stats-weekly-svg, the "Monthly" pane
+           swaps in stats-monthly-svg. Both renderers (Phase 187) stay
+           the same — only the chrome changed. -->
       <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:14px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-          <div style="font-size:13px;font-weight:700;color:var(--text)">📈 Monthly Completed Visits — Team Total</div>
-          <span style="font-size:10px;color:var(--muted)">Last 6 months</span>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+          <div style="font-size:13px;font-weight:700;color:var(--text)" id="ph247-completed-title">📊 Completed Visits — Team Total</div>
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <button id="ph247-cv-tab-weekly"  type="button" onclick="_phase247SetCompletedMode('weekly')"
+              style="background:#fff;color:#475569;border:1px solid var(--border);border-radius:6px;padding:5px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">📊 Weekly</button>
+            <button id="ph247-cv-tab-monthly" type="button" onclick="_phase247SetCompletedMode('monthly')"
+              style="background:#1F3864;color:#fff;border:1px solid #1F3864;border-radius:6px;padding:5px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">📈 Monthly</button>
+            <span style="width:1px;height:18px;background:var(--border);margin:0 4px"></span>
+            <span id="ph247-cv-period-label" style="font-size:10px;color:var(--muted)">Last 6 months</span>
+          </div>
         </div>
+        <!-- Two SVGs: only one shows at a time, controlled by Phase 247 toggle. -->
         <svg id="stats-monthly-svg" width="100%" height="180" style="display:block;overflow:visible"></svg>
-      </div>
-
-      <!-- Team-wide weekly completed visits — sum across all members, last 6 weeks -->
-      <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:14px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-          <div style="font-size:13px;font-weight:700;color:var(--text)">📊 Weekly Completed Visits — Team Total</div>
-          <span style="font-size:10px;color:var(--muted)">Last 6 weeks (Mon–Sun)</span>
-        </div>
-        <svg id="stats-weekly-svg" width="100%" height="180" style="display:block;overflow:visible"></svg>
+        <svg id="stats-weekly-svg"  width="100%" height="180" style="display:none;overflow:visible"></svg>
       </div>
 
       <!-- Phase 187 (2026-05-31): TEAM-WIDE line + bar charts of monthly
@@ -60172,8 +60176,14 @@ function renderTeamStats(){
       + card('leadsPeriod',  data.totals.leadsPeriod,  'Leads — '+data.range.label,  '#7030A0', '#faf5ff');
   }
   // Line graphs
+  /* Phase 247 — only re-render the visible pane. Both SVGs still get
+     drawn on first paint to seed them, but subsequent toggles are
+     handled by _phase247SetCompletedMode. */
   _drawTeamMonthlyVisits();
   _drawTeamWeeklyVisits();
+  if(typeof _phase247ApplyCompletedMode === 'function'){
+    try { _phase247ApplyCompletedMode(); } catch(_){}
+  }
 }
 window.renderTeamStats = renderTeamStats;
 
@@ -62193,6 +62203,41 @@ window.closeTeamContribution     = closeTeamContribution;
 // ── TEAM-WIDE LINE GRAPHS ───────────────────────────────────────────────
 // Monthly: last 6 months, team-total completed visits per month
 // Weekly:  last 6 weeks (Mon–Sun), team-total completed visits per week
+/* Phase 247 (2026-06-02) — Completed Visits Weekly/Monthly toggle.
+   The combined card has two SVG elements; this handler swaps which
+   one is visible + updates the tab pill states + the period label. */
+window._phase247CompletedMode = window._phase247CompletedMode || 'monthly';
+function _phase247SetCompletedMode(mode){
+  if(mode !== 'weekly' && mode !== 'monthly') return;
+  window._phase247CompletedMode = mode;
+  _phase247ApplyCompletedMode();
+}
+function _phase247ApplyCompletedMode(){
+  var mode = window._phase247CompletedMode || 'monthly';
+  var monthlySvg = document.getElementById('stats-monthly-svg');
+  var weeklySvg  = document.getElementById('stats-weekly-svg');
+  if(monthlySvg) monthlySvg.style.display = (mode === 'monthly') ? 'block' : 'none';
+  if(weeklySvg)  weeklySvg.style.display  = (mode === 'weekly')  ? 'block' : 'none';
+  var mTab = document.getElementById('ph247-cv-tab-monthly');
+  var wTab = document.getElementById('ph247-cv-tab-weekly');
+  function paint(btn, on){
+    if(!btn) return;
+    btn.style.background = on ? '#1F3864' : '#fff';
+    btn.style.color = on ? '#fff' : '#475569';
+    btn.style.borderColor = on ? '#1F3864' : 'var(--border)';
+  }
+  paint(mTab, mode === 'monthly');
+  paint(wTab, mode === 'weekly');
+  var title = document.getElementById('ph247-completed-title');
+  var lbl   = document.getElementById('ph247-cv-period-label');
+  if(title) title.textContent = (mode === 'monthly')
+    ? '📈 Completed Visits — Team Total · Monthly'
+    : '📊 Completed Visits — Team Total · Weekly';
+  if(lbl)   lbl.textContent   = (mode === 'monthly') ? 'Last 6 months' : 'Last 6 weeks (Mon–Sun)';
+}
+window._phase247SetCompletedMode    = _phase247SetCompletedMode;
+window._phase247ApplyCompletedMode  = _phase247ApplyCompletedMode;
+
 function _drawTeamMonthlyVisits(){
   var svg = document.getElementById('stats-monthly-svg');
   if(!svg) return;
