@@ -53028,7 +53028,9 @@ function switchProfileTab(tab){
         referralCounter.style.display = 'none';
       }
     }
-    if(sideActivities)  sideActivities.style.display  = _ph217Show ? '' : 'none';
+    /* Phase 219 (2026-06-01) — Side Activities lives on Performance tab
+       now, not in the blue card. Keep it hidden on every tab. */
+    if(sideActivities)  sideActivities.style.display  = 'none';
     /* On Performance / History, also remove the navy card's own padding
        + background so the back button doesn't sit on a tall empty navy
        strip — collapse it to a flat row. Restore on Overview. */
@@ -55958,7 +55960,15 @@ function loadMemberProfile(name){
 
   document.getElementById('profile-card').style.display='block';
   document.getElementById('no-profile').style.display='none';
-  if(typeof renderSideActivities === 'function') renderSideActivities(name);
+  /* Phase 219 (2026-06-01) — user: "right now the one that is working is
+     in the performance, keep it in the performance." The blue-card
+     Side Activities (renderSideActivities → #side-activities-section)
+     was the broken duplicate. The working one lives on the Performance
+     tab (_phase185RenderSideActivities → #perf-side-activities-grid).
+     Stop rendering the blue-card duplicate and hide its container so
+     Phase 217's overview-show toggle doesn't reveal an empty strip. */
+  var _ph219SaSec = document.getElementById('side-activities-section');
+  if(_ph219SaSec){ _ph219SaSec.innerHTML = ''; _ph219SaSec.style.display = 'none'; }
   var ptabs=document.getElementById('profile-tabs');
   if(ptabs)ptabs.style.display='flex';
   switchProfileTab('overview');
