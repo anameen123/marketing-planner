@@ -2581,17 +2581,22 @@ button:not([disabled]):not(.no-press):active {
       <summary style="cursor:pointer;font-size:13px;font-weight:700;color:var(--text);padding:8px 0;list-style:none;display:flex;align-items:center;gap:6px">
         <span style="font-size:11px">▸</span> 🎯 Monthly leads by type <span id="perf-leads-type-total" style="font-size:11px;color:var(--muted);font-weight:500;margin-left:auto"></span>
       </summary>
-      <div style="font-size:10px;color:var(--muted);margin:6px 0;font-style:italic">Established leads this month, split by clinic vs MVA attorney.</div>
-      <div style="background:#fafbfc;border-radius:8px;padding:10px;border:1px solid var(--border);margin-top:6px">
-        <svg id="perf-leads-svg" width="100%" height="180" style="display:block;overflow:visible"></svg>
+      <div style="font-size:10px;color:var(--muted);margin:6px 0;font-style:italic">Established leads only (Needs work / Dead end excluded). Toggle between Clinics and MVA attorneys, bar or line, and 1 / 3 / 6 / 12 month windows.</div>
+      <div id="perf-leads-toolbar" style="margin-top:6px;display:flex;flex-wrap:wrap;gap:6px;align-items:center"></div>
+      <div id="perf-leads-level-filter" style="margin-top:6px;display:none;flex-wrap:wrap;gap:5px;align-items:center"></div>
+      <div style="background:#fafbfc;border-radius:8px;padding:10px;border:1px solid var(--border);margin-top:8px">
+        <svg id="perf-leads-svg" width="100%" height="220" style="display:block;overflow:visible"></svg>
       </div>
     </details>
     <details class="perf-chart-block" style="margin-bottom:12px">
       <summary style="cursor:pointer;font-size:13px;font-weight:700;color:var(--text);padding:8px 0;list-style:none;display:flex;align-items:center;gap:6px">
         <span style="font-size:11px">▸</span> 👥 Monthly patient referrals <span id="perf-referrals-total" style="font-size:11px;color:var(--muted);font-weight:500;margin-left:auto"></span>
       </summary>
+      <div style="font-size:10px;color:var(--muted);margin:6px 0;font-style:italic">Confirmed referrals by source (Clinic / MVA / Outreach / Google call). Toggle between bar or line, and 1 / 3 / 6 / 12 month windows.</div>
+      <div id="perf-referrals-toolbar" style="margin-top:6px;display:flex;flex-wrap:wrap;gap:6px;align-items:center"></div>
+      <div id="perf-referrals-source-filter" style="margin-top:6px;display:none;flex-wrap:wrap;gap:5px;align-items:center"></div>
       <div style="background:#fafbfc;border-radius:8px;padding:10px;border:1px solid var(--border);margin-top:8px">
-        <svg id="perf-referrals-svg" width="100%" height="180" style="display:block;overflow:visible"></svg>
+        <svg id="perf-referrals-svg" width="100%" height="220" style="display:block;overflow:visible"></svg>
       </div>
     </details>
 
@@ -53307,78 +53312,377 @@ function _phase185RenderAreaChart(d){
   svg.innerHTML = parts.join('');
 }
 
-function _phase185RenderLeadsChart(d){
-  var svg = document.getElementById('perf-leads-svg');
-  if(!svg) return;
-  var c = d.leadsClinic, m = d.leadsMva;
-  if(!c && !m){ svg.innerHTML = '<text x="50%" y="50%" text-anchor="middle" fill="#94a3b8" font-size="11" font-family="DM Sans,sans-serif">No leads established this month</text>'; return; }
-  var w = 600, h = 180;
-  var max = Math.max(c, m, 1);
-  var barW = 120;
-  var leftX = w/2 - barW - 30;
-  var rightX = w/2 + 30;
-  var topY = 30;
-  var bottomY = h - 30;
-  var avail = bottomY - topY;
-  var hC = avail * (c / max);
-  var hM = avail * (m / max);
-  svg.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
-  svg.innerHTML = '<g font-family="DM Sans,sans-serif">'
-    + '<rect x="' + leftX + '" y="' + (bottomY - hC) + '" width="' + barW + '" height="' + hC + '" fill="#1F3864" rx="6"/>'
-    + '<text x="' + (leftX + barW/2) + '" y="' + (bottomY - hC - 8) + '" text-anchor="middle" font-size="18" font-weight="800" fill="#1F3864">' + c + '</text>'
-    + '<text x="' + (leftX + barW/2) + '" y="' + (bottomY + 18) + '" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">🏥 Clinic</text>'
-    + '<rect x="' + rightX + '" y="' + (bottomY - hM) + '" width="' + barW + '" height="' + hM + '" fill="#7c3aed" rx="6"/>'
-    + '<text x="' + (rightX + barW/2) + '" y="' + (bottomY - hM - 8) + '" text-anchor="middle" font-size="18" font-weight="800" fill="#7c3aed">' + m + '</text>'
-    + '<text x="' + (rightX + barW/2) + '" y="' + (bottomY + 18) + '" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">⚖ MVA</text>'
-    + '</g>';
+/* ── Phase 229 (2026-06-02) ─────────────────────────────────────────────
+   Monthly leads by type + Monthly patient referrals — complete rewrite.
+
+   User: "those two charts don't work. They should be live for the current
+   month and fixed for the previous months. They should extract their data
+   from the schedule on dashboard. The leads chart: clinic OR MVA toggle,
+   stacked bar by level, line chart with per-level filter (Established
+   only — Needs work / Dead end excluded). The referrals chart: broken
+   down between the 4 source options (clinic / MVA / outreach / Google
+   call). Both: bar OR line, 1 / 3 / 6 / 12 month range, always render
+   axes even when empty."
+
+   State stored on window so the toolbar buttons re-render the same
+   chart on click without re-running renderPerfCharts. */
+window._ph229Leads = window._ph229Leads || { chartType:'bar', range:6, biz:'clinic', hiddenLevels:{} };
+window._ph229Refs  = window._ph229Refs  || { chartType:'bar', range:6, hiddenSources:{} };
+
+/* Source palette for referrals — matches REFERRAL_CHANNELS visual cues. */
+var _PH229_SOURCES = [
+  { key:'clinic',   label:'🏥 Clinic',         color:'#1F3864' },
+  { key:'mva',      label:'⚖ MVA',             color:'#7c3aed' },
+  { key:'outreach', label:'🏘️ Outreach',       color:'#16a34a' },
+  { key:'google',   label:'🔍 Google call',    color:'#d97706' }
+];
+/* Level palettes for leads — clinic has L1-L4, MVA has L1-L2. */
+var _PH229_LEVEL_COLORS_CLINIC = ['#94a3b8', '#16a34a', '#0d9488', '#7c3aed', '#dc2626'];
+var _PH229_LEVEL_COLORS_MVA    = ['#94a3b8', '#16a34a', '#7c3aed'];
+
+/* Build the list of [year, month] buckets for a given range (1, 3, 6, 12),
+   ending at the current month. Newest last. */
+function _ph229MonthBuckets(range){
+  var out = [];
+  var d = new Date(); d.setDate(1); d.setHours(0,0,0,0);
+  for(var i = range - 1; i >= 0; i--){
+    var dd = new Date(d.getFullYear(), d.getMonth() - i, 1);
+    out.push({ y: dd.getFullYear(), m: dd.getMonth(),
+               key: dd.getFullYear() + '-' + String(dd.getMonth()+1).padStart(2,'0'),
+               label: dd.toLocaleDateString('en-US', { month:'long' }) });
+  }
+  return out;
 }
 
-function _phase185RenderReferralsChart(d){
-  var svg = document.getElementById('perf-referrals-svg');
-  if(!svg) return;
-  // Day-by-day count for the selected month
-  _phase185EnsureMonth();
-  var y = window._PERF_MONTH.y, mo = window._PERF_MONTH.m;
-  var daysInMonth = new Date(y, mo+1, 0).getDate();
-  var perDay = new Array(daysInMonth).fill(0);
+/* Aggregate established leads for the current member into monthly buckets
+   keyed by lead level. Returns { buckets:[{key,label,total,byLevel:{1:n,2:n,...}}], levels:[1,2,...], maxLevel:N }.
+   biz = 'clinic' | 'mva'. */
+function _ph229CollectLeads(range, biz){
+  var buckets = _ph229MonthBuckets(range);
+  var bMap = {}; buckets.forEach(function(b){ bMap[b.key] = b; b.total = 0; b.byLevel = {}; });
+  var levels = biz === 'mva' ? [1, 2] : [1, 2, 3, 4];
+  var memberName = (typeof currentMember !== 'undefined' && currentMember) ? currentMember : '';
+  if(typeof CLINIC_LEADS !== 'undefined' && CLINIC_LEADS){
+    Object.keys(CLINIC_LEADS).forEach(function(name){
+      var lead = CLINIC_LEADS[name];
+      if(!lead || lead.status !== 'established') return;
+      if(memberName && lead.member && lead.member !== memberName) return;
+      var thisBiz = (typeof getBizTypeForName === 'function') ? getBizTypeForName(name) : 'clinic';
+      /* clinic chart: only clinic + outreach; mva chart: only mva. */
+      if(biz === 'mva' && thisBiz !== 'mva') return;
+      if(biz === 'clinic' && thisBiz === 'mva') return;
+      var iso = lead.date || (lead.history && lead.history.length ? lead.history[lead.history.length-1].date : '');
+      if(!iso || String(iso).length < 7) return;
+      var key = String(iso).slice(0, 7);
+      if(!bMap[key]) return;  /* outside the window */
+      var lvl = parseInt(lead.level || 0, 10);
+      if(!lvl || levels.indexOf(lvl) < 0) return;
+      bMap[key].total++;
+      bMap[key].byLevel[lvl] = (bMap[key].byLevel[lvl] || 0) + 1;
+    });
+  }
+  return { buckets: buckets, levels: levels };
+}
+
+/* Aggregate referrals for the current member into monthly buckets keyed
+   by source. Returns { buckets:[{key,label,total,bySource:{...}}], sources:[...] } */
+function _ph229CollectRefs(range){
+  var buckets = _ph229MonthBuckets(range);
+  var bMap = {}; buckets.forEach(function(b){ bMap[b.key] = b; b.total = 0; b.bySource = {}; });
   var memberName = (typeof currentMember !== 'undefined' && currentMember) ? currentMember : '';
   if(typeof REFERRAL_LOG !== 'undefined' && Array.isArray(REFERRAL_LOG)){
     REFERRAL_LOG.forEach(function(e){
       if(!e || !e.entryDate) return;
-      var parts = String(e.entryDate).split('-');
-      if(parts.length < 3) return;
-      if(parseInt(parts[0], 10) !== y || (parseInt(parts[1], 10) - 1) !== mo) return;
+      var iso = String(e.entryDate);
+      if(iso.length < 7) return;
+      var key = iso.slice(0, 7);
+      if(!bMap[key]) return;
       if(memberName){
-        var arr = Array.isArray(e.memberNames) ? e.memberNames : [e.memberName];
+        var arr = Array.isArray(e.memberNames) ? e.memberNames : (e.memberName ? [e.memberName] : []);
         if(arr.indexOf(memberName) < 0) return;
       }
-      var day = parseInt(parts[2], 10);
-      if(day >= 1 && day <= daysInMonth) perDay[day - 1]++;
+      var src = e.sourceType === 'mva' ? 'mva'
+              : e.sourceType === 'google' ? 'google'
+              : e.sourceType === 'outreach' ? 'outreach'
+              : 'clinic';
+      bMap[key].total++;
+      bMap[key].bySource[src] = (bMap[key].bySource[src] || 0) + 1;
     });
   }
-  var total = perDay.reduce(function(s, v){ return s + v; }, 0);
-  if(!total){ svg.innerHTML = '<text x="50%" y="50%" text-anchor="middle" fill="#94a3b8" font-size="11" font-family="DM Sans,sans-serif">No referrals attributed this month</text>'; return; }
-  var w = 600, h = 180, pad = 26;
-  var max = Math.max.apply(null, perDay);
-  var step = (w - pad * 2) / daysInMonth;
-  var barW = Math.max(step - 2, 2);
-  var parts = ['<g font-family="DM Sans,sans-serif">'];
-  perDay.forEach(function(v, i){
-    if(v <= 0) return;
-    var x = pad + i * step;
-    var bh = (h - pad - 16) * (v / max);
-    var by = h - pad - bh;
-    parts.push('<rect x="' + x + '" y="' + by + '" width="' + barW + '" height="' + bh + '" fill="#0891b2" rx="2"/>');
-    if(v >= max) parts.push('<text x="' + (x + barW/2) + '" y="' + (by - 4) + '" text-anchor="middle" font-size="9" font-weight="700" fill="#0891b2">' + v + '</text>');
+  return { buckets: buckets, sources: _PH229_SOURCES.map(function(s){ return s.key; }) };
+}
+
+/* ── Toolbar builders ───────────────────────────────────────────────── */
+function _ph229Chip(label, isActive, onclick, color){
+  var bg = isActive ? (color || '#1F3864') : '#fff';
+  var fg = isActive ? '#fff' : '#475569';
+  var bd = isActive ? (color || '#1F3864') : 'var(--border)';
+  return '<button type="button" onclick="' + onclick + '" style="background:' + bg + ';color:' + fg + ';border:1px solid ' + bd + ';border-radius:99px;padding:3px 10px;font-size:10.5px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif">' + label + '</button>';
+}
+function _ph229BuildLeadsToolbar(){
+  var host = document.getElementById('perf-leads-toolbar');
+  if(!host) return;
+  var s = window._ph229Leads;
+  var html = ''
+    + '<div style="font-size:10px;font-weight:700;color:#64748b;letter-spacing:.04em;text-transform:uppercase;margin-right:4px">Type</div>'
+    + _ph229Chip('🏥 Clinic', s.biz === 'clinic', '_ph229SetLeads(\'biz\',\'clinic\')', '#1F3864')
+    + _ph229Chip('⚖ MVA',     s.biz === 'mva',    '_ph229SetLeads(\'biz\',\'mva\')',    '#7c3aed')
+    + '<span style="width:1px;height:18px;background:var(--border);margin:0 6px"></span>'
+    + '<div style="font-size:10px;font-weight:700;color:#64748b;letter-spacing:.04em;text-transform:uppercase;margin-right:4px">Chart</div>'
+    + _ph229Chip('▮▮ Bar',  s.chartType === 'bar',  '_ph229SetLeads(\'chartType\',\'bar\')', '#0f172a')
+    + _ph229Chip('╱╲ Line', s.chartType === 'line', '_ph229SetLeads(\'chartType\',\'line\')', '#0f172a')
+    + '<span style="width:1px;height:18px;background:var(--border);margin:0 6px"></span>'
+    + '<div style="font-size:10px;font-weight:700;color:#64748b;letter-spacing:.04em;text-transform:uppercase;margin-right:4px">Range</div>'
+    + _ph229Chip('1m',  s.range === 1,  '_ph229SetLeads(\'range\',1)',  '#0f172a')
+    + _ph229Chip('3m',  s.range === 3,  '_ph229SetLeads(\'range\',3)',  '#0f172a')
+    + _ph229Chip('6m',  s.range === 6,  '_ph229SetLeads(\'range\',6)',  '#0f172a')
+    + _ph229Chip('12m', s.range === 12, '_ph229SetLeads(\'range\',12)', '#0f172a');
+  host.innerHTML = html;
+  /* Level filter row — only visible in line mode. */
+  var lvlHost = document.getElementById('perf-leads-level-filter');
+  if(lvlHost){
+    if(s.chartType === 'line'){
+      var levels = s.biz === 'mva' ? [1, 2] : [1, 2, 3, 4];
+      var palette = s.biz === 'mva' ? _PH229_LEVEL_COLORS_MVA : _PH229_LEVEL_COLORS_CLINIC;
+      var lvlHtml = '<div style="font-size:10px;font-weight:700;color:#64748b;letter-spacing:.04em;text-transform:uppercase;margin-right:4px">Levels</div>';
+      levels.forEach(function(lv){
+        var hidden = !!s.hiddenLevels[lv];
+        lvlHtml += _ph229Chip('L' + lv, !hidden, '_ph229ToggleLeadLevel(' + lv + ')', palette[lv]);
+      });
+      lvlHost.innerHTML = lvlHtml;
+      lvlHost.style.display = 'flex';
+    } else {
+      lvlHost.style.display = 'none';
+    }
+  }
+}
+function _ph229BuildRefsToolbar(){
+  var host = document.getElementById('perf-referrals-toolbar');
+  if(!host) return;
+  var s = window._ph229Refs;
+  var html = ''
+    + '<div style="font-size:10px;font-weight:700;color:#64748b;letter-spacing:.04em;text-transform:uppercase;margin-right:4px">Chart</div>'
+    + _ph229Chip('▮▮ Bar',  s.chartType === 'bar',  '_ph229SetRefs(\'chartType\',\'bar\')', '#0f172a')
+    + _ph229Chip('╱╲ Line', s.chartType === 'line', '_ph229SetRefs(\'chartType\',\'line\')', '#0f172a')
+    + '<span style="width:1px;height:18px;background:var(--border);margin:0 6px"></span>'
+    + '<div style="font-size:10px;font-weight:700;color:#64748b;letter-spacing:.04em;text-transform:uppercase;margin-right:4px">Range</div>'
+    + _ph229Chip('1m',  s.range === 1,  '_ph229SetRefs(\'range\',1)',  '#0f172a')
+    + _ph229Chip('3m',  s.range === 3,  '_ph229SetRefs(\'range\',3)',  '#0f172a')
+    + _ph229Chip('6m',  s.range === 6,  '_ph229SetRefs(\'range\',6)',  '#0f172a')
+    + _ph229Chip('12m', s.range === 12, '_ph229SetRefs(\'range\',12)', '#0f172a');
+  host.innerHTML = html;
+  /* Source filter row — only in line mode. */
+  var srcHost = document.getElementById('perf-referrals-source-filter');
+  if(srcHost){
+    if(s.chartType === 'line'){
+      var srcHtml = '<div style="font-size:10px;font-weight:700;color:#64748b;letter-spacing:.04em;text-transform:uppercase;margin-right:4px">Sources</div>';
+      _PH229_SOURCES.forEach(function(src){
+        var hidden = !!s.hiddenSources[src.key];
+        srcHtml += _ph229Chip(src.label, !hidden, '_ph229ToggleRefSource(\'' + src.key + '\')', src.color);
+      });
+      srcHost.innerHTML = srcHtml;
+      srcHost.style.display = 'flex';
+    } else {
+      srcHost.style.display = 'none';
+    }
+  }
+}
+function _ph229SetLeads(k, v){
+  window._ph229Leads[k] = v;
+  if(k === 'biz') window._ph229Leads.hiddenLevels = {};  /* reset level filter on biz switch */
+  _phase185RenderLeadsChart();
+}
+function _ph229SetRefs(k, v){
+  window._ph229Refs[k] = v;
+  _phase185RenderReferralsChart();
+}
+function _ph229ToggleLeadLevel(lv){
+  var s = window._ph229Leads;
+  if(s.hiddenLevels[lv]) delete s.hiddenLevels[lv];
+  else s.hiddenLevels[lv] = true;
+  _phase185RenderLeadsChart();
+}
+function _ph229ToggleRefSource(src){
+  var s = window._ph229Refs;
+  if(s.hiddenSources[src]) delete s.hiddenSources[src];
+  else s.hiddenSources[src] = true;
+  _phase185RenderReferralsChart();
+}
+window._ph229SetLeads          = _ph229SetLeads;
+window._ph229SetRefs           = _ph229SetRefs;
+window._ph229ToggleLeadLevel   = _ph229ToggleLeadLevel;
+window._ph229ToggleRefSource   = _ph229ToggleRefSource;
+
+/* ── Chart draw primitives (stacked bar + multi-line) ───────────────── */
+function _ph229DrawAxes(parts, w, h, padL, padR, padT, padB, maxY, labels){
+  /* Y axis ticks. Always show even when maxY is 0 → render a 5-tick scale of 0..5. */
+  var effMax = Math.max(maxY, 5);
+  var ticks = 5;
+  for(var i = 0; i <= ticks; i++){
+    var v = (effMax / ticks) * i;
+    var yPx = h - padB - (h - padT - padB) * (v / effMax);
+    parts.push('<line x1="' + padL + '" y1="' + yPx + '" x2="' + (w - padR) + '" y2="' + yPx + '" stroke="' + (i === 0 ? '#94a3b8' : '#e2e8f0') + '" stroke-width="1"/>');
+    parts.push('<text x="' + (padL - 6) + '" y="' + (yPx + 3) + '" text-anchor="end" font-size="9" fill="#94a3b8">' + Math.round(v) + '</text>');
+  }
+  /* X axis labels. */
+  if(labels && labels.length){
+    var step = (w - padL - padR) / Math.max(labels.length, 1);
+    labels.forEach(function(lbl, i){
+      var x = padL + step * (i + 0.5);
+      parts.push('<text x="' + x + '" y="' + (h - padB + 14) + '" text-anchor="middle" font-size="10" fill="#475569">' + lbl + '</text>');
+    });
+  }
+  return effMax;
+}
+function _ph229DrawStackedBars(parts, buckets, segments, w, h, padL, padR, padT, padB, effMax){
+  /* segments = [{key, color, label}], buckets each have .byKey map. */
+  var n = buckets.length;
+  var step = (w - padL - padR) / Math.max(n, 1);
+  var barW = Math.min(step * 0.65, 60);
+  buckets.forEach(function(b, i){
+    var cx = padL + step * (i + 0.5);
+    var x = cx - barW / 2;
+    var yCursor = h - padB;
+    segments.forEach(function(seg){
+      var v = (b.byKey && b.byKey[seg.key]) || 0;
+      if(v <= 0) return;
+      var segH = (h - padT - padB) * (v / effMax);
+      yCursor -= segH;
+      parts.push('<rect x="' + x + '" y="' + yCursor + '" width="' + barW + '" height="' + segH + '" fill="' + seg.color + '" rx="2">'
+        + '<title>' + seg.label + ' · ' + b.label + ': ' + v + '</title></rect>');
+    });
+    if(b.total > 0){
+      parts.push('<text x="' + cx + '" y="' + (yCursor - 4) + '" text-anchor="middle" font-size="10" font-weight="700" fill="#1F3864">' + b.total + '</text>');
+    }
   });
-  // baseline
-  parts.push('<line x1="' + pad + '" y1="' + (h - pad - 12) + '" x2="' + (w - pad) + '" y2="' + (h - pad - 12) + '" stroke="#cbd5e1" stroke-width="1"/>');
-  parts.push('<text x="' + pad + '" y="' + (h - 6) + '" font-size="9" fill="#94a3b8">Day 1</text>');
-  parts.push('<text x="' + (w - pad) + '" y="' + (h - 6) + '" text-anchor="end" font-size="9" fill="#94a3b8">Day ' + daysInMonth + '</text>');
+}
+function _ph229DrawMultiLines(parts, buckets, lines, w, h, padL, padR, padT, padB, effMax){
+  /* lines = [{key, color, label, hidden}]. */
+  var n = buckets.length;
+  var step = (w - padL - padR) / Math.max(n - 1, 1);
+  /* Legend at top right. */
+  var legendY = padT - 4;
+  var legendX = w - padR;
+  lines.slice().reverse().forEach(function(ln){
+    if(ln.hidden) return;
+    parts.push('<circle cx="' + legendX + '" cy="' + legendY + '" r="4" fill="' + ln.color + '"/>');
+    parts.push('<text x="' + (legendX - 8) + '" y="' + (legendY + 3) + '" text-anchor="end" font-size="9.5" fill="#475569" font-weight="700">' + ln.label + '</text>');
+    legendX -= (8 + (ln.label.length * 6.5) + 12);
+  });
+  lines.forEach(function(ln){
+    if(ln.hidden) return;
+    var pts = buckets.map(function(b, i){
+      var v = (b.byKey && b.byKey[ln.key]) || 0;
+      var x = padL + step * i;
+      var y = h - padB - (h - padT - padB) * (v / effMax);
+      return { x: x, y: y, v: v };
+    });
+    /* Polyline path. */
+    var d = pts.map(function(p, i){ return (i === 0 ? 'M' : 'L') + p.x.toFixed(1) + ',' + p.y.toFixed(1); }).join(' ');
+    parts.push('<path d="' + d + '" stroke="' + ln.color + '" stroke-width="2" fill="none" stroke-linejoin="round"/>');
+    pts.forEach(function(p){
+      parts.push('<circle cx="' + p.x + '" cy="' + p.y + '" r="3" fill="' + ln.color + '">'
+        + '<title>' + ln.label + ': ' + p.v + '</title></circle>');
+    });
+  });
+}
+
+/* ── Renderers (called from renderPerfCharts hooks) ─────────────────── */
+function _phase185RenderLeadsChart(){
+  _ph229BuildLeadsToolbar();
+  var svg = document.getElementById('perf-leads-svg');
+  if(!svg) return;
+  var s = window._ph229Leads;
+  var data = _ph229CollectLeads(s.range, s.biz);
+  /* Build segment list per current biz + level palette. */
+  var palette = s.biz === 'mva' ? _PH229_LEVEL_COLORS_MVA : _PH229_LEVEL_COLORS_CLINIC;
+  var lvlLabel = function(lv){ return s.biz === 'mva'
+    ? (lv === 1 ? 'L1 Reception/Paralegal' : 'L2 Attorney')
+    : (['L1 Front Desk','L2 Coordinator','L3 Doctor','L4 Owner'][lv-1] || ('L' + lv)); };
+  var segs = data.levels.map(function(lv){ return { key:lv, color:palette[lv], label:lvlLabel(lv) }; });
+  /* Normalize buckets so each carries a byKey map keyed by level. */
+  data.buckets.forEach(function(b){ b.byKey = b.byLevel; });
+  /* Apply hidden-level filter for line mode (bar still shows all). */
+  var displaySegs = (s.chartType === 'line')
+    ? segs.filter(function(seg){ return !s.hiddenLevels[seg.key]; })
+    : segs;
+  var grandTotal = data.buckets.reduce(function(t, b){ return t + b.total; }, 0);
+  var lblEl = document.getElementById('perf-leads-type-total');
+  if(lblEl){
+    if(s.chartType === 'line' && displaySegs.length < segs.length){
+      lblEl.textContent = grandTotal + ' total established · showing ' + displaySegs.length + ' of ' + segs.length + ' level(s)';
+    } else {
+      lblEl.textContent = grandTotal + ' established · last ' + s.range + ' month' + (s.range === 1 ? '' : 's');
+    }
+  }
+  var w = 600, h = 220, padL = 36, padR = 14, padT = 24, padB = 30;
+  /* maxY across the window respecting hidden levels in line mode. */
+  var maxY = 0;
+  data.buckets.forEach(function(b){
+    if(s.chartType === 'line'){
+      displaySegs.forEach(function(seg){ var v = b.byKey[seg.key] || 0; if(v > maxY) maxY = v; });
+    } else {
+      if(b.total > maxY) maxY = b.total;
+    }
+  });
+  var parts = ['<g font-family="DM Sans,sans-serif">'];
+  var labels = data.buckets.map(function(b){
+    return s.range >= 6 ? b.label.slice(0,3) : b.label;
+  });
+  var effMax = _ph229DrawAxes(parts, w, h, padL, padR, padT, padB, maxY, labels);
+  if(s.chartType === 'bar'){
+    _ph229DrawStackedBars(parts, data.buckets, segs, w, h, padL, padR, padT, padB, effMax);
+  } else {
+    _ph229DrawMultiLines(parts, data.buckets, displaySegs.map(function(seg){
+      return { key:seg.key, color:seg.color, label:seg.label, hidden:false };
+    }), w, h, padL, padR, padT, padB, effMax);
+  }
   parts.push('</g>');
   svg.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
   svg.innerHTML = parts.join('');
 }
+
+function _phase185RenderReferralsChart(){
+  _ph229BuildRefsToolbar();
+  var svg = document.getElementById('perf-referrals-svg');
+  if(!svg) return;
+  var s = window._ph229Refs;
+  var data = _ph229CollectRefs(s.range);
+  data.buckets.forEach(function(b){ b.byKey = b.bySource; });
+  var grandTotal = data.buckets.reduce(function(t, b){ return t + b.total; }, 0);
+  var lblEl = document.getElementById('perf-referrals-total');
+  if(lblEl) lblEl.textContent = grandTotal + ' referral(s) · last ' + s.range + ' month' + (s.range === 1 ? '' : 's');
+  var segs = _PH229_SOURCES.map(function(src){ return { key:src.key, color:src.color, label:src.label }; });
+  var displaySegs = (s.chartType === 'line')
+    ? segs.filter(function(seg){ return !s.hiddenSources[seg.key]; })
+    : segs;
+  var w = 600, h = 220, padL = 36, padR = 14, padT = 24, padB = 30;
+  var maxY = 0;
+  data.buckets.forEach(function(b){
+    if(s.chartType === 'line'){
+      displaySegs.forEach(function(seg){ var v = b.byKey[seg.key] || 0; if(v > maxY) maxY = v; });
+    } else {
+      if(b.total > maxY) maxY = b.total;
+    }
+  });
+  var parts = ['<g font-family="DM Sans,sans-serif">'];
+  var labels = data.buckets.map(function(b){
+    return s.range >= 6 ? b.label.slice(0,3) : b.label;
+  });
+  var effMax = _ph229DrawAxes(parts, w, h, padL, padR, padT, padB, maxY, labels);
+  if(s.chartType === 'bar'){
+    _ph229DrawStackedBars(parts, data.buckets, segs, w, h, padL, padR, padT, padB, effMax);
+  } else {
+    _ph229DrawMultiLines(parts, data.buckets, displaySegs.map(function(seg){
+      return { key:seg.key, color:seg.color, label:seg.label, hidden:false };
+    }), w, h, padL, padR, padT, padB, effMax);
+  }
+  parts.push('</g>');
+  svg.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
+  svg.innerHTML = parts.join('');
+}
+window._phase185RenderLeadsChart     = _phase185RenderLeadsChart;
+window._phase185RenderReferralsChart = _phase185RenderReferralsChart;
 
 // ── Side activities (NEW Phase 185) ────────────────────────────────────────
 // Stored per-member in wcg_side_activities_v1: { memberName: { 'YYYY-MM-DD': [ { id, title, notes, ts } ] } }
