@@ -56962,12 +56962,14 @@ function renderCounters(){
         +'<div class="mc-stat"><div class="mc-n nk">'+w.canc+'</div><div class="mc-l">Canceled</div></div>'
         +'<div class="mc-stat"><div class="mc-n nl">'+w.leads+'</div><div class="mc-l">Leads</div></div>'
         +'</div>'
-        // Side activities counter (this month) — purple-tinted footer line
+        // Phase 257 — Side activities counter is clickable: opens that
+        // member's profile → Performance tab → side activities calendar.
         +(function(){
           var saCount = (typeof getSideActivityCount === 'function') ? getSideActivityCount(m) : 0;
-          return '<div style="background:#faf5ff;border-top:1px solid #e9d5ff;padding:6px 12px;display:flex;align-items:center;justify-content:space-between;font-size:11px;color:#6b21a8">'
+          var safeM = m.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+          return '<div onclick="if(typeof loadMemberProfile===\'function\'){loadMemberProfile(\'' + safeM + '\');setTimeout(function(){if(typeof switchProfileTab===\'function\')switchProfileTab(\'performance\');},120);setTimeout(function(){var b=document.getElementById(\'perf-side-activities-block\');if(b){b.open=true;b.scrollIntoView({behavior:\'smooth\',block:\'center\'});}},260);}" title="Open ' + m + '\'s Performance tab → Side activities calendar" style="background:#faf5ff;border-top:1px solid #e9d5ff;padding:6px 12px;display:flex;align-items:center;justify-content:space-between;font-size:11px;color:#6b21a8;cursor:pointer;transition:background .12s" onmouseover="this.style.background=\'#f3e8ff\'" onmouseout="this.style.background=\'#faf5ff\'">'
             +'<span><span style="font-size:13px;margin-right:4px">📋</span><strong style="font-family:DM Mono,monospace">'+saCount+'</strong> side '+(saCount===1?'activity':'activities')+' this month</span>'
-            +'<span style="font-size:9px;opacity:.65;letter-spacing:.04em">&nbsp;</span>'
+            +'<span style="font-size:9px;color:#6b21a8;font-weight:700;letter-spacing:.04em">VIEW &rsaquo;</span>'
           +'</div>';
         })()
         // Calls-Converted row removed 2026-05-27 per user.
@@ -58735,6 +58737,18 @@ function _phase176SetWeekOffset(delta){
 window._phase176SetWeekOffset = _phase176SetWeekOffset;
 
 function _phase176RenderFacility(facKey){
+  /* Phase 257 (2026-06-02) — CRITICAL FIX. There are ~11 call sites
+     across this file that do _phase176RenderFacility(window._phase176LastFacility)
+     directly (sub-tab swaps, week-offset nav, calendar re-renders, etc).
+     When window._phase176LastFacility === 'iccotx' (the default since
+     Phase 245), those calls were rendering the rollup key as a facility,
+     producing an empty page. Dispatch to the rollup renderer here so
+     every existing caller works without needing to be rewritten. */
+  if(facKey === 'iccotx'){
+    if(typeof _phase245RenderICCOTX === 'function') return _phase245RenderICCOTX();
+    /* No rollup defined — silently fall back to Frisco rather than crash. */
+    facKey = 'frisco_er';
+  }
   var host = document.getElementById('loc-facility-content');
   if(!host) return;
   var meta = _phase176FacilityMeta(facKey);
@@ -69641,10 +69655,32 @@ window.getMonthConversions = getMonthConversions;
 // Count of side activities a member has logged in the current month.
 // Triggers _archiveIfNeeded first so a month rollover doesn't show stale data.
 function getSideActivityCount(memberName){
-  if(typeof SIDE_ACTIVITIES === 'undefined' || !memberName) return 0;
-  if(typeof _archiveIfNeeded === 'function') _archiveIfNeeded(memberName);
-  if(!SIDE_ACTIVITIES[memberName]) return 0;
-  return (SIDE_ACTIVITIES[memberName].current || []).length;
+  /* Phase 257 (2026-06-02) — read from the SAME store the Performance
+     calendar writes to (wcg_side_activities_v1 via _phase185LoadSideActivities).
+     The legacy SIDE_ACTIVITIES global is a separate orphan store that
+     stopped being written when the modal moved to Phase 185+ — that
+     mismatch is why every dashboard counter showed 0 even when the
+     calendar had entries.
+     Count is scoped to the CURRENT month (so the "this month" label
+     in the dashboard tile actually matches the number). */
+  if(!memberName) return 0;
+  try {
+    if(typeof _phase185LoadSideActivities !== 'function') return 0;
+    var all = _phase185LoadSideActivities() || {};
+    var bucket = all[memberName];
+    if(!bucket) return 0;
+    var now = new Date();
+    var yyyy = now.getFullYear();
+    var mm = String(now.getMonth() + 1).padStart(2, '0');
+    var prefix = yyyy + '-' + mm;
+    var total = 0;
+    Object.keys(bucket).forEach(function(dateIso){
+      if(String(dateIso).slice(0, 7) !== prefix) return;
+      var arr = bucket[dateIso];
+      if(Array.isArray(arr)) total += arr.length;
+    });
+    return total;
+  } catch(_){ return 0; }
 }
 window.getSideActivityCount = getSideActivityCount;
 
