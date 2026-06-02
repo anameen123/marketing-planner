@@ -41276,15 +41276,24 @@ window._rpOptIsGreenOrYellow = _rpOptIsGreenOrYellow;
 // Scope: ANY member, ANY status — the user wants no double-booking at all.
 // ════════════════════════════════════════════════════════════════════════════
 function _phase198IsBookedThisWeek(name){
+  return !!_phase252WhoBookedThisWeek(name);
+}
+window._phase198IsBookedThisWeek = _phase198IsBookedThisWeek;
+
+/* Phase 252 (2026-06-02) — OK.docx #3: cross-member week-lock detail.
+   Returns the member name + date who first booked this clinic in the
+   current Mon-Sun week (or '' if nobody). The lookup powers both the
+   existing eligibility filter AND the friendlier toast that names the
+   blocker. Renamed for clarity but back-compat with Phase 198 caller. */
+function _phase252WhoBookedThisWeek(name){
   try {
-    if(!name || typeof S === 'undefined' || !S || !Array.isArray(S.days)) return false;
+    if(!name || typeof S === 'undefined' || !S || !Array.isArray(S.days)) return null;
     var pivot;
     if(typeof _DV_LAST_DI === 'number' && S.days[_DV_LAST_DI] && S.days[_DV_LAST_DI].date){
       pivot = new Date(S.days[_DV_LAST_DI].date + 'T12:00:00');
     } else {
       pivot = new Date();
     }
-    // Monday = (day + 6) % 7 days back (Sun=0 → 6 back, Mon=1 → 0 back)
     var dow = pivot.getDay();
     var back = (dow + 6) % 7;
     var mon = new Date(pivot); mon.setDate(pivot.getDate() - back); mon.setHours(0,0,0,0);
@@ -41299,13 +41308,19 @@ function _phase198IsBookedThisWeek(name){
       for(var j = 0; j < d.rows.length; j++){
         var r = d.rows[j];
         if(!r || !r.clinic) continue;
-        if(r.clinic === name) return true;   // any member, any status
+        if(r.clinic === name){
+          /* Return who booked it + when. */
+          var bookedBy = r.member || (Array.isArray(r.coMembers) && r.coMembers[0]) || '(unassigned)';
+          var dt = new Date(d.date + 'T12:00:00');
+          var dayLbl = isNaN(dt.getTime()) ? d.date : dt.toLocaleDateString('en-US', { weekday:'long', month:'short', day:'numeric' });
+          return { member: bookedBy, date: d.date, dayLabel: dayLbl };
+        }
       }
     }
-    return false;
-  } catch(_){ return false; }
+    return null;
+  } catch(_){ return null; }
 }
-window._phase198IsBookedThisWeek = _phase198IsBookedThisWeek;
+window._phase252WhoBookedThisWeek = _phase252WhoBookedThisWeek;
 
 // Composite filter for Pick & Plan circle candidates. Combines:
 //   • Phase 57:  green / yellow only (no fresh red, no warm yellow already
@@ -41371,6 +41386,17 @@ function _rpOptConsumePinClick(name, exactCoord){
   if(!_rpOptIsGreenOrYellow(name)){
     if(typeof showToast === 'function') showToast('"' + name + '" is too recent (red/orange). Only green + yellow clinics are pickable.');
     return false;
+  }
+  // Phase 252 (2026-06-02) — OK.docx #3: cross-member week-lock.
+  // Surfaces a named-blocker toast instead of the silent filter. Admin
+  // bypass kept per Phase 199 admin-override semantics.
+  var _ph252IsAdmin = (typeof isAdmin === 'function') && isAdmin();
+  if(!_ph252IsAdmin){
+    var blocker = (typeof _phase252WhoBookedThisWeek === 'function') ? _phase252WhoBookedThisWeek(name) : null;
+    if(blocker){
+      if(typeof showToast === 'function') showToast('"' + name + '" is already booked this week by ' + blocker.member + ' (' + blocker.dayLabel + '). Pick a different target.');
+      return false;
+    }
   }
   // Cap at 10
   if(window._RP_OPT_TARGETS.length >= 10){
