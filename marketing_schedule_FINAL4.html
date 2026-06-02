@@ -5336,7 +5336,19 @@ function renderSideActivities(memberName){
   var el = document.getElementById('side-activities-section');
   if(!el || !memberName) return;
   var store = getSideActivities(memberName);
-  var isOwnProfile = CURRENT_USER && CURRENT_USER.name === memberName;
+  /* Phase 218 (2026-06-01) — user: "the members can't add anything here
+     which is wrong, they need to be able to add and edit." The original
+     gate was self-only — only the member viewing THEIR OWN profile saw
+     the +Add button + the X-delete buttons. That blocked two real-world
+     paths: (a) admin acting on a member's profile, (b) signed-in member
+     viewing their own profile from a team-page click where the route
+     opens the profile but the name comparison is case/whitespace-fragile.
+     Widen to "own profile OR admin." Admin can add/edit on behalf of any
+     member; member can only add/edit their own (Phase 149 rule). The
+     stored entry's memberName stays = memberName so stats count toward
+     the right person, regardless of who clicked the button. */
+  var _ph218IsAdminUser = (typeof isAdmin === 'function') && isAdmin();
+  var isOwnProfile = ((CURRENT_USER && CURRENT_USER.name === memberName) || _ph218IsAdminUser);
 
   // Current month header
   var monthLabel = (function(){
