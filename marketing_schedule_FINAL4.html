@@ -29620,9 +29620,15 @@ var ROUTE_COORDS = {
   // street addresses and flip addressVerified:true when you have them.
   // Phase 138: Richardson renamed to "Main office" per user "the one
   // in Richardson call it Main office".
-  '_facility_frisco_er':       { lat: 33.1577, lng: -96.8094, label: 'Frisco ER',         type: 'facility', address: 'Frisco, TX 75035',     addressVerified: false, city: 'Frisco' },
-  '_facility_castle_hills_er': { lat: 32.9947, lng: -96.8881, label: 'Castle Hills ER',   type: 'facility', address: 'Lewisville, TX 75056', addressVerified: false, city: 'Lewisville' },
-  '_facility_plano_uc':        { lat: 33.0464, lng: -96.7558, label: 'Urgent Care Plano', type: 'facility', address: 'Plano, TX 75093',      addressVerified: false, city: 'Plano' },
+  /* Phase 225b (2026-06-02) — real addresses pulled from iccotx.com.
+     Two zip/city corrections vs the prior placeholders:
+       Castle Hills ER is physically in Carrollton 75010, not Lewisville 75056.
+       Urgent Care of Plano is at 75023, not 75093.
+     ICCOTX has no Lewisville location; "Castle Hills" is the
+     community served, not the city. */
+  '_facility_frisco_er':       { lat: 33.1577, lng: -96.8094, label: 'Frisco ER',         type: 'facility', address: '12600 Rolater Rd, Suite 120, Frisco, TX 75035', addressVerified: true, city: 'Frisco' },
+  '_facility_castle_hills_er': { lat: 32.9947, lng: -96.8881, label: 'Castle Hills ER',   type: 'facility', address: '4228 N. Josey Lane, Carrollton, TX 75010',      addressVerified: true, city: 'Carrollton' },
+  '_facility_plano_uc':        { lat: 33.0464, lng: -96.7558, label: 'Urgent Care Plano', type: 'facility', address: '3909 W Parker Rd, Suite 104, Plano, TX 75023', addressVerified: true, city: 'Plano' },
   '_facility_richardson':      { lat: 32.9893, lng: -96.7437, label: 'Main office',       type: 'facility', address: '101 W Renner Rd, Richardson, TX 75080', addressVerified: true,  city: 'Richardson' },
   // 21 approved cities — centroid
   'Frisco':         { lat: 33.1507, lng: -96.8236 },
