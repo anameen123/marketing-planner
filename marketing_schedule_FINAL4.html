@@ -33159,16 +33159,15 @@ function renderDayMap(di){
     }
     return (typeof getCoordForBusiness === 'function') ? getCoordForBusiness(name) : null;
   }
-  /* Phase 213 (2026-06-01) — honor the day-view member filter on the map
-     so it matches the table. Mirrors the _isVisibleRow gate in renderDayTable
-     (around line 52086). Without this, picking one member in the FILTER
-     dropdown filters the table but the map keeps showing every pin + the
-     polyline for everyone, which is what the user reported as broken. */
+  /* Phase 213 + 215 (2026-06-01) — honor the day-view member filter on
+     the map so it matches the table. Phase 215 removed the admin bypass
+     here too — when admin explicitly picks a member, the map should
+     show only their pins + only their polyline. "All members" still
+     shows everyone for every role. */
   var _dmFilterMember = (typeof _CAL_MEMBER_FILTER === 'string') ? _CAL_MEMBER_FILTER : '';
-  var _dmIsAdmin     = (typeof isAdmin === 'function') && isAdmin();
   function _dmRowMatchesFilter(r){
     if(!r) return false;
-    if(!_dmFilterMember || _DAY_VIEW_SHOW_ALL || _dmIsAdmin) return true;
+    if(!_dmFilterMember || _DAY_VIEW_SHOW_ALL) return true;
     var members = [];
     if(typeof getRowMembers === 'function') members = getRowMembers(r) || [];
     if(!members.length && r.member) members = [r.member];
@@ -52114,13 +52113,20 @@ function renderDayTable(di){
   // view has been explicitly toggled to "Show all on this day." Outreach
   // events with co-members surface to ANY of their members.
   var _filterMember = (typeof _CAL_MEMBER_FILTER === 'string') ? _CAL_MEMBER_FILTER : '';
-  var _isAdminDV    = (typeof isAdmin === 'function') && isAdmin();
+  /* Phase 215 (2026-06-01) — admin bypass removed from the row filter.
+     The old predicate `!_isAdminDV` made the filter a silent no-op for
+     admin testers — picking a member from the dropdown did nothing. User
+     report: "the filter inside the dashboard, why didn't you fix it?"
+     Phase 213 had only added the map-side filter, assuming the table
+     filter worked; it does work, but only for non-admin. When admin
+     explicitly picks a member, that's an active choice — respect it.
+     "All members" mode still shows everyone. */
   function _isVisibleRow(r){
     if(!r) return false;
     var isReal = r.isManual || r.editing || r.clinic || r.member;
     if(!isReal) return false;
-    // Member-filter respect (unless toggle is on, or no filter set, or admin)
-    if(_filterMember && !_DAY_VIEW_SHOW_ALL && !_isAdminDV){
+    // Member filter — applies to every role when a specific member is picked.
+    if(_filterMember && !_DAY_VIEW_SHOW_ALL){
       var members = [];
       if(typeof getRowMembers === 'function'){
         members = getRowMembers(r) || [];
