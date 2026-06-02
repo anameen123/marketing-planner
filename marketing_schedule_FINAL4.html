@@ -57008,6 +57008,41 @@ function renderCounters(){
   var totalCompleted = teamCompleted;
   var totalLeadsAll  = teamLeads;
 
+  // Phase 264 (2026-06-02) — OK.docx #10: team-wide per-area breakdown
+  // for the displayed month. User explicitly approved keeping the
+  // existing AREAS list (Frisco / Plano / McKinney / Carrollton / Allen
+  // / Other) instead of expanding to 12 — "only those are enough." Scan
+  // every day in the displayed month, every confirmed-member completed
+  // row, bucket by row.city (fallback day.focus → 'Other').
+  var perAreaCompleted = {};
+  AREAS.forEach(function(a){ perAreaCompleted[a] = 0; });
+  if(typeof S !== 'undefined' && S && Array.isArray(S.days)){
+    S.days.forEach(function(day){
+      if(!day || !day.date) return;
+      var dt = new Date(day.date + 'T00:00:00');
+      if(isNaN(dt.getTime())) return;
+      if(dt.getFullYear() !== OVERVIEW_YEAR || dt.getMonth() !== OVERVIEW_MONTH) return;
+      (day.rows || []).forEach(function(r){
+        if(!r || !r.memberConfirmed) return;
+        if(r.status !== 'Completed') return;
+        var raw = r.city || day.focus || 'Other';
+        var bucket = AREAS.indexOf(raw) >= 0 ? raw : 'Other';
+        perAreaCompleted[bucket] = (perAreaCompleted[bucket] || 0) + 1;
+      });
+    });
+  }
+  var totalAreaCompleted = 0;
+  AREAS.forEach(function(a){ totalAreaCompleted += (perAreaCompleted[a] || 0); });
+  /* Fixed palette so colors don't shuffle when the month changes. */
+  var AREA_COLORS = {
+    'Frisco':     '#0ea5e9',
+    'Plano':      '#22c55e',
+    'McKinney':   '#f59e0b',
+    'Carrollton': '#a855f7',
+    'Allen':      '#f43f5e',
+    'Other':      '#64748b'
+  };
+
   // SVG geometry (used by both donuts)
   var cx = 100, cy = 100, rOuter = 78, rInner = 48;
   function _polarToCart(cx, cy, r, deg){
@@ -57069,6 +57104,45 @@ function renderCounters(){
   }
   var ph256DoneDonut  = _ph256BuildContributionDonut(perMemberCompleted, totalCompleted, 'COMPLETED');
   var ph256LeadsDonut = _ph256BuildContributionDonut(perMemberLeads,     totalLeadsAll,  'LEADS');
+
+  /* Phase 264 (2026-06-02) — area donut: same slice/center/legend shape
+     as the member donuts, but keyed by AREAS + AREA_COLORS. Donut is
+     rendered FULL-WIDTH below the two member donuts. */
+  function _ph264BuildAreaDonut(perArea, total, centerLabel){
+    var slices = '';
+    if(total > 0){
+      var startDeg = 0;
+      AREAS.forEach(function(a){
+        var v = perArea[a] || 0;
+        if(v <= 0) return;
+        var sweep = (v / total) * 360;
+        var endDeg = startDeg + sweep;
+        var color  = AREA_COLORS[a] || '#94a3b8';
+        slices += '<path d="' + _donutArcPath(cx, cy, rOuter, rInner, startDeg, endDeg) + '" fill="' + color + '" stroke="rgba(15,23,42,.35)" stroke-width="1"><title>' + a + ': ' + v + ' (' + Math.round((v/total)*100) + '%)</title></path>';
+        startDeg = endDeg;
+      });
+    } else {
+      slices = '<path d="' + _donutArcPath(cx, cy, rOuter, rInner, 0, 359.999) + '" fill="rgba(255,255,255,.08)" stroke="rgba(255,255,255,.18)" stroke-width="1"></path>';
+    }
+    var centerSvg = '<text x="100" y="96" text-anchor="middle" font-size="28" font-weight="700" fill="#fff" font-family="DM Mono,monospace">' + total + '</text>'
+                  + '<text x="100" y="115" text-anchor="middle" font-size="8.5" font-weight="700" fill="rgba(255,255,255,.55)" letter-spacing="1.2" font-family="DM Sans,sans-serif">' + centerLabel + '</text>';
+    /* Two-column legend so all 6 areas fit without stretching the card. */
+    var legend = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;margin-top:8px">';
+    AREAS.forEach(function(a){
+      var v = perArea[a] || 0;
+      var pct = (total > 0) ? Math.round((v / total) * 100) : 0;
+      var color = AREA_COLORS[a] || '#94a3b8';
+      legend += '<div style="display:flex;align-items:center;gap:6px;font-size:10.5px;color:#fff;line-height:1.1">'
+        +   '<span style="width:9px;height:9px;border-radius:50%;background:' + color + ';flex-shrink:0"></span>'
+        +   '<span style="opacity:.85;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">' + a + '</span>'
+        +   '<span style="font-family:DM Mono,monospace;font-weight:700">' + v + '</span>'
+        +   '<span style="font-family:DM Mono,monospace;color:rgba(255,255,255,.5);font-size:9.5px;min-width:28px;text-align:right">' + pct + '%</span>'
+        + '</div>';
+    });
+    legend += '</div>';
+    return { slices: slices, centerSvg: centerSvg, legend: legend };
+  }
+  var ph264AreaDonut = _ph264BuildAreaDonut(perAreaCompleted, totalAreaCompleted, 'BY AREA');
   // Keep `pieSlices`, `pieCenter`, `pieLegend` defined so the original
   // template literal below doesn't crash if it still references them.
   // Phase 256 replaces them with composite blocks rendered through new
@@ -57111,6 +57185,18 @@ function renderCounters(){
     +     '<svg width="100%" viewBox="0 0 200 200" style="display:block;max-width:160px;margin:0 auto"><g>' + ph256LeadsDonut.slices + ph256LeadsDonut.centerSvg + '</g></svg>'
     +     ph256LeadsDonut.legend
     +   '</div>'
+    + '</div>'
+    /* Phase 264 (2026-06-02) — OK.docx #10: team-wide area breakdown
+       donut. Sits under the two member donuts, full-width, with the
+       same dark-card styling so it visually belongs to the Team
+       Overview group. */
+    + '<div style="border-top:1px solid rgba(255,255,255,.08);padding-top:12px;margin-bottom:14px">'
+    +   '<div style="font-size:9px;color:rgba(255,255,255,.55);text-transform:uppercase;letter-spacing:.08em;font-weight:700;margin-bottom:6px;text-align:center">'
+    +     'Visits by area · ' + monthLabel
+    +   '</div>'
+    +   '<div style="font-size:10px;color:#fcd34d;text-transform:uppercase;letter-spacing:.06em;font-weight:700;text-align:center;margin-bottom:4px">📍 Area breakdown</div>'
+    +   '<svg width="100%" viewBox="0 0 200 200" style="display:block;max-width:170px;margin:0 auto"><g>' + ph264AreaDonut.slices + ph264AreaDonut.centerSvg + '</g></svg>'
+    +   ph264AreaDonut.legend
     + '</div>'
     // ── NUMERIC STAT CARDS (Phase 256: Canceled tile removed; grid 3-wide)
     +'<div class="team-summary-grid" style="grid-template-columns:repeat(3,1fr)">'
