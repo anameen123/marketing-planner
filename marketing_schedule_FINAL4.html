@@ -57525,12 +57525,26 @@ function _phase176RenderFacility(facKey){
   var counters = _phase176Counters(entries);
   var safeName = String(meta.label).replace(/</g,'&lt;');
   var safeCity = String(meta.city || '').replace(/</g,'&lt;');
+  /* Phase 228c — pull the verified street address from ROUTE_COORDS so
+     the facility page shows the real address, not just the city. */
+  var safeAddr = '';
+  var rawAddr  = '';
+  try {
+    if(typeof ROUTE_COORDS !== 'undefined' && ROUTE_COORDS[facKey] && ROUTE_COORDS[facKey].address){
+      rawAddr  = ROUTE_COORDS[facKey].address;
+      safeAddr = String(rawAddr).replace(/</g, '&lt;');
+    }
+  } catch(_){}
+  var mapsUrl = rawAddr ? 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(rawAddr) : '';
   var html = ''
     // Header
     + '<div style="background:linear-gradient(135deg,#1F3864,#7030A0);color:#fff;border-radius:14px;padding:18px 22px;margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">'
     +   '<div>'
     +     '<div style="font-size:18px;font-weight:800">🏥 ' + safeName + '</div>'
-    +     '<div style="font-size:11px;opacity:.9;margin-top:3px">' + safeCity + ' · ' + counters.total + ' patient' + (counters.total === 1 ? '' : 's') + ' logged all-time</div>'
+    +     (safeAddr
+        ? '<div style="font-size:12px;opacity:.95;margin-top:5px;font-weight:600">📍 ' + safeAddr + (mapsUrl ? ' · <a href="' + mapsUrl + '" target="_blank" rel="noopener" style="color:#fef3c7;text-decoration:underline">open in Maps</a>' : '') + '</div>'
+        : '')
+    +     '<div style="font-size:11px;opacity:.85;margin-top:3px">' + safeCity + ' · ' + counters.total + ' patient' + (counters.total === 1 ? '' : 's') + ' logged all-time</div>'
     +   '</div>'
     +   '<div style="font-size:10px;opacity:.85;text-transform:uppercase;letter-spacing:.05em">All numbers count confirmed referrals + direct logs</div>'
     + '</div>'
