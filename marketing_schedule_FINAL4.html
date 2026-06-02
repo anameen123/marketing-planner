@@ -2626,9 +2626,17 @@ button:not([disabled]):not(.no-press):active {
          improving on vs the weekend dips. -->
     <details class="perf-chart-block" open style="margin-bottom:12px">
       <summary style="cursor:pointer;font-size:13px;font-weight:700;color:var(--text);padding:8px 0;list-style:none;display:flex;align-items:center;gap:6px">
-        <span style="font-size:11px">▾</span> 📅 Daily completed visits · this month <span id="perf-daily-visits-total" style="font-size:11px;color:var(--muted);font-weight:500;margin-left:auto"></span>
+        <span style="font-size:11px">▾</span> 📅 Daily completed visits · <span id="perf-daily-visits-month-label">this month</span> <span id="perf-daily-visits-total" style="font-size:11px;color:var(--muted);font-weight:500;margin-left:auto"></span>
       </summary>
-      <div style="font-size:10px;color:var(--muted);margin:6px 0;font-style:italic">Day-by-day completed-visits trend for the current calendar month. Weekends will usually drop to 0; the chart highlights the days you're picking up the pace.</div>
+      <!-- Phase 259 (2026-06-02) — OK.docx item #26: month picker for the
+           daily completed-visits chart. Previously hard-coded to current
+           month; now switches via ◀ / ▶ + jump-back-to-today. -->
+      <div style="display:flex;align-items:center;gap:8px;margin:6px 0;flex-wrap:wrap">
+        <button onclick="_ph259ShiftDailyVisitsMonth(-1)" style="background:#fff;border:1px solid var(--border);color:var(--text);font-size:11px;font-weight:600;padding:4px 10px;border-radius:6px;cursor:pointer;font-family:inherit">◀ Prev</button>
+        <button onclick="_ph259ShiftDailyVisitsMonth(1)"  id="ph259-dv-next" style="background:#fff;border:1px solid var(--border);color:var(--text);font-size:11px;font-weight:600;padding:4px 10px;border-radius:6px;cursor:pointer;font-family:inherit">Next ▶</button>
+        <button onclick="_ph259ShiftDailyVisitsMonth(0)"  style="background:#ede9fe;border:1px solid #c4b5fd;color:#5b21b6;font-size:11px;font-weight:700;padding:4px 10px;border-radius:6px;cursor:pointer;font-family:inherit">⏵ Today</button>
+        <span style="font-size:10px;color:var(--muted);font-style:italic">Day-by-day completed-visits trend for the selected month.</span>
+      </div>
       <div style="background:#fafbfc;border-radius:8px;padding:10px;border:1px solid var(--border);margin-top:8px">
         <svg id="perf-daily-visits-svg" width="100%" height="220" style="display:block;overflow:visible"></svg>
       </div>
@@ -53774,7 +53782,12 @@ function _ph229BuildLeadsToolbar(){
     + _ph229Chip('1m',  s.range === 1,  '_ph229SetLeads(\'range\',1)',  '#0f172a')
     + _ph229Chip('3m',  s.range === 3,  '_ph229SetLeads(\'range\',3)',  '#0f172a')
     + _ph229Chip('6m',  s.range === 6,  '_ph229SetLeads(\'range\',6)',  '#0f172a')
-    + _ph229Chip('12m', s.range === 12, '_ph229SetLeads(\'range\',12)', '#0f172a');
+    + _ph229Chip('12m', s.range === 12, '_ph229SetLeads(\'range\',12)', '#0f172a')
+    /* Phase 259 (2026-06-02) — per user OK.docx item #12: add 2-year and
+       3-year range options across leads + referrals + completion-ratio
+       toolbars. */
+    + _ph229Chip('2y',  s.range === 24, '_ph229SetLeads(\'range\',24)', '#0f172a')
+    + _ph229Chip('3y',  s.range === 36, '_ph229SetLeads(\'range\',36)', '#0f172a');
   host.innerHTML = html;
   /* Level filter row — only visible in line mode. */
   var lvlHost = document.getElementById('perf-leads-level-filter');
@@ -53807,7 +53820,10 @@ function _ph229BuildRefsToolbar(){
     + _ph229Chip('1m',  s.range === 1,  '_ph229SetRefs(\'range\',1)',  '#0f172a')
     + _ph229Chip('3m',  s.range === 3,  '_ph229SetRefs(\'range\',3)',  '#0f172a')
     + _ph229Chip('6m',  s.range === 6,  '_ph229SetRefs(\'range\',6)',  '#0f172a')
-    + _ph229Chip('12m', s.range === 12, '_ph229SetRefs(\'range\',12)', '#0f172a');
+    + _ph229Chip('12m', s.range === 12, '_ph229SetRefs(\'range\',12)', '#0f172a')
+    /* Phase 259 (2026-06-02) — OK.docx item #13: 2y + 3y ranges. */
+    + _ph229Chip('2y',  s.range === 24, '_ph229SetRefs(\'range\',24)', '#0f172a')
+    + _ph229Chip('3y',  s.range === 36, '_ph229SetRefs(\'range\',36)', '#0f172a');
   host.innerHTML = html;
   /* Source filter row — only in line mode. */
   var srcHost = document.getElementById('perf-referrals-source-filter');
@@ -54042,13 +54058,51 @@ window._ph250CollectRefsDaily        = _ph250CollectRefsDaily;
 /* ── Phase 251 (2026-06-02) — OK.docx #30: daily completed-visits chart
    for the current member, this calendar month. Scans S.days for the
    month's rows where status === 'Completed' AND the member matches
-   currentMember. Buckets per day. */
+   currentMember. Buckets per day.
+   Phase 259 (2026-06-02) — OK.docx #26: chart now responds to a month
+   offset so the user can scroll back across past months. ◀/▶ buttons
+   in the panel adjust _PH259_DAILY_VISITS_MONTH_OFFSET; we never allow
+   future months (clamped at 0). */
+var _PH259_DAILY_VISITS_MONTH_OFFSET = 0;
+function _ph259ShiftDailyVisitsMonth(delta){
+  if(delta === 0){
+    _PH259_DAILY_VISITS_MONTH_OFFSET = 0;
+  } else {
+    var next = _PH259_DAILY_VISITS_MONTH_OFFSET + delta;
+    if(next > 0) next = 0;  /* never browse the future */
+    _PH259_DAILY_VISITS_MONTH_OFFSET = next;
+  }
+  _phase251RenderDailyVisitsChart();
+}
+window._ph259ShiftDailyVisitsMonth = _ph259ShiftDailyVisitsMonth;
+
 function _phase251RenderDailyVisitsChart(){
   var svg = document.getElementById('perf-daily-visits-svg');
   if(!svg) return;
   var memberName = (typeof currentMember !== 'undefined' && currentMember) ? currentMember : null;
   var now = new Date();
-  var y = now.getFullYear(), mo = now.getMonth();
+  /* Apply month offset relative to the current calendar month. */
+  var anchor = new Date(now.getFullYear(), now.getMonth() + _PH259_DAILY_VISITS_MONTH_OFFSET, 1);
+  var y = anchor.getFullYear(), mo = anchor.getMonth();
+  /* Disable "Next ▶" when we're already on the current month so the user
+     can't drift into future months that have no data. */
+  var nextBtn = document.getElementById('ph259-dv-next');
+  if(nextBtn){
+    if(_PH259_DAILY_VISITS_MONTH_OFFSET >= 0){
+      nextBtn.disabled = true;
+      nextBtn.style.opacity = '.4';
+      nextBtn.style.cursor = 'not-allowed';
+    } else {
+      nextBtn.disabled = false;
+      nextBtn.style.opacity = '';
+      nextBtn.style.cursor = 'pointer';
+    }
+  }
+  /* Header month label so users always see which month they're on. */
+  var monthLabelEl = document.getElementById('perf-daily-visits-month-label');
+  if(monthLabelEl){
+    monthLabelEl.textContent = anchor.toLocaleDateString('en-US', { month:'long', year:'numeric' });
+  }
   var daysInMonth = new Date(y, mo+1, 0).getDate();
   var perDay = [];
   for(var d = 1; d <= daysInMonth; d++){ perDay.push({ day: d, count: 0 }); }
@@ -54810,7 +54864,13 @@ function _phase220SaveModal(){
   if(!all[member][dateIso]) all[member][dateIso] = [];
   /* Phase 223 — admin-override marker: stamp the row when admin is
      acting outside the normal time window, so the UI can show
-     "✏ by admin" per the standing admin-override rule. */
+     "✏ by admin" per the standing admin-override rule.
+     Phase 259 (2026-06-02) — BUGFIX: _ph223InAddWin was referenced here
+     but never declared, which threw ReferenceError every time admin (or
+     anyone) clicked Confirm/Save on a side activity. The modal stayed
+     open and nothing was written. Compute the flag from the same
+     can-add-on-date check that gates non-admin adds. */
+  var _ph223InAddWin  = _phase221CanAddOn(dateIso);
   var _ph223AdminAdd  = !editId && _ph223Admin && !_ph223InAddWin;
   var _ph223AdminEdit =  editId && _ph223WasLocked;
   function _ph223BuildOverride(action){
@@ -59286,6 +59346,10 @@ function _phase246BuildRowsHtml(entries, includeFacBadge){
     var clinic = e.sourceBusiness || e.sourceName || '—';
     /* Member = marketing rep attributed. */
     var member = e.memberName || (Array.isArray(e.memberNames) ? e.memberNames.join(', ') : '') || (e.noMarketingRep ? '🚫 None' : '—');
+    /* Phase 259 (2026-06-02) — OK.docx item #17: also expose the
+       front-desk staff who manually typed their name when logging
+       the patient. Stored as filledByName. */
+    var frontDesk = e.filledByName || '—';
     /* Referral status: Y if this row was created via the confirmed-referral
        path (has a pendingReferralId or wasReferral flag). */
     var refStatus = (e.pendingReferralId || e.wasReferral)
@@ -59304,6 +59368,7 @@ function _phase246BuildRowsHtml(entries, includeFacBadge){
       + '<td style="padding:8px 10px;border-bottom:1px solid var(--border);font-size:11px;color:var(--muted)">' + esc(channel) + '</td>'
       + '<td style="padding:8px 10px;border-bottom:1px solid var(--border);font-size:11px;color:var(--text);font-weight:600">' + esc(clinic) + '</td>'
       + '<td style="padding:8px 10px;border-bottom:1px solid var(--border);font-size:11px">' + esc(member) + '</td>'
+      + '<td style="padding:8px 10px;border-bottom:1px solid var(--border);font-size:11px;color:var(--muted);font-style:italic">' + esc(frontDesk) + '</td>'
       + '<td style="padding:8px 10px;border-bottom:1px solid var(--border);text-align:center">' + refStatus + '</td>'
       + facBadge
       + '</tr>';
@@ -59314,7 +59379,8 @@ function _phase246BuildRowsHtml(entries, includeFacBadge){
     +   '<th style="padding:8px 10px;text-align:left;font-size:10px;font-weight:700;color:#fff;text-transform:uppercase;letter-spacing:.04em">Source</th>'
     +   '<th style="padding:8px 10px;text-align:left;font-size:10px;font-weight:700;color:#fff;text-transform:uppercase;letter-spacing:.04em">Channel</th>'
     +   '<th style="padding:8px 10px;text-align:left;font-size:10px;font-weight:700;color:#fff;text-transform:uppercase;letter-spacing:.04em">Clinic</th>'
-    +   '<th style="padding:8px 10px;text-align:left;font-size:10px;font-weight:700;color:#fff;text-transform:uppercase;letter-spacing:.04em">Member</th>'
+    +   '<th style="padding:8px 10px;text-align:left;font-size:10px;font-weight:700;color:#fff;text-transform:uppercase;letter-spacing:.04em">Marketing rep</th>'
+    +   '<th style="padding:8px 10px;text-align:left;font-size:10px;font-weight:700;color:#fff;text-transform:uppercase;letter-spacing:.04em">Logged by (front desk)</th>'
     +   '<th style="padding:8px 10px;text-align:center;font-size:10px;font-weight:700;color:#fff;text-transform:uppercase;letter-spacing:.04em">Referral?</th>'
     + (includeFacBadge ? '<th style="padding:8px 10px;text-align:left;font-size:10px;font-weight:700;color:#fff;text-transform:uppercase;letter-spacing:.04em">Location</th>' : '')
     + '</tr></thead>'
@@ -63255,10 +63321,16 @@ function renderKPICards(name){
         + '</div>'
       ) : '')
     + '</div>';
-  // 4. Visits per Area — interactive dropdown showing per-area count (ALL-TIME)
-  // Build the per-area visit count map for this member.
+  // 4. Visits per Area — interactive dropdown showing per-area count
+  // Phase 259 (2026-06-02) — OK.docx #9: was hard-coded ALL-TIME and
+  // ignored the month switcher above. Now scopes to the selected month
+  // (viewY/viewM derived from _KPI_MONTH_OFFSET).
   var areaCounts = {};
   S.days.forEach(function(day){
+    if(!day || !day.date) return;
+    var dt = new Date(day.date + 'T00:00:00');
+    if(isNaN(dt.getTime())) return;
+    if(dt.getFullYear() !== viewY || dt.getMonth() !== viewM) return;
     day.rows.forEach(function(r){
       if(r.member !== name || !r.memberConfirmed) return;
       if(r.status !== 'Completed') return;
@@ -63275,10 +63347,13 @@ function renderKPICards(name){
   });
   var areaPicker = '<select id="kpi-area-picker-'+name.replace(/[^a-zA-Z0-9]/g,'')+'" onchange="document.getElementById(\'kpi-area-result-'+name.replace(/[^a-zA-Z0-9]/g,'')+'\').textContent=this.value?(\''+'\\u2192 \'+(({'+areaList.map(function(a){return '\''+a+'\':'+areaCounts[a];}).join(',')+'})[this.value])+\' visit\'+((({'+areaList.map(function(a){return '\''+a+'\':'+areaCounts[a];}).join(',')+'})[this.value])!==1?\'s\':\'\')+\' to '+name+' clinics in \'+this.value):\'\'" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:6px 8px;font-size:11px;font-family:DM Sans,sans-serif;background:#fff;outline:none;margin-top:6px">'+areaOpts+'</select>';
   var areaResultId = 'kpi-area-result-'+name.replace(/[^a-zA-Z0-9]/g,'');
+  // Phase 259 (2026-06-02) — area card now scopes to selected month, so
+  // the badge needs to advertise that instead of saying "ALL-TIME".
+  var areaMonthLabel = new Date(viewY, viewM, 1).toLocaleDateString('en-US', { month:'short', year:'2-digit' }).toUpperCase();
   cards+='<div class="kpi-card">'
     +'<div class="kpi-card-top"><div class="kpi-label">Visits per Area</div>'
-    +'<span class="kpi-badge badge-grey" style="font-weight:700">ALL-TIME</span></div>'
-    +'<div class="kpi-nums"><div class="kpi-actual" style="color:#7030A0">'+areaList.length+'</div><div style="font-size:11px;color:var(--muted);margin-left:8px">area'+(areaList.length!==1?'s':'')+' covered &middot; '+areaTotal+' visits total</div></div>'
+    +'<span class="kpi-badge badge-grey" style="font-weight:700">'+areaMonthLabel+'</span></div>'
+    +'<div class="kpi-nums"><div class="kpi-actual" style="color:#7030A0">'+areaList.length+'</div><div style="font-size:11px;color:var(--muted);margin-left:8px">area'+(areaList.length!==1?'s':'')+' covered &middot; '+areaTotal+' visits this month</div></div>'
     +(areaList.length>0 ? areaPicker : '<div style="font-size:10px;color:var(--muted);margin-top:8px;font-style:italic">No completed visits yet</div>')
     +'<div id="'+areaResultId+'" style="font-size:11px;color:var(--text);font-weight:600;margin-top:6px;min-height:14px"></div>'
     +'</div>';
