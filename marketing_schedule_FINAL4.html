@@ -19871,7 +19871,8 @@ function openReferralHistory(name){
       var c = hist.byMonth[m];
       var pct = maxCount > 0 ? (c / maxCount) * 100 : 0;
       var labelDate = new Date(m + '-01');
-      var label = labelDate.toLocaleDateString('en-US',{month:'short',year:'2-digit'});
+      /* Phase 227 — month name only per user. */
+      var label = labelDate.toLocaleDateString('en-US',{month:'long'});
       var isCurMonth = (m === curMKey);
       var cardBg = isCurMonth ? 'linear-gradient(135deg,#faf5ff,#fdf4ff)' : '#f8fafc';
       var cardBorder = isCurMonth ? '#a855f7' : 'var(--border)';
@@ -57288,10 +57289,52 @@ function _phase176IsoDate(d){
   return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
 }
 
+/* Phase 227 (2026-06-02) — week-back nav within current calendar month.
+   User: "we need to be able to switch back in time to the previous week.
+   Not only one week before. Any week before — same calendar month."
+   _phase176WeekOffset = 0 → this week (Mon→today). 1 → last week's
+   Mon-Sun. Capped so we never cross into the previous calendar month. */
+window._phase176WeekOffset = window._phase176WeekOffset || 0;
+function _phase176WeekRange(offset){
+  /* Returns { start: Date, end: Date, label: string, canPrev: bool,
+                canNext: bool } for the requested week. */
+  var today = new Date(); today.setHours(0, 0, 0, 0);
+  /* Monday-of-this-week. JS Sun=0; shift so Mon=0. */
+  var dow = today.getDay();
+  var monOffset = (dow + 6) % 7;
+  var monThisWeek = new Date(today);
+  monThisWeek.setDate(monThisWeek.getDate() - monOffset);
+  /* Apply offset. */
+  var weekStart = new Date(monThisWeek);
+  weekStart.setDate(weekStart.getDate() - 7 * offset);
+  var weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekEnd.getDate() + 6);
+  /* Cap to current calendar month: if weekStart falls in previous month
+     and that's NOT the same month-of-today, this offset is too far. */
+  var monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+  var canPrev = true;
+  /* The next previous week would start on weekStart - 7d. If that's
+     before monthStart, prev is disabled. */
+  var prevPeek = new Date(weekStart); prevPeek.setDate(prevPeek.getDate() - 7);
+  if(prevPeek < monthStart) canPrev = false;
+  var canNext = (offset > 0);
+  /* Label: "This week" when offset 0, else "Week of Jun 2-8" style. */
+  var label;
+  if(offset === 0){
+    label = 'This week';
+  } else {
+    var fmt = function(d){ return d.toLocaleDateString('en-US',{ month:'short', day:'numeric' }); };
+    label = 'Week of ' + fmt(weekStart) + '-' + weekEnd.getDate();
+  }
+  return { start: weekStart, end: weekEnd, label: label, canPrev: canPrev, canNext: canNext };
+}
 function _phase176Counters(entries){
   var today = new Date(); today.setHours(0,0,0,0);
   var todayIso = _phase176IsoDate(today);
-  var weekStart = new Date(today); weekStart.setDate(weekStart.getDate() - 6);
+  /* Week range honors the offset. weekEnd is exclusive end-of-day. */
+  var wr = _phase176WeekRange(window._phase176WeekOffset || 0);
+  var weekStart = wr.start, weekEnd = new Date(wr.end);
+  weekEnd.setHours(23, 59, 59, 999);
   var monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
   var dayCount = 0, weekCount = 0, monthCount = 0, totalCount = 0;
   entries.forEach(function(e){
@@ -57301,11 +57344,30 @@ function _phase176Counters(entries){
     if(isNaN(d.getTime())) return;
     totalCount++;
     if(iso === todayIso) dayCount++;
-    if(d >= weekStart && d <= new Date(today.getTime() + 86400000 - 1)) weekCount++;
+    if(d >= weekStart && d <= weekEnd) weekCount++;
     if(d >= monthStart) monthCount++;
   });
-  return { day: dayCount, week: weekCount, month: monthCount, total: totalCount };
+  return { day: dayCount, week: weekCount, month: monthCount, total: totalCount, weekRange: wr };
 }
+function _phase176SetWeekOffset(delta){
+  var newOff = (window._phase176WeekOffset || 0) + delta;
+  if(newOff < 0) newOff = 0;
+  /* Probe the new offset; if it's not allowed (canPrev=false at current
+     offset, meaning we can't go BACKWARD from here), clamp. */
+  if(delta > 0){
+    var probe = _phase176WeekRange(newOff);
+    /* If probing this offset shows weekStart < monthStart, deny. */
+    var today = new Date(); today.setHours(0,0,0,0);
+    var monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    if(probe.start < monthStart){
+      if(typeof showToast === 'function') showToast('Can\'t go back further — past the start of this calendar month.');
+      return;
+    }
+  }
+  window._phase176WeekOffset = newOff;
+  _phase176RenderFacility(window._phase176LastFacility);
+}
+window._phase176SetWeekOffset = _phase176SetWeekOffset;
 
 function _phase176RenderFacility(facKey){
   var host = document.getElementById('loc-facility-content');
@@ -57327,7 +57389,7 @@ function _phase176RenderFacility(facKey){
     // Counter strip
     + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:18px">'
     +   _phase176CounterCard('Today',     counters.day,   '#15803d', '🗓')
-    +   _phase176CounterCard('This week', counters.week,  '#1e40af', '📅')
+    +   _phase176WeekCounterCard(counters)
     +   _phase176CounterCard('This month', counters.month, '#7030A0', '📆')
     +   _phase176CounterCard('All-time',  counters.total, '#1F3864', '∑')
     + '</div>'
@@ -57365,6 +57427,28 @@ function _phase176CounterCard(label, value, color, icon){
   return '<div style="background:#fff;border:1px solid var(--border);border-left:4px solid ' + color + ';border-radius:10px;padding:14px 16px;box-shadow:0 1px 3px rgba(15,23,42,.04)">'
     + '<div style="display:flex;align-items:center;gap:6px;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-weight:700">' + icon + ' ' + label + '</div>'
     + '<div style="font-size:32px;font-weight:800;color:' + color + ';font-family:DM Mono,monospace;margin-top:4px;line-height:1">' + value + '</div>'
+    + '</div>';
+}
+/* Phase 227 — week-counter with prev/next chevrons. Chevrons disabled
+   when crossing the current-calendar-month boundary or when already
+   at offset=0. */
+function _phase176WeekCounterCard(counters){
+  var wr = counters.weekRange;
+  var color = '#1e40af';
+  var prevDisabled = !wr.canPrev;
+  var nextDisabled = !wr.canNext;
+  var prevBtn = '<button type="button" onclick="_phase176SetWeekOffset(1)" '
+    + (prevDisabled ? 'disabled ' : '')
+    + 'style="background:' + (prevDisabled ? '#f1f5f9' : '#fff') + ';border:1px solid var(--border);border-radius:5px;width:22px;height:22px;font-size:13px;cursor:' + (prevDisabled ? 'not-allowed' : 'pointer') + ';color:' + (prevDisabled ? '#cbd5e1' : color) + ';font-weight:800;font-family:DM Sans,sans-serif;padding:0;line-height:1">‹</button>';
+  var nextBtn = '<button type="button" onclick="_phase176SetWeekOffset(-1)" '
+    + (nextDisabled ? 'disabled ' : '')
+    + 'style="background:' + (nextDisabled ? '#f1f5f9' : '#fff') + ';border:1px solid var(--border);border-radius:5px;width:22px;height:22px;font-size:13px;cursor:' + (nextDisabled ? 'not-allowed' : 'pointer') + ';color:' + (nextDisabled ? '#cbd5e1' : color) + ';font-weight:800;font-family:DM Sans,sans-serif;padding:0;line-height:1">›</button>';
+  return '<div style="background:#fff;border:1px solid var(--border);border-left:4px solid ' + color + ';border-radius:10px;padding:14px 16px;box-shadow:0 1px 3px rgba(15,23,42,.04)">'
+    + '<div style="display:flex;align-items:center;justify-content:space-between;gap:6px">'
+    +   '<div style="display:flex;align-items:center;gap:6px;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-weight:700">📅 ' + String(wr.label).replace(/</g, '&lt;') + '</div>'
+    +   '<div style="display:flex;gap:3px">' + prevBtn + nextBtn + '</div>'
+    + '</div>'
+    + '<div style="font-size:32px;font-weight:800;color:' + color + ';font-family:DM Mono,monospace;margin-top:4px;line-height:1">' + counters.week + '</div>'
     + '</div>';
 }
 
@@ -57409,7 +57493,12 @@ function _phase176DrawChart(entries){
     var d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     buckets.push({
       key: d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0'),
-      label: d.toLocaleDateString('en-US', { month:'short', year:'2-digit' }),
+      /* Phase 227 (2026-06-02): user asked for the month name only
+         (e.g. "April", "May", "June"), not "Apr 26 - May 26". Long
+         month name; year omitted because the window is at most 12
+         months so cross-year labels are rare and unambiguous in
+         context. */
+      label: d.toLocaleDateString('en-US', { month:'long' }),
       count: 0
     });
   }
